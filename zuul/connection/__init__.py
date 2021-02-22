@@ -711,7 +711,7 @@ class BaseThreadPoolEventConnector:
                     return
                 future = self._event_forward_queue.popleft()
                 (events, connection_event, zuul_event_id,
-                 event_type) = future.result()
+                 event_type) = future.result(timeout=900)
                 try:
                     if not events:
                         log = get_annotated_logger(self.log, zuul_event_id)
