@@ -16,6 +16,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import ctypes
 import json
 import logging
 import socket
@@ -221,6 +222,7 @@ class Scheduler(threading.Thread):
     _build_request_cleanup_interval = IntervalTrigger(seconds=60, jitter=5)
     _merge_request_cleanup_interval = IntervalTrigger(seconds=60, jitter=5)
     _connection_cleanup_interval = IntervalTrigger(minutes=5, jitter=10)
+    _malloc_trim_interval = IntervalTrigger(minutes=30, jitter=60)
     _merger_client_class = MergeClient
     _executor_client_class = ExecutorClient
     _launcher_client_class = LauncherClient
@@ -676,7 +678,13 @@ class Scheduler(threading.Thread):
                                  trigger=self._connection_cleanup_interval)
             self.apsched.add_job(self._runGeneralCleanup,
                                  trigger=self._general_cleanup_interval)
+            self.apsched.add_job(self._runMallocTrim,
+                                 trigger=self._malloc_trim_interval)
             return
+
+    def _runMallocTrim(self):
+        self.log.debug("Executing malloc_trim")
+        ctypes.CDLL(None).malloc_trim(0)
 
     def _runSemaphoreCleanup(self):
         if self.semaphore_cleanup_lock.acquire(blocking=False):
