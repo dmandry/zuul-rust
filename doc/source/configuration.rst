@@ -434,6 +434,18 @@ The following section of ``zuul.conf`` is used by the merger:
 
       Value in seconds.
 
+   .. attr:: sync_timeout
+      :default: 30
+
+      When a ``git fetch`` fails with ``fatal: couldn't find remote ref``,
+      Zuul retries the operation after sleeping for this many seconds. That
+      error often appears if the Git remote (for example a Gerrit review site
+      fed by replication) has not yet received the ref Zuul is fetching.
+      Increase this value if merges or executor checkouts frequently retry
+      until the ref appears.
+
+      Value in seconds.
+
    .. attr:: git_user_email
 
       Value to pass to `git config user.email
