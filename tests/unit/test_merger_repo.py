@@ -17,12 +17,14 @@ import datetime
 import logging
 import os
 import shutil
+from contextlib import contextmanager
 from unittest import mock
 from zuul.lib import yamlutil as yaml
 
 import git
 import testtools
 
+import zuul.merger.merger as merger_mod
 from zuul.merger.merger import MergerTree, Repo
 import zuul.model
 from zuul.model import MergeRequest
@@ -34,6 +36,10 @@ from tests.base import (
     okay_tracebacks,
     simple_layout,
 )
+
+
+class MissingStderrFetchError(Exception):
+    """Raised by test_fetch_retry_no_stderr_uses_retry_interval."""
 
 
 class TestMergerRepo(ZuulTestCase):
@@ -337,6 +343,95 @@ class TestMergerRepo(ZuulTestCase):
         # This is created on the second fetch
         self.assertTrue(os.path.exists(os.path.join(
             self.workspace_root, 'stamp2')))
+
+    @okay_tracebacks('GitCommandError')
+    def test_fetch_retry_missing_remote_ref_uses_sync_timeout(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.patch(Repo, 'retry_attempts', 2)
+        sync_timeout = 12
+        retry_interval = 99
+        self.patch(Repo, 'retry_interval', retry_interval)
+        work_repo = Repo(
+            parent_path, self.workspace_root,
+            'none@example.org', 'User Name', '0', '0',
+            sync_timeout=sync_timeout)
+        sleep_calls = []
+
+        def record_sleep(duration):
+            sleep_calls.append(duration)
+
+        self.patch(merger_mod.time, 'sleep', record_sleep)
+
+        err = git.exc.GitCommandError(
+            ['git', 'fetch'], 1,
+            "fatal: couldn't find remote ref refs/heads/foo\n")
+
+        mock_repo = mock.MagicMock()
+        calls = {'n': 0}
+
+        def fetch_side_effect(*args, **kwargs):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise err
+            return ''
+
+        mock_repo.git.fetch.side_effect = fetch_side_effect
+
+        @contextmanager
+        def fake_create_repo(zuul_event_id, build=None):
+            yield mock_repo
+
+        with mock.patch.object(
+                work_repo, 'createRepoObject', fake_create_repo):
+            with mock.patch.object(work_repo, '_ensure_cloned'):
+                work_repo._git_fetch('origin', None, ref='master')
+
+        self.assertEqual([sync_timeout], sleep_calls)
+        self.assertEqual(2, calls['n'])
+
+    @okay_tracebacks('MissingStderrFetchError')
+    def test_fetch_retry_no_stderr_uses_retry_interval(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.patch(Repo, 'retry_attempts', 2)
+        sync_timeout = 12
+        retry_interval = 99
+        self.patch(Repo, 'retry_interval', retry_interval)
+        work_repo = Repo(
+            parent_path, self.workspace_root,
+            'none@example.org', 'User Name', '0', '0',
+            sync_timeout=sync_timeout)
+        sleep_calls = []
+
+        def record_sleep(duration):
+            sleep_calls.append(duration)
+
+        self.patch(merger_mod.time, 'sleep', record_sleep)
+
+        err = MissingStderrFetchError()
+        err.stderr = None
+
+        mock_repo = mock.MagicMock()
+        calls = {'n': 0}
+
+        def fetch_side_effect(*args, **kwargs):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise err
+            return ''
+
+        mock_repo.git.fetch.side_effect = fetch_side_effect
+
+        @contextmanager
+        def fake_create_repo(zuul_event_id, build=None):
+            yield mock_repo
+
+        with mock.patch.object(
+                work_repo, 'createRepoObject', fake_create_repo):
+            with mock.patch.object(work_repo, '_ensure_cloned'):
+                work_repo._git_fetch('origin', None, ref='master')
+
+        self.assertEqual([retry_interval], sleep_calls)
+        self.assertEqual(2, calls['n'])
 
     def test_deleted_local_ref(self):
         parent_path = os.path.join(self.upstream_root, 'org/project1')
