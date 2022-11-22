@@ -120,7 +120,8 @@ class Repo(object):
     def __init__(self, remote, local, email, username, speed_limit, speed_time,
                  sshkey=None, cache_path=None, logger=None, git_timeout=300,
                  zuul_event_id=None, retry_timeout=None, skip_refs=False,
-                 sparse_paths=SparsePaths.EMPTY, workspace_project_path=None):
+                 sparse_paths=SparsePaths.EMPTY, workspace_project_path=None,
+                 sync_timeout=30):
         # The default for sparse_paths is that we set the
         # sparse-checkout to the top dir only; that's the minimal
         # checkout that we can perform and still do index-based
@@ -150,6 +151,7 @@ class Repo(object):
         self.email = email
         self.username = username
         self.cache_path = cache_path
+        self.sync_timeout = sync_timeout
         self._initialized = False
         try:
             self._setup_known_hosts()
@@ -350,7 +352,9 @@ class Repo(object):
                 return True
             except Exception as e:
                 if attempt < self.retry_attempts:
-                    if 'fatal: bad config' in e.stderr.lower():
+                    if e.stderr is None:
+                        time.sleep(self.retry_interval)
+                    elif 'fatal: bad config' in e.stderr.lower():
                         # This error can be introduced by a merge conflict
                         # or someone committing faulty configuration
                         # in the .gitmodules which was left by the last
@@ -393,6 +397,10 @@ class Repo(object):
                         # repository. However if git reports a bad object, then
                         # we may have written the repo refs with bad data.
                         shutil.rmtree(self.local_path)
+                    elif ('fatal: couldn\'t find remote ref'
+                          in e.stderr.lower()):
+                        # Remote may lack the ref yet (e.g. replication lag).
+                        time.sleep(self.sync_timeout)
                     else:
                         time.sleep(self.retry_interval)
                     log.exception("Retry %s: Fetch %s %s %s" % (
@@ -1105,7 +1113,7 @@ class Merger(object):
     def __init__(self, working_root, connections, zk_client, email,
                  username, speed_limit, speed_time, cache_root=None,
                  logger=None, execution_context=False, git_timeout=300,
-                 scheme=None, cache_scheme=None):
+                 scheme=None, cache_scheme=None, sync_timeout=30):
         self.logger = logger
         if logger is None:
             self.log = logging.getLogger("zuul.Merger")
@@ -1124,6 +1132,7 @@ class Merger(object):
         self.cache_root = cache_root
         self.scheme = scheme or zuul.model.SCHEME_UNIQUE
         self.cache_scheme = cache_scheme or zuul.model.SCHEME_UNIQUE
+        self.sync_timeout = sync_timeout
         # Flag to determine if the merger is used for preparing repositories
         # for job execution. This flag can be used to enable executor specific
         # behavior e.g. to keep the 'origin' remote intact.
@@ -1180,7 +1189,8 @@ class Merger(object):
                 zuul_event_id=zuul_event_id, retry_timeout=retry_timeout,
                 skip_refs=self.execution_context,
                 sparse_paths=sparse_paths,
-                workspace_project_path=workspace_project_path)
+                workspace_project_path=workspace_project_path,
+                sync_timeout=self.sync_timeout)
 
             self.repos[key] = repo
         except Exception:

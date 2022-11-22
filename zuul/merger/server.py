@@ -90,6 +90,7 @@ class BaseMergeServer(metaclass=ABCMeta):
         self.merge_speed_time = get_default(
             config, 'merger', 'git_http_low_speed_time', '30')
         self.git_timeout = get_default(config, 'merger', 'git_timeout', 300)
+        self.sync_timeout = get_default(config, 'merger', 'sync_timeout', 30)
 
         self.merge_root = get_default(config, component, 'git_dir',
                                       '/var/lib/zuul/{}-git'.format(component))
@@ -143,6 +144,7 @@ class BaseMergeServer(metaclass=ABCMeta):
             git_timeout=self.git_timeout,
             scheme=scheme,
             cache_scheme=cache_scheme,
+            sync_timeout=self.sync_timeout,
         )
 
     def _repoLock(self, connection_name, project_name):

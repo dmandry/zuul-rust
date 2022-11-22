@@ -1,0 +1,14 @@
+---
+features:
+  - |
+    The ``[merger]`` section of ``zuul.conf`` now accepts ``sync_timeout``
+    (default ``30`` seconds). When a ``git fetch`` fails because the remote
+    does not have the ref yet (``fatal: couldn't find remote ref``), the
+    merger waits for this interval before retrying instead of using the
+    shorter generic fetch retry delay. This helps environments where refs
+    reach review Git servers only after replication lag.
+fixes:
+  - |
+    Merger fetch retries no longer assume ``git`` stderr is always present;
+    if stderr is missing, the merger now waits for the normal retry interval
+    before trying again.
