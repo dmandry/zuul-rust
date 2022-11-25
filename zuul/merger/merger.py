@@ -28,6 +28,7 @@ import shutil
 import time
 from collections import OrderedDict
 from concurrent.futures.process import BrokenProcessPool
+from pathlib import Path
 
 import git
 import gitdb
@@ -39,6 +40,17 @@ import zuul.model
 from zuul.lib.logutil import get_annotated_logger
 
 NULL_REF = '0000000000000000000000000000000000000000'
+
+
+def cache_objects_dir(cache_path):
+    """Return the object database path for a non-bare or bare cache repo."""
+    nested = os.path.join(cache_path, '.git', 'objects')
+    if os.path.isdir(nested):
+        return nested
+    bare = os.path.join(cache_path, 'objects')
+    if os.path.isdir(bare):
+        return bare
+    return nested
 
 
 def redact_url(url):
@@ -121,7 +133,7 @@ class Repo(object):
                  sshkey=None, cache_path=None, logger=None, git_timeout=300,
                  zuul_event_id=None, retry_timeout=None, skip_refs=False,
                  sparse_paths=SparsePaths.EMPTY, workspace_project_path=None,
-                 sync_timeout=30):
+                 sync_timeout=30, project=None):
         # The default for sparse_paths is that we set the
         # sparse-checkout to the top dir only; that's the minimal
         # checkout that we can perform and still do index-based
@@ -152,6 +164,7 @@ class Repo(object):
         self.username = username
         self.cache_path = cache_path
         self.sync_timeout = sync_timeout
+        self.project = project
         self._initialized = False
         try:
             self._setup_known_hosts()
@@ -312,6 +325,9 @@ class Repo(object):
         log = get_annotated_logger(self.log, zuul_event_id, build=build)
         mygit = git.cmd.Git(os.getcwd())
         mygit.update_environment(**self.env)
+        if self.cache_path:
+            repo_dir = Path(self.local_path)
+            repo_dir.mkdir(parents=True, exist_ok=True)
 
         kwargs = dict(kill_after_timeout=self.git_timeout)
         if self.skip_refs:
@@ -321,8 +337,46 @@ class Repo(object):
         for attempt in range(1, self.retry_attempts + 1):
             try:
                 with timeout_handler(self.local_path):
-                    mygit.clone(git.cmd.Git.polish_url(url), self.local_path,
-                                **kwargs)
+                    if self.cache_path:
+                        repo_dir = Path(self.local_path)
+                        repo = git.Repo.init(str(repo_dir))
+                        repo.git.update_environment(**self.env)
+                        to = dict(kill_after_timeout=self.git_timeout)
+                        alternates = repo_dir / '.git/objects/info/alternates'
+                        alternates.parent.mkdir(parents=True, exist_ok=True)
+                        with open(alternates, 'w') as fh:
+                            fh.write(cache_objects_dir(self.cache_path) + '\n')
+                        repo.git.remote(
+                            'add', 'origin', self.cache_path, **to)
+                        if (self.project is not None
+                                and 'sparse-checkout' in self.project):
+                            repo.git.sparse_checkout('init', **to)
+                            for path in self.project['sparse-checkout']:
+                                repo.git.sparse_checkout('add', path, **to)
+                        # Fetch default refs from the local cache (do not assume
+                        # the default branch is named master; e.g. roles may use
+                        # main only).
+                        repo.git.fetch('--no-tags', 'origin', **to)
+                        try:
+                            repo.git.remote('set-head', 'origin', '-a', **to)
+                        except git.exc.GitCommandError:
+                            log.debug(
+                                "remote set-head origin -a failed for cache %s",
+                                self.cache_path, exc_info=True)
+                        for ref in ('origin/HEAD', 'origin/master',
+                                    'origin/main'):
+                            try:
+                                repo.git.checkout('--quiet', ref, **to)
+                                break
+                            except git.exc.GitCommandError:
+                                continue
+                        else:
+                            raise RuntimeError(
+                                'Could not check out a default branch from '
+                                'cache at %s' % (self.cache_path,))
+                    else:
+                        mygit.clone(git.cmd.Git.polish_url(url),
+                                    self.local_path, **kwargs)
                 break
             except Exception:
                 if attempt < self.retry_attempts:
@@ -1113,7 +1167,8 @@ class Merger(object):
     def __init__(self, working_root, connections, zk_client, email,
                  username, speed_limit, speed_time, cache_root=None,
                  logger=None, execution_context=False, git_timeout=300,
-                 scheme=None, cache_scheme=None, sync_timeout=30):
+                 scheme=None, cache_scheme=None, sync_timeout=30,
+                 projects=None):
         self.logger = logger
         if logger is None:
             self.log = logging.getLogger("zuul.Merger")
@@ -1133,6 +1188,7 @@ class Merger(object):
         self.scheme = scheme or zuul.model.SCHEME_UNIQUE
         self.cache_scheme = cache_scheme or zuul.model.SCHEME_UNIQUE
         self.sync_timeout = sync_timeout
+        self.projects = projects
         # Flag to determine if the merger is used for preparing repositories
         # for job execution. This flag can be used to enable executor specific
         # behavior e.g. to keep the 'origin' remote intact.
@@ -1182,6 +1238,10 @@ class Merger(object):
                         hostname, project_name, self.cache_scheme))
             else:
                 cache_path = None
+            project = (
+                None if self.projects is None else
+                self.projects[project_name] if project_name in
+                self.projects.keys() else None)
             repo = Repo(
                 url, path, self.email, self.username, self.speed_limit,
                 self.speed_time, sshkey=sshkey, cache_path=cache_path,
@@ -1190,7 +1250,8 @@ class Merger(object):
                 skip_refs=self.execution_context,
                 sparse_paths=sparse_paths,
                 workspace_project_path=workspace_project_path,
-                sync_timeout=self.sync_timeout)
+                sync_timeout=self.sync_timeout,
+                project=project)
 
             self.repos[key] = repo
         except Exception:
