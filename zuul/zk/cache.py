@@ -110,7 +110,11 @@ class ZuulTreeCache(abc.ABC):
             self._event_queue.put(None)
             self._playback_queue.put(None)
         elif state == KazooState.CONNECTED and not self._stopped:
-            self.client.handler.short_spawn(self._start)
+            # Use spawn (dedicated thread), not short_spawn (ZK handler pool):
+            # _start joins event/playback workers which may block on ZK;
+            # running that on the pool can deadlock shutdown when all workers
+            # are stuck.
+            self.client.handler.spawn(self._start)
 
     def _cacheListener(self, event):
         if self._async_worker:
@@ -182,7 +186,7 @@ class ZuulTreeCache(abc.ABC):
                 self.log.debug("Cache at %s is ready", self.root)
             except Exception:
                 self.log.exception("Error initializing cache at %s", self.root)
-                self.client.handler.short_spawn(self._start)
+                self.client.handler.spawn(self._start)
 
     def stop(self):
         self._stopped = True
