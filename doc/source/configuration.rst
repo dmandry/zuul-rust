@@ -475,6 +475,35 @@ The following section of ``zuul.conf`` is used by the merger:
       The IPv4 addr to listen for prometheus metrics poll.
       To use IPv6, python>3.8 is required `issue24209 <https://bugs.python.org/issue24209>`_.
 
+   .. attr:: projects
+
+      Optional multi-line string in ``zuul.conf`` containing YAML.  If set, it
+      is parsed with ``yaml.safe_load`` and passed to the in-process merger
+      (including the merger embedded in the executor).  The value must be a
+      mapping from **Zuul project name** (for example ``org/project``) to a
+      per-project dictionary.
+
+      The only supported project key today is ``sparse-checkout``: a list of
+      path patterns that are passed to ``git sparse-checkout set --no-cone``
+      when Zuul creates a
+      **working copy from a local cache** (when the merger clones with a
+      ``cache_path`` set, as on executors that use a cache directory beside the
+      job workspace).  Full clones that do not use that cache path ignore this
+      setting.
+
+      The cache repository must already contain the objects and refs needed for
+      the subsequent checkout.  The initial fetch pulls the cache remote's
+      default ref mapping; checkout uses ``origin/HEAD`` when available, or
+      ``origin/master`` or ``origin/main`` as fallbacks.
+
+      Example (YAML body only; place under ``[merger]`` in ``zuul.conf`` with
+      appropriate indentation for a multi-line value)::
+
+         org/example:
+           sparse-checkout:
+             - doc
+             - tools/ci
+
 .. _executor:
 
 Executor
