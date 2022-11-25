@@ -19,6 +19,7 @@ import socket
 import sys
 import threading
 import time
+import yaml
 from abc import ABCMeta
 from configparser import ConfigParser
 from contextlib import nullcontext
@@ -95,6 +96,10 @@ class BaseMergeServer(metaclass=ABCMeta):
         self.merge_root = get_default(config, component, 'git_dir',
                                       '/var/lib/zuul/{}-git'.format(component))
 
+        self.projects = get_default(config, 'merger', 'projects', None)
+        if self.projects:
+            self.projects = yaml.safe_load(self.projects)
+
         self.config = config
 
         self.tracing = tracing.Tracing(self.config)
@@ -145,6 +150,7 @@ class BaseMergeServer(metaclass=ABCMeta):
             scheme=scheme,
             cache_scheme=cache_scheme,
             sync_timeout=self.sync_timeout,
+            projects=self.projects,
         )
 
     def _repoLock(self, connection_name, project_name):
