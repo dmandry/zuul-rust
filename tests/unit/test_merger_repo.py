@@ -133,6 +133,66 @@ class TestMergerRepo(ZuulTestCase):
             sub_repo.createRepoObject(None).remotes[0].url,
             message="Sub repository points to upstream project2")
 
+    def test_cache_clone_full_worktree_without_sparse_config(self):
+        """Repo with cache_path uses alternates + fetch; full tree without
+        per-project sparse-checkout."""
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo(
+            'org/project1', 'trees for cache clone',
+            {'doc/sparse.txt': 'in doc',
+             'other/other.txt': 'other'})
+
+        cache_path = os.path.join(self.test_root, 'merger-cache-full')
+        shutil.rmtree(cache_path, ignore_errors=True)
+        git.Repo.clone_from(parent_path, cache_path)
+
+        work_root = os.path.join(self.test_root, 'merger-work-full')
+        shutil.rmtree(work_root, ignore_errors=True)
+        os.makedirs(work_root)
+
+        work_repo = Repo(
+            parent_path, work_root,
+            'none@example.org', 'User Name', '0', '0',
+            cache_path=cache_path,
+            project=None,
+            sparse_paths=None,
+        )
+        self.assertTrue(work_repo.isInitialized())
+        self.assertTrue(os.path.isfile(
+            os.path.join(work_repo.local_path, 'doc', 'sparse.txt')))
+        self.assertTrue(os.path.isfile(
+            os.path.join(work_repo.local_path, 'other', 'other.txt')))
+
+    def test_cache_clone_sparse_checkout_from_project_config(self):
+        """Per-project sparse-checkout applies when cloning from cache_path."""
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo(
+            'org/project1', 'trees for sparse checkout',
+            {'doc/sparse.txt': 'in doc',
+             'other/other.txt': 'other'})
+
+        cache_path = os.path.join(self.test_root, 'merger-cache-sparse')
+        shutil.rmtree(cache_path, ignore_errors=True)
+        git.Repo.clone_from(parent_path, cache_path)
+
+        work_root = os.path.join(self.test_root, 'merger-work-sparse')
+        shutil.rmtree(work_root, ignore_errors=True)
+        os.makedirs(work_root)
+
+        project = {'sparse-checkout': ['doc']}
+        work_repo = Repo(
+            parent_path, work_root,
+            'none@example.org', 'User Name', '0', '0',
+            cache_path=cache_path,
+            project=project,
+            sparse_paths=None,
+        )
+        self.assertTrue(work_repo.isInitialized())
+        self.assertTrue(os.path.isfile(
+            os.path.join(work_repo.local_path, 'doc', 'sparse.txt')))
+        self.assertFalse(os.path.exists(
+            os.path.join(work_repo.local_path, 'other')))
+
     def test_repo_reset_branch_conflict(self):
         """Test correct reset with conflicting branch names"""
         parent_path = os.path.join(self.upstream_root, 'org/project1')
