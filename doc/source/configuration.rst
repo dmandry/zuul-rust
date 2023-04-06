@@ -483,18 +483,32 @@ The following section of ``zuul.conf`` is used by the merger:
       mapping from **Zuul project name** (for example ``org/project``) to a
       per-project dictionary.
 
-      The only supported project key today is ``sparse-checkout``: a list of
-      path patterns that are passed to ``git sparse-checkout set --no-cone``
-      when Zuul creates a
-      **working copy from a local cache** (when the merger clones with a
-      ``cache_path`` set, as on executors that use a cache directory beside the
-      job workspace).  Full clones that do not use that cache path ignore this
-      setting.
+      The supported per-project keys are:
 
-      The cache repository must already contain the objects and refs needed for
-      the subsequent checkout.  The initial fetch pulls the cache remote's
-      default ref mapping; checkout uses ``origin/HEAD`` when available, or
-      ``origin/master`` or ``origin/main`` as fallbacks.
+      * ``sparse-checkout``: a list of path patterns that are passed to
+        ``git sparse-checkout set --no-cone`` when Zuul creates a
+        **working copy from a local cache** (when the merger clones with a
+        ``cache_path`` set, as on executors that use a cache directory beside the
+        job workspace).  Full clones that do not use that cache path ignore this
+        setting.
+
+        The cache repository must already contain the objects and refs needed for
+        the subsequent checkout.  The initial fetch pulls the cache remote's
+        default ref mapping; checkout uses ``origin/HEAD`` when available, or
+        ``origin/master`` or ``origin/main`` as fallbacks.
+
+      * ``no-rebase-pipelines``: a list of :ref:`pipeline <pipeline>` **names**
+        (strings, as they appear in tenant configuration).  When the executor
+        prepares a job workspace and merges items into a repository, it passes
+        the active pipeline name into the in-process merger.  If that name is
+        listed here for the project, Zuul fetches the change ref and checks out
+        ``FETCH_HEAD`` for that item instead of using the project's
+        :attr:`project.merge-mode` (merge, rebase, cherry-pick, squash, and so
+        on) to integrate the change onto the base branch.  This lets selected
+        pipelines test the change revision as published, without a speculative
+        merge or rebase onto the target branch.  This applies only to executor
+        workspace preparation; merge jobs served by a standalone merger do not
+        supply a pipeline name, so this key has no effect there.
 
       Example (YAML body only; place under ``[merger]`` in ``zuul.conf`` with
       appropriate indentation for a multi-line value)::
@@ -503,6 +517,9 @@ The following section of ``zuul.conf`` is used by the merger:
            sparse-checkout:
              - doc
              - tools/ci
+           no-rebase-pipelines:
+             - experimental
+             - post-merge
 
 .. _executor:
 

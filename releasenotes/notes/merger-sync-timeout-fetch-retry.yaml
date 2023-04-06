@@ -12,3 +12,11 @@ fixes:
     Merger fetch retries no longer assume ``git`` stderr is always present;
     if stderr is missing, the merger now waits for the normal retry interval
     before trying again.
+  - |
+    If ``.git/HEAD`` is empty, the merger now reclones the repository on the
+    next update instead of treating the tree as healthy (empty ``HEAD`` could
+    leave fetch in a broken state).
+  - |
+    ``GIT_SSH_COMMAND`` is only set for SSH-style Git URLs, so placeholder
+    ``sshkey`` values in connection config do not affect ``file://`` remotes
+    (for example tests using a fake Gerrit with local repositories).
