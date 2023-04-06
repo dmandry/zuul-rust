@@ -1232,6 +1232,121 @@ class TestMerger(ZuulTestCase):
         self.assertEqual(read_files[1]['files']['zuul.d/a.yaml'],
                          'a-in-project1')
 
+    def test_no_rebase_pipelines_checkouts_change_revision(self):
+        """Executor pipeline in no-rebase-pipelines skips merge_mode."""
+        merger = self.executor_server.merger
+        saved_projects = merger.projects
+
+        def restore_projects():
+            merger.projects = saved_projects
+
+        self.addCleanup(restore_projects)
+        merger.projects = {
+            'org/project': {'no-rebase-pipelines': ['experimental']},
+        }
+
+        parent_path = os.path.join(self.upstream_root, 'org/project')
+        upstream = git.Repo(parent_path)
+
+        A = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'A', files={'a.txt': 'a'})
+        B = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'B', files={'b.txt': 'b'},
+            parent=A.patchsets[0]['ref'])
+        item = self._item_from_fake_change(B)
+        item['merge_mode'] = zuul.model.MERGER_MERGE
+        change_tip = upstream.commit(item['ref']).hexsha
+
+        merger.updateRepo('gerrit', 'org/project')
+        result = merger.mergeChanges([item], pipeline_name='experimental')
+        self.assertIsNotNone(result)
+        hexsha = result[0]
+        self.assertEqual(
+            hexsha, change_tip,
+            'HEAD should match the published change ref, '
+            'not a merge commit')
+
+    def test_no_rebase_pipelines_ignored_for_other_pipeline(self):
+        """Pipelines not listed under no-rebase-pipelines use merge_mode."""
+        merger = self.executor_server.merger
+        saved_projects = merger.projects
+
+        def restore_projects():
+            merger.projects = saved_projects
+
+        self.addCleanup(restore_projects)
+        merger.projects = {
+            'org/project': {'no-rebase-pipelines': ['experimental']},
+        }
+
+        parent_path = os.path.join(self.upstream_root, 'org/project')
+        upstream = git.Repo(parent_path)
+
+        A = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'A', files={'a.txt': 'a'})
+        B = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'B', files={'b.txt': 'b'},
+            parent=A.patchsets[0]['ref'])
+        item = self._item_from_fake_change(B)
+        item['merge_mode'] = zuul.model.MERGER_MERGE
+        change_tip = upstream.commit(item['ref']).hexsha
+
+        # Advance master so merging B cannot fast-forward (must be a merge
+        # commit with two parents).
+        readme = os.path.join(parent_path, 'README')
+        with open(readme, 'a') as f:
+            f.write('diverge master for merge test\n')
+        upstream.index.add([readme])
+        upstream.index.commit('advance master for merge test')
+
+        merger.updateRepo('gerrit', 'org/project')
+        result = merger.mergeChanges([item], pipeline_name='gate')
+        self.assertIsNotNone(result)
+        hexsha = result[0]
+        self.assertNotEqual(hexsha, change_tip)
+        zuul_repo = git.Repo(
+            merger.getRepo('gerrit', 'org/project').local_path)
+        head = zuul_repo.commit(hexsha)
+        self.assertEqual(
+            len(head.parents), 2,
+            'MERGER_MERGE without no-rebase should produce a merge commit')
+
+    def test_no_rebase_pipelines_ignored_when_pipeline_name_none(self):
+        """Without pipeline_name, merge_mode always applies."""
+        merger = self.executor_server.merger
+        saved_projects = merger.projects
+
+        def restore_projects():
+            merger.projects = saved_projects
+
+        self.addCleanup(restore_projects)
+        merger.projects = {
+            'org/project': {'no-rebase-pipelines': ['experimental']},
+        }
+
+        A = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'A', files={'a.txt': 'a'})
+        B = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'B', files={'b.txt': 'b'},
+            parent=A.patchsets[0]['ref'])
+        item = self._item_from_fake_change(B)
+        item['merge_mode'] = zuul.model.MERGER_MERGE
+        parent_path = os.path.join(self.upstream_root, 'org/project')
+        upstream = git.Repo(parent_path)
+        change_tip = upstream.commit(item['ref']).hexsha
+
+        readme = os.path.join(parent_path, 'README')
+        with open(readme, 'a') as f:
+            f.write('diverge master for merge test (no pipeline)\n')
+        upstream.index.add([readme])
+        upstream.index.commit('advance master for merge test')
+
+        merger.updateRepo('gerrit', 'org/project')
+        result = merger.mergeChanges([item])
+        self.assertIsNotNone(result)
+        hexsha = result[0]
+        self.assertNotEqual(hexsha, change_tip)
+
     def test_merge_temp_refs(self):
         """
         Test that the merge updates local zuul refs in order to avoid

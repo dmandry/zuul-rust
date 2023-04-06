@@ -1592,7 +1592,8 @@ class AnsibleJob(object):
                 with tracer.start_as_current_span(
                         'BuildMergeChanges'):
                     item_commit = self.doMergeChanges(
-                        merge_items, self.repo_state, recent, merged_repos)
+                        merge_items, self.repo_state, recent, merged_repos,
+                        args['zuul']['pipeline'])
                 if item_commit is None:
                     # There was a merge conflict and we have already sent
                     # a work complete result, don't run any jobs
@@ -1929,12 +1930,14 @@ class AnsibleJob(object):
 
         filecomments.updateLines(fc, new_lines)
 
-    def doMergeChanges(self, items, repo_state, recent, merged_repos):
+    def doMergeChanges(
+            self, items, repo_state, recent, merged_repos, pipeline_name):
         try:
             ret = self.workspace_merger.mergeChanges(
                 items, repo_state=repo_state,
                 process_worker=self.executor_server.process_worker,
-                recent=recent)
+                recent=recent,
+                pipeline_name=pipeline_name)
         except ValueError:
             # Return ABORTED so that we'll try again. At this point all of
             # the refs we're trying to merge should be valid refs. If we
