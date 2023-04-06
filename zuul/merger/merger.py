@@ -919,6 +919,20 @@ class Repo(object):
                     timestamp=timestamp))
             return repo.head.commit.hexsha
 
+    def noRebaseMerge(self, item, zuul_event_id=None, ops=None):
+        """Fetch change ref and checkout FETCH_HEAD (no merge/rebase)."""
+        log = get_annotated_logger(self.log, zuul_event_id)
+        with self.createRepoObject(zuul_event_id) as repo:
+            ref = item['ref']
+            self.fetch(ref, zuul_event_id=zuul_event_id)
+            if ops is not None:
+                ops.append(zuul.model.MergeOp(
+                    cmd=['git', 'fetch', 'origin', ref],
+                    path=self.workspace_project_path))
+            log.debug("Checkouting %s", ref)
+            repo.git.checkout('FETCH_HEAD')
+            return repo.head.commit.hexsha
+
     def cherryPick(self, ref, zuul_event_id=None, timestamp=None, ops=None):
         log = get_annotated_logger(self.log, zuul_event_id)
         with self.createRepoObject(zuul_event_id) as repo:
@@ -1424,7 +1438,7 @@ class Merger(object):
                 return job
             self._finishRestoreRepoState(job, zuul_event_id)
 
-    def _mergeChange(self, item, base, zuul_event_id, ops):
+    def _mergeChange(self, item, base, zuul_event_id, ops, pipeline_name):
         log = get_annotated_logger(self.log, zuul_event_id)
         repo = self.getRepo(item['connection'], item['project'],
                             zuul_event_id=zuul_event_id)
@@ -1440,7 +1454,19 @@ class Merger(object):
         timestamp = item.get('configured_time')
         try:
             mode = item['merge_mode']
-            if mode == zuul.model.MERGER_MERGE:
+            project_name = item['project']
+            project = (
+                self.projects.get(project_name) if self.projects else None)
+            no_rebase_pipelines = (
+                project.get('no-rebase-pipelines') if project else None)
+            use_no_rebase = (
+                pipeline_name is not None
+                and no_rebase_pipelines
+                and pipeline_name in no_rebase_pipelines)
+            if use_no_rebase:
+                hexsha = repo.noRebaseMerge(
+                    item, zuul_event_id=zuul_event_id, ops=ops)
+            elif mode == zuul.model.MERGER_MERGE:
                 hexsha = repo.merge(item['ref'], zuul_event_id=zuul_event_id,
                                     timestamp=timestamp, ops=ops)
             elif mode == zuul.model.MERGER_MERGE_RESOLVE:
@@ -1483,7 +1509,7 @@ class Merger(object):
 
     def _mergeItem(self, item, recent, recent_by_item, repo_state,
                    zuul_event_id, ops, branches=None,
-                   process_worker=None):
+                   process_worker=None, pipeline_name=None):
         log = get_annotated_logger(self.log, zuul_event_id)
         log.debug("Processing ref %s for project %s/%s / %s uuid %s" %
                   (item['ref'], item['connection'],
@@ -1541,7 +1567,8 @@ class Merger(object):
                               zuul_event_id=zuul_event_id)
 
         # Merge the change
-        orig_hexsha, hexsha = self._mergeChange(item, base, zuul_event_id, ops)
+        orig_hexsha, hexsha = self._mergeChange(
+            item, base, zuul_event_id, ops, pipeline_name)
         if not hexsha:
             return None, None
         # Store this commit as the most recent for this project-branch
@@ -1561,10 +1588,18 @@ class Merger(object):
 
     def mergeChanges(self, items, files=None, dirs=None, repo_state=None,
                      repo_locks=None, branches=None, zuul_event_id=None,
-                     process_worker=None, errors=None, recent=None):
+                     process_worker=None, errors=None, recent=None,
+                     pipeline_name=None):
         """Merge changes
 
         Call Merger.updateRepo() first.
+
+        If ``pipeline_name`` is set and the project entry in ``Merger``
+        ``projects`` includes ``no-rebase-pipelines`` containing that
+        pipeline, the change ref is fetched and checked out directly
+        (``Repo.noRebaseMerge``) instead of using ``merge_mode`` merge or
+        rebase.  Used by the executor so selected pipelines can test the
+        revision as published without speculative merge/rebase onto base.
         """
         # _mergeItem calls reset as necessary.
         log = get_annotated_logger(self.log, zuul_event_id)
@@ -1600,7 +1635,8 @@ class Merger(object):
                         item, recent, recent_by_item, repo_state,
                         zuul_event_id, ops,
                         branches=branches,
-                        process_worker=process_worker)
+                        process_worker=process_worker,
+                        pipeline_name=pipeline_name)
                 except BrokenProcessPool:
                     raise
                 except Exception:
