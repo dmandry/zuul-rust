@@ -16,7 +16,7 @@
 
 from contextlib import contextmanager
 from contextlib import nullcontext
-from urllib.parse import urlsplit, urlunsplit, urlparse
+from urllib.parse import urlsplit, urlunsplit, urlparse, urlunparse
 import enum
 import hashlib
 import logging
@@ -29,6 +29,7 @@ import time
 from collections import OrderedDict
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
+from posixpath import normpath
 
 import git
 import gitdb
@@ -61,6 +62,11 @@ def _remote_uses_git_ssh(remote_url):
         return True
     scheme = urlsplit(str(remote_url)).scheme.lower()
     return scheme in ('ssh', 'git+ssh')
+
+
+def _git_mirror_base():
+    """Root directory for per-project bare mirrors; override for unit tests."""
+    return os.environ.get('ZUUL_GIT_MIRROR_ROOT', '/git-mirror').rstrip('/')
 
 
 def redact_url(url):
@@ -143,7 +149,7 @@ class Repo(object):
                  sshkey=None, cache_path=None, logger=None, git_timeout=300,
                  zuul_event_id=None, retry_timeout=None, skip_refs=False,
                  sparse_paths=SparsePaths.EMPTY, workspace_project_path=None,
-                 sync_timeout=30, project=None):
+                 sync_timeout=30, project=None, project_name=None):
         # The default for sparse_paths is that we set the
         # sparse-checkout to the top dir only; that's the minimal
         # checkout that we can perform and still do index-based
@@ -175,6 +181,7 @@ class Repo(object):
         self.cache_path = cache_path
         self.sync_timeout = sync_timeout
         self.project = project
+        self.project_name = project_name
         self._initialized = False
         try:
             self._setup_known_hosts()
@@ -419,6 +426,23 @@ class Repo(object):
                 else:
                     raise
 
+    def _mirror_bare_repo(self, mirror_path, origin_url=None):
+        """Open or create a bare repository at mirror_path for /git-mirror."""
+        mp = Path(mirror_path)
+        to = {'kill_after_timeout': self.git_timeout}
+        if not mp.is_dir():
+            if origin_url is None:
+                raise ValueError(
+                    'origin_url is required to create mirror at %s' % (mp,))
+            mp.mkdir(parents=True, exist_ok=True)
+            r = git.Repo.init(str(mp), bare=True)
+            r.git.update_environment(**self.env)
+            r.git.remote('add', '--mirror=fetch', 'origin', origin_url, **to)
+            return r
+        r = git.Repo(str(mp))
+        r.git.update_environment(**self.env)
+        return r
+
     def _git_fetch(self, remote, zuul_event_id, ref=None, **kwargs):
         log = get_annotated_logger(self.log, zuul_event_id)
         for attempt in range(1, self.retry_attempts + 1):
@@ -434,9 +458,120 @@ class Repo(object):
                     ref_to_fetch = ref
                     if ref_to_fetch:
                         ref_to_fetch += ':refs/zuul/fetch'
-                    repo.git.fetch(remote, ref_to_fetch,
-                                   kill_after_timeout=self.git_timeout, f=True,
-                                   **kwargs)
+                    repo.git.fetch(
+                        '--recurse-submodules=no', remote, ref_to_fetch,
+                        kill_after_timeout=self.git_timeout, f=True,
+                        **kwargs)
+                    if ref_to_fetch:
+                        use_mirror = (
+                            self.project.get('use-mirror', False)
+                            if self.project else False)
+                        if use_mirror:
+                            mirror_dir = (
+                                Path(_git_mirror_base()) / self.project_name)
+                            url = repo.remotes[0].config_reader.get("url")
+                            to = {'kill_after_timeout': self.git_timeout}
+                            mir = self._mirror_bare_repo(mirror_dir, url)
+                            mir.git.fetch(
+                                '--no-tags', '--recurse-submodules=no',
+                                repo.working_tree_dir,
+                                'refs/zuul/fetch:' + ref, **to)
+                            try:
+                                gitmodules = mir.git.show(
+                                    '%s:.gitmodules' % (ref,), **to)
+                            except Exception:
+                                gitmodules = ''
+                            url_modules_pattern = re.compile(
+                                r'\n\s*url\s*=\s*([\S]+)\s')
+                            url_matches = url_modules_pattern.findall(
+                                gitmodules)
+                            path_modules_pattern = re.compile(
+                                r'\n\s*path\s*=\s*([\S]+)\s')
+                            path_matches = path_modules_pattern.findall(
+                                gitmodules)
+                            for submodule, path in zip(
+                                    url_matches, path_matches):
+                                submodule_mirror_dir = (
+                                    Path(_git_mirror_base())
+                                    / self.project_name / submodule)
+                                submodules_remote = self.project.get(
+                                    'submodules-remote',
+                                    repo.remotes[0].config_reader.get(
+                                        "url"))
+                                url_parsed = urlparse(
+                                    submodules_remote + '/' + submodule)
+                                sub_url = urlunparse(
+                                    url_parsed._replace(
+                                        path=normpath(
+                                            url_parsed.path)))
+                                sub_mir = self._mirror_bare_repo(
+                                    submodule_mirror_dir, sub_url)
+                                submodule_ref = mir.git.rev_parse(
+                                    '%s:%s' % (ref, path), **to).strip()
+                                try:
+                                    sub_mir.git.fetch(
+                                        '--no-tags', 'origin', submodule_ref,
+                                        **to)
+                                except Exception:
+                                    log.info(
+                                        "Unable to fetch submodule commit, "
+                                        "fallback to fetching of default "
+                                        "refs")
+                                    sub_mir.git.fetch(
+                                        '--no-tags', 'origin', **to)
+                                try:
+                                    lfsconfig = sub_mir.git.show(
+                                        '%s:.lfsconfig' % (submodule_ref,),
+                                        **to)
+                                except Exception:
+                                    log.info(
+                                        f'Repo has no lfsconfig for '
+                                        f'submodule {submodule}, skipping '
+                                        f'lfs fetch')
+                                else:
+                                    url_pattern = re.compile(
+                                        r'\n\s*url\s*=\s*"([^"]+)"')
+                                    lfs_matches = url_pattern.findall(
+                                        lfsconfig)
+                                    if not lfs_matches:
+                                        url_pattern = re.compile(
+                                            r'\n\s*url\s*=\s*([\S]+)')
+                                        lfs_matches = url_pattern.findall(
+                                            lfsconfig)
+                                    if lfs_matches:
+                                        url_string = lfs_matches[0]
+                                        sub_mir.git.lfs(
+                                            'fetch', url_string, submodule_ref,
+                                            **to)
+                                    else:
+                                        log.info(
+                                            f'URL not found in lfsconfig '
+                                            f'file for submodule '
+                                            f'{submodule}, skipping lfs fetch')
+                            try:
+                                lfsconfig = mir.git.show(
+                                    '%s:.lfsconfig' % (ref,), **to)
+                            except Exception:
+                                log.info(
+                                    'Repo has no lfsconfig, skipping lfs '
+                                    'fetch')
+                            else:
+                                url_pattern = re.compile(
+                                    r'\n\s*url\s*=\s*"([^"]+)"')
+                                lfs_matches = url_pattern.findall(lfsconfig)
+                                if not lfs_matches:
+                                    url_pattern = re.compile(
+                                        r'\n\s*url\s*=\s*([\S]+)')
+                                    lfs_matches = url_pattern.findall(
+                                        lfsconfig)
+                                if lfs_matches:
+                                    url_string = lfs_matches[0]
+                                    mir.git.lfs(
+                                        'fetch', url_string, ref, **to)
+                                else:
+                                    log.info(
+                                        'URL not found in lfsconfig file, '
+                                        'skipping lfs fetch')
                 return True
             except Exception as e:
                 if attempt < self.retry_attempts:
@@ -791,7 +926,7 @@ class Repo(object):
         return "Deleted reference %s" % path
 
     def checkout(self, ref, sparse_paths=None,
-                 zuul_event_id=None):
+                 zuul_event_id=None, pipeline_name=None):
         # Return the hexsha of the checkout commit
         log = get_annotated_logger(self.log, zuul_event_id)
         with self.createRepoObject(zuul_event_id) as repo:
@@ -803,7 +938,8 @@ class Repo(object):
             else:
                 log.debug("Checking out %s" % ref)
                 try:
-                    self._checkout(repo, sparse_paths, ref)
+                    self._checkout(
+                        repo, sparse_paths, ref, pipeline_name, log)
                 except Exception:
                     lock_path = f"{self.local_path}/.git/index.lock"
                     if os.path.isfile(lock_path):
@@ -811,12 +947,14 @@ class Repo(object):
                                     lock_path)
                         os.unlink(lock_path)
                         # Retry the checkout
-                        self._checkout(repo, sparse_paths, ref)
+                        self._checkout(
+                            repo, sparse_paths, ref, pipeline_name, log)
                     else:
                         raise
+
             return repo.head.commit.hexsha
 
-    def _checkout(self, repo, sparse_paths, ref):
+    def _checkout(self, repo, sparse_paths, ref, pipeline_name=None, log=None):
         # Perform a hard reset to the correct ref before checking out so
         # that we clean up anything that might be left over from a merge
         # while still only preparing the working copy once.
@@ -834,6 +972,87 @@ class Repo(object):
         repo.head.reset(working_tree=True)
         repo.git.clean('-x', '-f', '-d')
         repo.git.checkout(ref)
+        no_rebase_pipelines = (
+            self.project.get('no-rebase-pipelines') if self.project else None)
+        use_mirror = (
+            self.project.get('use-mirror', False) if self.project else False)
+        # When not using no-rebase for this pipeline, fetch ref to
+        # mirrors if needed
+        if use_mirror and not (
+                pipeline_name and no_rebase_pipelines
+                and pipeline_name in no_rebase_pipelines):
+            mirror_dir = Path(_git_mirror_base()) / self.project_name
+            url = repo.remotes[0].config_reader.get("url")
+            to = {'kill_after_timeout': self.git_timeout}
+            mir = self._mirror_bare_repo(mirror_dir, url)
+            mir.git.fetch(
+                '--no-tags', '--recurse-submodules=no',
+                repo.working_tree_dir, '%s:%s' % (ref, ref), **to)
+            try:
+                gitmodules = mir.git.show(
+                    '%s:.gitmodules' % (ref,), **to)
+            except Exception:
+                gitmodules = ''
+            url_modules_pattern = re.compile(r'\n\s*url\s*=\s*([\S]+)\s')
+            url_matches = url_modules_pattern.findall(gitmodules)
+            path_modules_pattern = re.compile(r'\n\s*path\s*=\s*([\S]+)\s')
+            path_matches = path_modules_pattern.findall(gitmodules)
+            for submodule, path in zip(url_matches, path_matches):
+                submodule_mirror_dir = (
+                    Path(_git_mirror_base()) / self.project_name / submodule)
+                submodules_remote = self.project.get(
+                    'submodules-remote',
+                    repo.remotes[0].config_reader.get("url"))
+                url_parsed = urlparse(
+                    submodules_remote + '/' + submodule)
+                sub_url = urlunparse(
+                    url_parsed._replace(
+                        path=normpath(url_parsed.path)))
+                sub_mir = self._mirror_bare_repo(submodule_mirror_dir, sub_url)
+                submodule_ref = mir.git.rev_parse(
+                    '%s:%s' % (ref, path), **to).strip()
+                sub_mir.git.fetch(
+                    '--no-tags', 'origin', submodule_ref, **to)
+                try:
+                    lfsconfig = sub_mir.git.show(
+                        '%s:.lfsconfig' % (submodule_ref,), **to)
+                except Exception:
+                    log.info(
+                        f'Repo has no lfsconfig for submodule '
+                        f'{submodule}, skipping lfs fetch')
+                else:
+                    url_pattern = re.compile(
+                        r'\n\s*url\s*=\s*"([^"]+)"')
+                    lfs_matches = url_pattern.findall(lfsconfig)
+                    if not lfs_matches:
+                        url_pattern = re.compile(
+                            r'\n\s*url\s*=\s*([\S]+)')
+                        lfs_matches = url_pattern.findall(lfsconfig)
+                    if lfs_matches:
+                        url_string = lfs_matches[0]
+                        sub_mir.git.lfs(
+                            'fetch', url_string, submodule_ref, **to)
+                    else:
+                        log.info(
+                            f'URL not found in lfsconfig file for '
+                            f'submodule {submodule}, skipping lfs fetch')
+            try:
+                lfsconfig = mir.git.show('%s:.lfsconfig' % (ref,), **to)
+            except Exception:
+                log.info('Repo has no lfsconfig, skipping lfs fetch')
+            else:
+                url_pattern = re.compile(r'\n\s*url\s*=\s*"([^"]+)"')
+                lfs_matches = url_pattern.findall(lfsconfig)
+                if not lfs_matches:
+                    url_pattern = re.compile(r'\n\s*url\s*=\s*([\S]+)')
+                    lfs_matches = url_pattern.findall(lfsconfig)
+                if lfs_matches:
+                    url_string = lfs_matches[0]
+                    mir.git.lfs('fetch', url_string, str(ref), **to)
+                else:
+                    log.info(
+                        'URL not found in lfsconfig file, skipping lfs '
+                        'fetch')
 
     def uncheckout(self):
         with self.createRepoObject(None) as repo:
@@ -1306,7 +1525,8 @@ class Merger(object):
                 sparse_paths=sparse_paths,
                 workspace_project_path=workspace_project_path,
                 sync_timeout=self.sync_timeout,
-                project=project)
+                project=project,
+                project_name=project_name)
 
             self.repos[key] = repo
         except Exception:
@@ -1460,7 +1680,9 @@ class Merger(object):
         repo = self.getRepo(item['connection'], item['project'],
                             zuul_event_id=zuul_event_id)
         try:
-            repo.checkout(base, zuul_event_id=zuul_event_id)
+            repo.checkout(
+                base, zuul_event_id=zuul_event_id,
+                pipeline_name=pipeline_name)
         except Exception:
             log.exception("Unable to checkout %s", base)
             return None, None

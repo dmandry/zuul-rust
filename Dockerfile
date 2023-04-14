@@ -125,6 +125,9 @@ RUN apt-get update \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir /root/.ssh \
+  && echo "PubkeyAcceptedAlgorithms +ssh-rsa" > /root/.ssh/config
+
 CMD ["/usr/local/bin/zuul-executor", "-f"]
 
 FROM zuul AS zuul-fingergw
@@ -134,6 +137,10 @@ FROM zuul AS zuul-launcher
 CMD ["/usr/local/bin/zuul-launcher", "-f"]
 
 FROM zuul AS zuul-merger
+
+RUN mkdir /root/.ssh \
+  && echo "PubkeyAcceptedAlgorithms +ssh-rsa" > /root/.ssh/config
+
 CMD ["/usr/local/bin/zuul-merger", "-f"]
 
 FROM zuul AS zuul-scheduler

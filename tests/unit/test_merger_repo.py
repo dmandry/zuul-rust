@@ -1062,6 +1062,72 @@ class TestMergerRepo(ZuulTestCase):
         self.assertEqual(work_repo.remote_url, parent_path)
         self.assertTrue(os.path.exists(work_repo.local_path))
 
+    def test_git_mirror_root_env_strips_trailing_slash(self):
+        root = os.path.join(self.test_root, 'gmroot') + '/'
+        os.environ['ZUUL_GIT_MIRROR_ROOT'] = root
+        self.addCleanup(os.environ.pop, 'ZUUL_GIT_MIRROR_ROOT', None)
+        self.assertEqual(merger_mod._git_mirror_base(), root.rstrip('/'))
+
+    def test_use_mirror_fetch_without_gitmodules_populates_mirror(self):
+        mirror_root = os.path.join(self.test_root, 'git-mirror-fetch')
+        os.environ['ZUUL_GIT_MIRROR_ROOT'] = mirror_root
+        self.addCleanup(os.environ.pop, 'ZUUL_GIT_MIRROR_ROOT', None)
+        shutil.rmtree(mirror_root, ignore_errors=True)
+
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        work_root = os.path.join(self.test_root, 'mirror-fetch-work')
+        shutil.rmtree(work_root, ignore_errors=True)
+        os.makedirs(work_root)
+
+        work_repo = Repo(
+            parent_path, work_root,
+            'none@example.org', 'User Name', '0', '0',
+            project={'use-mirror': True},
+            project_name='org/project1',
+        )
+        work_repo._git_fetch('origin', None, ref='master')
+
+        bare_path = os.path.join(mirror_root, 'org/project1')
+        self.assertTrue(os.path.isfile(os.path.join(bare_path, 'HEAD')))
+        bare = git.Repo(bare_path)
+        upstream_master = git.Repo(parent_path).commit('master').hexsha
+        self.assertEqual(bare.commit('master').hexsha, upstream_master)
+
+    def test_use_mirror_checkout_skipped_for_no_rebase_pipeline(self):
+        mirror_root = os.path.join(self.test_root, 'git-mirror-skip')
+        os.environ['ZUUL_GIT_MIRROR_ROOT'] = mirror_root
+        self.addCleanup(os.environ.pop, 'ZUUL_GIT_MIRROR_ROOT', None)
+        shutil.rmtree(mirror_root, ignore_errors=True)
+
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        work_root = os.path.join(self.test_root, 'mirror-skip-work')
+        shutil.rmtree(work_root, ignore_errors=True)
+        os.makedirs(work_root)
+
+        project = {
+            'use-mirror': True,
+            'no-rebase-pipelines': ['exper'],
+        }
+        work_repo = Repo(
+            parent_path, work_root,
+            'none@example.org', 'User Name', '0', '0',
+            project=project,
+            project_name='org/project1',
+        )
+        calls = []
+        real_mirror = Repo._mirror_bare_repo
+
+        def counting_mirror(inst, mirror_path, origin_url=None):
+            calls.append(str(mirror_path))
+            return real_mirror(inst, mirror_path, origin_url=origin_url)
+
+        self.patch(Repo, '_mirror_bare_repo', counting_mirror)
+        work_repo.checkout('master', pipeline_name='exper')
+        self.assertEqual([], calls)
+        calls.clear()
+        work_repo.checkout('master', pipeline_name='gate')
+        self.assertNotEqual([], calls)
+
 
 class TestMergerWithAuthUrl(ZuulTestCase):
     config_file = 'zuul-github-driver.conf'

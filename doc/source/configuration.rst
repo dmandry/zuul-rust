@@ -507,8 +507,45 @@ The following section of ``zuul.conf`` is used by the merger:
         on) to integrate the change onto the base branch.  This lets selected
         pipelines test the change revision as published, without a speculative
         merge or rebase onto the target branch.  This applies only to executor
-        workspace preparation; merge jobs served by a standalone merger do not
+        workspace preparation;         merge jobs served by a standalone merger do not
         supply a pipeline name, so this key has no effect there.
+
+      * ``use-mirror``: when true, Zuul maintains **bare** Git mirrors on the
+        local filesystem under ``<mirror-root>/<Zuul project name>`` (for
+        example ``/git-mirror/org/example`` when using the default root).
+        ``<mirror-root>`` is ``/git-mirror`` unless the process environment
+        sets ``ZUUL_GIT_MIRROR_ROOT`` to a different path (a trailing slash
+        is ignored). Set this variable on merger and executor processes when
+        the default location is unsuitable, and ensure the chosen directory is
+        writable and persisted if mirrors should survive restarts. After a successful ``git fetch``
+        of a change ref into the workspace repository, Zuul copies objects into
+        that mirror from the workspace and walks ``.gitmodules`` at the
+        fetched revision to refresh per-submodule mirrors under
+        ``<mirror-root>/<project>/<url>``, where ``<url>`` is the submodule URL
+        string from ``.gitmodules``. When the executor checks out a workspace
+        (``checkout_workspace_repos``), it passes the job's pipeline name; if
+        that pipeline is **not** listed under ``no-rebase-pipelines`` for the
+        project, Zuul performs a similar mirror update from the checked-out
+        tree. Pipelines listed under ``no-rebase-pipelines`` skip this
+        checkout-time mirror pass (fetches still update mirrors when a ref is
+        fetched). When ``pipeline_name`` is omitted (for example many
+        standalone merger merge requests), checkout-time mirror updates are
+        skipped; mirror updates after ``git fetch`` still run when a change
+        ref is supplied.
+
+        The host must allow Zuul to create and write under ``<mirror-root>``
+        (for example bind-mount a volume in container deployments). The
+        ``git`` and ``git lfs`` commands must be available on ``PATH``; LFS
+        blobs are fetched when ``.lfsconfig`` exists at the relevant revision.
+        Mirror updates always run ``git show <rev>:.gitmodules``; the revision
+        must therefore include a ``.gitmodules`` file. Projects that never
+        carry that file should not set ``use-mirror``.
+
+      * ``submodules-remote``: optional string. When set, submodule bare mirrors
+        use this value as the **base URL** joined with each submodule URL from
+        ``.gitmodules`` (path normalized) instead of using the main project's
+        ``origin`` URL. Use this when submodule clone URLs are relative to a
+        different host or path prefix than the parent repository.
 
       Example (YAML body only; place under ``[merger]`` in ``zuul.conf`` with
       appropriate indentation for a multi-line value)::
@@ -520,6 +557,8 @@ The following section of ``zuul.conf`` is used by the merger:
            no-rebase-pipelines:
              - experimental
              - post-merge
+           use-mirror: true
+           submodules-remote: https://git.example.com/base
 
 .. _executor:
 

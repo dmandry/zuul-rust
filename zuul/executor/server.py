@@ -1633,7 +1633,9 @@ class AnsibleJob(object):
                         attributes={'connection': project['connection'],
                                     'project': project['name']}):
                     if self.checkout_workspace_repos:
-                        hexsha = repo.checkout(selected_ref)
+                        hexsha = repo.checkout(
+                            selected_ref,
+                            pipeline_name=args['zuul']['pipeline'])
                     else:
                         hexsha = repo.getRef(selected_ref)[1]
                         # So that we have a consistent workspace
