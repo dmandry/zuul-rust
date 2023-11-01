@@ -73,6 +73,7 @@ def construct_build_params(uuid, connections, job, item, pipeline,
         project=project,
         tenant=tenant.name,
         event_id=item.event.zuul_event_id if item.event else None,
+        comment=item.event.comment if item.event else None,
         jobtags=sorted(job.tags),
         include_vars=job.include_vars,
     ))
@@ -241,6 +242,7 @@ def construct_build_params(uuid, connections, job, item, pipeline,
 
     if item.event:
         params['zuul_event_id'] = item.event.zuul_event_id
+        params['comment'] = item.event.comment
     return params
 
 

@@ -1586,3 +1586,57 @@ class TestSourceContext(BaseTestCase):
 
     def test_serialize(self):
         self.context.deserialize(self.context.serialize())
+
+
+class TestEventInfoTriggerComment(BaseTestCase):
+    """Trigger comment text is tracked on EventInfo and MergeRequest."""
+
+    def test_event_info_from_event_copies_comment(self):
+        ev = Dummy(
+            zuul_event_id='e1',
+            timestamp=123.0,
+            span_context=None,
+            comment='recheck bugfix',
+        )
+        info = model.EventInfo.fromEvent(ev, 'refs/heads/master')
+        self.assertEqual(info.comment, 'recheck bugfix')
+        self.assertEqual(info.ref, 'refs/heads/master')
+
+    def test_event_info_from_change_management_event_ignores_comment(self):
+        ev = model.EnqueueEvent(
+            'tenant', 'gate', 'git.example.com', 'org/proj', change='1,1')
+        ev.comment = 'should not propagate'
+        info = model.EventInfo.fromEvent(ev, None)
+        self.assertIsNone(info.comment)
+
+    def test_event_info_to_dict_from_dict_roundtrip_comment(self):
+        info = model.EventInfo()
+        info.zuul_event_id = 'zid'
+        info.timestamp = 99.0
+        info.span_context = None
+        info.ref = 'refs/change/1/1'
+        info.comment = 'note body'
+        d = info.toDict()
+        restored = model.EventInfo.fromDict(d)
+        self.assertEqual(restored.comment, 'note body')
+        self.assertEqual(restored.zuul_event_id, 'zid')
+
+    def test_merge_request_comment_roundtrip(self):
+        req = model.MergeRequest(
+            uuid='u1',
+            job_type=model.MergeRequest.MERGE,
+            build_set_uuid='bs1',
+            tenant_name='tenant',
+            pipeline_name='check',
+            event_id='e1',
+            comment='merge me',
+            precedence=0,
+            state=model.MergeRequest.UNSUBMITTED,
+            result_path=None,
+            span_context=None,
+            span_info=None,
+        )
+        d = req.toDict()
+        self.assertEqual(d['comment'], 'merge me')
+        again = model.MergeRequest.fromDict(d)
+        self.assertEqual(again.comment, 'merge me')

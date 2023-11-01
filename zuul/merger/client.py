@@ -99,6 +99,7 @@ class MergeClient(object):
                 tenant_name=tenant_name,
                 pipeline_name=pipeline_name,
                 event_id=event.zuul_event_id if event else None,
+                comment=event.comment if event else None,
                 precedence=precedence,
                 span_info=tracing.getSpanInfo(job_span),
             )

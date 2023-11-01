@@ -1115,6 +1115,18 @@ The following variables related to the job are available:
       The UUID of the event that triggered this execution. This is mainly
       useful for debugging purposes.
 
+   .. var:: comment
+
+      When the triggering event includes user comment text (for example a
+      pull-request or merge-request note that matched a pipeline trigger's
+      ``comment`` patterns), this field holds that text.  Otherwise the
+      value is null (for example a new change notification, a timer, or a
+      ref update).  Change-management events (such as administrative enqueue
+      commands) do not populate this field.
+
+      The same text is forwarded to merge operations so merger logs can
+      correlate speculative merges with comment-driven runs.
+
    .. var:: voting
 
       A boolean indicating whether the job is voting.
