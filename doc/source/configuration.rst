@@ -394,6 +394,12 @@ Mergers need to be able to connect to the ZooKeeper cluster as well as
 any services for which connections are configured (Gerrit, GitHub,
 etc).
 
+When a merge request is issued, Zuul may attach the optional trigger
+comment from the originating event (the same value jobs see as
+:var:`zuul.comment` in :ref:`user_jobs_zuul_variables`).  The merger logs
+that text while processing the change, which helps operators relate
+merge activity to comment-triggered pipelines.
+
 The following section of ``zuul.conf`` is used by the merger:
 
 .. attr:: merger

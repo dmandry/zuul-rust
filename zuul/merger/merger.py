@@ -1747,13 +1747,14 @@ class Merger(object):
         return orig_hexsha, hexsha
 
     def _mergeItem(self, item, recent, recent_by_item, repo_state,
-                   zuul_event_id, ops, branches=None,
+                   zuul_event_id, ops, comment=None, branches=None,
                    process_worker=None, pipeline_name=None):
         log = get_annotated_logger(self.log, zuul_event_id)
         log.debug("Processing ref %s for project %s/%s / %s uuid %s" %
                   (item['ref'], item['connection'],
                    item['project'], item['branch'],
                    item['buildset_uuid']))
+        log.info("Processing change with event comment %s", comment)
         repo = self.getRepo(item['connection'], item['project'])
         key = (item['connection'], item['project'], item['branch'])
 
@@ -1827,8 +1828,8 @@ class Merger(object):
 
     def mergeChanges(self, items, files=None, dirs=None, repo_state=None,
                      repo_locks=None, branches=None, zuul_event_id=None,
-                     process_worker=None, errors=None, recent=None,
-                     pipeline_name=None):
+                     comment=None, process_worker=None, errors=None,
+                     recent=None, pipeline_name=None):
         """Merge changes
 
         Call Merger.updateRepo() first.
@@ -1873,6 +1874,7 @@ class Merger(object):
                     orig_hexsha, hexsha = self._mergeItem(
                         item, recent, recent_by_item, repo_state,
                         zuul_event_id, ops,
+                        comment=comment,
                         branches=branches,
                         process_worker=process_worker,
                         pipeline_name=pipeline_name)

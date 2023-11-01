@@ -6098,7 +6098,7 @@ class MergeRequest(JobRequest):
     FILES_CHANGES = "fileschanges"
 
     def __init__(self, uuid, job_type, build_set_uuid, tenant_name,
-                 pipeline_name, event_id, precedence=None, state=None,
+                 pipeline_name, event_id, comment=None, precedence=None, state=None,
                  result_path=None, span_context=None, span_info=None):
         super().__init__(uuid, precedence, state, result_path, span_context)
         self.job_type = job_type
@@ -6106,6 +6106,7 @@ class MergeRequest(JobRequest):
         self.tenant_name = tenant_name
         self.pipeline_name = pipeline_name
         self.event_id = event_id
+        self.comment = comment
         self.span_info = span_info
 
     def toDict(self):
@@ -6116,6 +6117,7 @@ class MergeRequest(JobRequest):
             "tenant_name": self.tenant_name,
             "pipeline_name": self.pipeline_name,
             "event_id": self.event_id,
+            "comment": self.comment,
             "span_info": self.span_info,
         })
         return d
@@ -6129,6 +6131,7 @@ class MergeRequest(JobRequest):
             data["tenant_name"],
             data["pipeline_name"],
             data["event_id"],
+            comment=data.get("comment"),
             precedence=data["precedence"],
             state=data["state"],
             result_path=data["result_path"],
@@ -7047,6 +7050,7 @@ class EventInfo:
         self.image_names = None
         self.image_upload_uuid = None
         self.image_build_uuid = None
+        self.comment = None
 
     @classmethod
     def fromEvent(cls, event, event_ref_key):
@@ -7061,6 +7065,7 @@ class EventInfo:
         tinfo.image_names = getattr(event, 'image_names', None)
         tinfo.image_upload_uuid = getattr(event, 'image_upload_uuid', None)
         tinfo.image_build_uuid = getattr(event, 'image_build_uuid', None)
+        tinfo.comment = event.comment if not isinstance(event, ChangeManagementEvent) else None
         return tinfo
 
     @classmethod
@@ -7073,6 +7078,7 @@ class EventInfo:
         tinfo.image_names = d.get("image_names")
         tinfo.image_upload_uuid = d.get("image_upload_uuid")
         tinfo.image_build_uuid = d.get("image_build_uuid")
+        tinfo.comment = d.get("comment")
         return tinfo
 
     def isSuperset(self, other):
@@ -7108,6 +7114,7 @@ class EventInfo:
             "image_names": self.image_names,
             "image_upload_uuid": self.image_upload_uuid,
             "image_build_uuid": self.image_build_uuid,
+            "comment": self.comment,
         }
 
 
