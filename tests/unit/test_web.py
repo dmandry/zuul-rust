@@ -1228,8 +1228,17 @@ class TestWeb(BaseTestWeb):
 
     @simple_layout('layouts/special-characters-job.yaml')
     def test_web_job_special_characters(self):
-        job = self.get_url("api/tenant/tenant-one/job/a%40b%2Fc").json()
-        self.assertEqual("a@b/c", job[0]["name"])
+        resp = self.get_url("api/tenant/tenant-one/job"
+                            "/org/project1_:@% +check-job")
+        data = resp.json()
+        self.assertEqual("org/project1_:@% +check-job", data[0]["name"])
+
+        resp = self.get_url(
+            "api/tenant/tenant-one/pipeline/check"
+            "/project/org/project1_:@% +test/branch/master/freeze-job/"
+            "org/project1_:@% +check-job")
+        data = resp.json()
+        self.assertTrue(data['job'] == "org/project1_:@% +check-job")
 
     def test_freeze_jobs(self):
         # Test can get a list of the jobs for a given project+pipeline+branch.

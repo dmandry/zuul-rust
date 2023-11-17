@@ -126,7 +126,7 @@ const routes = (info, user) => {
       component: ProjectPage
     },
     {
-      to: '/job/:jobName',
+      to: '/job/:jobName*',
       component: JobPage
     },
     {
@@ -146,7 +146,7 @@ const routes = (info, user) => {
       component: NodePage
     },
     {
-      to: '/semaphore/:semaphoreName',
+      to: '/semaphore/:semaphoreName*',
       component: SemaphorePage
     },
     {

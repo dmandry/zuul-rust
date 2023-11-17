@@ -70,7 +70,7 @@ class JobsList extends React.Component {
       id: jobId,
       name: (
         <React.Fragment>
-          <Link to={linkPrefix + encodeURIComponent(job.name)}>{job.name}</Link>
+          <Link to={linkPrefix + job.name}>{job.name}</Link>
           {extra && (<span> ({extra})</span>)}
           {job.description && (
             <span style={{marginLeft: '10px'}}>{job.description}</span>
