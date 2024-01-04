@@ -2354,6 +2354,12 @@ class PipelineManager(metaclass=ABCMeta):
                             "branch. No jobs will run.")
             source.setChangeAttributes(
                 change, containing_branches=event.item_in_branches)
+        for files in event.files:
+            if 'generated' in files.keys() and files['generated']:
+                change = item.changes[0]
+                source = self.sched.connections.getSource(
+                    change.project.connection_name)
+                source.setChangeAttributes(change, files=files['files'])
         with build_set.activeContext(self.current_context):
             build_set.setMergeRepoState(event.repo_state)
             build_set.merge_state = build_set.COMPLETE

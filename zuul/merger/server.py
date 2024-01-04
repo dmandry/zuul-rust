@@ -324,7 +324,8 @@ class BaseMergeServer(metaclass=ABCMeta):
             repo_locks=self.repo_locks,
             zuul_event_id=zuul_event_id,
             comment=merge_request.comment,
-            errors=errors)
+            errors=errors,
+            pipeline_name=merge_request.pipeline_name)
 
         if ret is not None:
             result['merged'] = True

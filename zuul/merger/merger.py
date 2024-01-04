@@ -24,6 +24,7 @@ import math
 import sys
 import os
 import re
+import requests
 import shutil
 import time
 from collections import OrderedDict
@@ -41,6 +42,38 @@ import zuul.model
 from zuul.lib.logutil import get_annotated_logger
 
 NULL_REF = '0000000000000000000000000000000000000000'
+
+# Default relative path under ``layout-url`` for layout artifact HTML indexes.
+DEFAULT_LAYOUT_URL_PATH = (
+    '{change}/{patchset}/{pipeline}-layout/{commit}/{job}'
+)
+
+
+def layout_artifact_path_from_template(template, *, change, patchset, pipeline,
+                                       commit_short, commit_full, job):
+    """Return the path segment under *layout-url* for layout artifact fetches.
+
+    *template* is a str.format pattern.  Supported placeholders are
+    ``change`` (change id), ``patchset``, ``pipeline`` (active pipeline name),
+    ``commit`` (merged commit, first 8 hex digits), ``commit_full`` (full hex
+    SHA), and ``job`` (``layout-job``).  When *template* is falsy, use
+    ``DEFAULT_LAYOUT_URL_PATH``.
+    """
+    fmt = template or DEFAULT_LAYOUT_URL_PATH
+    try:
+        return fmt.format(
+            change=change,
+            patchset=patchset,
+            pipeline=pipeline,
+            commit=commit_short,
+            commit_full=commit_full,
+            job=job,
+        ).strip('/')
+    except KeyError as e:
+        raise ValueError(
+            'layout-url-path: unknown placeholder in format string; '
+            'allowed names are change, patchset, pipeline, commit, '
+            'commit_full, job (%s)' % (e.args[0],)) from e
 
 
 def cache_objects_dir(cache_path):
@@ -1284,7 +1317,10 @@ class Repo(object):
             return False
 
     def getFiles(self, files, dirs=[], branch=None, commit=None,
-                 zuul_event_id=None):
+                 zuul_event_id=None, errors=None, layout_url=None,
+                 layout_url_username=None, layout_url_secret=None,
+                 layout_job=None, layout_url_path=None, pipeline_name=None,
+                 number=None, patchset=None, is_head_change=False):
         log = get_annotated_logger(self.log, zuul_event_id)
         ret = {}
         with self.createRepoObject(zuul_event_id) as repo:
@@ -1292,6 +1328,7 @@ class Repo(object):
                 head = repo.heads[branch].commit
             else:
                 head = repo.commit(commit)
+
             log.debug("Getting files for %s at %s",
                       self.local_path, head.hexsha)
             tree = head.tree
@@ -1332,6 +1369,73 @@ class Repo(object):
                         if not _ignored(blob) and blob.path.endswith(".yaml"):
                             ret[blob.path] = blob.data_stream.read().decode(
                                 'utf-8')
+
+            if (layout_url and is_head_change and pipeline_name
+                    and not pipeline_name.endswith('-layout')
+                    and not pipeline_name.endswith('-trigger')):
+                short_commit = commit[:8]
+                rel_path = layout_artifact_path_from_template(
+                    layout_url_path,
+                    change=number,
+                    patchset=patchset,
+                    pipeline=pipeline_name,
+                    commit_short=short_commit,
+                    commit_full=commit,
+                    job=layout_job,
+                )
+                layout_base = layout_url.rstrip('/')
+                layout_artifacts_root = f'{layout_base}/{rel_path}'
+                req_auth = ((layout_url_username, layout_url_secret)
+                            if (layout_url_username or layout_url_secret)
+                            else None)
+                log.debug(
+                    "Getting layout from url %s/ (path %s)",
+                    layout_artifacts_root, rel_path)
+                builds_index = requests.get(
+                    f'{layout_artifacts_root}/', auth=req_auth)
+                while builds_index.status_code == 404:
+                    time.sleep(60)
+                    builds_index = requests.get(
+                        f'{layout_artifacts_root}/', auth=req_auth)
+                timestamps = re.findall(
+                    r'<a href="(\d{10})/">', builds_index.text, re.MULTILINE)
+                for timestamp in sorted(timestamps, reverse=True):
+                    verdict_file = requests.get(
+                        f'{layout_artifacts_root}/{timestamp}/success.verdict',
+                        auth=req_auth)
+                    if verdict_file.status_code != 200:
+                        self.log.exception(
+                            "Error running %s for change %s,%s pipeline %s",
+                            layout_job, number, patchset, pipeline_name)
+                        if errors is not None:
+                            build_url = requests.get(
+                                f'{layout_artifacts_root}/{timestamp}/'
+                                f'build.url',
+                                auth=req_auth)
+                            gen_err_msg = (
+                                f"Error running {layout_job} for change "
+                                f"{number},{patchset} pipeline "
+                                f"{pipeline_name}, "
+                                f"check build result at\n"
+                                f"{build_url.text}"
+                            )
+                            errors.append(gen_err_msg)
+                            return None
+                    else:
+                        build_index = requests.get(
+                            f'{layout_artifacts_root}/{timestamp}/',
+                            auth=req_auth)
+                        build_yamls = re.findall(
+                            r'<a href="(.+\.yaml)">',
+                            build_index.text, re.MULTILINE)
+                        for yaml_file in build_yamls:
+                            yaml_data = requests.get(
+                                f'{layout_artifacts_root}/{timestamp}/'
+                                f'{yaml_file}',
+                                auth=req_auth)
+                            ret['zuul.d/' + yaml_file] = yaml_data.text
+                        return ret
+                return None
             return ret
 
     def getFilesChanges(self, branch, tosha=None, zuul_event_id=None):
@@ -1889,14 +1993,42 @@ class Merger(object):
                         errors.append(err_msg)
                     return None
                 if files or dirs:
+                    project_name = item['project']
+                    project = (
+                        self.projects.get(project_name)
+                        if self.projects else None)
+                    layout_url = (
+                        project.get('layout-url') if project else None)
+                    layout_url_username = (
+                        project.get('layout-url-username')
+                        if project else None)
+                    layout_url_secret = (
+                        project.get('layout-url-secret')
+                        if project else None)
+                    layout_job = project.get('layout-job') if project else None
+                    layout_url_path = (
+                        project.get('layout-url-path')
+                        if project else None)
                     repo = self.getRepo(item['connection'], item['project'])
-                    repo_files = repo.getFiles(files, dirs, commit=hexsha)
+                    repo_files = repo.getFiles(
+                        files, dirs, commit=hexsha,
+                        errors=errors,
+                        layout_url=layout_url,
+                        layout_url_username=layout_url_username,
+                        layout_url_secret=layout_url_secret,
+                        layout_job=layout_job,
+                        layout_url_path=layout_url_path,
+                        pipeline_name=pipeline_name,
+                        number=item['number'],
+                        patchset=item['patchset'],
+                        is_head_change=(item == items[-1]))
                     key = item['connection'], item['project'], item['branch']
                     read_files[key] = dict(
                         connection=item['connection'],
                         project=item['project'],
                         branch=item['branch'],
-                        files=repo_files)
+                        files=repo_files,
+                        generated=layout_url is not None)
         return (
             hexsha, list(read_files.values()), repo_state, recent,
             orig_hexsha, ops

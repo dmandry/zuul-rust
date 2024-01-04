@@ -16,6 +16,7 @@
 import datetime
 import logging
 import os
+import re
 import shutil
 from contextlib import contextmanager
 from unittest import mock
@@ -49,6 +50,215 @@ def _fetch_retry_backoff_sleeps(sleep_calls, sync_timeout, retry_interval):
     other threads (e.g. fake nodepool in ZuulTestCase) may call time.sleep too.
     """
     return [d for d in sleep_calls if d in (sync_timeout, retry_interval)]
+
+
+def _layout_http_fake_requests_get(url, auth=None, **kwargs):
+    """Minimal responses for merger HTTP layout artifact tree (tests only)."""
+    if 'success.verdict' in url:
+        return mock.MagicMock(status_code=200, text='ok')
+    if url.endswith('extra.yaml'):
+        return mock.MagicMock(text='- job: from-http\n')
+    if re.search(r'/\d{10}/$', url):
+        return mock.MagicMock(status_code=200, text='<a href="extra.yaml">')
+    return mock.MagicMock(status_code=200, text='<a href="0123456789/">')
+
+
+class TestLayoutArtifactPath(testtools.TestCase):
+    """Unit tests for merger layout-url-path formatting."""
+
+    def test_default_template_matches_legacy_path(self):
+        p = merger_mod.layout_artifact_path_from_template(
+            None,
+            change='10',
+            patchset='2',
+            pipeline='gate',
+            commit_short='a' * 8,
+            commit_full='a' * 40,
+            job='publish-zuul-yaml',
+        )
+        self.assertEqual(
+            p, '10/2/gate-layout/' + 'a' * 8 + '/publish-zuul-yaml')
+
+    def test_custom_template(self):
+        p = merger_mod.layout_artifact_path_from_template(
+            '{pipeline}/c_{change}/ps_{patchset}/{job}/{commit_full}',
+            change='1',
+            patchset='1',
+            pipeline='check',
+            commit_short='deadbeef',
+            commit_full='f' * 40,
+            job='j',
+        )
+        self.assertEqual(p, 'check/c_1/ps_1/j/' + 'f' * 40)
+
+    def test_unknown_placeholder_raises(self):
+        with self.assertRaises(ValueError) as cm:
+            merger_mod.layout_artifact_path_from_template(
+                '{not_a_field}',
+                change='1',
+                patchset='1',
+                pipeline='p',
+                commit_short='c0ffee',
+                commit_full='beef',
+                job='j',
+            )
+        self.assertIn('not_a_field', str(cm.exception))
+
+
+class TestRepoGetFilesHttpLayout(ZuulTestCase):
+    """Repo.getFiles optional HTTP layout augmentation (requests mocked)."""
+
+    log = logging.getLogger("zuul.test.merger.repo.layout_http")
+    tenant_config_file = 'config/single-tenant/main.yaml'
+
+    def test_get_files_merges_http_layout_yaml(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo(
+            'org/project1', 'zuul.d in repo',
+            {'zuul.d/in_repo.yaml': '- job: in-repo\n'})
+        repo_git = git.Repo(parent_path)
+        full_sha = repo_git.commit('master').hexsha
+
+        workspace = os.path.join(self.test_root, 'layout-http-work')
+        shutil.rmtree(workspace, ignore_errors=True)
+        os.makedirs(workspace)
+        work_repo = Repo(
+            parent_path, workspace,
+            'none@example.org', 'User Name', '0', '0')
+
+        with mock.patch.object(
+                merger_mod.requests, 'get',
+                side_effect=_layout_http_fake_requests_get):
+            ret = work_repo.getFiles(
+                [], dirs=['zuul.d'],
+                commit=full_sha,
+                layout_url='https://artifacts.example/zuul',
+                layout_job='lj',
+                pipeline_name='gate',
+                number='1',
+                patchset='1',
+                is_head_change=True,
+            )
+
+        self.assertIn('zuul.d/in_repo.yaml', ret)
+        self.assertIn('zuul.d/extra.yaml', ret)
+        self.assertIn('in-repo', ret['zuul.d/in_repo.yaml'])
+        self.assertIn('from-http', ret['zuul.d/extra.yaml'])
+
+    def test_get_files_layout_http_sends_basic_auth(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo('org/project1', 'c', {'zuul.d/a.yaml': 'x: 1\n'})
+        full_sha = git.Repo(parent_path).commit('master').hexsha
+        workspace = os.path.join(self.test_root, 'layout-http-auth')
+        shutil.rmtree(workspace, ignore_errors=True)
+        os.makedirs(workspace)
+        work_repo = Repo(
+            parent_path, workspace,
+            'none@example.org', 'User Name', '0', '0')
+        calls = []
+
+        def recording_get(url, auth=None, **kwargs):
+            calls.append((url, auth))
+            return _layout_http_fake_requests_get(url, auth=auth, **kwargs)
+
+        with mock.patch.object(
+                merger_mod.requests, 'get',
+                side_effect=recording_get):
+            work_repo.getFiles(
+                [], dirs=['zuul.d'],
+                commit=full_sha,
+                layout_url='https://artifacts.example/zuul',
+                layout_url_username='zuul',
+                layout_url_secret='secret',
+                layout_job='lj',
+                pipeline_name='gate',
+                number='1',
+                patchset='1',
+                is_head_change=True,
+            )
+        for _url, auth in calls:
+            self.assertEqual(auth, ('zuul', 'secret'))
+
+    def test_get_files_skips_http_for_layout_suffix_pipeline(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo('org/project1', 'c', {'zuul.d/a.yaml': 'x: 1\n'})
+        full_sha = git.Repo(parent_path).commit('master').hexsha
+        workspace = os.path.join(self.test_root, 'layout-skip-layout')
+        shutil.rmtree(workspace, ignore_errors=True)
+        os.makedirs(workspace)
+        work_repo = Repo(
+            parent_path, workspace,
+            'none@example.org', 'User Name', '0', '0')
+
+        def boom(*args, **kwargs):
+            raise AssertionError('HTTP layout fetch should not run')
+
+        with mock.patch.object(merger_mod.requests, 'get', side_effect=boom):
+            ret = work_repo.getFiles(
+                [], dirs=['zuul.d'],
+                commit=full_sha,
+                layout_url='https://artifacts.example/zuul',
+                layout_job='lj',
+                pipeline_name='periodic-layout',
+                number='1',
+                patchset='1',
+                is_head_change=True,
+            )
+        self.assertIn('zuul.d/a.yaml', ret)
+
+    def test_get_files_skips_http_for_trigger_suffix_pipeline(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo('org/project1', 'c', {'zuul.d/a.yaml': 'x: 1\n'})
+        full_sha = git.Repo(parent_path).commit('master').hexsha
+        workspace = os.path.join(self.test_root, 'layout-skip-trigger')
+        shutil.rmtree(workspace, ignore_errors=True)
+        os.makedirs(workspace)
+        work_repo = Repo(
+            parent_path, workspace,
+            'none@example.org', 'User Name', '0', '0')
+
+        def boom(*args, **kwargs):
+            raise AssertionError('HTTP layout fetch should not run')
+
+        with mock.patch.object(merger_mod.requests, 'get', side_effect=boom):
+            ret = work_repo.getFiles(
+                [], dirs=['zuul.d'],
+                commit=full_sha,
+                layout_url='https://artifacts.example/zuul',
+                layout_job='lj',
+                pipeline_name='foo-trigger',
+                number='1',
+                patchset='1',
+                is_head_change=True,
+            )
+        self.assertIn('zuul.d/a.yaml', ret)
+
+    def test_get_files_skips_http_when_not_head_change(self):
+        parent_path = os.path.join(self.upstream_root, 'org/project1')
+        self.addCommitToRepo('org/project1', 'c', {'zuul.d/a.yaml': 'x: 1\n'})
+        full_sha = git.Repo(parent_path).commit('master').hexsha
+        workspace = os.path.join(self.test_root, 'layout-not-head')
+        shutil.rmtree(workspace, ignore_errors=True)
+        os.makedirs(workspace)
+        work_repo = Repo(
+            parent_path, workspace,
+            'none@example.org', 'User Name', '0', '0')
+
+        def boom(*args, **kwargs):
+            raise AssertionError('HTTP layout fetch should not run')
+
+        with mock.patch.object(merger_mod.requests, 'get', side_effect=boom):
+            ret = work_repo.getFiles(
+                [], dirs=['zuul.d'],
+                commit=full_sha,
+                layout_url='https://artifacts.example/zuul',
+                layout_job='lj',
+                pipeline_name='gate',
+                number='1',
+                patchset='1',
+                is_head_change=False,
+            )
+        self.assertIn('zuul.d/a.yaml', ret)
 
 
 class TestMergerRepo(ZuulTestCase):
@@ -1297,6 +1507,54 @@ class TestMerger(ZuulTestCase):
         self.assertEqual(read_files[1]['branch'], 'master')
         self.assertEqual(read_files[1]['files']['zuul.d/a.yaml'],
                          'a-in-project1')
+
+    def test_merge_changes_sets_generated_when_layout_configured(self):
+        merger = self.executor_server.merger
+        saved_projects = merger.projects
+
+        def restore_projects():
+            merger.projects = saved_projects
+
+        self.addCleanup(restore_projects)
+        merger.projects = {
+            'org/project': {
+                'layout-url': 'https://artifacts.example/zuul',
+                'layout-job': 'lj',
+            },
+        }
+        files = ['zuul.yaml', '.zuul.yaml']
+        dirs = ['zuul.d', '.zuul.d']
+        file_dict_a = {'zuul.d/a.yaml': 'a'}
+        A = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'A', files=file_dict_a)
+        item_a = self._item_from_fake_change(A)
+        merger.updateRepo('gerrit', 'org/project')
+        with mock.patch.object(
+                merger_mod.requests, 'get',
+                side_effect=_layout_http_fake_requests_get):
+            result = merger.mergeChanges(
+                [item_a], files=files, dirs=dirs, pipeline_name='gate')
+        self.assertIsNotNone(result)
+        _hexsha, read_files, _repo_state, _recent, _orig, _ops = result
+        self.assertEqual(len(read_files), 1)
+        self.assertTrue(read_files[0]['generated'])
+        self.assertIn('from-http', read_files[0]['files']['zuul.d/extra.yaml'])
+
+    def test_merge_changes_generated_false_without_layout_url(self):
+        merger = self.executor_server.merger
+        files = ['zuul.yaml', '.zuul.yaml']
+        dirs = ['zuul.d', '.zuul.d']
+        file_dict_a = {'zuul.d/a.yaml': 'a'}
+        A = self.fake_gerrit.addFakeChange(
+            'org/project', 'master', 'A', files=file_dict_a)
+        item_a = self._item_from_fake_change(A)
+        merger.updateRepo('gerrit', 'org/project')
+        result = merger.mergeChanges(
+            [item_a], files=files, dirs=dirs, pipeline_name='gate')
+        self.assertIsNotNone(result)
+        _hexsha, read_files, _repo_state, _recent, _orig, _ops = result
+        self.assertEqual(len(read_files), 1)
+        self.assertFalse(read_files[0]['generated'])
 
     def test_no_rebase_pipelines_checkouts_change_revision(self):
         """Executor pipeline in no-rebase-pipelines skips merge_mode."""

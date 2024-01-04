@@ -512,9 +512,11 @@ The following section of ``zuul.conf`` is used by the merger:
         :attr:`project.merge-mode` (merge, rebase, cherry-pick, squash, and so
         on) to integrate the change onto the base branch.  This lets selected
         pipelines test the change revision as published, without a speculative
-        merge or rebase onto the target branch.  This applies only to executor
-        workspace preparation;         merge jobs served by a standalone merger do not
-        supply a pipeline name, so this key has no effect there.
+        merge or rebase onto the target branch.  When the merge request is
+        submitted with a build set (the usual scheduler-driven path, including
+        merges handled by a standalone merger), the merger receives the active
+        pipeline name and applies this key.  Merges submitted without pipeline
+        context omit ``pipeline_name``, so this key has no effect there.
 
       * ``use-mirror``: when true, Zuul maintains **bare** Git mirrors on the
         local filesystem under ``<mirror-root>/<Zuul project name>`` (for
@@ -534,8 +536,8 @@ The following section of ``zuul.conf`` is used by the merger:
         project, Zuul performs a similar mirror update from the checked-out
         tree. Pipelines listed under ``no-rebase-pipelines`` skip this
         checkout-time mirror pass (fetches still update mirrors when a ref is
-        fetched). When ``pipeline_name`` is omitted (for example many
-        standalone merger merge requests), checkout-time mirror updates are
+        fetched). When ``pipeline_name`` is omitted (for example merge
+        requests submitted without a build set), checkout-time mirror updates are
         skipped; mirror updates after ``git fetch`` still run when a change
         ref is supplied.
 
@@ -553,6 +555,59 @@ The following section of ``zuul.conf`` is used by the merger:
         ``origin`` URL. Use this when submodule clone URLs are relative to a
         different host or path prefix than the parent repository.
 
+      * ``layout-url``: optional string. When set together with ``layout-job``,
+        and the merger receives a non-empty ``pipeline_name`` with the merge
+        request, Zuul can supplement files read from the merged Git tree with
+        YAML taken from an HTTP(S) artifact area after a speculative merge.
+        This supports workflows where Zuul configuration for the head change is
+        produced by a separate job and published as static files rather than
+        committed to the repository under test.  When this mechanism supplies
+        files, the scheduler merges those paths into the change's cached file
+        list after merge completes so configuration loading sees the fetched
+        ``zuul.d/*.yaml`` entries.
+
+        The merger requests (with optional HTTP basic authentication) a URL
+        consisting of ``layout-url`` plus a relative path.  Unless overridden
+        (see ``layout-url-path`` below), that path is::
+
+           {change}/{patchset}/{pipeline}-layout/{commit}/{job}/
+
+        under the configured ``layout-url`` base, where ``commit`` is the first
+        eight hexadecimal characters of the merged commit, ``pipeline`` is the
+        active pipeline name, ``change`` / ``patchset`` identify the change, and
+        ``job`` is ``layout-job``.  The merger
+        polls that URL every 60 seconds while the server responds with HTTP
+        404, then parses the HTML index for subdirectories whose names are ten
+        decimal digits (build timestamps), tries the newest timestamps first,
+        and requires HTTP 200 on ``success.verdict`` under a timestamp
+        directory before loading.  For a successful verdict it fetches every
+        ``*.yaml`` linked from that directory's index and exposes them to the
+        scheduler as ``zuul.d/<filename>`` alongside paths read from Git.
+        Pipelines whose names end with ``-layout`` or ``-trigger`` skip this
+        HTTP step so layout and trigger pipelines do not recurse.  The HTTP
+        fetch runs only for the **last** (head) change in a serialized merge
+        batch; other items use Git only.  On failure, Zuul appends an error
+        message that may include the body of a sibling ``build.url`` file when
+        present.
+
+      * ``layout-url-username`` / ``layout-url-secret``: optional strings passed
+        as the user and password for HTTP basic authentication when requesting
+        layout artifact URLs.  Omit both when the artifact server is anonymous.
+
+      * ``layout-job``: optional string, used as the final path segment in the
+        default layout artifact URL (see ``layout-url``).  Should match the Zuul
+        job name (or other folder name) under which your publisher writes layout
+        YAML and verdict files.
+
+      * ``layout-url-path``: optional string.  A ``str.format``-style
+        template for the path under ``layout-url`` (leading and trailing slashes
+        are ignored).  Placeholders: ``change`` (change id), ``patchset``,
+        ``pipeline`` (pipeline name), ``commit`` (merged revision, 8 hex
+        digits), ``commit_full`` (full merged SHA), ``job`` (``layout-job``).
+        If omitted, the path matches the default described under ``layout-url``
+        (equivalent to
+        ``{change}/{patchset}/{pipeline}-layout/{commit}/{job}``).
+
       Example (YAML body only; place under ``[merger]`` in ``zuul.conf`` with
       appropriate indentation for a multi-line value)::
 
@@ -565,6 +620,12 @@ The following section of ``zuul.conf`` is used by the merger:
              - post-merge
            use-mirror: true
            submodules-remote: https://git.example.com/base
+         org/generated-config:
+           layout-url: https://artifacts.example.com/zuul-layout
+           layout-url-path: '{pipeline}/zuul/{change}/{patchset}/{commit}/{job}'
+           layout-url-username: zuul
+           layout-url-secret: replace-me
+           layout-job: publish-zuul-yaml
 
 .. _executor:
 
