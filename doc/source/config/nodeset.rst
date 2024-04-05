@@ -14,6 +14,28 @@ project as long as the contents are the same.  This is to aid in
 branch maintenance, so that creating a new branch based on an existing
 branch will not immediately produce a configuration error.
 
+.. _multi_label_jobs:
+
+Multi-label support for jobs
+----------------------------
+
+When ``multi_label`` is ``true`` in the ``[launcher]`` section of
+``zuul.conf`` on each scheduler and launcher (see :ref:`launcher`), Zuul
+keeps retrying node
+allocation after failures instead of giving up as soon as alternatives
+are exhausted.  Specifically, after every alternative in a list has
+failed, the scheduler wraps back to the first alternative and submits
+another node request, repeating until one attempt succeeds.  The same
+retry path applies when a job has only one effective nodeset (including
+when no ``alternatives`` list is used): a failed node request is retried
+against that same nodeset.  The launcher also fails a nodeset request
+explicitly when the tenant is out of quota and no provider nodes are
+assigned yet, so the scheduler can retry like other provisioning
+failures.  When ``multi_label`` is ``false`` (the default), Zuul keeps
+the previous behavior: the last failed alternative ends node-request
+fallback for that failure, and quota exhaustion before any node is
+assigned may leave the request unaccepted until conditions change.
+
 .. code-block:: yaml
 
    - nodeset:
@@ -46,9 +68,18 @@ specifies a list of :attr:`nodeset.alternatives`, Zuul will request
 the first Nodeset in the series, and if allocation fails for any
 reason, Zuul will re-attempt the request with the subsequent Nodeset
 and so on.  The first Nodeset which is fulfilled
-will be used to run the job.  Additionally, if Zuul
-encounters an unrechable node during the build, it will use the next
-alternative when retrying the job.  An example of a nodeset
+will be used to run the job.  If :ref:`multi_label support for jobs
+<multi_label_jobs>` is enabled and every alternative in the list has
+failed, Zuul advances the nodeset index past the last alternative back
+to the first and submits a new node request, so allocation is retried
+in a cycle until one attempt succeeds.  The same retry behavior applies
+when the job has only a single effective nodeset (including a job with
+no ``alternatives`` list): a failed node request is retried against
+that same nodeset rather than failing the item at once.  Additionally,
+if Zuul encounters an unreachable node during the build, it will use
+the next alternative when retrying the job (and with multi_label
+enabled, continues to advance through alternatives as described above).
+An example of a nodeset
 configuration with alternatives follows.
 
 .. code-block:: yaml
@@ -131,7 +162,12 @@ specify nodes and groups, or alternative nodesets, but not both.
 
       A list of alternative nodesets for which requests should be
       attempted in series.  The first request which succeeds will be
-      used for the job.
+      used for the job.  If a request fails (for example the cloud is
+      out of quota or capacity), Zuul tries the next alternative.  With
+      :ref:`multi_label support for jobs <multi_label_jobs>` enabled,
+      after the last alternative fails, Zuul returns to the first
+      alternative and issues another request, repeating until a
+      request is fulfilled.
 
       The items in the list may be either strings, in which case they
       refer to other Nodesets within the layout, or they may be a

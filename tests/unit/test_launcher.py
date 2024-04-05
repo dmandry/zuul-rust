@@ -54,8 +54,19 @@ from tests.base import (
     okay_tracebacks,
     return_data,
     simple_layout,
+    zuul_config,
 )
 from tests.fake_nodescan import NodescanFixture
+
+
+def _out_of_quota_at_accept_only(
+        tenant_name, provider, label, messages, include_usage=True):
+    # _selectProviders() calls with include_usage=False to filter
+    # candidates; the accept-path (empty provider_node_data) uses the
+    # default include_usage=True.
+    if not include_usage:
+        return True
+    return False
 
 
 class ImageMocksFixture(fixtures.Fixture):
@@ -1575,6 +1586,47 @@ class TestLauncher(LauncherBaseTestCase):
                     pnode.refresh(ctx)
                 except NoNodeError:
                     break
+
+    @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
+    @mock.patch('zuul.launcher.server.Launcher.doesProviderHaveQuotaForLabel',
+                side_effect=_out_of_quota_at_accept_only)
+    @zuul_config('launcher', 'multi_label', 'true')
+    def test_out_of_quota_fails_request_when_multi_label(self, mock_has_quota):
+        # With multi_label, no-quota on first label must fail the request
+        # explicitly so the scheduler can retry the nodeset.
+        with self.createZKContext(None):
+            request = self.requestNodes(
+                ['debian-normal'], timeout=None)
+        for _ in iterate_timeout(30, 'request to be marked failed'):
+            with self.createZKContext(None) as rctx:
+                request.refresh(rctx)
+            if request.state == model.NodesetRequest.State.FAILED:
+                break
+        self.assertEqual(
+            request.state, model.NodesetRequest.State.FAILED,
+            request)
+
+    @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
+    @mock.patch('zuul.launcher.server.Launcher.doesProviderHaveQuotaForLabel',
+                side_effect=_out_of_quota_at_accept_only)
+    def test_out_of_quota_does_not_fail_request_without_multi_label(
+            self, mock_has_quota):
+        # Default: leave the request in REQUESTED until quota/conditions change
+        with self.createZKContext(None):
+            request = self.requestNodes(
+                ['debian-normal'], timeout=None)
+        # A stuck REQUESTED request prevents waitUntilSettled; allow one
+        # launcher pass then assert (not FAILED / not FULFILLED from quota).
+        time.sleep(0.5)
+        for _ in iterate_timeout(5, 'request to remain in REQUESTED'):
+            with self.createZKContext(None) as ctx2:
+                request.refresh(ctx2)
+            if request.state == model.NodesetRequest.State.REQUESTED:
+                break
+            time.sleep(0.1)
+        self.assertEqual(
+            request.state, model.NodesetRequest.State.REQUESTED,
+            request)
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     @mock.patch(

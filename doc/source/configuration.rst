@@ -1412,6 +1412,17 @@ sections of ``zuul.conf`` are used by the launcher:
       If this launcher should only be used for certain connections,
       specify them here as a comma separated string.
 
+   .. attr:: multi_label
+      :default: false
+
+      When ``true``, enables :ref:`multi_label job support <multi_label_jobs>`
+      for this deployment: the scheduler may cycle through nodeset
+      alternatives indefinitely after failed node requests, and the
+      launcher fails a nodeset request explicitly when a tenant is out
+      of quota so allocation can be retried.  The scheduler reads the
+      same option from its ``zuul.conf``; set it consistently on every
+      scheduler and launcher.
+
 
 Client
 ------

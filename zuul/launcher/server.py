@@ -1136,6 +1136,8 @@ class Launcher:
                 f.strip() for f in filter_string.split(",")]
         else:
             self.connection_filter = None
+        self.multi_label = get_default(
+            self.config, 'launcher', 'multi_label', False)
         self.repl = None
         # All tenants and all providers
         self.tenant_providers = {}
@@ -1498,6 +1500,9 @@ class Launcher:
                             # accept the request; currently this will
                             # happen only if we can fulfill the first
                             # label immediately.
+                            if self.multi_label:
+                                raise NodesetRequestError(
+                                    "Unable to process because out of quota")
                             return
                     self._emitMessages(log, messages)
                     node = self._requestNode(

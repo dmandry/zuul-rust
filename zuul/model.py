@@ -4275,15 +4275,20 @@ class FrozenJob(zkobject.ZKObject):
             playbooks = getattr(self, k)
             yield from playbooks
 
-    def incrementNodesetIndex(self):
-        if len(self.nodeset_alternatives) <= self.nodeset_index + 1:
-            # No alternatives to fall back upon
-            return False
+    def incrementNodesetIndex(self, multi_label=False):
+        if not multi_label:
+            if len(self.nodeset_alternatives) <= self.nodeset_index + 1:
+                # No alternatives to fall back upon
+                return False
 
         context = self.buildset.item.manager.current_context
-        # Increment the nodeset index
+        # Increment the nodeset index (with multi_label, cycle back to 0
+        # after the last alternative for persistent retries)
         with self.activeContext(context):
-            self.nodeset_index = self.nodeset_index + 1
+            if len(self.nodeset_alternatives) <= self.nodeset_index + 1:
+                self.nodeset_index = 0
+            else:
+                self.nodeset_index = self.nodeset_index + 1
 
         return True
 

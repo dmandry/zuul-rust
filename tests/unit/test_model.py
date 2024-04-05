@@ -15,6 +15,7 @@
 
 
 import configparser
+import contextlib
 import os
 import textwrap
 import uuid
@@ -1640,3 +1641,73 @@ class TestEventInfoTriggerComment(BaseTestCase):
         self.assertEqual(d['comment'], 'merge me')
         again = model.MergeRequest.fromDict(d)
         self.assertEqual(again.comment, 'merge me')
+
+
+@contextlib.contextmanager
+def _null_frozenjob_activeContext(self, context):
+    # ZKObject blocks setattr except while _active_context is set, matching
+    # real activeContext, but skip any ZK write at exit.
+    self._set(_active_context=context)
+    try:
+        yield
+    finally:
+        self._set(_active_context=None)
+
+
+class TestFrozenJobNodesetIndex(BaseTestCase):
+    def setUp(self):
+        COMPONENT_REGISTRY.registry = Dummy()
+        COMPONENT_REGISTRY.registry.model_api = MODEL_API
+        super().setUp()
+
+    def _make_job(self, alts, index):
+        job = model.FrozenJob()
+        job._set(
+            uuid=uuid.uuid4().hex,
+            name='j',
+            nodeset_alternatives=list(alts),
+            nodeset_index=index,
+        )
+        # ZKObject blocks setattr except under activeContext
+        bset = mock.Mock()
+        bset.item.manager.current_context = object()
+        object.__setattr__(job, 'buildset', bset)
+        return job
+
+    def test_increment_stops_at_last_alternative_without_multi_label(self):
+        # Three alternatives: indices 0, 1, 2 — no further index after 2
+        job = self._make_job((1, 1, 1), 2)
+        with mock.patch.object(
+                model.FrozenJob,
+                'activeContext',
+                _null_frozenjob_activeContext):
+            self.assertFalse(job.incrementNodesetIndex(multi_label=False))
+            self.assertEqual(2, job.nodeset_index)
+
+    def test_multi_label_cycles_to_first_from_last(self):
+        job = self._make_job((1, 1, 1), 2)
+        with mock.patch.object(
+                model.FrozenJob,
+                'activeContext',
+                _null_frozenjob_activeContext):
+            self.assertTrue(job.incrementNodesetIndex(multi_label=True))
+            self.assertEqual(0, job.nodeset_index)
+
+    def test_increments_within_list_without_multi_label(self):
+        job = self._make_job((1, 1, 1), 0)
+        with mock.patch.object(
+                model.FrozenJob,
+                'activeContext',
+                _null_frozenjob_activeContext):
+            self.assertTrue(job.incrementNodesetIndex(multi_label=False))
+            self.assertEqual(1, job.nodeset_index)
+
+    def test_single_alternative_resets_to_zero_with_multi_label(self):
+        # One entry in nodeset_alternatives: "retry" loops back to index 0
+        job = self._make_job((1,), 0)
+        with mock.patch.object(
+                model.FrozenJob,
+                'activeContext',
+                _null_frozenjob_activeContext):
+            self.assertTrue(job.incrementNodesetIndex(multi_label=True))
+            self.assertEqual(0, job.nodeset_index)
