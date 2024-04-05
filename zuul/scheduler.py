@@ -371,6 +371,10 @@ class Scheduler(threading.Thread):
                 self.zk_client, self.system.system_id, self.statsd,
                 scheduler=True)
 
+    @property
+    def launcher_multi_label(self):
+        return get_default(self.config, 'launcher', 'multi_label', False)
+
     def start(self):
         super(Scheduler, self).start()
 

@@ -2271,7 +2271,8 @@ class PipelineManager(metaclass=ABCMeta):
         build_set = build.build_set
 
         if build.retry:
-            if build.unreachable and build.job.incrementNodesetIndex():
+            if build.unreachable and build.job.incrementNodesetIndex(
+                    self.sched.launcher_multi_label):
                 # If we are retrying a build because it encountered an
                 # unreachable host, increment the nodeset.
                 log.info("Next node request for retried build of job "
@@ -2381,7 +2382,7 @@ class PipelineManager(metaclass=ABCMeta):
                 build_set.repo_state_state = build_set.COMPLETE
 
     def _handleNodeRequestFallback(self, log, build_set, job, old_request):
-        if not job.incrementNodesetIndex():
+        if not job.incrementNodesetIndex(self.sched.launcher_multi_label):
             # No alternatives to fall back upon
             return False
 
