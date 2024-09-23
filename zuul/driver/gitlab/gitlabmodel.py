@@ -102,6 +102,7 @@ class GitlabTriggerEvent(TriggerEvent):
         self.tag = None
         self.commits = []
         self.total_commits_count = 0
+        self.branch_protected = None
 
     def toDict(self):
         d = super().toDict()

@@ -1404,6 +1404,9 @@ class TestGitlabUnprotectedBranches(ZuulTestCase):
 
         # now enable branch protection and trigger the push event again
         self.fake_gitlab.protectBranch('org', 'project2', 'master')
+        pevent = self.fake_gitlab.getPushEvent(project='org/project2',
+                                               before=A.sha,
+                                               branch='refs/heads/master')
 
         self.fake_gitlab.emitEvent(pevent)
         self.waitUntilSettled()
@@ -1412,6 +1415,32 @@ class TestGitlabUnprotectedBranches(ZuulTestCase):
 
         # We now expect that zuul reconfigured itself
         self.assertLess(old, new)
+
+    def test_unprotected_branch_create(self):
+        # Test that creating a new unprotected branch does not cause a
+        # reconfiguration
+        branch = 'feature/somefeature'
+        project = 'org/project2'
+
+        # record previous tenant reconfiguration time, which may not be set
+        old = self.scheds.first.sched.tenant_layout_state.get(
+            'tenant-one', EMPTY_LAYOUT_STATE)
+
+        # prepare an existing branch
+        self.create_branch(project, branch)
+
+        self.fake_gitlab.emitEvent(
+            self.fake_gitlab.getPushEvent(
+                before='0' * 40,
+                project=project, branch=f'refs/heads/{branch}'))
+        self.waitUntilSettled()
+
+        new = self.scheds.first.sched.tenant_layout_state.get(
+            'tenant-one', EMPTY_LAYOUT_STATE)
+
+        # We don't expect a reconfiguration because the push was to an
+        # unprotected branch
+        self.assertEqual(old, new)
 
     def test_protected_branch_delete(self):
         """Test that protected branch deletes trigger a tenant reconfig"""
@@ -1441,13 +1470,14 @@ class TestGitlabUnprotectedBranches(ZuulTestCase):
             'tenant-one', EMPTY_LAYOUT_STATE)
         self.waitUntilSettled()
 
-        # Delete the branch
-        self.fake_gitlab.deleteBranch('org', 'project2', 'master')
-
+        # Get the event before deleting the branch so it picks up the
+        # protected flag
         pevent = self.fake_gitlab.getPushEvent(project='org/project2',
                                                before=A.sha,
                                                after='0' * 40,
                                                branch='refs/heads/master')
+        # Delete the branch
+        self.fake_gitlab.deleteBranch('org', 'project2', 'master')
 
         self.fake_gitlab.emitEvent(pevent)
         self.waitUntilSettled()

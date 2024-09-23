@@ -1821,6 +1821,37 @@ class TestGithubUnprotectedBranches(ZuulTestCase):
         # We now expect that zuul reconfigured itself
         self.assertLess(old, new)
 
+    def test_unprotected_branch_create(self):
+        # Test that creating a new unprotected branch does not cause a
+        # reconfiguration
+        branch = 'feature/somefeature'
+        project = 'org/project2'
+
+        # record previous tenant reconfiguration time, which may not be set
+        old = self.scheds.first.sched.tenant_layout_state.get(
+            'tenant-one', EMPTY_LAYOUT_STATE)
+
+        # prepare an existing branch
+        self.create_branch(project, branch)
+
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project(project)
+        repo._create_branch(branch)
+        repo._set_branch_protection(branch, False)
+
+        self.fake_github.emitEvent(
+            self.fake_github.getPushEvent(
+                project,
+                ref='refs/heads/%s' % branch))
+        self.waitUntilSettled()
+
+        new = self.scheds.first.sched.tenant_layout_state.get(
+            'tenant-one', EMPTY_LAYOUT_STATE)
+
+        # We don't expect a reconfiguration because the push was to an
+        # unprotected branch
+        self.assertEqual(old, new)
+
     def test_protected_branch_delete(self):
         """Test that protected branch deletes trigger a tenant reconfig"""
 

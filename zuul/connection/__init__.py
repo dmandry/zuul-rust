@@ -256,6 +256,9 @@ class ZKBranchCacheMixin:
         else:
             event.branch_updated = True
 
+        # The Gitlab driver does not require the section below and
+        # overrides this method.
+
         project = self.source.getProject(event.project_name)
         if event.branch:
             if event.branch_deleted:
@@ -273,6 +276,9 @@ class ZKBranchCacheMixin:
                 # been created.  Other drivers could optimize this,
                 # but for the moment, implement the lowest common
                 # denominator and clear the cache so that we query.
+                #
+                # TODO: the newer branch protection rules feature may
+                # allow a branch to be created protected.
                 self.updateProjectBranches(project, event)
             event.branch_cache_ltime = self._branch_cache.ltime
         return event
