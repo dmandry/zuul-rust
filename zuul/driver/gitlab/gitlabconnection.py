@@ -206,6 +206,7 @@ class GitlabEventConnector(threading.Thread):
         event.newrev = body['after']
         event.oldrev = body['before']
         event.type = 'gl_push'
+        event.branch_protected = body['ref_protected']
         event.commits = body.get('commits')
 
         self.connection.clearConnectionCacheOnBranchEvent(event)
@@ -220,6 +221,7 @@ class GitlabEventConnector(threading.Thread):
         event.oldrev = None
         event.tag = body['ref'].replace('refs/tags/', '')
         event.type = 'gl_push'
+        event.branch_protected = body['ref_protected']
         return event
 
     def _handleEvent(self, connection_event):
@@ -263,7 +265,9 @@ class GitlabEventConnector(threading.Thread):
             # unprotected branches, we might need to check whether the
             # branch is now protected.
             if hasattr(event, "branch") and event.branch:
-                self.connection.checkBranchCache(event.project_name, event)
+                self.connection.checkBranchCache(
+                    event.project_name, event,
+                    protected=event.branch_protected)
 
             self.connection.logEvent(event)
             self.connection.sched.addTriggerEvent(
@@ -881,6 +885,30 @@ class GitlabConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             remove_labels=','.join(unlabels))
         log.debug("Added labels %s to, and removed labels %s from %s#%s",
                   labels, unlabels, project_name, mr_number)
+
+    # Override from connection cache mixin
+    def clearConnectionCacheOnBranchEvent(self, event):
+        """Update event and clear connection cache if needed.
+
+        This checks whether the event created or deleted a branch so
+        that Zuul may know to perform a reconfiguration on the
+        project. Drivers must call this method when a branch event is
+        received.
+
+        :param event:
+            The event, inherit from `zuul.model.TriggerEvent` class.
+        """
+        if event.oldrev == '0' * 40:
+            event.branch_created = True
+        elif event.newrev == '0' * 40:
+            event.branch_deleted = True
+        else:
+            event.branch_updated = True
+
+        # Gitlab includes the branch protection flag in all push
+        # events, so we can let checkBranchCache update the cache; we
+        # don't need to clear the branch list here.
+        return event
 
 
 class GitlabWebController(BaseWebController):

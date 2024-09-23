@@ -346,6 +346,12 @@ class FakeGitlabConnection(gitlabconnection.GitlabConnection):
         fake_branch = FakeGitlabBranch(branch, protected, self.upstream_root)
         self._test_web_server.fake_repos[(owner, project)].append(fake_branch)
 
+    def _test_isBranchProtected(self, owner, project, branch):
+        fake_repos = self._test_web_server.fake_repos
+        if branch in fake_repos[(owner, project)]:
+            return fake_repos[(owner, project)][branch].protected
+        return False
+
     def deleteBranch(self, owner, project, branch):
         if branch in self._test_web_server.fake_repos[(owner, project)]:
             del self._test_web_server.fake_repos[(owner, project)][branch]
@@ -388,13 +394,21 @@ class FakeGitlabConnection(gitlabconnection.GitlabConnection):
             self, project, before=None, after=None,
             branch='refs/heads/master',
             added_files=None, removed_files=None,
-            modified_files=None):
+            modified_files=None,
+            ref_protected=None,
+    ):
         if added_files is None:
             added_files = []
         if removed_files is None:
             removed_files = []
         if modified_files is None:
             modified_files = []
+
+        if ref_protected is None:
+            bname = branch.replace('refs/heads/', '')
+            owner, pname = project.split('/', 1)
+            ref_protected = self._test_isBranchProtected(owner, pname, bname)
+
         name = 'gl_push'
         if not after:
             repo_path = os.path.join(self.upstream_root, project)
@@ -405,6 +419,7 @@ class FakeGitlabConnection(gitlabconnection.GitlabConnection):
             'before': before or '1' * 40,
             'after': after,
             'ref': branch,
+            'ref_protected': ref_protected,
             'project': {
                 'path_with_namespace': project
             },
@@ -426,6 +441,7 @@ class FakeGitlabConnection(gitlabconnection.GitlabConnection):
             'before': '0' * 40,
             'after': sha,
             'ref': 'refs/tags/%s' % tag,
+            'ref_protected': False,
             'project': {
                 'path_with_namespace': project
             },
