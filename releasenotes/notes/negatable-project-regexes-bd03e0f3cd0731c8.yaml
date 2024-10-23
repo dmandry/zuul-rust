@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    Project names in Zuul configuration can now be negated using the
+    :attr:`<regular expression>` form of regexes. These negated regexes
+    must match the canonical and non canonical forms of projects names.

@@ -72,10 +72,17 @@ pipeline.
       The name of the project.  If Zuul is configured with two or more
       unique projects with the same name, the canonical hostname for
       the project should be included (e.g., `git.example.com/foo`).
-      This can also be a regex. In this case the regex must start with ``^``
-      and match the full project name following the same rule as name without
-      regex. If not given it is implicitly derived from the project where this
+      If not given it is implicitly derived from the project where this
       is defined.
+
+      This can also be a regex. If given as a simple string the regex must
+      start with ``^``. In this form it must match the full project name
+      following the same rule as a non regex name. Alternatively, it may
+      be provided as a negatable :attr:`<regular expression>` dictionary.
+      Regexes in this form need not start with ``^``, but the regex must
+      still match the entire project name string. When negating the regex
+      you must match both the canonical and non canonical project name
+      forms.
 
    .. attr:: templates
 

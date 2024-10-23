@@ -7837,7 +7837,7 @@ class TestSchedulerRegexProject(ZuulTestCase):
     tenant_config_file = 'config/regex-project/main.yaml'
 
     def test_regex_project(self):
-        "Test that changes are tested in parallel and merged in series"
+        "Test project regexes apply appropriately"
 
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         B = self.fake_gerrit.addFakeChange('org/project1', 'master', 'B')
@@ -7851,9 +7851,9 @@ class TestSchedulerRegexProject(ZuulTestCase):
 
         # We expect the following builds:
         #  - 1 for org/project
-        #  - 3 for org/project1
-        #  - 3 for org/project2
-        self.assertEqual(len(self.history), 7)
+        #  - 4 for org/project1
+        #  - 4 for org/project2
+        self.assertEqual(len(self.history), 9)
         self.assertEqual(A.reported, 1)
         self.assertEqual(B.reported, 1)
         self.assertEqual(C.reported, 1)
@@ -7864,9 +7864,13 @@ class TestSchedulerRegexProject(ZuulTestCase):
             dict(name='project-common-test', result='SUCCESS', changes='2,1'),
             dict(name='project-common-test-canonical', result='SUCCESS',
                  changes='2,1'),
+            dict(name='project-common-test-negate', result='SUCCESS',
+                 changes='2,1'),
             dict(name='project-test2', result='SUCCESS', changes='3,1'),
             dict(name='project-common-test', result='SUCCESS', changes='3,1'),
             dict(name='project-common-test-canonical', result='SUCCESS',
+                 changes='3,1'),
+            dict(name='project-common-test-negate', result='SUCCESS',
                  changes='3,1'),
         ], ordered=False)
 

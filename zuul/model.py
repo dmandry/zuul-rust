@@ -32,7 +32,6 @@ from functools import partial, total_ordering
 from uuid import uuid4
 import voluptuous as vs
 
-import re2
 import jsonpath_rw
 from cachetools.func import lru_cache
 from kazoo.exceptions import NodeExistsError, NoNodeError
@@ -11096,24 +11095,22 @@ class Tenant(object):
         """Return all TPCs with a full match to either project name or
         canonical project name.
 
-        :arg str regex: The regex to match
+        :arg ZuulRegex regex: The regex to match
         :returns: A list of TenantProjectConfigs describing the found
             projects.
         """
-
-        matcher = re2.compile(regex)
         projects = []
         result = []
 
         for name, hostname_dict in self.projects.items():
-            if matcher.fullmatch(name):
+            if regex.fullmatch(name):
                 projects.extend(hostname_dict.values())
             else:
                 # It is possible for the regex to match specific connection
                 # prefixes. Check these more specific names if we didn't add
                 # all of the possible canonical names already.
                 for project in hostname_dict.values():
-                    if matcher.fullmatch(project.canonical_name):
+                    if regex.fullmatch(project.canonical_name):
                         projects.append(project)
 
         for project in projects:
@@ -11129,7 +11126,7 @@ class Tenant(object):
         """Return all projects with a full match to either project name or
         canonical project name.
 
-        :arg str regex: The regex to match
+        :arg ZuulRegex regex: The regex to match
         :returns: A list of tuples (trusted, project) describing the found
             projects.
         """

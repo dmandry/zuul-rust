@@ -27,6 +27,10 @@
     name: project-common-test-canonical
     parent: project-common-test
 
+- job:
+    name: project-common-test-negate
+    parent: project-common-test
+
 # This shall run project-common on org/project1 and org/project2
 # but not on org/project
 - project:
@@ -43,3 +47,14 @@
     check:
       jobs:
         - project-common-test-canonical
+
+
+# This will run project-common-test-negate on org/project1 and
+# org/project2 but not on org/project.
+- project:
+    name:
+      regex: .*org/project$
+      negate: true
+    check:
+      jobs:
+        - project-common-test-negate
