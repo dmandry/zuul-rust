@@ -23,6 +23,7 @@ import sqlalchemy.exc
 
 from zuul.driver.sql.sqlconnection import SQL_MAX_STRING_LENGTH
 from zuul.exceptions import MissingBuildsetError
+from zuul.lib.logutil import get_annotated_logger
 from zuul.lib.result_data import get_artifacts_from_result_data
 from zuul.reporter import BaseReporter
 
@@ -30,6 +31,11 @@ from zuul.reporter import BaseReporter
 DATA_LENGTH_ERROR = """
 %s's length exceeds DB storage capacity.
 Original value: %s"""
+
+
+def get_event(buildset):
+    if buildset:
+        return buildset.item.event
 
 
 class SQLReporter(BaseReporter):
@@ -98,20 +104,22 @@ class SQLReporter(BaseReporter):
         if not buildset.uuid:
             return
 
+        log = get_annotated_logger(self.log, get_event(buildset))
         for retry_count in range(self.retry_count):
             try:
                 with self.connection.getSession() as db:
                     return self._createBuildset(db, buildset)
             except sqlalchemy.exc.DBAPIError:
                 if retry_count < self.retry_count - 1:
-                    self.log.error("Unable to create buildset, will retry")
+                    log.error("Unable to create buildset, will retry")
                     time.sleep(self.retry_delay)
                 else:
-                    self.log.exception("Unable to create buildset")
+                    log.exception("Unable to create buildset")
 
     def reportBuildsetEnd(self, buildset, action, final, result=None):
         if not buildset.uuid:
             return
+        log = get_annotated_logger(self.log, get_event(buildset))
         if final:
             message = self._formatItemReport(
                 buildset.item, with_jobs=False, action=action)
@@ -137,12 +145,16 @@ class SQLReporter(BaseReporter):
                     return
             except sqlalchemy.exc.DBAPIError:
                 if retry_count < self.retry_count - 1:
-                    self.log.error("Unable to update buildset, will retry")
+                    log.error("Unable to update buildset, will retry")
                     time.sleep(self.retry_delay)
                 else:
-                    self.log.exception("Unable to update buildset")
+                    log.exception("Unable to update buildset")
 
     def reportBuildStart(self, build):
+        if build and build.build_set:
+            log = get_annotated_logger(self.log, get_event(build.build_set))
+        else:
+            log = self.log
         for retry_count in range(self.retry_count):
             try:
                 with self.connection.getSession() as db:
@@ -150,19 +162,23 @@ class SQLReporter(BaseReporter):
                     return db_build
             except sqlalchemy.exc.DBAPIError:
                 if retry_count < self.retry_count - 1:
-                    self.log.error("Unable to create build, will retry")
+                    log.error("Unable to create build, will retry")
                     time.sleep(self.retry_delay)
                 else:
-                    self.log.exception("Unable to create build")
+                    log.exception("Unable to create build")
 
     def reportBuildEnd(self, build, tenant, final):
         return self.reportBuildEnds([build], tenant, final)
 
     def reportBuildEnds(self, builds, tenant, final):
+        log = self.log
         for retry_count in range(self.retry_count):
             try:
                 with self.connection.getSession() as db:
                     buildset = builds[0].build_set
+                    if buildset:
+                        log = get_annotated_logger(
+                            self.log, get_event(buildset))
                     try:
                         db_buildset = self._getBuildset(db, builds[0])
                     except MissingBuildsetError:
@@ -178,10 +194,10 @@ class SQLReporter(BaseReporter):
                 return
             except sqlalchemy.exc.DBAPIError:
                 if retry_count < self.retry_count - 1:
-                    self.log.error("Unable to update build, will retry")
+                    log.error("Unable to update build, will retry")
                     time.sleep(self.retry_delay)
                 else:
-                    self.log.exception("Unable to update build")
+                    log.exception("Unable to update build")
 
     def _reportBuildEnd(self, db, db_buildset, build, tenant, final):
         db_build = db.getBuild(tenant=tenant, uuid=build.uuid)
@@ -248,7 +264,8 @@ class SQLReporter(BaseReporter):
         db_buildset = db.getBuildset(
             tenant=buildset.item.manager.tenant.name, uuid=buildset.uuid)
         if not db_buildset:
-            self.log.warning("Creating missing buildset %s", buildset.uuid)
+            log = get_annotated_logger(self.log, get_event(buildset))
+            log.warning("Creating missing buildset %s", buildset.uuid)
             db_buildset = self._createBuildset(db, buildset)
         return db_buildset
 
