@@ -38,6 +38,11 @@ def get_event(buildset):
         return buildset.item.event
 
 
+# MySQL and earlier versions of MariaDB have a practical limit of
+# 65535 bytes for TEXT columns; avoid exceeding that.
+MAX_TEXT_BYTES = 65535
+
+
 class SQLReporter(BaseReporter):
     """Sends off reports to a database."""
 
@@ -123,6 +128,9 @@ class SQLReporter(BaseReporter):
         if final:
             message = self._formatItemReport(
                 buildset.item, with_jobs=False, action=action)
+            # Truncate the message to the nearest valid utf8 character
+            message = message.encode('utf8')[:MAX_TEXT_BYTES].decode(
+                'utf8', errors='ignore')
         else:
             message = None
         for retry_count in range(self.retry_count):

@@ -469,6 +469,36 @@ class TestSQLConnectionMysql(ZuulTestCase):
 
             self.assertEqual(len(buildset0_builds), 5)
 
+    def test_sql_long_message(self):
+        reporter = self.scheds.first.sched.sql
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        # This exceeds 65535
+        large_data = "very long test data" * 3500
+        interim_data = 'Build succeeded.\nWarning:\n  ' + large_data
+        expected_data = interim_data[:65535]
+        self.executor_server.returnData(
+            'project-test1', A,
+            {'zuul':
+             {'warnings': [large_data]}
+             }
+        )
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # Check the results
+        with self.scheds.first.connections.getSqlConnection().\
+             engine.connect() as conn:
+
+            result = conn.execute(
+                sa.sql.select(reporter.connection.zuul_buildset_table)
+            )
+
+            buildsets = result.fetchall()
+            self.assertEqual(1, len(buildsets))
+            buildset0 = buildsets[0]
+            self.assertEqual('SUCCESS', buildset0.result)
+            self.assertEqual(expected_data, buildset0.message)
+
 
 class TestSQLReporterLongValues(AnsibleZuulTestCase):
     config_file = 'zuul-sql-driver-mysql.conf'
