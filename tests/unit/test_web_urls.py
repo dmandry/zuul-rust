@@ -136,6 +136,14 @@ class TestWhiteLabelAPI(TestWebURLs):
             ('^/api/(.*)$',
              'http://localhost:{}/api/tenant/tenant-one/\\1'.format(
                  self.web.port)),
+            ('^/.well-known/jwks$',
+             'http://localhost:{}/oidc/tenant/tenant-one/'
+             '.well-known/jwks'.format(
+                 self.web.port)),
+            ('^/.well-known/openid-configuration$',
+             'http://localhost:{}/oidc/tenant/tenant-one/'
+             '.well-known/openid-configuration'.format(
+                 self.web.port)),
         ]
         self.proxy = self.useFixture(WebProxyFixture(rules))
         self.port = self.proxy.port
@@ -143,6 +151,16 @@ class TestWhiteLabelAPI(TestWebURLs):
     def test_info(self):
         info = json.loads(self._get(self.port, '/api/info').decode('utf-8'))
         self.assertEqual('tenant-one', info['info']['tenant'])
+
+    def test_oidc(self):
+        openid = json.loads(self._get(
+            self.port, '/.well-known/openid-configuration').decode('utf-8'))
+        self.assertEqual(openid['issuer'], 'https://zuul.example.com')
+        self.assertEqual(openid['jwks_uri'],
+                         'https://zuul.example.com/.well-known/jwks')
+        jwks = json.loads(self._get(
+            self.port, '/.well-known/jwks').decode('utf-8'))
+        self.assertGreater(len(jwks["keys"]), 0)
 
 
 class TestSuburl(TestWebURLs):
