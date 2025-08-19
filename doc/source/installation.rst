@@ -140,6 +140,8 @@ application as the document root and add rewrite rules::
     # Rewrite api to the zuul-web endpoint
     RewriteRule api/tenant/(.*)/console-stream ws://localhost:9000/api/tenant/$1/console-stream [P,L]
     RewriteRule api/(.*)$ http://localhost:9000/api/$1 [P,L]
+    RewriteRule oidc/(.*)$ http://localhost:9000/oidc/$1 [P,L]
+    RewriteRule .well-known/openid-configuration$ http://localhost:9000/.well-known/openid-configuration [P,L]
     # Backward compatible rewrite
     RewriteRule t/(.*)/(.*).html(.*) /t/$1/$2$3 [R=301,L,NE]
 
@@ -182,6 +184,8 @@ rules::
     # Rewrite api to the zuul-web endpoint
     RewriteRule api/tenant/(.*)/console-stream ws://localhost:9000/api/tenant/$1/console-stream [P,L]
     RewriteRule api/(.*)$ http://localhost:9000/api/$1 [P,L]
+    RewriteRule oidc/(.*)$ http://localhost:9000/oidc/$1 [P,L]
+    RewriteRule .well-known/openid-configuration$ http://localhost:9000/.well-known/openid-configuration [P,L]
     # Backward compatible rewrite
     RewriteRule t/(.*)/(.*).html(.*) /t/$1/$2$3 [R=301,L,NE]
 
@@ -217,6 +221,8 @@ name is ``example``, the rewrite rules are::
     RewriteRule api/connection/(.*)$ http://localhost:9000/api/connection/$1 [P,L]
     RewriteRule api/console-stream ws://localhost:9000/api/tenant/example/console-stream [P,L]
     RewriteRule api/(.*)$ http://localhost:9000/api/tenant/example/$1 [P,L]
+    RewriteRule oidc/(.*)$ http://localhost:9000/oidc/tenant/example/$1 [P,L]
+    RewriteRule .well-known/openid-configuration$ http://localhost:9000/oidc/tenant/.well-known/openid-configuration [P,L]
     # Backward compatible rewrite
     RewriteRule t/(.*)/(.*).html(.*) /t/$1/$2$3 [R=301,L,NE]
 

@@ -1,0 +1,19 @@
+---
+upgrade:
+  - |
+    The URLs used when Zuul acts as an OpenID Connect provider are changing.
+
+    The OpenID configuration URL,
+    `zuul.example.com/.well-known/openid-configuration`, will remain
+    the same.  It was possible to access this data through other URLs;
+    doing so was incorrect and probably did not work.  Anything other
+    than this URL is considered deprecated.
+
+    The URL serving the OpenID keys is changing to
+    `zuul.example.com/oidc/jwks`.  Other URLs for this endpoint are
+    considered deprecated.  With this version, Zuul will report that
+    URL as the key endpoint in the OpenId configuration, so if proxy
+    configuration is required for access, that change must be made
+    before upgrade.  Old URLs will continue to work for this version
+    of Zuul to facilitate continued operation during the upgrade, but
+    will be removed in the next version of Zuul.

@@ -1329,7 +1329,7 @@ class ZuulWebOIDC(object):
 
         return {
             "issuer": web_root,
-            "jwks_uri": f"{web_root}/oidc/.well-known/jwks",
+            "jwks_uri": f"{web_root}/oidc/jwks",
             "claims_supported": [
                 "aud", "iat", "iss", "name", "sub", "custom"
             ],
@@ -3480,19 +3480,28 @@ class ZuulWeb(object):
                           controller=api, action='tenant_status')
         route_map.connect('api', '/api/tenant/{tenant_name}/system-events',
                           controller=api, action='system_events')
-        # whitelabel webroot access
-        route_map.connect('oidc', '/{tenant_name}/.well-known/jwks',
-                          controller=oidc, action='tenant_jwks')
-        route_map.connect(
-            'oidc', '/{tenant_name}/.well-known/openid-configuration',
-            controller=oidc, action='tenant_openid_configuration')
         # global webroot access
-        route_map.connect('oidc', '/.well-known/jwks',
+        route_map.connect('oidc', '/oidc/jwks',
                           controller=oidc, action='global_jwks')
         route_map.connect(
             'oidc', '/.well-known/openid-configuration',
             controller=oidc, action='global_openid_configuration')
-
+        # whitelabel webroot access
+        route_map.connect('oidc', '/oidc/tenant/{tenant_name}/jwks',
+                          controller=oidc, action='tenant_jwks')
+        route_map.connect(
+            'oidc',
+            '/oidc/tenant/{tenant_name}/.well-known/openid-configuration',
+            controller=oidc, action='tenant_openid_configuration')
+        # Backwards compat, remove after zuul 15
+        route_map.connect('oidc', '/oidc/.well-known/jwks',
+                          controller=oidc, action='global_jwks')
+        route_map.connect('oidc', '/.well-known/jwks',
+                          controller=oidc, action='global_jwks')
+        route_map.connect('oidc', '/oidc/{tenant_name}/jwks',
+                          controller=oidc, action='tenant_jwks')
+        route_map.connect('oidc', '/oidc/{tenant_name}/.well-known/jwks',
+                          controller=oidc, action='tenant_jwks')
         return route_map
 
     def __init__(self,
@@ -3670,9 +3679,6 @@ class ZuulWeb(object):
 
         api_app = cherrypy.tree.mount(api, '/', config=conf)
         api_app.log = ZuulCherrypyLogManager(appid=api_app.log.appid)
-
-        oidc_app = cherrypy.tree.mount(oidc, '/oidc', config=conf)
-        oidc_app.log = ZuulCherrypyLogManager(appid=oidc_app.log.appid)
 
     @property
     def port(self):

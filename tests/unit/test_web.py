@@ -28,6 +28,7 @@ from unittest import skip, mock
 
 from kazoo.exceptions import NoNodeError
 import requests
+import testtools
 
 from zuul.lib.statsd import normalize_statsd_name
 from zuul.zk.locks import tenant_write_lock
@@ -5126,7 +5127,7 @@ class TestWebOIDCEndpoints(BaseTestWeb):
         # Make sure the fist signning key is created
         keystore.getLatestOidcSigningKeys(algorithm="RS256")
 
-        jwks_data = self.get_url('oidc/.well-known/jwks').json()
+        jwks_data = self.get_url('oidc/jwks').json()
         self.assertEqual(len(jwks_data["keys"]), 1)
         for idx, key in enumerate(jwks_data["keys"]):
             self._validate_oidc_key(key, expected_kid=f'RS256-{idx}')
@@ -5142,22 +5143,26 @@ class TestWebOIDCEndpoints(BaseTestWeb):
             if len(test_keys.keys) == 2:
                 break
 
-        jwks_data = self.get_url('oidc/.well-known/jwks').json()
+        jwks_data = self.get_url('oidc/jwks').json()
         self.assertEqual(len(jwks_data["keys"]), 2)
         for idx, key in enumerate(jwks_data["keys"]):
             self._validate_oidc_key(key, expected_kid=f'RS256-{idx}')
 
     def _test_oidc_endpoints(self, tenant_name, expected_webroot):
-        well_known_url = 'oidc/.well-known'
         if tenant_name:
-            well_known_url = f'oidc/{tenant_name}/.well-known'
+            root = f'oidc/tenant/{tenant_name}/'
+            jwks = f'{root}jwks'
+        else:
+            root = ''
+            jwks = 'oidc/jwks'
+        well_known_url = f'{root}.well-known'
 
         # Test that the openid-configuration content is correct
         config_data = self.get_url(
             f'{well_known_url}/openid-configuration').json()
         self.assertEqual(config_data['issuer'], expected_webroot)
         self.assertEqual(config_data['jwks_uri'],
-                         f'{expected_webroot}/oidc/.well-known/jwks')
+                         f'{expected_webroot}/oidc/jwks')
         self.assertEqual(config_data['claims_supported'],
                          ['aud', 'iat', 'iss', 'name', 'sub', 'custom'])
         self.assertEqual(config_data['response_types_supported'], ['id_token'])
@@ -5166,10 +5171,26 @@ class TestWebOIDCEndpoints(BaseTestWeb):
         self.assertEqual(config_data['subject_types_supported'], ['public'])
 
         # Test that the jwks content is correct
-        jwks_data = self.get_url(f'{well_known_url}/jwks').json()
+        jwks_data = self.get_url(jwks).json()
         self.assertEqual(len(jwks_data["keys"]), 1)
         key = jwks_data["keys"][0]
         self._validate_oidc_key(key)
+
+        # Test that these similar urls don't work
+        well_known_url = f'{root}oidc/.well-known'
+        with testtools.ExpectedException(requests.exceptions.JSONDecodeError):
+            config_data = self.get_url(
+                f'{well_known_url}/openid-configuration').json()
+        with testtools.ExpectedException(requests.exceptions.JSONDecodeError):
+            config_data = self.get_url('jwks').json()
+
+        # Test backwards compat (remove after zuul 13)
+        well_known_url = 'oidc/.well-known'
+        if tenant_name:
+            well_known_url = f'oidc/{tenant_name}/.well-known'
+        jwks_data = self.get_url(
+            f'{well_known_url}/jwks').json()
+        self.assertEqual(len(jwks_data["keys"]), 1)
 
     def _validate_oidc_key(self, key, expected_kid='RS256-0'):
         jwk = jwt.PyJWK.from_dict(key)
