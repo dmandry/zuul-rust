@@ -64,6 +64,19 @@
         - failed_in_loop1
         - failed_in_loop2
 
+    - name: Retry with rescue
+      block:
+        - name: Retry test
+          win_command: "cmd /c exit 1"
+          register: result
+          until:
+            - result is not failed
+          retries: 2
+          delay: 2
+      rescue:
+        - name: Rescue task
+          win_command: 'cmd /c echo This is a rescue task'
+
     - name: Set testfile path name for later test
       set_fact:
         testfile: "{{ ansible_user_dir }}\\testfile-{{ zuul.build }}"
