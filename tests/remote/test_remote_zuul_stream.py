@@ -188,7 +188,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine(r'compute1 \| ok: Runtime: None', text)
 
             # Test no_log for command
-            nolog_task = data[0]['plays'][1]['tasks'][15]
+            nolog_task = data[0]['plays'][1]['tasks'][17]
             self.assertEqual("Test no_log command",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -196,7 +196,7 @@ class FunctionalZuulStreamMixIn:
             self.assertNotIn('This task should not log', text)
 
             # Test no_log for shell
-            nolog_task = data[0]['plays'][1]['tasks'][16]
+            nolog_task = data[0]['plays'][1]['tasks'][18]
             self.assertEqual("Test no_log shell",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -208,14 +208,14 @@ class FunctionalZuulStreamMixIn:
             # a side effect of how we prevent output in the JSON log; we
             # could consider changing it, but we include assertions so that
             # we know that the behavior is consistent over time.
-            nolog_task = data[0]['plays'][1]['tasks'][17]
+            nolog_task = data[0]['plays'][1]['tasks'][19]
             self.assertEqual("Inspect command_no_log_result",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
             self.assertNotIn("This task should not log", nolog_json_as_str)
 
             # Test it does not appear in the registered output from shell
-            nolog_task = data[0]['plays'][1]['tasks'][18]
+            nolog_task = data[0]['plays'][1]['tasks'][20]
             self.assertEqual("Inspect shell_no_log_result",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -284,7 +284,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine('PLAY RECAP', text)
             self.assertLogLine(
                 r'controller \| ok: \d+ changed: \d+ unreachable: 0 failed: 0 '
-                'skipped: 2 rescued: 1 ignored: 0', text)
+                'skipped: 2 rescued: 2 ignored: 0', text)
             self.assertLogLine(
                 r'RUN END RESULT_NORMAL: \[untrusted : review.example.com/'
                 r'org/project/playbooks/command.yaml@master]', text)
@@ -309,6 +309,22 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine(
                 r'fake \| skipping: Conditional result was False', text)
             self.assertLogLine(r'compute1 \| Testing raw', text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
 
     def test_command_split_streams(self):
         job = self._run_job('command', split=True)
@@ -356,7 +372,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine(r'compute1 \| ok: Runtime: None', text)
 
             # Test no_log for command
-            nolog_task = data[0]['plays'][1]['tasks'][15]
+            nolog_task = data[0]['plays'][1]['tasks'][17]
             self.assertEqual("Test no_log command",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -364,7 +380,7 @@ class FunctionalZuulStreamMixIn:
             self.assertNotIn('This task should not log', text)
 
             # Test no_log for shell
-            nolog_task = data[0]['plays'][1]['tasks'][16]
+            nolog_task = data[0]['plays'][1]['tasks'][18]
             self.assertEqual("Test no_log shell",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -372,14 +388,14 @@ class FunctionalZuulStreamMixIn:
             self.assertNotIn('This task should not log', text)
 
             # Test it does not appear in the registered output from command
-            nolog_task = data[0]['plays'][1]['tasks'][17]
+            nolog_task = data[0]['plays'][1]['tasks'][19]
             self.assertEqual("Inspect command_no_log_result",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
             self.assertNotIn("This task should not log", nolog_json_as_str)
 
             # Test it does not appear in the registered output from shell
-            nolog_task = data[0]['plays'][1]['tasks'][18]
+            nolog_task = data[0]['plays'][1]['tasks'][20]
             self.assertEqual("Inspect shell_no_log_result",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -439,7 +455,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine('PLAY RECAP', text)
             self.assertLogLine(
                 r'controller \| ok: \d+ changed: \d+ unreachable: 0 failed: 0 '
-                'skipped: 2 rescued: 1 ignored: 0', text)
+                'skipped: 2 rescued: 2 ignored: 0', text)
             self.assertLogLine(
                 r'RUN END RESULT_NORMAL: \[untrusted : review.example.com/'
                 r'org/project/playbooks/command.yaml@master]', text)
@@ -463,6 +479,23 @@ class FunctionalZuulStreamMixIn:
                 r"""compute1 \| ok: \{'string': '\d.""", text)
             self.assertLogLine(
                 r'fake \| skipping: Conditional result was False', text)
+            self.assertLogLine(r'compute1 \| Testing raw', text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
 
     @zuul_config('executor', 'output_max_bytes', '2')
     def test_command_output_max_bytes(self):
@@ -590,7 +623,7 @@ class FunctionalZuulStreamMixIn:
             # self.assertLogLine(r'compute1 \| ok: Runtime: None', text)
 
             # Test no_log for win_command
-            nolog_task = data[0]['plays'][1]['tasks'][14]
+            nolog_task = data[0]['plays'][1]['tasks'][16]
             self.assertEqual("Test no_log command",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -598,7 +631,7 @@ class FunctionalZuulStreamMixIn:
             self.assertNotIn('This task should not log', text)
 
             # Test no_log for win_shell
-            nolog_task = data[0]['plays'][1]['tasks'][15]
+            nolog_task = data[0]['plays'][1]['tasks'][17]
             self.assertEqual("Test no_log shell",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -606,14 +639,14 @@ class FunctionalZuulStreamMixIn:
             self.assertNotIn('This task should not log', text)
 
             # Test it does not appear in the registered output from command
-            nolog_task = data[0]['plays'][1]['tasks'][16]
+            nolog_task = data[0]['plays'][1]['tasks'][18]
             self.assertEqual("Inspect command_no_log_result",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
             self.assertNotIn("This task should not log", nolog_json_as_str)
 
             # Test it does not appear in the registered output from shell
-            nolog_task = data[0]['plays'][1]['tasks'][17]
+            nolog_task = data[0]['plays'][1]['tasks'][19]
             self.assertEqual("Inspect shell_no_log_result",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -673,7 +706,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine('PLAY RECAP', text)
             self.assertLogLine(
                 r'controller \| ok: \d+ changed: \d+ unreachable: 0 failed: 0 '
-                'skipped: 2 rescued: 1 ignored: 0', text)
+                'skipped: 2 rescued: 2 ignored: 0', text)
             self.assertLogLine(
                 r'RUN END RESULT_NORMAL: \[untrusted : review.example.com/'
                 r'org/project/playbooks/win-command.yaml@master]', text)
@@ -697,6 +730,22 @@ class FunctionalZuulStreamMixIn:
                 r"""compute1 \| ok: \{'string': '\d.""", text)
             self.assertLogLine(
                 r'fake \| skipping: Conditional result was False', text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
 
     @skip("Windows unavailable in gate")
     def test_win_command_fqcn(self):
@@ -753,7 +802,7 @@ class FunctionalZuulStreamMixIn:
             # self.assertLogLine(r'compute1 \| ok: Runtime: None', text)
 
             # Test no_log for win_command
-            nolog_task = data[0]['plays'][1]['tasks'][14]
+            nolog_task = data[0]['plays'][1]['tasks'][16]
             self.assertEqual("Test no_log command",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -761,7 +810,7 @@ class FunctionalZuulStreamMixIn:
             self.assertNotIn('This task should not log', text)
 
             # Test no_log for win_shell
-            nolog_task = data[0]['plays'][1]['tasks'][15]
+            nolog_task = data[0]['plays'][1]['tasks'][17]
             self.assertEqual("Test no_log shell",
                              nolog_task['task']['name'])
             nolog_json_as_str = json.dumps(nolog_task)
@@ -822,7 +871,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine('PLAY RECAP', text)
             self.assertLogLine(
                 r'controller \| ok: \d+ changed: \d+ unreachable: 0 failed: 0 '
-                'skipped: 2 rescued: 1 ignored: 0', text)
+                'skipped: 2 rescued: 2 ignored: 0', text)
             self.assertLogLine(
                 r'RUN END RESULT_NORMAL: \[untrusted : review.example.com/'
                 r'org/project/playbooks/win-command-fqcn.yaml@master]', text)
@@ -846,6 +895,22 @@ class FunctionalZuulStreamMixIn:
                 r"""compute1 \| ok: \{'string': '\d.""", text)
             self.assertLogLine(
                 r'fake \| skipping: Conditional result was False', text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(2 retries left\)',
+                text)
+            self.assertLogLine(
+                r'compute1 \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
+            self.assertLogLine(
+                r'controller \| FAILED - RETRYING: '
+                r'Retry test \(1 retries left\)',
+                text)
 
 
 class TestZuulStream9(AnsibleZuulTestCase, FunctionalZuulStreamMixIn):

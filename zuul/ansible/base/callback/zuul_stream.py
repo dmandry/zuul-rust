@@ -34,6 +34,7 @@ DOCUMENTATION = '''
       - Set as stdout in config
 '''
 
+import collections
 import datetime
 import logging
 import logging.config
@@ -326,7 +327,8 @@ class CallbackModule(default.CallbackModule):
         self._task = None
         self._daemon_running = False
         self._play = None
-        self._streamers = {}  # task uuid -> streamer
+        self._streamers = {}  # (task, host) -> streamer
+        self._retries = collections.Counter()  # task key -> retry count
         self.sent_failure_result = False
         self.configure_logger()
         self.configure_regexes()
@@ -451,14 +453,18 @@ class CallbackModule(default.CallbackModule):
 
         self._log(msg)
 
-    def v2_playbook_on_task_start(self, task, is_conditional):
+    def v2_playbook_on_task_start(self, task, is_conditional,
+                                  zuul_retry_host=None):
         # Log an extra blank line to get space before each task
-        self._log("")
+        if zuul_retry_host is None:
+            self._log("")
 
         self._task = task
 
         if self._play.strategy != 'free':
-            task_name = self._print_task_banner(task)
+            task_name = task
+            if zuul_retry_host is None:
+                self._print_task_banner(task)
         else:
             task_name = task.get_name().strip()
 
@@ -473,6 +479,8 @@ class CallbackModule(default.CallbackModule):
 
             hosts = self._get_task_hosts(task)
             for host, inventory_hostname in hosts:
+                if zuul_retry_host is not None and zuul_retry_host != host:
+                    continue
                 default_port = ACTION_LOG_STREAM_PORT.get(task.action)
                 # This is intended to be only used for testing where
                 # we change the port so we can run another instance
@@ -520,17 +528,24 @@ class CallbackModule(default.CallbackModule):
                 # comments in paths.py for details.
                 log_host = paths._sanitize_filename(inventory_hostname)
                 key = "%s-%s" % (self._task._uuid, log_host)
-                count = paths.ZUUL_LOG_ID_MAP.get(key, 0) + 1
-                paths.ZUUL_LOG_ID_MAP[key] = count
-                log_id = "%s-%s-%s" % (
-                    self._task._uuid, count, log_host)
+
+                count = paths.ZUUL_LOG_ID_MAP.get(key, 0)
+                if zuul_retry_host is None:
+                    count += 1
+                    paths.ZUUL_LOG_ID_MAP[key] = count
+                retry_key = "%s-%s-%s" % (self._task._uuid, count, log_host)
+                retries = self._retries[retry_key]
+                self._retries[retry_key] += 1
+                log_id = "%s-%s-%s-%s" % (
+                    self._task._uuid, count, retries, log_host)
 
                 self._log("[%s] Starting to log %s for task %s"
                           % (host, log_id, task_name),
                           job=False, executor=True)
                 streamer = Streamer(self, host, ip, port, log_id)
                 streamer.start()
-                self._streamers[self._task._uuid] = streamer
+                streamer_key = (self._task._uuid, inventory_hostname)
+                self._streamers[streamer_key] = streamer
 
     def v2_playbook_on_handler_task_start(self, task):
         self.v2_playbook_on_task_start(task, False)
@@ -553,10 +568,11 @@ class CallbackModule(default.CallbackModule):
                 msg = "[Zuul] Log Stream did not terminate"
                 self._log(msg)
 
-    def _stop_skipped_task_streamer(self, task):
+    def _stop_skipped_task_streamer(self, result):
         # Immediately stop a streamer for a skipped task.  We don't
         # expect a logfile in that situation.
-        streamer = self._streamers.pop(task._uuid, None)
+        streamer_key = (result._task._uuid, result._host.get_name())
+        streamer = self._streamers.pop(streamer_key, None)
         if streamer is None:
             return
         # Give no grace since we don't expect the log to exist
@@ -570,6 +586,20 @@ class CallbackModule(default.CallbackModule):
             if streamer.is_alive():
                 msg = "[Zuul] Log Stream did not terminate"
                 self._log(msg)
+
+    def _stop_retried_task_streamer(self, result):
+        # Like a normal stop, but just for a single streamer
+        streamer_key = (result._task._uuid, result._host.get_name())
+        streamer = self._streamers.pop(streamer_key, None)
+        if streamer is None:
+            return
+        # Give 10 seconds of grace for the log to appear
+        streamer.stop(10)
+        # And 30 seconds to finish streaming after that
+        streamer.join(30)
+        if streamer.is_alive():
+            msg = "[Zuul] Log Stream did not terminate"
+            self._log(msg)
 
     def _process_result_for_localhost(self, result, is_task=True):
         result_dict = dict(result._result)
@@ -653,8 +683,48 @@ class CallbackModule(default.CallbackModule):
         self._result_logger.info("unreachable")
         return ret
 
+    def v2_runner_retry(self, result):
+        # This is called immediately after the command finishes.
+        # There may be a delay before the next retry, but we aren't
+        # notified, so we do some math here to anticipate when we will
+        # resume.
+        entry_time = time.monotonic()
+
+        # Wait for the streamer to stop so that we get the complete
+        # log from the previous attempt before we start logging
+        # anything about the next one.
+        self._stop_retried_task_streamer(result)
+
+        # Emit a log entry that is similar to the default callback.
+        task_host = result._host.get_name()
+        task_name = result.task_name or result._task
+        msg = "%s | FAILED - RETRYING: %s (%d retries left)" % (
+            task_host, task_name,
+            result._result['retries'] - result._result['attempts'])
+        self._log(msg)
+
+        # Accounting for how long we spent waiting for the streamer to
+        # stop, determine when we expect the retry to begin
+        resume_time = entry_time + result._task.delay
+        remain_time = resume_time - time.monotonic()
+        # Start connecting just slightly before the task should start
+        # again
+        delay = max(remain_time - 0.1, 0)
+
+        def start():
+            self._log("[%s] Delaying %s to start retry for task %s"
+                      % (result._host, delay, result._task),
+                      job=False, executor=True)
+            time.sleep(delay)
+            self.v2_playbook_on_task_start(result._task, False,
+                                           zuul_retry_host=result._host)
+
+        self.thread = threading.Thread(target=start)
+        self.thread.daemon = True
+        self.thread.start()
+
     def v2_runner_on_skipped(self, result):
-        self._stop_skipped_task_streamer(result._task)
+        self._stop_skipped_task_streamer(result)
         if result._task.loop:
             self._items_done = False
             self._deferred_result = dict(result._result)
@@ -684,7 +754,7 @@ class CallbackModule(default.CallbackModule):
             # "Did/Would not run command since 'path' exists/does not exist"
             # is the message we're looking for.
             if 'not run command since' in result_dict.get('msg', ''):
-                self._stop_skipped_task_streamer(result._task)
+                self._stop_skipped_task_streamer(result)
 
         if result._task.action in ('win_command', 'win_shell'):
             # The win_command module has a small set of msgs it returns;
@@ -695,7 +765,7 @@ class CallbackModule(default.CallbackModule):
             # for.
             m = result_dict.get('msg', '')
             if 'skipped, since' in m and 'exist' in m:
-                self._stop_skipped_task_streamer(result._task)
+                self._stop_skipped_task_streamer(result)
 
         if (self._play.strategy == 'free'
                 and self._last_task_banner != result._task._uuid):

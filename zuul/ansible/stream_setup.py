@@ -49,7 +49,9 @@ def stream_setup_run(module, task_vars):
             task_vars.get('inventory_hostname'))
         key = "%s-%s" % (module._task._uuid, log_host)
         count = paths.ZUUL_LOG_ID_MAP.get(key, 0)
-        module._task.args['zuul_log_id'] = "%s-%s-%s" % (
-            module._task._uuid, count, log_host)
+        retries = getattr(module._task, '_zuul_retries', 0)
+        module._task._zuul_retries = retries + 1
+        module._task.args['zuul_log_id'] = "%s-%s-%s-%s" % (
+            module._task._uuid, count, retries, log_host)
     module._task.args["zuul_output_max_bytes"] = int(
         os.environ["ZUUL_OUTPUT_MAX_BYTES"])

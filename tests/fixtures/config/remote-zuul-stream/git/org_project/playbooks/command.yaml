@@ -69,6 +69,19 @@
         - failed_in_loop1
         - failed_in_loop2
 
+    - name: Retry with rescue
+      block:
+        - name: Retry test
+          command: /bin/false
+          register: result
+          until:
+            - result is not failed
+          retries: 2
+          delay: 2
+      rescue:
+        - name: Rescue task
+          command: echo "This is a rescue task"
+
     - name: Set testfile path name for later test
       set_fact:
         testfile: "/tmp/testfile-{{ zuul.build }}"
