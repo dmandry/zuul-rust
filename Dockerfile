@@ -21,17 +21,17 @@ ARG IMAGE_FLAVOR=
 # Base images, defined as separate stages to allow for mirror selection or
 # downstream customization via named contexts when built with docker buildx.
 
-FROM quay.io/opendevorg/python-base:3.11-bookworm${IMAGE_FLAVOR} AS zuul-base
+FROM quay.io/opendevorg/python-base:3.11-trixie${IMAGE_FLAVOR} AS zuul-base
 
 # This is a mirror of:
-# FROM docker.io/library/node:22-bookworm AS node-base
-FROM quay.io/opendevmirror/node:22-bookworm AS node-base
+# FROM docker.io/library/node:22-trixie AS node-base
+FROM quay.io/opendevmirror/node:22-trixie AS node-base
 
 # This is a mirror of:
-# FROM golang:1.22-bookworm AS go-base
-FROM quay.io/opendevmirror/golang:1.22-bookworm AS go-base
+# FROM golang:1.25-trixie AS go-base
+FROM quay.io/opendevmirror/golang:1.25-trixie AS go-base
 
-FROM quay.io/opendevorg/python-builder:3.11-bookworm AS builder-base
+FROM quay.io/opendevorg/python-builder:3.11-trixie AS builder-base
 
 FROM node-base AS js-builder
 
@@ -92,6 +92,9 @@ RUN --mount=from=builder,source=/output,target=/output \
   /output/install-from-bindep zuul_base
 
 RUN useradd -u 10001 -m -d /var/lib/zuul -c "Zuul Daemon" zuul \
+# Newer distro releases set homedirs to 700 by default which doesn't
+# play nice with running zuul as another user.
+  && chmod 755 /var/lib/zuul \
 # This enables git protocol v2 which is more efficient at negotiating
 # refs.  This can be removed after the images are built with git 2.26
 # where it becomes the default.

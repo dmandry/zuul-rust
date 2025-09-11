@@ -245,8 +245,8 @@
     allowed-projects: zuul/zuul
     timeout: 2700  # 45 minutes
     requires:
-      - python-builder-3.11-bookworm-container-image
-      - python-base-3.11-bookworm-container-image
+      - python-builder-3.11-trixie-container-image
+      - python-base-3.11-trixie-container-image
     ansible-split-streams: true
     post-run:
       - playbooks/image/test-image.yaml
@@ -324,8 +324,8 @@
     description: Build container images and upload.
     allowed-projects: zuul/zuul
     requires:
-      - python-builder-3.11-bookworm-container-image
-      - python-base-3.11-bookworm-container-image
+      - python-builder-3.11-trixie-container-image
+      - python-base-3.11-trixie-container-image
     provides: zuul-container-image
     secrets:
       name: container_registry_credentials
