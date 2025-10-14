@@ -71,10 +71,20 @@
     - name: Test no_log command
       no_log: true
       ansible.windows.win_command: 'cmd /c echo This task should not log'
+      register: command_no_log_result
 
     - name: Test no_log shell
       no_log: true
       ansible.windows.win_shell: 'cmd /c echo This task should not log'
+      register: shell_no_log_result
+
+    - name: Inspect command_no_log_result
+      debug:
+        msg: "{{ command_no_log_result.stdout}}{{ command_no_log_result.stderr }}"
+
+    - name: Inspect shell_no_log_result
+      debug:
+        msg: "{{ shell_no_log_result.stdout}}{{ shell_no_log_result.stderr }}"
 
   handlers:
     - name: test handler
