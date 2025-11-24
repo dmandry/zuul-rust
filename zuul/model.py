@@ -9892,6 +9892,7 @@ class UnparsedAbideConfig(object):
         self.ltime = -1
         self.tenants = {}
         self.authz_rules = []
+        self.authz_roles = []
         self.semaphores = []
         self.api_roots = []
 
@@ -9899,6 +9900,7 @@ class UnparsedAbideConfig(object):
         if isinstance(conf, UnparsedAbideConfig):
             self.tenants.update(conf.tenants)
             self.authz_rules.extend(conf.authz_rules)
+            self.authz_roles.extend(conf.authz_roles)
             self.semaphores.extend(conf.semaphores)
             self.api_roots.extend(conf.api_roots)
             if len(self.api_roots) > 1:
@@ -9924,6 +9926,8 @@ class UnparsedAbideConfig(object):
                 self.authz_rules.append(value)
             elif key == 'authorization-rule':
                 self.authz_rules.append(value)
+            elif key == 'role':
+                self.authz_roles.append(value)
             elif key == 'global-semaphore':
                 self.semaphores.append(value)
             elif key == 'api-root':
@@ -9941,6 +9945,7 @@ class UnparsedAbideConfig(object):
             "api_roots": self.api_roots,
         }
         d["authz_rules"] = self.authz_rules
+        d["authz_roles"] = self.authz_roles
         return d
 
     @classmethod
@@ -9952,6 +9957,7 @@ class UnparsedAbideConfig(object):
         unparsed_abide.authz_rules = data.get('authz_rules',
                                               data.get('admin_rules',
                                                        []))
+        unparsed_abide.authz_roles = data.get('authz_roles', [])
         unparsed_abide.semaphores = data.get("semaphores", [])
         unparsed_abide.api_roots = data.get("api_roots", [])
         return unparsed_abide
@@ -11327,6 +11333,7 @@ class TenantTPCRegistry:
 class Abide(object):
     def __init__(self):
         self.authz_rules = {}
+        self.authz_roles = {}
         self.semaphores = {}
         self.tenants = {}
         self.tenant_lock = threading.Lock()
@@ -11715,6 +11722,64 @@ class AuthZRuleTree(object):
 
     def __repr__(self):
         return '<AuthZRuleTree [ %s ]>' % self.ruletree
+
+
+class AuthZRole(object):
+    admin = False
+
+    def __init__(self, conf):
+        self.name = conf['name']
+        self.permissions = conf['permissions']
+
+    def __call__(self, permission, params):
+        return False
+
+
+class AuthZAdminRole(AuthZRole):
+    # Special role that always returns true to checks to enable admin action
+    admin = True
+
+    def __init__(self, *args, **kwargs):
+        self.name = 'admin'
+        self.permissions = {'admin': True}
+
+    def __call__(self, permission, params):
+        return True
+
+
+class AuthZReadRole(AuthZRole):
+    # Special role that limits access to read only endpoints
+    admin = False
+
+    def __init__(self, *args, **kwargs):
+        self.name = 'read'
+        self.permissions = {'read': True}
+
+    def __call__(self, permission, params):
+        return True
+
+
+class AuthZConfigRole(AuthZRole):
+    # Roles that are configured in the zuul config
+
+    # Admin in this case really means has permission to do more than read.
+    # If we have a configured role explicitly allowing something then that
+    # rule has permission to do more than read. This is "admin" while we
+    # carry the old backward compatbile code.
+    admin = True
+
+    def __call__(self, permission, params):
+        if permission:
+            for perm, conditions in self.permissions.items():
+                if permission == perm:
+                    if conditions is True:
+                        return True
+                    elif conditions and isinstance(conditions, dict):
+                        for cond, val in conditions['conditions'].items():
+                            if not params.get(cond) == val:
+                                return False
+                        return True
+        return False
 
 
 class TenantEventState(zkobject.ZKObject):
