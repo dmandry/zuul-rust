@@ -22,7 +22,8 @@ from configparser import ConfigParser
 from zuul import model
 from zuul.lib.ansible import AnsibleManager
 from zuul.configloader import (
-    AuthorizationRuleParser, ConfigLoader, safe_load_yaml
+    AuthorizationRuleParser, AuthorizationRoleParser,
+    ConfigLoader, safe_load_yaml
 )
 from zuul.model import Abide, MergeRequest, SourceContext
 from zuul.zk.locks import tenant_read_lock
@@ -1137,6 +1138,42 @@ class TestAuthorizationRuleParserWithTemplating(ZuulTestCase):
         self.assertTrue(not rules['tenant-admin-complex'](claims_2,
                                                           tenant_one))
         self.assertTrue(rules['tenant-admin-complex'](claims_2, tenant_two))
+
+
+class TestAuthorizationRoleParser(ZuulTestCase):
+    tenant_config_file = 'config/tenant-parser/rbac.yaml'
+
+    def test_roles_are_loaded(self):
+        roles = self.scheds.first.sched.abide.authz_roles
+        self.assertTrue('admin' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue('read' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue('enqueue' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue(roles['enqueue'].permissions['enqueue'])
+        self.assertTrue('dequeue' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertEqual(roles['dequeue'].permissions['dequeue']['conditions'],
+                         {'project': 'org/project'})
+
+    def test_invalid_override_of_reserved_roles(self):
+        # Check that valid names are fine
+        role = {'name': 'enqueue',
+                'permissions': {'enqueue': True}
+               }
+        AuthorizationRoleParser().fromYaml(role)
+        # Now check that the two reserved role names can't be overridden.
+        role = {'name': 'admin',
+                'permissions': {'enqueue': True}
+               }
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
+        role = {'name': 'read',
+                'permissions': {'enqueue': True}
+               }
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
 
 
 class TestTenantExtra(TenantParserTestCase):

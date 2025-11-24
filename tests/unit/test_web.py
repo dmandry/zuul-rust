@@ -20,6 +20,7 @@ import urllib.parse
 import socket
 import textwrap
 import time
+import json
 import jwt
 import sys
 import subprocess
@@ -30,6 +31,8 @@ from kazoo.exceptions import NoNodeError
 import requests
 
 from zuul.lib.statsd import normalize_statsd_name
+import zuul.model
+from zuul.zk.event_queues import TENANT_EVENT_STATE
 from zuul.zk.locks import tenant_write_lock
 import zuul.web
 
@@ -4394,6 +4397,407 @@ class TestTenantScopedWebApiTokenWithExpiry(BaseTestWeb):
         self.assertEqual('project-test2', ah_request['job'])
         self.assertEqual(".*", ah_request['ref_filter'])
         self.assertEqual("some reason", ah_request['reason'])
+
+
+class TestTenantScopedWebApiWithRBAC(BaseTestWeb):
+    config_file = 'zuul-admin-web-no-override.conf'
+    tenant_config_file = 'config/authorization/single-tenant/rbac.yaml'
+
+    def test_rbac_read_access(self):
+        """Test explicit read access"""
+        # Generate some build records in the db.
+        self.add_base_changes()
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        path = 'api/tenant/tenant-one/builds' \
+               '?project=org/project&job_name=project-test1'
+
+        def _test_builds_get_with_authz(authz, expected):
+            token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                               algorithm='HS256')
+            req = self.get_url(path,
+                               headers={'Authorization': 'Bearer %s' % token})
+            if expected == 200:
+                build_query = req.json()
+                self.assertEqual(len(build_query), 1)
+                self.assertEqual(build_query[0]['job_name'], 'project-test1')
+                self.assertEqual(build_query[0]['pipeline'], 'gate')
+                self.assertEqual(build_query[0]['result'], 'SUCCESS')
+            else:
+                self.assertEqual(expected, req.status_code, req.text)
+
+        # Authorized sub
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'venkman',
+                 'exp': int(time.time()) + 3600}
+        _test_builds_get_with_authz(authz, 200)
+        # Unauthorized sub
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'exp': int(time.time()) + 3600}
+        _test_builds_get_with_authz(authz, 403)
+        # Authorized group
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        _test_builds_get_with_authz(authz, 200)
+
+    def test_rbac_enqueue_permissions(self):
+        """Test that rbac rules defined on tenant are checked"""
+        path = "api/tenant/%(tenant)s/project/%(project)s/enqueue"
+
+        def _test_project_enqueue_with_authz(i, project, authz, expected):
+            f_ch = self.fake_gerrit.addFakeChange(project, 'master',
+                                                  '%s %i' % (project, i))
+            f_ch.addApproval('Code-Review', 2)
+            f_ch.addApproval('Approved', 1)
+            change = {'trigger': 'gerrit',
+                      'change': '%i,1' % i,
+                      'pipeline': 'gate', }
+            enqueue_args = {'tenant': 'tenant-one',
+                            'project': project, }
+
+            token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                               algorithm='HS256')
+            req = self.post_url(path % enqueue_args,
+                                headers={'Authorization': 'Bearer %s' % token},
+                                json=change)
+            self.assertEqual(expected, req.status_code, req.text)
+            self.waitUntilSettled()
+
+        i = 0
+        for p in ['org/project', 'org/project1', 'org/project2']:
+            i += 1
+            # Authorized sub
+            authz = {'iss': 'zuul_operator',
+                     'aud': 'zuul.example.com',
+                     'sub': 'venkman',
+                     'exp': int(time.time()) + 3600}
+            _test_project_enqueue_with_authz(i, p, authz, 200)
+            i += 1
+            # Unauthorized sub
+            authz = {'iss': 'zuul_operator',
+                     'aud': 'zuul.example.com',
+                     'sub': 'vigo',
+                     'exp': int(time.time()) + 3600}
+            _test_project_enqueue_with_authz(i, p, authz, 403)
+            i += 1
+            # Authorized group
+            authz = {'iss': 'zuul_operator',
+                     'aud': 'zuul.example.com',
+                     'sub': 'vigo',
+                     'groups': ['ghostbusters'],
+                     'exp': int(time.time()) + 3600}
+            _test_project_enqueue_with_authz(i, p, authz, 200)
+            i += 1
+            # unauthorized group
+            authz = {'iss': 'zuul_operator',
+                     'aud': 'zuul.example.com',
+                     'sub': 'vigo',
+                     'groups': ['ghostbusters2'],
+                     'exp': int(time.time()) + 3600}
+            _test_project_enqueue_with_authz(i, p, authz, 403)
+        self.waitUntilSettled()
+
+    def test_rbac_dequeue(self):
+        """Test that rbac rules for dequeue actions are respected"""
+        start_builds = len(self.builds)
+        self.create_branch('org/project', 'stable')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'stable'))
+        self.executor_server.hold_jobs_in_build = True
+        self.commitConfigUpdate('common-config', 'layouts/timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        for _ in iterate_timeout(30, 'Wait for a build on hold'):
+            if len(self.builds) > start_builds:
+                break
+        self.waitUntilSettled()
+
+        # First check non matching role conditions (ref does not match)
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters2'],
+                 'exp': int(time.time()) + 3600}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        path = "api/tenant/%(tenant)s/project/%(project)s/dequeue"
+        dequeue_args = {'tenant': 'tenant-one',
+                        'project': 'org/project', }
+        change = {'ref': 'refs/heads/stable',
+                  'pipeline': 'periodic', }
+        req = self.post_url(path % dequeue_args,
+                            headers={'Authorization': 'Bearer %s' % token},
+                            json=change)
+        # Request has failed and jobs are still held.
+        self.assertEqual(403, req.status_code, req.text)
+        self.waitUntilSettled()
+        assert len(self.builds) > start_builds
+
+        # Now check that the request succeeds with matching role conditions
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        path = "api/tenant/%(tenant)s/project/%(project)s/dequeue"
+        dequeue_args = {'tenant': 'tenant-one',
+                        'project': 'org/project', }
+        change = {'ref': 'refs/heads/stable',
+                  'pipeline': 'periodic', }
+        req = self.post_url(path % dequeue_args,
+                            headers={'Authorization': 'Bearer %s' % token},
+                            json=change)
+        self.assertEqual(200, req.status_code, req.text)
+        data = req.json()
+        self.assertEqual(True, data)
+        self.waitUntilSettled()
+
+        self.commitConfigUpdate('common-config',
+                                'layouts/no-timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertEqual(self.countJobResults(self.history, 'ABORTED'), 1)
+
+    def test_rbac_authorizations(self):
+        # TODO this test case should test that we list out the authorizations
+        # for the current user.
+        pass
+
+    def test_rbac_autohold(self):
+        """Test autoholds work with rbac authz"""
+
+        def _test_autohold_with_authz(project, job, authz, expected):
+            path = '/api/tenant/%(tenant)s/project/%(project)s/autohold'
+            autohold = {'job': job,
+                        'count': 1,
+                        'change': None,
+                        'ref': '.*',
+                        'reason': 'Testing RBAC',
+                        'node_hold_expiration': 0}
+            autohold_args = {'tenant': 'tenant-one',
+                             'project': project, }
+
+            token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                               algorithm='HS256')
+            req = self.post_url(path % autohold_args,
+                                headers={'Authorization': 'Bearer %s' % token},
+                                json=autohold)
+            self.assertEqual(expected, req.status_code, req.text)
+            self.waitUntilSettled()
+
+        # Unauthorized sub
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'exp': int(time.time()) + 3600}
+        _test_autohold_with_authz('org/project', 'project-test1', authz, 403)
+        # Unauthorized group
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters2'],
+                 'exp': int(time.time()) + 3600}
+        _test_autohold_with_authz('org/project', 'project-test1', authz, 403)
+        # Unauthorized project
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        _test_autohold_with_authz('org/project2', 'project-test1', authz, 403)
+        # Unauthorized job
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        _test_autohold_with_authz('org/project', 'project-test2', authz, 403)
+        # Authorized group
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        _test_autohold_with_authz('org/project', 'project-test1', authz, 200)
+
+        # Check the resulting autohold exists (and get its id for deletion)
+        path = '/api/tenant/%(tenant)s/project/%(project)s/autohold'
+        autohold_args = {'tenant': 'tenant-one',
+                         'project': 'org/project'}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        req = self.get_url(path % autohold_args,
+                           headers={'Authorization': 'Bearer %s' % token})
+        request_id = req.json()[0]['id']
+        self.assertEqual('0000000000', request_id)
+
+        def _test_delete_autohold_with_authz(request_id, authz, expected):
+            path = '/api/tenant/%(tenant)s/autohold/%(request_id)s'
+            delete_args = {'tenant': 'tenant-one',
+                           'request_id': request_id}
+            token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                               algorithm='HS256')
+            req = self.get_url(path % delete_args,
+                               headers={'Authorization': 'Bearer %s' % token})
+            self.assertEqual(expected, req.status_code)
+
+        # Now try to delete the autohold
+        # Unauthorized sub
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'exp': int(time.time()) + 3600}
+        _test_delete_autohold_with_authz(request_id, authz, 403)
+        # Authorized group*
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        # This succeeds despite having a role would like to only allow
+        # autohold deletions for project: org/project2 and job: project-test2
+        # because currently the delete request only considers the request_id
+        # not any of the other autohold attributes.
+        # TODO Consider scoping permissions for autohold deletes based on
+        # project, job, change/ref, etc.
+        _test_delete_autohold_with_authz(request_id, authz, 200)
+
+    def test_rbac_state_post(self):
+        """Test rbac roles are honored by state_post requests"""
+        path = '/api/tenant/%(tenant)s/state'
+        state_post_args = {'tenant': 'tenant-one'}
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        # Check a request that doesn't match any roles
+        state_post = {'trigger_queue_paused': False,
+                      'reason': 'rbac testing'}
+        req = self.post_url(path % state_post_args,
+                            headers={'Authorization': 'Bearer %s' % token},
+                            json=state_post)
+        self.assertEqual(403, req.status_code, req.text)
+
+        # Now check a request that does match a role
+        state_post = {'trigger_queue_paused': True,
+                      'reason': 'rbac testing'}
+        req = self.post_url(path % state_post_args,
+                            headers={'Authorization': 'Bearer %s' % token},
+                            json=state_post)
+        self.assertEqual(200, req.status_code, req.text)
+        # Check the tenant state in zookeeper
+        tqs_path = TENANT_EVENT_STATE.format(tenant='tenant-one')
+        tqs = zuul.model.TenantEventState(tqs_path)
+        ctx = self.createZKContext(None)
+        tqs.refresh(ctx)
+        tqs = tqs.toDict()
+        self.assertTrue(tqs['trigger_queue_paused'])
+        self.assertEqual(tqs['reason'], 'rbac testing')
+
+    def test_rbac_build_image(self):
+        path = 'api/tenant/%(tenant)s/image/%(image)s/build'
+        image_build_args = {'tenant': 'tenant-one',
+                            'image': 'badimage'}
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        # Check a request that doesn't match any roles due to bad image name
+        req = self.post_url(path % image_build_args,
+                            headers={'Authorization': 'Bearer %s' % token})
+        self.assertEqual(403, req.status_code, req.text)
+        # Now check a request for an image name that matches our rbac role
+        image_build_args = {'tenant': 'tenant-one',
+                            'image': 'testimage'}
+        req = self.post_url(path % image_build_args,
+                            headers={'Authorization': 'Bearer %s' % token})
+        # The 404 response with the image not found error indicates we
+        # successfully authenticated and were authorized, but the image
+        # simply isn't in this zuul tenant.
+        self.assertEqual(404, req.status_code, req.text)
+        self.assertIn('Image not found in tenant', req.text)
+
+    def test_rbac_delete_build_artifact(self):
+        path = '/api/tenant/%(tenant)s/image-build-artifact/%(artifact_id)s'
+        delete_args = {'tenant': 'tenant-one',
+                       'artifact_id': '654321'}
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        # Check a request that doesn't match any roles due to bad artifact id
+        req = self.delete_url(path % delete_args,
+                              headers={'Authorization': 'Bearer %s' % token})
+        self.assertEqual(403, req.status_code, req.text)
+        # Now check a request for an artifact id that matches our rbac role
+        delete_args = {'tenant': 'tenant-one',
+                       'artifact_id': '123456'}
+        req = self.delete_url(path % delete_args,
+                              headers={'Authorization': 'Bearer %s' % token})
+        # The 404 response with the image build artifact not found error
+        # indicates we successfully authenticated and were authorized, but the
+        # image build artifact simply isn't in this zuul tenant.
+        self.assertEqual(404, req.status_code, req.text)
+        self.assertIn('Image build artifact not found in tenant', req.text)
+
+    def test_rbac_invalid_json(self):
+        """Test behavior of bad requests prior to auth validation"""
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'vigo',
+                 'groups': ['ghostbusters'],
+                 'exp': int(time.time()) + 3600}
+        token = jwt.encode(authz, key='NoDanaOnlyZuul',
+                           algorithm='HS256')
+        path = '/api/tenant/%(tenant)s/project/%(project)s/autohold'
+        autohold_args = {'tenant': 'tenant-one',
+                         'project': 'org/project', }
+        autohold = {'job': 'project-test1',
+                    'count': 1,
+                    'change': None,
+                    'ref': '.*',
+                    'reason': 'Testing RBAC',
+                    'node_hold_expiration': 0}
+        headers = {
+            'Authorization': 'Bearer %s' % token,
+            'Content-Type': 'application/json'
+        }
+        full_path = urllib.parse.urljoin(self.base_url, path % autohold_args)
+        raw_json = json.dumps(autohold)
+
+        # Ensure everything is happy if the json is valid
+        req = requests.post(full_path, headers=headers, data=raw_json)
+        self.assertEqual(200, req.status_code)
+
+        # Edit the raw_json to make it invalid json
+        raw_json = raw_json[1:-1]
+        req = requests.post(full_path, headers=headers, data=raw_json)
+        self.assertEqual(400, req.status_code)
+        self.assertIn('Invalid JSON document', req.text)
 
 
 class TestHeldAttributeInBuildInfo(BaseTestWeb):

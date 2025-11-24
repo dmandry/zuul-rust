@@ -1,0 +1,89 @@
+- authorization-rule:
+    name: venkman_rule
+    conditions:
+      - zuul_uid: venkman
+- authorization-rule:
+    name: gb_rule
+    conditions:
+      - groups: ghostbusters
+- authorization-rule:
+    name: gb_rule2
+    conditions:
+      - groups: ghostbusters2
+- role:
+    name: enqueue
+    permissions:
+      enqueue: true
+- role:
+    name: enqueue2
+    permissions:
+      enqueue:
+        conditions:
+          project: tcejopr/gro
+- role:
+    name: dequeue
+    permissions:
+      dequeue:
+        conditions:
+          project: org/project
+- role:
+    name: dequeue2
+    permissions:
+      dequeue:
+        conditions:
+          project: org/project
+          ref: refs/heads/main
+- role:
+    name: autohold
+    permissions:
+      set_autohold:
+        conditions:
+          project: org/project
+          job: project-test1
+      delete_autohold:
+        conditions:
+          project: org/project2
+          job: project-test2
+- role:
+    name: set_state
+    permissions:
+      state_post:
+        conditions:
+          trigger_queue_paused: true
+- role:
+    name: build_image
+    permissions:
+      build_image:
+        conditions:
+          image: testimage
+- role:
+    name: delete_build_artifact
+    permissions:
+      delete_build_artifact:
+        conditions:
+          artifact_id: '123456'
+- tenant:
+    name: tenant-one
+    anonymous-read-access: false
+    role-mappings:
+      venkman_rule: admin
+      gb_rule:
+        - enqueue
+        - dequeue
+        - autohold
+        - set_state
+        - build_image
+        - delete_build_artifact
+        - read
+      gb_rule2:
+        - enqueue2
+        - dequeue2
+        - read
+    source:
+      gerrit:
+        config-projects:
+          - common-config
+        untrusted-projects:
+          - org/project
+          - org/project1
+          - org/project2
