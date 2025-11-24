@@ -22,8 +22,10 @@ from configparser import ConfigParser
 from zuul import model
 from zuul.lib.ansible import AnsibleManager
 from zuul.configloader import (
-    AuthorizationRuleParser, ConfigLoader, safe_load_yaml
+    AuthorizationRuleParser, AuthorizationRoleParser,
+    ConfigLoader, safe_load_yaml
 )
+from zuul.exceptions import AuthZRoleNotFoundError, AuthZRuleNotFoundError
 from zuul.model import Abide, MergeRequest, SourceContext
 from zuul.zk.locks import tenant_read_lock
 
@@ -1143,6 +1145,142 @@ class TestAuthorizationRuleParserWithTemplating(ZuulTestCase):
         self.assertTrue(not rules['tenant-admin-complex'](claims_2,
                                                           tenant_one))
         self.assertTrue(rules['tenant-admin-complex'](claims_2, tenant_two))
+
+
+class TestAuthorizationRoleParser(ZuulTestCase):
+    tenant_config_file = 'config/tenant-parser/rbac.yaml'
+
+    def test_roles_are_loaded(self):
+        roles = self.scheds.first.sched.abide.authz_roles
+        self.assertTrue('admin' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue('read' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue('enqueue' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue(roles['enqueue'].permissions['enqueue'])
+        self.assertTrue('dequeue1' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertEqual(
+            roles['dequeue1'].permissions['dequeue']['conditions'],
+            {'project': 'org/project'})
+        self.assertTrue('dequeue2' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertEqual(
+            roles['dequeue2'].permissions['dequeue']['conditions'],
+            {'ref': 'refs/heads/stable/foo'})
+        self.assertTrue('dequeue3' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertEqual(
+            roles['dequeue3'].permissions['dequeue']['conditions'],
+            {'project': 'org/project',
+             'ref': 'refs/heads/stable/foo'})
+        self.assertTrue('build_image' in roles,
+                        self.scheds.first.sched.abide)
+        self.assertTrue(roles['build_image'].permissions['build-image'])
+
+    def test_invalid_override_of_reserved_roles(self):
+        # Check that valid names are fine
+        role = {'name': 'enqueue',
+                'permissions': {'enqueue': True}
+               }
+        AuthorizationRoleParser().fromYaml(role)
+        # Now check that the two reserved role names can't be overridden.
+        role = {'name': 'admin',
+                'permissions': {'enqueue': True}
+               }
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
+        role = {'name': 'read',
+                'permissions': {'enqueue': True}
+               }
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
+
+    def test_invalid_rbac_conditions(self):
+        # Check valid conditions
+        role = {
+            'name': 'enqueue',
+            'permissions': {
+                'enqueue': {
+                    'conditions': {
+                        'project': 'foo/bar',
+                        'ref': 'refs/heads/featuretesting'
+                    }
+                }
+            }
+        }
+        AuthorizationRoleParser().fromYaml(role)
+        # Now check extra invalid conditions
+        role['permissions']['enqueue']['conditions']['job'] = 'atestjob'
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
+        # Now check the lack of conditions
+        del role['permissions']['enqueue']['conditions']['project']
+        del role['permissions']['enqueue']['conditions']['ref']
+        del role['permissions']['enqueue']['conditions']['job']
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
+
+    def test_role_shouldnt_have_conditions(self):
+        # Check that conditions don't apply to some permissions
+        role = {
+            'name': 'autohold',
+            'permissions': {
+                'autohold': {
+                    'conditions': {
+                        'project': 'foo/bar',
+                    }
+                }
+            }
+        }
+        self.assertRaises(vs.error.MultipleInvalid,
+                          AuthorizationRoleParser().fromYaml, role)
+        # Now check valid role construction
+        role['permissions']['autohold'] = True
+        AuthorizationRoleParser().fromYaml(role)
+
+
+class TestTenantInvalidRoleInRoleMappings(ZuulTestCase):
+    tenant_config_file = 'config/tenant-parser/invalid_role_rbac.yaml'
+
+    # This test raises a config error during the startup of the test
+    # case which makes the first scheduler fail during its startup.
+    # The second (or any additional) scheduler won't even run as the
+    # startup is serialized in tests/base.py.
+    # Thus it doesn't make sense to execute this test with multiple
+    # schedulers.
+    scheduler_count = 1
+
+    def setUp(self):
+        err = 'The Authorization Role "not_a_valid_role" was not found.'
+        with testtools.ExpectedException(AuthZRoleNotFoundError, err):
+            super().setUp()
+
+    def test_tenant_invalid_role_in_role_mappings(self):
+        # The magic is in setUp
+        pass
+
+
+class TestTenantInvalidRuleInRoleMappings(ZuulTestCase):
+    tenant_config_file = 'config/tenant-parser/invalid_rule_rbac.yaml'
+
+    # This test raises a config error during the startup of the test
+    # case which makes the first scheduler fail during its startup.
+    # The second (or any additional) scheduler won't even run as the
+    # startup is serialized in tests/base.py.
+    # Thus it doesn't make sense to execute this test with multiple
+    # schedulers.
+    scheduler_count = 1
+
+    def setUp(self):
+        err = 'The Authorization Rule "auth-rule-three" was not found.'
+        with testtools.ExpectedException(AuthZRuleNotFoundError, err):
+            super().setUp()
+
+    def test_tenant_invalid_rule_in_role_mappings(self):
+        # The magic is in setUp
+        pass
 
 
 class TestTenantExtra(TenantParserTestCase):

@@ -1,0 +1,54 @@
+- authorization-rule:
+    name: auth-rule-one
+    conditions:
+      - sub: venkman
+      - sub: zeddemore
+- authorization-rule:
+    name: auth-rule-two
+    conditions:
+      - sub: gozer
+        iss: another_dimension
+- role:
+    name: enqueue
+    permissions:
+      enqueue: true
+- role:
+    name: dequeue1
+    permissions:
+      dequeue:
+        conditions:
+          project: org/project
+- role:
+    name: dequeue2
+    permissions:
+      dequeue:
+        conditions:
+          ref: refs/heads/stable/foo
+- role:
+    name: dequeue3
+    permissions:
+      dequeue:
+        conditions:
+          project: org/project
+          ref: refs/heads/stable/foo
+- role:
+    name: build_image
+    permissions:
+      build-image: true
+- tenant:
+    name: tenant-one
+    role-mappings:
+      auth-rule-one: admin
+      auth-rule-two:
+        - enqueue
+        - dequeue1
+        - dequeue2
+        - dequeue3
+        - build_image
+    source:
+      gerrit:
+        config-projects:
+          - common-config
+        untrusted-projects:
+          - org/project1
+          - org/project2

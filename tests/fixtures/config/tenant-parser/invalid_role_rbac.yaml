@@ -1,0 +1,28 @@
+- authorization-rule:
+    name: auth-rule-one
+    conditions:
+      - sub: venkman
+      - sub: zeddemore
+- authorization-rule:
+    name: auth-rule-two
+    conditions:
+      - sub: gozer
+        iss: another_dimension
+- role:
+    name: enqueue
+    permissions:
+      enqueue: true
+- tenant:
+    name: tenant-one
+    role-mappings:
+      auth-rule-one: admin
+      auth-rule-two:
+        - enqueue
+        - not_a_valid_role
+    source:
+      gerrit:
+        config-projects:
+          - common-config
+        untrusted-projects:
+          - org/project1
+          - org/project2
