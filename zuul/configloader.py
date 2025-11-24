@@ -1779,6 +1779,112 @@ class AuthorizationRuleParser(object):
         return a
 
 
+class AuthorizationRoleParser(object):
+    state_post = {
+        'state_post': bool
+    }
+    delete_autohold = {
+        'delete_autohold': bool
+    }
+    root_authorization = {
+        'root_authorization': bool
+    }
+    authorizations = {
+        'authorizations': bool
+    }
+    build_image = {
+        'build_image': bool
+    }
+    delete_build_artifact = {
+        'delete_build_artifact': bool
+    }
+    delete_image_upload = {
+        'delete_image_upload': bool
+    }
+    validate_image_uload = {
+        'validate_image_upload': bool
+    }
+    put_nodes = {
+        'put_nodes': bool
+    }
+    delete_nodeset_requests = {
+        'delete_nodeset_requests': bool
+    }
+    # This construction comes from:
+    # https://github.com/alecthomas/voluptuous/issues/126#issuecomment-134322625
+    dequeue = {
+        'dequeue':
+            vs.Any(bool, {
+                'conditions': vs.All(
+                    # Validate conditions keys
+                    vs.Schema({vs.Required(vs.Any('project', 'ref')): object}),
+                    # Validate conditions data
+                    vs.Schema({
+                        vs.Optional('project'): str,
+                        vs.Optional('ref'): str
+                    })
+                )
+            })
+    }
+    enqueue = {
+        'enqueue':
+            vs.Any(bool, {
+                'conditions': vs.All(
+                    # Validate conditions keys
+                    vs.Schema({vs.Required(vs.Any('project', 'ref')): object}),
+                    # Validate conditions data
+                    vs.Schema({
+                        vs.Optional('project'): str,
+                        vs.Optional('ref'): str
+                    })
+                )
+            })
+    }
+    set_autohold = {
+        'set_autohold':
+            vs.Any(bool, {
+                'conditions': vs.All(
+                    # Validate conditions keys
+                    vs.Schema({vs.Required(vs.Any('project', 'ref')): object}),
+                    # Validate conditions data
+                    vs.Schema({
+                        vs.Optional('project'): str,
+                        vs.Optional('ref'): str
+                    })
+                )
+            })
+    }
+
+    def __init__(self):
+        self.log = logging.getLogger("zuul.AuthorizationRoleParser")
+        self.schema = self.getSchema()
+
+    def getSchema(self):
+        permissions = {}
+        permissions.update(self.state_post)
+        permissions.update(self.delete_autohold)
+        permissions.update(self.root_authorization)
+        permissions.update(self.authorizations)
+        permissions.update(self.build_image)
+        permissions.update(self.delete_build_artifact)
+        permissions.update(self.delete_image_upload)
+        permissions.update(self.put_nodes)
+        permissions.update(self.delete_nodeset_requests)
+        permissions.update(self.dequeue)
+        permissions.update(self.enqueue)
+        permissions.update(self.set_autohold)
+        authRole = {
+            vs.Required('name'): vs.All(str, vs.NotIn(('read', 'admin'))),
+            vs.Required('permissions'): permissions,
+        }
+        return vs.Schema(authRole)
+
+    def fromYaml(self, conf):
+        self.schema(conf)
+        a = model.AuthZConfigRole(conf)
+        return a
+
+
 class GlobalSemaphoreParser(object):
     def __init__(self):
         self.log = logging.getLogger("zuul.GlobalSemaphoreParser")
@@ -1803,10 +1909,21 @@ class ApiRootParser(object):
         self.log = logging.getLogger("zuul.ApiRootParser")
         self.schema = self.getSchema()
 
+    def validateRoleMappings(self):
+        # TODO Need to check that each key is a valid authz rule name
+        # and each value is a valid api method or admin or read.
+        # Maybe farm out to static or global method to share with
+        # TenantParser.
+        def v(value, path=[]):
+            return True
+        return v
+
     def getSchema(self):
         api_root = {
             'authentication-realm': str,
             'access-rules': to_list(str),
+            'anonymous-read-access': bool,
+            'role-mappings': self.validateRoleMappings(),
         }
         return vs.Schema(api_root)
 
@@ -1814,6 +1931,12 @@ class ApiRootParser(object):
         self.schema(conf)
         api_root = model.ApiRoot(conf.get('authentication-realm'))
         api_root.access_rules = conf.get('access-rules', [])
+        api_root.anonymous_read_access = conf.get(
+            'anonymous-read-access', True)
+        api_root.role_mappings = {}
+        if conf.get('role-mappings') is not None:
+            for key, val in conf['role-mappings'].items():
+                api_root.role_mappings[key] = as_list(val)
         return api_root
 
 
@@ -1980,6 +2103,15 @@ class TenantParser(object):
             if semaphore_name not in abide.semaphores:
                 raise GlobalSemaphoreNotFoundError(semaphore_name)
 
+    def validateRoleMappings(self):
+        # TODO Need to check that each key is a valid authz rule name
+        # and each value is a valid api method or admin or read.
+        # Maybe farm out to static or global method to share with
+        # ApiRootParser.
+        def v(value, path=[]):
+            return True
+        return v
+
     def getSchema(self):
         tenant = {vs.Required('name'): str,
                   'max-changes-per-pipeline': int,
@@ -2000,6 +2132,8 @@ class TenantParser(object):
                   'default-ansible-version': vs.Any(str, float, int),
                   'access-rules': to_list(str),
                   'admin-rules': to_list(str),
+                  'anonymous-read-access': bool,
+                  'role-mappings': self.validateRoleMappings(),
                   'semaphores': to_list(str),
                   'authentication-realm': str,
                   # TODO: Ignored, allowed for backwards compat, remove for v5.
@@ -2049,6 +2183,11 @@ class TenantParser(object):
             tenant.admin_rules = as_list(conf['admin-rules'])
         if conf.get('access-rules') is not None:
             tenant.access_rules = as_list(conf['access-rules'])
+        tenant.anonymous_read_access = conf.get('anonymous-read-access', True)
+        tenant.role_mappings = {}
+        if conf.get('role-mappings') is not None:
+            for key, val in conf['role-mappings'].items():
+                tenant.role_mappings[key] = as_list(val)
         if conf.get('authentication-realm') is not None:
             tenant.default_auth_realm = conf['authentication-realm']
         if conf.get('semaphores') is not None:
@@ -3217,6 +3356,7 @@ class ConfigLoader(object):
             connections, zk_client, scheduler, merger, keystorage,
             zuul_globals, statsd, unparsed_config_cache)
         self.authz_rule_parser = AuthorizationRuleParser()
+        self.authz_role_parser = AuthorizationRoleParser()
         self.global_semaphore_parser = GlobalSemaphoreParser()
         self.api_root_parser = ApiRootParser()
 
@@ -3274,6 +3414,14 @@ class ConfigLoader(object):
         for conf_authz_rule in unparsed_abide.authz_rules:
             authz_rule = self.authz_rule_parser.fromYaml(conf_authz_rule)
             abide.authz_rules[authz_rule.name] = authz_rule
+        abide.authz_roles.clear()
+        for conf_authz_role in unparsed_abide.authz_roles:
+            authz_role = self.authz_role_parser.fromYaml(conf_authz_role)
+            abide.authz_roles[authz_role.name] = authz_role
+        admin_role = model.AuthZAdminRole()
+        abide.authz_roles['admin'] = admin_role
+        read_role = model.AuthZReadRole()
+        abide.authz_roles['read'] = read_role
 
     def loadSemaphores(self, abide, unparsed_abide):
         abide.semaphores.clear()
