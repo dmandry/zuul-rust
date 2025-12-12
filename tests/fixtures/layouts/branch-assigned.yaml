@@ -1,0 +1,133 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- pipeline:
+    name: gate
+    manager: dependent
+    success-message: Build succeeded (gate).
+    trigger:
+      gerrit:
+        - event: comment-added
+          approval:
+            - Approved: 1
+    success:
+      gerrit:
+        Verified: 2
+        submit: true
+    failure:
+      gerrit:
+        Verified: -2
+    start:
+      gerrit:
+        Verified: 0
+    precedence: high
+
+- pipeline:
+    name: post
+    manager: independent
+    trigger:
+      gerrit:
+        - event: ref-updated
+          ref: ^(?!refs/).*$
+
+- pipeline:
+    name: tag
+    manager: independent
+    trigger:
+      gerrit:
+        - event: ref-updated
+          ref: ^refs/tags/.*$
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: ubuntu-xenial
+          name: controller
+
+- job:
+    name: test-job
+
+- queue:
+    name: red-queue
+    type: branch-assigned
+
+- queue:
+    name: gold-queue
+    type: branch-assigned
+
+- project:
+    name: org/project1
+    branches: master
+    check:
+      jobs:
+        - test-job
+    gate:
+      jobs:
+        - test-job
+
+- project:
+    name: org/project1
+    queue: red-queue
+    branches: red-one
+    check:
+      jobs:
+        - test-job
+    gate:
+      jobs:
+        - test-job
+
+- project:
+    name: org/project1
+    queue: gold-queue
+    branches: gold-one
+    check:
+      jobs:
+        - test-job
+    gate:
+      jobs:
+        - test-job
+
+- project:
+    name: org/project2
+    branches: master
+    check:
+      jobs:
+        - test-job
+    gate:
+      jobs:
+        - test-job
+
+- project:
+    name: org/project2
+    queue: red-queue
+    branches: red-two
+    check:
+      jobs:
+        - test-job
+    gate:
+      jobs:
+        - test-job
+
+- project:
+    name: org/project2
+    queue: gold-queue
+    branches: gold-two
+    check:
+      jobs:
+        - test-job
+    gate:
+      jobs:
+        - test-job
