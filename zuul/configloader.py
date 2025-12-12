@@ -1681,9 +1681,11 @@ class QueueParser:
 
     def getSchema(self):
         queue = {vs.Required('name'): str,
-                 'per-branch': bool,
+                 vs.Exclusive('per-branch', 'type'): bool,
                  'allow-circular-dependencies': bool,
                  'dependencies-by-topic': bool,
+                 vs.Exclusive('type', 'type'): vs.Any(
+                     'all-branches', 'per-branch', 'branch-assigned'),
                  '_source_context': model.SourceContext,
                  '_start_mark': model.ZuulMark,
                  }
@@ -1691,11 +1693,16 @@ class QueueParser:
 
     def fromYaml(self, conf):
         self.schema(conf)
+        # Default or explicit value
+        qtype = conf.get('type', 'all-branches')
+        # If per-branch was specified, then type wasn't
+        if conf.get('per-branch'):
+            qtype = 'per-branch'
         queue = model.Queue(
             conf['name'],
-            conf.get('per-branch', False),
             conf.get('allow-circular-dependencies', False),
             conf.get('dependencies-by-topic', False),
+            qtype,
         )
         if (queue.dependencies_by_topic and not
             queue.allow_circular_dependencies):

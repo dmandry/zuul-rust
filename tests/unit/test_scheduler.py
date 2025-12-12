@@ -7124,6 +7124,57 @@ class TestChangeQueues(ZuulTestCase):
             'existing definition in branch master' in A.messages[0])
         self.assertEqual(A.data['status'], 'NEW')
 
+    def test_per_branch_queues_sos(self):
+        self.executor_server.hold_jobs_in_build = True
+        self.create_branch('org/project2', 'stable')
+        self.create_branch('org/project4', 'stable')
+        A = self.fake_gerrit.addFakeChange('org/project2', 'master', 'A')
+        B = self.fake_gerrit.addFakeChange('org/project4', 'master', 'B')
+        C = self.fake_gerrit.addFakeChange('org/project2', 'stable', 'C')
+        D = self.fake_gerrit.addFakeChange('org/project4', 'stable', 'D')
+        A.addApproval('Code-Review', 2)
+        B.addApproval('Code-Review', 2)
+        C.addApproval('Code-Review', 2)
+        D.addApproval('Code-Review', 2)
+
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.fake_gerrit.addEvent(C.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        sched1 = self.scheds.first
+        sched2 = self.createScheduler()
+        sched2.start()
+
+        # Pause scheduler 1
+        with sched1.sched.run_handler_lock:
+            self.fake_gerrit.addEvent(B.addApproval('Approved', 1))
+            self.fake_gerrit.addEvent(D.addApproval('Approved', 1))
+            self.waitUntilSettled(matcher=[sched2])
+
+        self.assertBuilds([
+            dict(name='project-test', changes='1,1'),
+            dict(name='project-test', changes='3,1'),
+            dict(name='project-test', changes='1,1 2,1'),
+            dict(name='project-test', changes='3,1 4,1'),
+        ])
+        tenant = sched2.sched.abide.tenants.get('tenant-one')
+        gate_manager = tenant.layout.pipeline_managers['gate']
+        self.assertEqual(2, len(gate_manager.state.queues))
+        q1 = gate_manager.state.queues[0]
+        q2 = gate_manager.state.queues[1]
+        self.assertEqual(len(q1.queue), 2)
+        self.assertEqual(len(q2.queue), 2)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+            dict(name='project-test', result='SUCCESS', changes='1,1 2,1'),
+            dict(name='project-test', result='SUCCESS', changes='3,1'),
+            dict(name='project-test', result='SUCCESS', changes='3,1 4,1'),
+        ], ordered=False)
+
 
 class TestJobUpdateBrokenConfig(ZuulTestCase):
     tenant_config_file = 'config/job-update-broken/main.yaml'

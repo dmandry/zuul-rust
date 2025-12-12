@@ -31,6 +31,10 @@ Here is an example ``queue`` configuration.
    .. attr:: per-branch
       :default: false
 
+      .. note:: This attribute is deprecated and will be removed in a
+                future version of Zuul.  Use :attr:`queue.type`
+                instead.
+
       Queues by default define a single queue for all projects and
       branches that use it. This is especially important if projects
       want to do upgrade tests between different branches in
@@ -42,6 +46,47 @@ Here is an example ``queue`` configuration.
       means that all projects that should be gated must have aligned branch
       names when using per branch queues. Otherwise changes that belong
       together end up in different queues.
+
+   .. attr:: type
+      :default: all-branches
+
+      Specifies the type of queue from one of the choices below:
+
+      .. value:: all-branches
+
+         Queues by default define a single queue for all projects and
+         branches that use it. This is especially important if
+         projects want to do upgrade tests between different branches
+         in the :term:`gate`.
+
+      .. value:: per-branch
+
+         A shared queue per branch for all projects. Note that this
+         means that all projects that should be gated must have
+         aligned branch names when using per branch queues. Otherwise
+         changes that belong together end up in different queues.
+
+      .. value:: branch-assigned
+
+         Each branch of a project may be arbitrarily assigned to a
+         queue.  This supports systems where projects have multiple
+         independent branches, but the coordination of those branches
+         across multiple projects is not done by sharing a consistent
+         branch name.
+
+         To assign a particular project-branch to a queue, create a
+         :attr:`project` stanza with a :attr:`project.queue` attribute
+         that specifies the queue name in the desired project-branch,
+         or create it with a :attr:`project.branches` attribute that
+         specifies the branch name.  Zuul will use the normal rules
+         for implied branch matchers if they are applicable, which may
+         include matching any branch if the project stanza appears in
+         a :term:`config-project`.
+
+         If a particular project-branch remains unassigned, Zuul will
+         attempt to fall back on a `per-branch` queue if any project
+         stanza for the project specified one, or an `all-branches`
+         queue otherwise.
 
    .. attr:: allow-circular-dependencies
       :default: false
