@@ -19,19 +19,48 @@ from zuul.manager import DynamicChangeQueueContextManager
 
 
 class ChangeQueueManager:
-
+    """Manages a single named queue (but may be per-branch)"""
     def __init__(self, pipeline_manager, name=None, per_branch=False):
         self.log = pipeline_manager.log
         self.pipeline_manager = pipeline_manager
         self.name = name
         self.per_branch = per_branch
-        self.projects = []
+        self.branch_matchers = {}
         self.created_for_branches = {}
+        self.project_branches = set()
 
-    def addProject(self, project):
-        self.projects.append(project)
+    def __repr__(self):
+        if self.branch_matchers:
+            kind = 'branch-assigned'
+        elif self.per_branch:
+            kind = 'per-branch'
+        else:
+            kind = 'all-branches'
+        return f'<ChangeQueueManager for {self.name} type: {kind}>'
+
+    def addBranchMatcher(self, project_name, matcher):
+        matcher_set = self.branch_matchers.setdefault(project_name, set())
+        matcher_set.add(matcher)
+
+    def matchesBranch(self, change):
+        for matcher in self.branch_matchers.get(
+                change.project.canonical_name, []):
+            if matcher is None:
+                # This may be due to conditions such as:
+                # * A trusted project configuring itself
+                # * A project that disabled implied branches with pragma
+                # * A project with only one branch
+                # In these cases, just like the jobs attached to these
+                # definitions, we will consider all branches assigned
+                # to this queue.
+                return True
+            if matcher.matches(change):
+                return True
+        return False
 
     def getOrCreateQueue(self, project, branch):
+        if not self.per_branch:
+            branch = None
         change_queue = self.created_for_branches.get(branch)
 
         if not change_queue:
@@ -42,8 +71,9 @@ class ChangeQueueManager:
 
         if not change_queue.matches(project.canonical_name, branch):
             change_queue.addProject(project, branch)
-            self.log.debug("Added project %s to queue: %s" %
-                           (project, change_queue))
+            self.project_branches.add((project.canonical_name, branch))
+            self.log.debug("Added project %s to queue: %s",
+                           project, change_queue)
 
         return change_queue
 
@@ -60,49 +90,95 @@ class SharedQueuePipelineManager(PipelineManager, metaclass=ABCMeta):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # project_name -> manager
+        self.default_queue_managers = {}
+        # project_name -> [managers]
+        self.branch_assigned_queue_managers = {}
+        # queue_name -> manager
+        self.named_queue_managers = {}
         self.change_queue_managers = []
+
+    def _configureBranchAssignedQueueManager(self, layout, project,
+                                             project_name, project_config):
+        # Ensure that we have a ChangeQueueManager for this project stanza
+        queue_name = project_config.queue_name
+        queue = layout.queues.get(queue_name)
+        if not queue:
+            return
+        if queue.type == queue.Type.BRANCH_ASSIGNED:
+            manager = self.named_queue_managers.get(queue_name)
+            if not manager:
+                manager = ChangeQueueManager(
+                    self,
+                    name=queue_name,
+                )
+                self.named_queue_managers[queue_name] = manager
+                self.change_queue_managers.append(manager)
+                self.log.debug("Created branch-assigned queue: %s" % manager)
+            manager.addBranchMatcher(
+                project.canonical_name,
+                project_config.getBranchMatcher(
+                    self.tenant,
+                    project.canonical_name,
+                )
+            )
+            # Add this queue manager to the list of possible
+            # branch-assigned queue managers for this project.
+            manager_set = self.branch_assigned_queue_managers.setdefault(
+                project_name, set())
+            manager_set.add(manager)
 
     def buildChangeQueues(self, layout):
         self.log.debug("Building shared change queues")
-        change_queues_managers = {}
         tenant = self.tenant
         layout_project_configs = layout.project_configs
 
         for project_name, project_configs in layout_project_configs.items():
             (trusted, project) = tenant.getProject(project_name)
-            queue_name = None
+            default_queue_name = None
             project_in_pipeline = False
             for project_config in layout.getAllProjectConfigs(project_name):
                 project_pipeline_config = project_config.pipelines.get(
                     self.pipeline.name)
-                if not queue_name:
-                    queue_name = project_config.queue_name
+                if not default_queue_name:
+                    queue = layout.queues.get(project_config.queue_name)
+                    branch_assigned = (
+                        queue and queue.type == queue.Type.BRANCH_ASSIGNED
+                    )
+                    if not branch_assigned:
+                        default_queue_name = project_config.queue_name
                 if project_pipeline_config is None:
                     continue
                 project_in_pipeline = True
             if not project_in_pipeline:
                 continue
 
-            # Check if the queue is global or per branch
-            queue = layout.queues.get(queue_name)
-            per_branch = queue and queue.per_branch
+            # Check if the default queue is global or per branch
+            queue = layout.queues.get(default_queue_name)
+            per_branch = bool(queue and queue.type == queue.Type.PER_BRANCH)
 
-            if queue_name and queue_name in change_queues_managers:
-                change_queue_manager = change_queues_managers[queue_name]
+            if (default_queue_name and
+                (default_queue_name in self.named_queue_managers)):
+                change_queue_manager = self.named_queue_managers[
+                    default_queue_name]
             else:
                 change_queue_manager = ChangeQueueManager(
-                    self, name=queue_name, per_branch=per_branch)
-                if queue_name:
+                    self, name=default_queue_name, per_branch=per_branch)
+                if default_queue_name:
                     # If this is a named queue, keep track of it in
                     # case it is referenced again.  Otherwise, it will
                     # have a name automatically generated from its
                     # constituent projects.
-                    change_queues_managers[queue_name] = change_queue_manager
+                    self.named_queue_managers[default_queue_name] =\
+                        change_queue_manager
                 self.change_queue_managers.append(change_queue_manager)
-                self.log.debug("Created queue: %s" % change_queue_manager)
-            change_queue_manager.addProject(project)
-            self.log.debug("Added project %s to queue managers: %s" %
-                           (project, change_queue_manager))
+                self.log.debug("Created queue: %s", change_queue_manager)
+            self.default_queue_managers[project_name] = change_queue_manager
+            self.log.debug("Added project %s to default queue manager: %s",
+                           project, change_queue_manager)
+            for project_config in layout.getAllProjectConfigs(project_name):
+                self._configureBranchAssignedQueueManager(
+                    layout, project, project_name, project_config)
 
     def getChangeQueue(self, change, event, existing=None):
         log = get_annotated_logger(self.log, event)
@@ -117,18 +193,22 @@ class SharedQueuePipelineManager(PipelineManager, metaclass=ABCMeta):
         else:
             # Change queues in the dependent pipeline manager are created
             # lazy so first check the managers for the project.
-            matching_managers = [t for t in self.change_queue_managers
-                                 if change.project in t.projects]
-            if matching_managers:
-                manager = matching_managers[0]
-                branch = None
-                if manager.per_branch:
-                    # The change queue is not existing yet for this branch
-                    branch = change.branch
 
-                # We have a queue manager but no queue yet, so create it
+            # If this project-branch was assigned to a branch-assigned
+            # queue, use that.
+            for manager in self.branch_assigned_queue_managers.get(
+                    change.project.canonical_name, []):
+                if manager.matchesBranch(change):
+                    return StaticChangeQueueContextManager(
+                        manager.getOrCreateQueue(change.project, change.branch)
+                    )
+            # If the project was assigned to a traditional or
+            # per-branch queue, use that.
+            manager = self.default_queue_managers.get(
+                change.project.canonical_name)
+            if manager:
                 return StaticChangeQueueContextManager(
-                    manager.getOrCreateQueue(change.project, branch)
+                    manager.getOrCreateQueue(change.project, change.branch)
                 )
 
             # No specific per-branch queue matched so look again with no branch

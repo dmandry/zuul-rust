@@ -1,0 +1,11 @@
+---
+features:
+  - |
+    Project-branch combinations may now be independently assigned to
+    shared change queues by using the
+    :value:`queue.type.branch-assigned` value for :attr:`queue.type`.
+deprecations:
+  - |
+    The :attr:`queue.per-branch` attribute is deprecated and its use
+    should be replaced with the :value:`queue.type.per-branch`
+    value for :attr:`queue.type`.

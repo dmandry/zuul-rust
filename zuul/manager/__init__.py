@@ -2602,7 +2602,10 @@ class PipelineManager(metaclass=ABCMeta):
                 # Handle per-branch queues
                 layout = self.tenant.layout
                 queue_config = layout.queues.get(item.queue.name)
-                per_branch = queue_config and queue_config.per_branch
+                per_branch = (
+                    queue_config and
+                    queue_config.type == queue_config.Type.PER_BRANCH
+                )
                 if per_branch and item.queue.project_branches:
                     # Get the first project-branch of this queue,
                     # which is a tuple of project, branch, and get
