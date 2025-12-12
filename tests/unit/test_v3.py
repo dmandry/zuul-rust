@@ -12064,3 +12064,101 @@ class TestAttributeControl(ZuulTestCase):
         self.assertHistory([
             dict(name='final-job', result='SUCCESS'),
         ], ordered=False)
+
+
+class TestBranchAssignedQueues(ZuulTestCase):
+    @simple_layout('layouts/branch-assigned.yaml')
+    def test_branch_assigned_queues(self):
+        self.executor_server.hold_jobs_in_build = True
+        self.create_branch('org/project1', 'red-one')
+        self.create_branch('org/project1', 'gold-one')
+        self.create_branch('org/project2', 'red-two')
+        self.create_branch('org/project2', 'gold-two')
+
+        # 1
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
+        A.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        # 2
+        B = self.fake_gerrit.addFakeChange('org/project2', 'master', 'B')
+        B.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(B.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        # 3
+        C = self.fake_gerrit.addFakeChange('org/project1', 'red-one', 'C')
+        C.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(C.addApproval('Approved', 1))
+        self.waitUntilSettled()
+        # 4
+        D = self.fake_gerrit.addFakeChange('org/project2', 'red-two', 'D')
+        D.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(D.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        # 5
+        E = self.fake_gerrit.addFakeChange('org/project1', 'gold-one', 'E')
+        E.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(E.addApproval('Approved', 1))
+        self.waitUntilSettled()
+        # 6
+        F = self.fake_gerrit.addFakeChange('org/project2', 'gold-two', 'F')
+        F.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(F.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        gate_manager = tenant.layout.pipeline_managers['gate']
+        self.assertEqual(4, len(gate_manager.state.queues))
+        self.assertEqual(1, len(gate_manager.state.queues[0].queue))
+        self.assertEqual(1, len(gate_manager.state.queues[1].queue))
+        self.assertEqual(2, len(gate_manager.state.queues[2].queue))
+        self.assertEqual(2, len(gate_manager.state.queues[3].queue))
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS', changes='1,1'),
+            dict(name='test-job', result='SUCCESS', changes='2,1'),
+            dict(name='test-job', result='SUCCESS', changes='3,1'),
+            dict(name='test-job', result='SUCCESS', changes='3,1 4,1'),
+            dict(name='test-job', result='SUCCESS', changes='5,1'),
+            dict(name='test-job', result='SUCCESS', changes='5,1 6,1'),
+        ], ordered=False)
+
+    @simple_layout('layouts/branch-assigned-single.yaml')
+    def test_branch_assigned_queues_single(self):
+        # Test projects with a single branch and no valid branch
+        # assignment (only the config project assigns the project to
+        # the queue, and its branch is ignored).
+        self.executor_server.hold_jobs_in_build = True
+
+        # 1
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
+        A.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        # 2
+        B = self.fake_gerrit.addFakeChange('org/project2', 'master', 'B')
+        B.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(B.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        gate_manager = tenant.layout.pipeline_managers['gate']
+        self.assertEqual(1, len(gate_manager.state.queues))
+        self.assertEqual(2, len(gate_manager.state.queues[0].queue))
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS', changes='1,1'),
+            dict(name='test-job', result='SUCCESS', changes='1,1 2,1'),
+        ], ordered=False)

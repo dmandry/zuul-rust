@@ -888,20 +888,26 @@ class PipelineState(zkobject.ZKObject):
             queues.append(queue)
 
         if hasattr(self.manager, "change_queue_managers"):
-            # Clear out references to old queues
+            # Perform a quick check to see if the queue objects in ZK
+            # are different than the ones we have in memory.
+            managed_queues = set()
             for cq_manager in self.manager.change_queue_managers:
-                cq_manager.created_for_branches.clear()
+                managed_queues |= set(cq_manager.created_for_branches.values())
 
-            # Add queues to matching change queue managers
-            for queue in queues:
-                project_cname, branch = queue.project_branches[0]
+            # Only if they are different, perform the more expensive
+            # calculation below to realign them.
+            if managed_queues != set(queues):
+                # Clear out references to old queues
                 for cq_manager in self.manager.change_queue_managers:
-                    managed_projects = {
-                        p.canonical_name for p in cq_manager.projects
-                    }
-                    if project_cname in managed_projects:
-                        cq_manager.created_for_branches[branch] = queue
-                        break
+                    cq_manager.created_for_branches.clear()
+
+                # Add queues to matching change queue managers
+                for queue in queues:
+                    for project_name, branch in queue.project_branches:
+                        for cq_manager in self.manager.change_queue_managers:
+                            if ((project_name, branch) in
+                                cq_manager.project_branches):
+                                cq_manager.created_for_branches[branch] = queue
 
         data.update({
             "queues": queues,
@@ -10706,14 +10712,20 @@ class Semaphore(ConfigObject):
 
 
 class Queue(ConfigObject):
-    def __init__(self, name, per_branch=False,
+    class Type(StrEnum):
+        ALL_BRANCHES = 'all-branches'
+        PER_BRANCH = 'per-branch'
+        BRANCH_ASSIGNED = 'branch-assigned'
+
+    def __init__(self, name,
                  allow_circular_dependencies=False,
-                 dependencies_by_topic=False):
+                 dependencies_by_topic=False,
+                 type=None):
         super().__init__()
         self.name = name
-        self.per_branch = per_branch
         self.allow_circular_dependencies = allow_circular_dependencies
         self.dependencies_by_topic = dependencies_by_topic
+        self.type = type
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -10723,11 +10735,11 @@ class Queue(ConfigObject):
             return False
         return (
             self.name == other.name and
-            self.per_branch == other.per_branch and
             self.allow_circular_dependencies ==
             other.allow_circular_dependencies and
             self.dependencies_by_topic ==
-            other.dependencies_by_topic
+            other.dependencies_by_topic and
+            self.type == other.type
         )
 
 
