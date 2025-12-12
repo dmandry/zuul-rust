@@ -225,11 +225,15 @@ pipeline.
       The name can refer to the name of a :attr:`queue` which allows
       further configuration of the queue.
 
-      Each pipeline for a project can only belong to one queue,
+      All pipelines for a project-branch can only belong to one queue,
       therefore Zuul will use the first value that it encounters.
       It need not appear in the first instance of a :attr:`project`
       stanza; it may appear in secondary instances or even in a
       :ref:`project-template` definition.
+
+      If a queue is :value:`queue.type.branch-assigned`, then
+      different branches of the same project may belong to different
+      queues.
 
       .. note:: This attribute is not evaluated speculatively and
                 its setting shall be merged to be effective.
