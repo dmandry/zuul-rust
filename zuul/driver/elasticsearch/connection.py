@@ -88,8 +88,8 @@ class ElasticsearchConnection(BaseConnection):
         try:
             self.log.debug("Elasticsearch info: %s" % self.es.info())
         except Exception as e:
-            self.log.warn("An error occured on estabilishing "
-                          "connection to Elasticsearch: %s" % e)
+            self.log.warning("An error occured on estabilishing "
+                             "connection to Elasticsearch: %s" % e)
         self.ic = IndicesClient(self.es)
 
     def setIndex(self, index):
@@ -127,7 +127,7 @@ class ElasticsearchConnection(BaseConnection):
             self.log.debug('%s docs indexed to %s' % (
                 len(source_it), self.connection_name))
         except BulkIndexError as exc:
-            self.log.warn("Some docs failed to be indexed (%s)" % exc)
+            self.log.warning("Some docs failed to be indexed (%s)" % exc)
             # We give flexibility by allowing any type of job's vars and
             # zuul return data to be indexed with EL dynamic mapping enabled.
             # It may happen that a doc own a field with a value that does not
@@ -154,5 +154,5 @@ class ElasticsearchConnection(BaseConnection):
                 self.log.info(
                     "%s errorneous docs indexed" % (len(errorneous_docs)))
             except BulkIndexError as exc:
-                self.log.warn(
+                self.log.warning(
                     "Some errorneous docs failed to be indexed (%s)" % exc)

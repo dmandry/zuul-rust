@@ -3462,9 +3462,9 @@ class AnsibleJob(object):
                 self.cpu_times['children_user'] += cpu_times.children_user
                 self.cpu_times['children_system'] += cpu_times.children_system
             except psutil.NoSuchProcess:
-                self.log.warn("Cannot get cpu_times for process %d. Is your"
-                              "/proc mounted with hidepid=2"
-                              " on an old linux kernel?", self.proc.pid)
+                self.log.warning("Cannot get cpu_times for process %d. Is your"
+                                 "/proc mounted with hidepid=2"
+                                 " on an old linux kernel?", self.proc.pid)
             ret = self.proc.wait()
             self.log.debug("Ansible exit code: %s" % (ret,))
         finally:

@@ -88,7 +88,7 @@ class ZuulConnectionHandler(ConnectionHandler):
         elif watch.type == CHILD_EVENT:
             watchers.extend(client._child_watchers.pop(path, []))
         else:
-            self.logger.warn("Received unknown event %r", watch.type)
+            self.logger.warning("Received unknown event %r", watch.type)
             return
 
         # Strip the chroot if needed
