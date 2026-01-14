@@ -18,6 +18,7 @@ from enum import IntFlag
 import logging
 import json
 
+from zuul.lib.logutil import get_annotated_logger
 from zuul.zk.zkobject import ZKContext, ShardedZKObject
 from zuul.zk.locks import (
     SessionAwareReadLock,
@@ -539,7 +540,8 @@ class BranchCache:
         project_info.default_branch = default_branch
 
     def setAllProjectData(self, project_name, valid_flags,
-                          branches, merge_modes, default_branch):
+                          branches, merge_modes, default_branch,
+                          zuul_event_id=None):
         """Set all the branch info for a project at once
 
         :param str project_name:
@@ -553,15 +555,20 @@ class BranchCache:
         :param str default_branch:
             The default branch or None.
         """
+        log = get_annotated_logger(self.log, zuul_event_id)
         # Set all three pieces of info with one lock and one active
         # context so that we only write the cache out once.
+        log.debug("Acquiring branch cache write lock: set all project data")
         with (zk_locked(self.wlock),
               self.zk_context as ctx,
               self.cache.activeContext(ctx)):
+            log.debug("Updating all project data for %s (lock acquired)",
+                      project_name)
             if valid_flags is not None:
                 self._setProjectBranches(project_name, valid_flags, branches)
             self._setProjectMergeModes(project_name, merge_modes)
             self._setProjectDefaultBranch(project_name, default_branch)
+        log.debug("Done updating all project data (lock released)")
 
     @property
     def ltime(self):

@@ -726,7 +726,7 @@ class GithubEventProcessor(object):
                 self.log.debug('Updating default branch for %s to %s',
                                project, default_branch)
                 self.connection._branch_cache.setProjectDefaultBranch(
-                    project.name, default_branch)
+                    project.name, default_branch, self.zuul_event_id)
                 event = self._repository_to_event(project_name, default_branch)
                 event.action = 'edited'
                 events.append(event)

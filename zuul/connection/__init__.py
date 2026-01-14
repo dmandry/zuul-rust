@@ -301,7 +301,7 @@ class ZKBranchCacheMixin:
         default_branch = self._fetchProjectDefaultBranch(project)
         self._branch_cache.setAllProjectData(
             project.name, valid_flags, branch_infos,
-            merge_modes, default_branch)
+            merge_modes, default_branch, zuul_event_id)
         log.info("Updated branches for %s", project.name)
 
     def getProjectBranches(self, project, tenant, min_ltime=-1):
@@ -530,7 +530,7 @@ class ZKBranchCacheMixin:
                               "changed to %s",
                               project_name, event.branch, protected)
                 self._branch_cache.setProtected(project_name, event.branch,
-                                                protected)
+                                                protected, event)
                 event.branch_cache_ltime = self._branch_cache.ltime
 
             event.branch_protected = protected
