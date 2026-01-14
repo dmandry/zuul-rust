@@ -211,6 +211,7 @@ class BuildConverter:
     # A class to encapsulate the conversion of database Build objects to
     # API output.
     def toDict(build, buildset=None, skip_refs=False):
+        execute_time = _datetimeToString(build.execute_time)
         start_time = _datetimeToString(build.start_time)
         end_time = _datetimeToString(build.end_time)
         if build.start_time and build.end_time:
@@ -225,6 +226,7 @@ class BuildConverter:
             'job_name': build.job_name,
             'result': build.result,
             'held': build.held,
+            'execute_time': execute_time,
             'start_time': start_time,
             'end_time': end_time,
             'duration': duration,
@@ -278,6 +280,7 @@ class BuildConverter:
             'job_name': str,
             'result': str,
             'held': str,
+            'execute_time': str,
             'start_time': str,
             'end_time': str,
             'duration': str,

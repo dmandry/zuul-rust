@@ -256,6 +256,8 @@ class SQLReporter(BaseReporter):
         start_time = build.start_time or time.time()
         start = datetime.datetime.fromtimestamp(start_time,
                                                 tz=datetime.timezone.utc)
+        execute_time = datetime.datetime.fromtimestamp(
+            build.execute_time or time.time(), tz=datetime.timezone.utc)
         if db_buildset is None:
             db_buildset = self._getBuildset(db, build)
         if db_buildset is None:
@@ -279,6 +281,7 @@ class SQLReporter(BaseReporter):
             ref=ref,
             uuid=build.uuid,
             job_name=build.job.name,
+            execute_time=execute_time,
             start_time=start,
             voting=build.job.voting,
             nodeset=build.job.nodeset.name,

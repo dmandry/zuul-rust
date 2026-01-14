@@ -903,6 +903,7 @@ class SQLConnection(BaseConnection):
                 self.table_prefix + REF_TABLE + ".id",
                 name=self.table_prefix + 'zuul_build_ref_id_fkey',
             ))
+            execute_time = sa.Column(sa.DateTime)
 
             buildset = orm.relationship(BuildSetModel,
                                         backref=orm.backref(

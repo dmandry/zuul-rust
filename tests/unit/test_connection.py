@@ -94,7 +94,7 @@ class TestSQLConnectionMysql(ZuulTestCase):
         self.assertEqual(9, len(insp.get_columns(ref_table)))
         self.assertEqual(12, len(insp.get_columns(buildset_table)))
         self.assertEqual(2, len(insp.get_columns(buildset_ref_table)))
-        self.assertEqual(14, len(insp.get_columns(build_table)))
+        self.assertEqual(15, len(insp.get_columns(build_table)))
         self.assertEqual(5, len(insp.get_columns(artifact_table)))
         self.assertEqual(3, len(insp.get_columns(provides_table)))
         self.assertEqual(5, len(insp.get_columns(build_event_table)))
