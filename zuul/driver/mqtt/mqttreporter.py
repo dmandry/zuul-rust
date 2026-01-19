@@ -57,6 +57,8 @@ class MQTTReporter(BaseReporter):
             'timestamp': time.time(),
             'action': self._action,
             'tenant': item.manager.tenant.name,
+            'tenant_web_root': item.formatUrlPattern(
+                item.manager.tenant.web_root),
             'zuul_ref': buildset.ref,
             'pipeline': item.manager.pipeline.name,
             'queue': item.queue.name,

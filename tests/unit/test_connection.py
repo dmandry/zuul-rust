@@ -824,6 +824,8 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertIn('uuid', mqtt_payload)
         self.assertEqual(dependent_test_job['dependencies'], ['test'])
         self.assertIn('test', dependent_test_job['job_dependencies'])
+        self.assertEqual(mqtt_payload['tenant_web_root'],
+                         'https://tenant.example.com/t/tenant-one/')
 
         changes = mqtt_payload['changes']
         self.assertEqual(len(changes), 1)
