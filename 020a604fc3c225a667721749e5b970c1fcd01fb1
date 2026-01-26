@@ -40,6 +40,30 @@
       "parentUuid": "b77b1911_b7c00e0f",
       "revId": "020a604fc3c225a667721749e5b970c1fcd01fb1",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "814cd3d1_8147af89",
+        "filename": "doc/source/config/flavor.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 26,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-01-26T14:41:59Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "b77b1911_b7c00e0f",
+      "range": {
+        "startLine": 26,
+        "startChar": 10,
+        "endLine": 26,
+        "endChar": 14
+      },
+      "revId": "020a604fc3c225a667721749e5b970c1fcd01fb1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
