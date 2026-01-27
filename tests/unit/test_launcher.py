@@ -310,87 +310,13 @@ class TestLauncher(LauncherBaseTestCase):
     )
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
                 return_value="test_external_id")
-    def test_launcher_missing_image_build(self, mock_image_upload_run):
-        self.waitUntilSettled()
-        self.assertHistory([
-            dict(name='build-debian-local-image', result='SUCCESS'),
-            dict(name='build-ubuntu-local-image', result='SUCCESS'),
-        ], ordered=False)
-        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
-
-        for _ in iterate_timeout(
-                30, "scheduler and launcher to have the same layout"):
-            if (self.scheds.first.sched.local_layout_state.get("tenant-one") ==
-                self.launcher.local_layout_state.get("tenant-one")):
-                break
-
-        # The build should not run again because the image is no
-        # longer missing
-        self.waitUntilSettled()
-        self.assertHistory([
-            dict(name='build-debian-local-image', result='SUCCESS'),
-            dict(name='build-ubuntu-local-image', result='SUCCESS'),
-        ], ordered=False)
-        for name in [
-                'review.example.com%2Forg%2Fcommon-config/debian-local',
-                'review.example.com%2Forg%2Fcommon-config/ubuntu-local',
-        ]:
-            artifacts = self._waitForArtifacts(name, 1)
-            self.assertEqual('raw', artifacts[0].format)
-            self.assertTrue(artifacts[0].validated)
-            uploads = self.launcher.image_upload_registry.getUploadsForImage(
-                name)
-            self.assertEqual(1, len(uploads))
-            self.assertEqual(artifacts[0].uuid, uploads[0].artifact_uuid)
-            self.assertEqual("test_external_id", uploads[0].external_id)
-            self.assertTrue(uploads[0].validated)
-
-        build = self.getJobFromHistory('build-debian-local-image')
-        formats = build.parameters['zuul']['image_formats']
-        self.assertEqual(['raw'], formats)
-        self.assertEqual(
-            'debian-local', build.parameters['zuul']['image_build_name'])
-
-        build = self.getJobFromHistory('build-ubuntu-local-image')
-        formats = build.parameters['zuul']['image_formats']
-        self.assertEqual(['raw'], formats)
-        self.assertEqual(
-            'ubuntu-local', build.parameters['zuul']['image_build_name'])
-
-        repo_name = 'review_example_com%2Forg%2Fcommon-config'
-        endpoint = 'aws_aws-us-east-1'
-        image_names = ['debian-local', 'ubuntu-local']
-        for image in image_names:
-            self.assertReportedStat(
-                f'zuul.image.{repo_name}_{image}.upload'
-                f'.{endpoint}.duration', kind='ms')
-
-        for image in image_names:
-            self.assertReportedStat(
-                f'zuul.image.{repo_name}_{image}.upload'
-                f'.{endpoint}.state.ready', kind='g', value='1')
-            for state in model.ImageUpload.STATES:
-                self.assertReportedStat(
-                    f'zuul.image.{repo_name}_{image}.upload'
-                    f'.{endpoint}.state.{state}', kind='g')
-
-        self.assertReportedStat(
-            'zuul.uploads.state.ready', kind='g', value='2')
-
-    @simple_layout('layouts/nodepool-image.yaml', enable_nodepool=True)
-    @return_data(
-        'build-debian-local-image',
-        'refs/heads/master',
-        LauncherBaseTestCase.debian_return_data,
-    )
-    @return_data(
-        'build-ubuntu-local-image',
-        'refs/heads/master',
-        LauncherBaseTestCase.ubuntu_return_data,
-    )
-    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
-                return_value="test_external_id")
     def test_launcher_image_expire(self, mock_image_upload_run):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local', 'ubuntu-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),
@@ -477,6 +403,12 @@ class TestLauncher(LauncherBaseTestCase):
     def test_launcher_image_no_validation(self, mock_uploadimage):
         # Test a two-stage image-build where we don't actually run the
         # validate stage (so all artifacts should be un-validated).
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),
@@ -518,6 +450,12 @@ class TestLauncher(LauncherBaseTestCase):
         # Test a two-stage image-build where we do run the validate
         # stage.
         self.executor_server.hold_jobs_in_build = True
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
 
         # Use distinct AMI IDs for each expected upload and
@@ -591,6 +529,12 @@ class TestLauncher(LauncherBaseTestCase):
     def test_launcher_image_validation_failure(self, mock_image_upload_run):
         # Test a two-stage image-build where the validate stage fails.
         self.executor_server.hold_jobs_in_build = True
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
 
         self.executor_server.release('build-debian-local-image')
@@ -634,6 +578,12 @@ class TestLauncher(LauncherBaseTestCase):
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
                 return_value="test_external_id")
     def test_launcher_crashed_upload(self, mock_image_upload_run):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         provider = self.launcher._getProvider(
             'tenant-one', 'aws-us-east-1-main')
@@ -682,6 +632,12 @@ class TestLauncher(LauncherBaseTestCase):
     def test_launcher_no_multiple_uploads(self, mock_image_upload_run):
         # Make sure that we don't enqueue multiple upload jobs for the
         # same pending uploads
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         provider = self.launcher._getProvider(
             'tenant-one', 'aws-us-east-1-main')
@@ -773,7 +729,12 @@ class TestLauncher(LauncherBaseTestCase):
     def test_launcher_image_signed_url(self, mock_image_upload_run):
         # If the image is uploaded using a signed url, it will not
         # permit a HEAD request; this tests the GET range fallback.
-
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local', 'ubuntu-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),
@@ -799,6 +760,12 @@ class TestLauncher(LauncherBaseTestCase):
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
                 return_value="test_external_id")
     def test_launcher_image_cleanup(self, mock_image_upload_run):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local', 'ubuntu-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),
@@ -1151,8 +1118,12 @@ class TestLauncher(LauncherBaseTestCase):
                 self.launcher.local_layout_state.get("tenant-one")):
                 break
 
-        # The build should not run again because the image is no
-        # longer missing
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/project',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='test-job', result='SUCCESS', changes='1,1'),
@@ -1824,6 +1795,12 @@ class TestLauncher(LauncherBaseTestCase):
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
                 return_value="ami-1e749f67")
     def test_image_build_node_lifecycle(self, mock_uploadimage):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local', 'ubuntu-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),
@@ -1894,6 +1871,12 @@ class TestLauncher(LauncherBaseTestCase):
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
                 return_value="ami-1e749f67")
     def test_image_delete_lifecycle(self, mock_uploadimage):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled("phase1")
         # Initialize some values for later
 
@@ -2671,6 +2654,12 @@ class TestLauncherUpload(LauncherBaseTestCase):
     def test_launcher_image_expire_failed_upload(self):
         # This tests that we correctly expire the uploads and artifact
         # for an image artifact with no successful uploads.
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local', 'ubuntu-local'],
+        )
         self.waitUntilSettled("start")
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),
@@ -3570,6 +3559,12 @@ class TestSnapshot(AnsibleZuulTestCase, LauncherBaseTestCase):
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageImportJob.run',
                 return_value="test_external_id")
     def test_snapshot_e2e(self, import_mock):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         image_cname = 'review.example.com%2Fcommon-config/debian-local'
         # We have an image, that's good enough for this test.

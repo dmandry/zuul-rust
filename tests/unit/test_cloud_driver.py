@@ -185,6 +185,12 @@ class BaseCloudDriverTest(ZuulTestCase):
                 break
 
     def _test_diskimage(self, expected_uploads=1):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         self.assertHistory([
             dict(name='build-debian-local-image', result='SUCCESS'),

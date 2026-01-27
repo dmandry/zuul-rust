@@ -2944,6 +2944,18 @@ class ZuulTestCase(BaseTestCase):
         self.addCommitToRepo(project, 'add content from fixture',
                              files, branch='master', tag='init')
 
+    def addImageBuildEvent(self, tenant_name, project_canonical_name,
+                           branch, image_names):
+        project_hostname, project_name = \
+            project_canonical_name.split('/', 1)
+        driver = self.launcher.connections.drivers['zuul']
+        event = driver.getImageBuildEvent(
+            list(image_names), project_hostname, project_name, branch)
+        self.log.info("Submitting image build event for %s %s",
+                      tenant_name, image_names)
+        self.launcher.trigger_events[tenant_name].put(
+            event.trigger_name, event)
+
     def assertNodepoolState(self):
         # Make sure that there are no pending requests
 

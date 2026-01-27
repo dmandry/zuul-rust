@@ -374,6 +374,12 @@ class TestAwsDriver(AwsBaseTest):
         AwsBaseTest.debian_return_data,
     )
     def test_aws_diskimage_snapshot_resume(self):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
 
         system_id = self.launcher.system.system_id
@@ -457,6 +463,12 @@ class TestAwsDriver(AwsBaseTest):
         AwsBaseTest.debian_return_data,
     )
     def test_aws_diskimage_image_resume(self):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
 
         system_id = self.launcher.system.system_id
@@ -623,6 +635,12 @@ class TestAwsDriver(AwsBaseTest):
         bucket = self.s3.Bucket('zuul')
         bucket.put_object(Body=ImageMocksFixture.raw_body.encode('utf8'),
                           Key='image.raw')
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
 
         west_provider = self.launcher._getProvider(
@@ -1056,6 +1074,12 @@ class TestAwsSnapshot(AnsibleZuulTestCase, AwsBaseTest):
                     return uploads
 
     def test_snapshot_e2e(self):
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/common-config',
+            'master',
+            ['debian-local'],
+        )
         self.waitUntilSettled()
         image_cname = 'review.example.com%2Fcommon-config/debian-local'
         # We have an image, that's good enough for this test.

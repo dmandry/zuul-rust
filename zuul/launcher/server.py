@@ -1299,7 +1299,6 @@ class Launcher:
                     raise
             if updated:
                 self.checkOldImages()
-                self.checkMissingImages()
                 self.checkMissingUploads()
         if self.image_updated_event.is_set():
             self.checkOldImages()
@@ -2828,17 +2827,6 @@ class Launcher:
                 self.local_layout_state.pop(tenant_name, None)
         return updated
 
-    def addImageBuildEvent(self, tenant_name, project_canonical_name,
-                           branch, image_names):
-        project_hostname, project_name = \
-            project_canonical_name.split('/', 1)
-        driver = self.connections.drivers['zuul']
-        event = driver.getImageBuildEvent(
-            list(image_names), project_hostname, project_name, branch)
-        self.log.info("Submitting image build event for %s %s",
-                      tenant_name, image_names)
-        self.trigger_events[tenant_name].put(event.trigger_name, event)
-
     def addImageValidateEvent(self, image_upload):
         iba = self.image_build_registry.getItem(image_upload.artifact_uuid)
         project_hostname, project_name = \
@@ -2886,22 +2874,6 @@ class Launcher:
             if done:
                 return
             time.sleep(1)
-
-    def checkMissingImages(self):
-        self.log.debug("Checking for missing images")
-        self._waitForStableImageRegistry()
-        for tenant_name, providers in self.tenant_providers.items():
-            images_by_project_branch = {}
-            for provider in providers:
-                for image in provider.images.values():
-                    if image.type == 'zuul':
-                        self.checkMissingImage(tenant_name, image,
-                                               images_by_project_branch)
-            for ((project_canonical_name, branch), image_names) in \
-                images_by_project_branch.items():
-                self.addImageBuildEvent(tenant_name, project_canonical_name,
-                                        branch, image_names)
-        self.log.debug("Done checking for missing images")
 
     def checkMissingImage(self, tenant_name, image, images_by_project_branch):
         # If there is already a successful build for
