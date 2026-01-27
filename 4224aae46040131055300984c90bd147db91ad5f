@@ -37,6 +37,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "55344522_1b50d81a",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 6987,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "This may be a bit of a matter of preference, but I don\u0027t think so.  I don\u0027t think this is actionable information for users, so it\u0027s probably just going to look like noise.  It\u0027s also technically a little tricky since it\u0027s still possible that some reporter jobs won\u0027t run (if they use the zuul.child_jobs return variable).  Finally, the main use case for this is really to expand the flexibility of the pipeline reporters themselves, and we generally don\u0027t report the results of reporters in other reporters.  :)",
+      "parentUuid": "ff58721f_3178c5bf",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "c95a13d2_6c983459",
         "filename": "tests/unit/test_v3.py",
         "patchSetId": 3
@@ -48,6 +66,24 @@
       "writtenOn": "2026-01-24T19:30:02Z",
       "side": 1,
       "message": "We reverse the buildsets list above does that mean the buildset for change 2 is actually buildsets[0] and not buildsets[1]? Maybe we want to filter by buildset_id like we do above when checking change 1\u0027s result?",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "aac7e97b_dd89e61b",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7026,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "The api returns them in reversed order.  This reverses them into the correct order.",
+      "parentUuid": "c95a13d2_6c983459",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -71,6 +107,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "29241f49_e5fc31b6",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7032,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "Yes, the recording of builds in sql is deterministic, the end of builds for asserthistory is not.",
+      "parentUuid": "40ce1ef8_683b239a",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "ac9615cf_1ba09a9d",
         "filename": "tests/unit/test_v3.py",
         "patchSetId": 3
@@ -82,6 +136,24 @@
       "writtenOn": "2026-01-24T19:30:02Z",
       "side": 1,
       "message": "I\u0027m not sure I understand why this is happening as we only set the reporter-job job to fail on change A in the executor which I don\u0027t think applies to the underlying git repo state.",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c7b4ac4f_f4da362c",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7117,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "In order to make the simulation as accurate as possible, the failJob method ultimately causes the fake executor to actually check the contents of the git repo on disk in order to decide if the job should fail when presented with the git repo contents of the change that should cause it to fail.  In other words, failJob means \"fail this job if you see the contents of this change\".  Very useful for testing a gating system.",
+      "parentUuid": "ac9615cf_1ba09a9d",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -105,6 +177,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "d362d64b_12975470",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 12013,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "We\u0027re checking that it didn\u0027t return an error message after validation (like the above test for an error condition does).",
+      "parentUuid": "add493cb_ae1c4647",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "73c0216c_1c8ebb6e",
         "filename": "zuul/manager/__init__.py",
         "patchSetId": 3
@@ -116,6 +206,24 @@
       "writtenOn": "2026-01-24T19:30:02Z",
       "side": 1,
       "message": "Should the above comment be updated to include that we won\u0027t remove items which are currently running reporter jobs?",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ec1aa769_e253212c",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 530,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "I don\u0027t think the comment has to duplicate what we do exactly, it\u0027s more to explain the reasoning for the loop in general.  I hope the \"don\u0027t interrupt reporter jobs\" bit is self-documenting.",
+      "parentUuid": "73c0216c_1c8ebb6e",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -139,6 +247,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "1b2da1fa_cbba9af9",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 544,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "Same.",
+      "parentUuid": "e1229fba_680cd479",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "063f1539_3ed8ad73",
         "filename": "zuul/manager/__init__.py",
         "patchSetId": 3
@@ -150,6 +276,24 @@
       "writtenOn": "2026-01-24T19:30:02Z",
       "side": 1,
       "message": "Maybe it is due to this being new code, but I wonder if it would be good to leave a comment here like:\n\n```\n# Bypass further queue processing as the current item is running reporter\n# jobs and no other actions are taken during that process.\n```",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f209172b_0d122f3e",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 2127,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "063f1539_3ed8ad73",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -167,6 +311,24 @@
       "writtenOn": "2026-01-24T19:30:02Z",
       "side": 1,
       "message": "I guess this check is here to prevent us reporting the reporter job non running queued state to the code review system? But we explicitly allow reporter jobs in the json always (by setting include_reporter to True) and other venues will include the data once the reporter jobs start?",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "77450610_0486645c",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7072,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T17:41:25Z",
+      "side": 1,
+      "message": "Yes -- or the slightly different way I view it: the job graph *expands* to include reporter jobs after a certain point in the lifecycle of the item, so that all the existing logic around how to request nodes and when to start jobs, etc, remains the same.  We just get some new jobs at the end of the process.\n\nIt\u0027s nice (and harmless) to see all the jobs in the web UI though, so we just always include them there.  (It\u0027s actually a bit more complicated *not* to do that.)",
+      "parentUuid": "84c35b87_f7a8ada3",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
