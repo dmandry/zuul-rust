@@ -41,6 +41,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "04933f25_da727c1b",
+        "filename": "doc/source/config/queue.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 73,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T20:12:12Z",
+      "side": 1,
+      "message": "Fixed.  I\u0027ll leave changing them all to coördination for another change.  :)",
+      "parentUuid": "981cdbd8_a964b21d",
+      "range": {
+        "startLine": 73,
+        "startChar": 39,
+        "endLine": 73,
+        "endChar": 51
+      },
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1e08d5f8_d22dccc6",
@@ -54,6 +78,24 @@
       "writtenOn": "2026-01-24T18:43:37Z",
       "side": 1,
       "message": "Should this documentation indicate the behavior for when queue.type is branch-assigned but the project doesn\u0027t specify a queue name on a specific branch (or on any branches)?",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d55bd6ff_eb8f6310",
+        "filename": "doc/source/config/queue.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 81,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T20:12:12Z",
+      "side": 1,
+      "message": "Good idea.",
+      "parentUuid": "1e08d5f8_d22dccc6",
       "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -117,6 +159,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "1766240c_7b441c99",
+        "filename": "zuul/manager/shared.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 98,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T20:12:12Z",
+      "side": 1,
+      "message": "Unfortunately, not at the moment.  We still support specifying an implicit queue by name, which means we can\u0027t distinguish that case from this one at config time.  If we continue the deprecation path and remove that feature, we can add that validation.",
+      "parentUuid": "090ff900_37464163",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "2ac974a2_499a10d1",
         "filename": "zuul/manager/shared.py",
         "patchSetId": 3
@@ -128,6 +188,24 @@
       "writtenOn": "2026-01-24T18:43:37Z",
       "side": 1,
       "message": "getBranchMatcher appears to be able to return None in a number of scenarios (like when a project has a single branch). If that happens we\u0027ll add a branch matcher with value None then we seem to blindly apply it matchesBranch above without checking that it has a matches() method first. \n\nI wonder if this case is worth having a test for as well as being more cautious about applying the branch matchers?",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ccc1a999_83114862",
+        "filename": "zuul/manager/shared.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 114,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T20:12:12Z",
+      "side": 1,
+      "message": "Good catch; that would cause an error.  I\u0027ve added more testing and also clarified the intentional behavior in those cases: all branches of the project should be assigned to the queue (in order to most closely match the same behavior the user will see from the job assignments).",
+      "parentUuid": "2ac974a2_499a10d1",
       "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -151,6 +229,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "1af41424_18a591d2",
+        "filename": "zuul/manager/shared.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 150,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T20:12:12Z",
+      "side": 1,
+      "message": "I think I forgot to remove it after I moved it up to line 136.",
+      "parentUuid": "6516eb21_dd1e86a2",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "65bb69f8_9c7546ac",
         "filename": "zuul/model.py",
         "patchSetId": 3
@@ -162,6 +258,24 @@
       "writtenOn": "2026-01-24T18:43:37Z",
       "side": 1,
       "message": "This is one case where getBranchMatcher is None but there are several above as well (this is related to my comment in the previous file).",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a414bde3_1997f6b9",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 9403,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-27T20:12:12Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "65bb69f8_9c7546ac",
       "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
