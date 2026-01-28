@@ -298,10 +298,9 @@ class ZKBranchCacheMixin:
             valid_flags = None
             branch_infos = None
         merge_modes = self._fetchProjectMergeModes(project)
-        default_branch = self._fetchProjectDefaultBranch(project)
         self._branch_cache.setAllProjectData(
             project.name, valid_flags, branch_infos,
-            merge_modes, default_branch)
+            merge_modes)
         log.info("Updated branches for %s", project.name)
 
     def getProjectBranches(self, project, tenant, min_ltime=-1):
