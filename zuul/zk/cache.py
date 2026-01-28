@@ -354,8 +354,6 @@ class ZuulTreeCache(abc.ABC):
         elif (event.type == EventType.DELETED):
             exists = False
 
-        self._max_zxid = max(zxid, self._max_zxid)
-
         # Keep the cached paths up to date
         if exists:
             self._cached_paths.add(event.path)
@@ -380,10 +378,14 @@ class ZuulTreeCache(abc.ABC):
                 # Don't update a locked object
                 if (stat.mzxid > obj._zstat.mzxid and
                     getattr(obj, 'lock', None) is None):
+                    # Only update our zkid for complete objects
+                    self._max_zxid = max(zxid, self._max_zxid)
                     self.updateFromRaw(obj, key, data, shard_index, stat)
             else:
                 obj = self.objectFromRaw(key, data, shard_index, stat)
                 if obj is not None:
+                    # Only update our zkid for complete objects
+                    self._max_zxid = max(zxid, self._max_zxid)
                     self._cached_objects[key] = obj
         else:
             try:

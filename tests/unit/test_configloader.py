@@ -239,7 +239,12 @@ class TestTenantSimple(TenantParserTestCase):
             # except for what needs to be refreshed from the files
             # cache in ZK.
             self.log.debug("Thaw scheduler-1")
-            self.waitUntilSettled()
+            state_one = first.sched.local_layout_state.get("tenant-one")
+            for _ in iterate_timeout(
+                    10, "all schedulers to have the same layout state"):
+                if (second.sched.local_layout_state.get(
+                        "tenant-one") == state_one):
+                    break
             self.log.debug("Layout update logs:")
             for x in update_logs.output:
                 self.log.debug(x)
