@@ -17,13 +17,10 @@
 from enum import IntFlag
 import logging
 import json
+from urllib.parse import quote_plus, unquote_plus
 
-from zuul.zk.zkobject import ZKContext, ShardedZKObject
-from zuul.zk.locks import (
-    SessionAwareReadLock,
-    SessionAwareWriteLock,
-    locked as zk_locked
-)
+from zuul.zk.launcher import LockableZKObjectCache
+from zuul.zk.zkobject import ZKContext, LockableShardedZKObject
 
 from kazoo.exceptions import NoNodeError
 
@@ -113,25 +110,49 @@ class BranchInfo:
         return o
 
 
-class ProjectInfo:
+class ProjectInfo(LockableShardedZKObject):
     """Store branch cache project information in ZK
 
     If a project is absent from the cache, it needs to be queried from
     the source.
     """
-    def __init__(self, name, merge_modes=None, default_branch=None):
-        self.name = name
-        self.merge_modes = merge_modes
-        self.default_branch = default_branch
-        self.branches = {}
-        # The set of flags we have performed queries for:
-        self.completed_flags = BranchFlag.CLEAR
-        # If there was an error fetching the branches for a given set
-        # of flags, the failure will be recorded here:
-        self.failed_flags = BranchFlag.CLEAR
+    # We can always recreate data if necessary, so go ahead and
+    # truncate when we update so we avoid corrupted data.
+    truncate_on_create = True
 
-    def toDict(self):
-        return {
+    def __init__(self):
+        super().__init__()
+        self._set(
+            name=None,
+            merge_modes=None,
+            default_branch=None,
+            branches={},
+            # The set of flags we have performed queries for:
+            completed_flags=BranchFlag.CLEAR,
+            # If there was an error fetching the branches for a given set
+            # of flags, the failure will be recorded here:
+            failed_flags=BranchFlag.CLEAR,
+            # Unused:
+            is_locked=None,
+            lock_holder=None,
+        )
+
+    def getPath(self):
+        safe_project = quote_plus(self.name)
+        return f"{self._root}/data/{safe_project}"
+
+    def getLockPath(self):
+        safe_project = quote_plus(self.name)
+        return f"{self._root}/lock/{safe_project}"
+
+    def acquireLock(self, *args, **kw):
+        #JEB do we still need this?
+        if kw.get('ensure_path') is None:
+            kw['ensure_path'] = True
+        return super().acquireLock(*args, **kw)
+
+    def serialize(self, context):
+        data = {
             'merge_modes': self.merge_modes,
             'default_branch': self.default_branch,
             'branches': {b.name: b.toDict() for b in self.branches.values()},
@@ -140,58 +161,35 @@ class ProjectInfo:
                 self.failed_flags,
             ],
         }
+        return json.dumps(data, sort_keys=True).encode("utf-8")
 
-    @classmethod
-    def fromDict(cls, name, data):
-        o = cls(name)
-        o.merge_modes = data['merge_modes']
-        o.default_branch = data['default_branch']
-        o.branches = {
+    def deserialize(self, raw, context, extra=None):
+        data = super().deserialize(raw, context)
+        data['branches'] = {
             name: BranchInfo.fromDict(name, bdata)
             for name, bdata in data['branches'].items()
         }
-        o.completed_flags = BranchFlag(data['flags'][0])
-        o.failed_flags = BranchFlag(data['flags'][1])
-        return o
+        data['completed_flags'] = BranchFlag(data['flags'][0])
+        data['failed_flags'] = BranchFlag(data['flags'][1])
+        return data
 
 
-class BranchCacheZKObject(ShardedZKObject):
-    """Store the branch cache in ZK
-
-    If a project is absent from the dict, it needs to be queried from
-    the source.
-
-    If there was an error fetching the branches, None will be stored
-    as a sentinel value.
-    """
-
-    # We can always recreate data if necessary, so go ahead and
-    # truncate when we update so we avoid corrupted data.
-    truncate_on_create = True
-
-    def getPath(self):
-        return self._path
-
-    def __init__(self):
-        super().__init__()
-        self._set(
-            projects={},
+class BranchTreeCache(LockableZKObjectCache):
+    def __init__(self, zk_client, root):
+        super().__init__(
+            zk_client,
+            None,
+            root=root,
+            items_path='data',
+            locks_path='lock',
+            zkobject_class=ProjectInfo,
         )
 
-    def serialize(self, context):
-        data = {
-            "projects": {p.name: p.toDict() for p in self.projects.values()},
-        }
-        return json.dumps(data, sort_keys=True).encode("utf8")
-
-    def deserialize(self, raw, context, extra=None):
-        data = super().deserialize(raw, context, extra)
-        projects = {}
-        for project_name, project_data in data['projects'].items():
-            projects[project_name] = ProjectInfo.fromDict(
-                project_name, project_data)
-        data['projects'] = projects
-        return data
+    def objectFromRaw(self, key, data, shard_index, zstat):
+        obj = super().objectFromRaw(key, data, shard_index, zstat)
+        if obj:
+            obj._set(_root=self.root, name=unquote_plus(key[0]))
+        return obj
 
 
 class BranchCache:
@@ -202,36 +200,52 @@ class BranchCache:
         self.connection = connection
 
         cname = self.connection.connection_name
-        base_path = f'/zuul/cache/connection/{cname}/branches'
-        lock_path = f'{base_path}/lock'
-        data_path = f'{base_path}/data'
+        self.base_path = f'/zuul/cache/connection/{cname}'
 
-        self.rlock = SessionAwareReadLock(zk_client.client, lock_path)
-        self.wlock = SessionAwareWriteLock(zk_client.client, lock_path)
+        self.cache = BranchTreeCache(zk_client, self.base_path)
 
         # TODO: standardize on a stop event for connections and add it
         # to the context.
-        self.zk_context = ZKContext(zk_client, self.wlock, None, self.log)
+        self.zk_client = zk_client
+        self.zk_context = ZKContext(zk_client, None, None, self.log)
 
-        with (self.zk_context as ctx,
-              zk_locked(self.wlock)):
-            try:
-                self.cache = BranchCacheZKObject.fromZK(
-                    ctx, data_path, _path=data_path)
-            except NoNodeError:
-                self.cache = BranchCacheZKObject.new(
-                    ctx, _path=data_path)
+    def createZKContext(self, lock):
+        return ZKContext(self.zk_client, lock, None, self.log)
+
+    def _getProjectInfoForWrite(self, project_name):
+        # Get a ProjectInfo object from the cache, or ZK
+        # Create if necessary
+        safe_project = quote_plus(project_name)
+        project_info = self.cache.getItem(safe_project)
+        if project_info is not None:
+            return project_info
+        project_info = ProjectInfo()
+        project_info._set(_root=self.cache.root, name=project_name)
+        return project_info
+
+    def _getProjectInfoForRead(self, project_name, min_ltime):
+        # Get a ProjectInfo object from the cache, or ZK
+        if self.cache.max_zxid < min_ltime:
+            self.cache.waitForSync()
+        safe_project = quote_plus(project_name)
+        project_info = self.cache.getItem(safe_project)
+        return project_info
 
     def clear(self, projects=None):
         """Clear the cache"""
-        with (zk_locked(self.wlock),
-              self.zk_context as ctx,
-              self.cache.activeContext(ctx)):
-            if projects is None:
-                self.cache.projects.clear()
-            else:
-                for p in projects:
-                    self.cache.projects.pop(p, None)
+        if projects is None:
+            items = self.cache.getItems()
+        else:
+            items = [
+                self.cache.getItem(quote_plus(p))
+                for p in projects
+            ]
+        for project_info in items:
+            if project_info is None:
+                continue
+            with project_info.locked(self.zk_context) as lock:
+                with self.createZKContext(lock) as zk_context:
+                    project_info.delete(zk_context)
 
     def getProjectCompletedFlags(self, project_name):
         """Get the completed branch query flags for a project
@@ -240,9 +254,8 @@ class BranchCache:
 
         :returns: a BranchFlag of the completed query flags
         """
-        try:
-            project_info = self.cache.projects[project_name]
-        except KeyError:
+        project_info = self._getProjectInfoForRead(project_name, -1)
+        if project_info is None:
             return BranchFlag.CLEAR
         return project_info.completed_flags
 
@@ -278,20 +291,9 @@ class BranchCache:
         :returns: The list of branch names, or None if there was
             an error when fetching the branches.
         """
-        if self.ltime < min_ltime:
-            with (zk_locked(self.rlock),
-                  self.zk_context as ctx):
-                self.cache.refresh(ctx)
-
-        project_info = None
-        try:
-            project_info = self.cache.projects[project_name]
-        except KeyError:
-            return return_default(default, project_name)
-
-        # We've definitely stored a failure, so return that.
+        project_info = self._getProjectInfoForRead(project_name, min_ltime)
         if project_info is None:
-            return None
+            return return_default(default, project_name)
 
         # Determine if we have enough info to answer the question
         # Check that required flags is a subset of completed flags
@@ -321,18 +323,19 @@ class BranchCache:
         :param list[str] branches:
             The list of branches or None to indicate a fetch error.
         """
-        with (zk_locked(self.wlock),
-              self.zk_context as ctx,
-              self.cache.activeContext(ctx)):
-            self._setProjectBranches(project_name,
-                                     valid_flags, branch_infos)
+        project_info = self._getProjectInfoForWrite(project_name)
+        with project_info.locked(self.zk_context) as lock:
+            with self.createZKContext(lock) as zk_context:
+                try:
+                    project_info.refresh(zk_context)
+                except NoNodeError:
+                    pass
+                with project_info.activeContext(zk_context):
+                    self._setProjectBranches(project_info,
+                                             valid_flags, branch_infos)
 
-    def _setProjectBranches(self, project_name,
+    def _setProjectBranches(self, project_info,
                             valid_flags, branch_infos):
-        project_info = self.cache.projects.get(project_name)
-        if project_info is None:
-            project_info = ProjectInfo(project_name)
-            self.cache.projects[project_name] = project_info
 
         if branch_infos is None:
             # We're storing an error, set the bits accordingly
@@ -374,21 +377,19 @@ class BranchCache:
         This may be called if a branch has changed state without us
         receiving an explicit event.
         """
-        with (zk_locked(self.wlock),
-              self.zk_context as ctx,
-              self.cache.activeContext(ctx)):
-
-            project_info = self.cache.projects.get(project_name)
-            if project_info is None:
-                project_info = ProjectInfo(project_name)
-                self.cache.projects[project_name] = project_info
-
-            branch_info = project_info.branches.get(branch)
-            if branch_info is None:
-                branch_info = BranchInfo(branch)
-                project_info.branches[branch] = branch_info
-
-            branch_info.protected = protected
+        project_info = self._getProjectInfoForWrite(project_name)
+        with project_info.locked(self.zk_context) as lock:
+            with self.createZKContext(lock) as zk_context:
+                try:
+                    project_info.refresh(zk_context)
+                except NoNodeError:
+                    pass
+                with project_info.activeContext(zk_context):
+                    branch_info = project_info.branches.get(branch)
+                    if branch_info is None:
+                        branch_info = BranchInfo(branch)
+                        project_info.branches[branch] = branch_info
+                    branch_info.protected = protected
 
     def getProjectMergeModes(self, project_name,
                              min_ltime=-1, default=RAISE_EXCEPTION):
@@ -419,19 +420,9 @@ class BranchCache:
         :returns: The list of merge modes by model id, or None if there was
             an error when fetching the merge modes.
         """
-        if self.ltime < min_ltime:
-            with (zk_locked(self.rlock),
-                  self.zk_context as ctx):
-                self.cache.refresh(ctx)
-
-        project_info = None
-        try:
-            project_info = self.cache.projects[project_name]
-        except KeyError:
-            return return_default(default, project_name)
-
+        project_info = self._getProjectInfoForRead(project_name, min_ltime)
         if project_info is None:
-            return None
+            return return_default(default, project_name)
 
         return project_info.merge_modes
 
@@ -447,15 +438,17 @@ class BranchCache:
             The list of merge modes (by model ID) or None.
 
         """
-        with (zk_locked(self.wlock),
-              self.zk_context as ctx,
-              self.cache.activeContext(ctx)):
-            self._setProjectMergeModes(project_name, merge_modes)
+        project_info = self._getProjectInfoForWrite(project_name)
+        with project_info.locked(self.zk_context) as lock:
+            with self.createZKContext(lock) as zk_context:
+                try:
+                    project_info.refresh(zk_context)
+                except NoNodeError:
+                    pass
+                with project_info.activeContext(zk_context):
+                    self._setProjectMergeModes(project_info, merge_modes)
 
-    def _setProjectMergeModes(self, project_name, merge_modes):
-        project_info = self.cache.projects.get(project_name)
-        if project_info is None:
-            project_info = ProjectInfo(project_name)
+    def _setProjectMergeModes(self, project_info, merge_modes):
         project_info.merge_modes = merge_modes
 
     def getProjectDefaultBranch(self, project_name,
@@ -488,19 +481,9 @@ class BranchCache:
             an error when fetching it.
 
         """
-        if self.ltime < min_ltime:
-            with (zk_locked(self.rlock),
-                  self.zk_context as ctx):
-                self.cache.refresh(ctx)
-
-        project_info = None
-        try:
-            project_info = self.cache.projects[project_name]
-        except KeyError:
-            return return_default(default, project_name)
-
+        project_info = self._getProjectInfoForRead(project_name, min_ltime)
         if project_info is None:
-            return None
+            return return_default(default, project_name)
 
         return project_info.default_branch
 
@@ -516,26 +499,17 @@ class BranchCache:
             The default branch or None.
 
         """
-        with (zk_locked(self.wlock),
-              self.zk_context as ctx,
-              self.cache.activeContext(ctx)):
-            self._setProjectDefaultBranch(project_name, default_branch)
+        project_info = self._getProjectInfoForWrite(project_name)
+        with project_info.locked(self.zk_context) as lock:
+            with self.createZKContext(lock) as zk_context:
+                try:
+                    project_info.refresh(zk_context)
+                except NoNodeError:
+                    pass
+                with project_info.activeContext(zk_context):
+                    self._setProjectDefaultBranch(project_info, default_branch)
 
-    def _setProjectDefaultBranch(self, project_name, default_branch):
-        """Set the upstream default branch for the given project.
-
-        Use None as a sentinel value for the default branch to indicate
-        that there was a fetch error.
-
-        :param str project_name:
-            The project for the default branch.
-        :param str default_branch:
-            The default branch or None.
-
-        """
-        project_info = self.cache.projects.get(project_name)
-        if project_info is None:
-            project_info = ProjectInfo(project_name)
+    def _setProjectDefaultBranch(self, project_info, default_branch):
         project_info.default_branch = default_branch
 
     def setAllProjectData(self, project_name, valid_flags,
@@ -555,14 +529,22 @@ class BranchCache:
         """
         # Set all three pieces of info with one lock and one active
         # context so that we only write the cache out once.
-        with (zk_locked(self.wlock),
-              self.zk_context as ctx,
-              self.cache.activeContext(ctx)):
-            if valid_flags is not None:
-                self._setProjectBranches(project_name, valid_flags, branches)
-            self._setProjectMergeModes(project_name, merge_modes)
-            self._setProjectDefaultBranch(project_name, default_branch)
+        project_info = self._getProjectInfoForWrite(project_name)
+        with project_info.locked(self.zk_context) as lock:
+            with self.createZKContext(lock) as zk_context:
+                try:
+                    project_info.refresh(zk_context)
+                except NoNodeError:
+                    pass
+                with project_info.activeContext(zk_context):
+                    if valid_flags is not None:
+                        self._setProjectBranches(
+                            project_info, valid_flags, branches)
+                    self._setProjectMergeModes(project_info, merge_modes)
+                    self._setProjectDefaultBranch(project_info, default_branch)
+        return project_info.getZKmzxid()
 
     @property
     def ltime(self):
-        return self.cache._zstat.last_modified_transaction_id
+        #JEB: this can be -1 if we just started and have no events
+        return self.cache.max_zxid

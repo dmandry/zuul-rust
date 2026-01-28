@@ -318,6 +318,7 @@ class ZuulTreeCache(abc.ABC):
 
     def _handlePlayback(self, event, future, key, shard_index):
         # self.event_log.debug("Cache playback event %s", event)
+
         exists = None
         data, stat = None, None
         zxid = WatchedEvent.NO_ZXID
