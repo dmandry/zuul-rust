@@ -183,6 +183,11 @@ class LockableZKObjectCache(ZuulTreeCache):
         self.ensureReady()
         return self._cached_objects.get((item_id,))
 
+    def setItem(self, item_id, item):
+        # Insert the item in the cache if it does not exist already.
+        self.ensureReady()
+        return self._cached_objects.setdefault((item_id,), item)
+
     def getItems(self):
         # get a copy of the values view to avoid runtime errors in the event
         # the _cached_nodes dict gets updated while iterating

@@ -156,6 +156,7 @@ class ZKObject:
     io_reader_class = sharding.RawZKIO
     io_writer_class = sharding.RawZKIO
     truncate_on_create = False
+    create_on_save = False
     delete_on_error = False
     log_error_missing = True
     makepath = True
@@ -522,6 +523,8 @@ class ZKObject:
                 context.profileEvent('exists', path)
                 if exists is not None:
                     raise NodeExistsError
+            if self.create_on_save:
+                create = True
             zstat = getattr(self, '_zstat', None)
             if zstat is not None:
                 version = self._zstat.version
@@ -540,6 +543,7 @@ class ZKObject:
                   _zkobject_hash=hash(data),
                   _zkobject_compressed_size=len(compressed_data),
                   _zkobject_uncompressed_size=len(data),
+                  create_on_save=False,
                   )
 
     def __setattr__(self, name, value):
@@ -630,9 +634,10 @@ class LockableZKObjectMixin(abc.ABC):
                 time.sleep(1)
 
     @contextmanager
-    def locked(self, context, blocking=True, timeout=None):
-        if not (lock := self.acquireLock(context, blocking=blocking,
-                                         timeout=timeout)):
+    def locked(self, context, blocking=True, timeout=None, ensure_path=None):
+        if not (lock := self.acquireLock(
+                context, blocking=blocking,
+                timeout=timeout, ensure_path=ensure_path)):
             raise LockException(f"Failed to acquire lock on {self}")
         try:
             yield lock
@@ -643,19 +648,22 @@ class LockableZKObjectMixin(abc.ABC):
                 context.log.exception("Failed to release lock on %s", self)
 
     def acquireLock(self, context, blocking=True, timeout=None,
-                    identifier=None):
+                    identifier=None, ensure_path=None):
+        # For most objects, we create the lock path when we create the
+        # object in ZK, so there is no need to ensure the path on
+        # lock.  Setting ensure_path to false lets us avoid
+        # re-creating the lock if the object was deleted behind our
+        # back.
+        if ensure_path is None:
+            ensure_path = False
         have_lock = False
         lock = None
         path = self.getLockPath()
         identifier = identifier or context.default_lock_identifier
         try:
-            # We create the lock path when we create the object in ZK,
-            # so there is no need to ensure the path on lock.  This
-            # lets us avoid re-creating the lock if the object was
-            # deleted behind our back.
             lock = SessionAwareLock(context.client, path,
                                     identifier=identifier,
-                                    ensure_path=False)
+                                    ensure_path=ensure_path)
             have_lock = lock.acquire(blocking, timeout)
         except NoNodeError:
             # Request disappeared
