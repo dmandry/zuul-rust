@@ -258,3 +258,9 @@ Version 36
 :Prior Zuul version: 13.0.0
 :Description: Supply tenant_name in ssh_keys to executors.
               Affects schedulers and executors.
+
+Version 37
+----------
+:Prior Zuul version: 14.0.0
+:Description: Upgrade to per-project branch cache.
+              Affects schedulers and web.

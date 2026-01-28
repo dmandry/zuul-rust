@@ -258,6 +258,10 @@ class ZKBranchCacheMixin:
 
         project = self.source.getProject(event.project_name)
         if event.branch:
+            # Our required ltime should either be the current ltime of
+            # the branch cache, or, if we performed an update, then
+            # the ltime of that update.
+            ltime = self._branch_cache.ltime
             if event.branch_deleted:
                 # We currently cannot determine if a deleted branch was
                 # protected so we need to assume it was. GitHub/GitLab don't
@@ -266,15 +270,15 @@ class ZKBranchCacheMixin:
                 # know if branch protection has been disabled before deletion
                 # of the branch.
                 # FIXME(tobiash): Find a way to handle that case
-                self.updateProjectBranches(project, event)
+                ltime = self.updateProjectBranches(project, event)
             elif event.branch_created:
                 # In GitHub, a new branch never can be protected
                 # because that needs to be configured after it has
                 # been created.  Other drivers could optimize this,
                 # but for the moment, implement the lowest common
                 # denominator and clear the cache so that we query.
-                self.updateProjectBranches(project, event)
-            event.branch_cache_ltime = self._branch_cache.ltime
+                ltime = self.updateProjectBranches(project, event)
+            event.branch_cache_ltime = ltime
         return event
 
     def updateProjectBranches(self, project, zuul_event_id=None):
@@ -284,6 +288,8 @@ class ZKBranchCacheMixin:
             The project for which the branches are returned.
         :param zuul_event_id:
             Unique id associated to the handled event.
+
+        :returns: The ltime of the branch cache update.
         """
         log = get_annotated_logger(self.log, event=zuul_event_id)
 
@@ -299,10 +305,11 @@ class ZKBranchCacheMixin:
             branch_infos = None
         merge_modes = self._fetchProjectMergeModes(project)
         default_branch = self._fetchProjectDefaultBranch(project)
-        self._branch_cache.setAllProjectData(
+        ltime = self._branch_cache.setAllProjectData(
             project.name, valid_flags, branch_infos,
             merge_modes, default_branch)
         log.info("Updated branches for %s", project.name)
+        return ltime
 
     def getProjectBranches(self, project, tenant, min_ltime=-1):
         """Get the branch names for the given project.
@@ -529,8 +536,8 @@ class ZKBranchCacheMixin:
                 self.log.info("Project %s branch %s protected state "
                               "changed to %s",
                               project_name, event.branch, protected)
-                self._branch_cache.setProtected(project_name, event.branch,
-                                                protected)
+                self._branch_cache.setProtected(
+                    project_name, event.branch, protected)
                 event.branch_cache_ltime = self._branch_cache.ltime
 
             event.branch_protected = protected
