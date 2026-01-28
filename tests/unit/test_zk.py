@@ -2177,8 +2177,9 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         # There's a lot of exception catching in the branch cache,
         # so exercise a serialize/deserialize cycle.
         ctx = ZKContext(self.zk_client, None, None, self.log)
-        data = cache.cache.serialize(ctx)
-        cache.cache.deserialize(data, ctx)
+        item = cache._getOldOrNewCache().cache.getItem('project1')
+        data = item.serialize(ctx)
+        item.deserialize(data, ctx)
 
     def test_branch_cache_all_then_protected(self):
         conn = DummyConnection()
@@ -2240,8 +2241,9 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         # There's a lot of exception catching in the branch cache,
         # so exercise a serialize/deserialize cycle.
         ctx = ZKContext(self.zk_client, None, None, self.log)
-        data = cache.cache.serialize(ctx)
-        cache.cache.deserialize(data, ctx)
+        item = cache._getOldOrNewCache().cache.getItem('project1')
+        data = item.serialize(ctx)
+        item.deserialize(data, ctx)
 
     def test_branch_cache_change_protected(self):
         conn = DummyConnection()
