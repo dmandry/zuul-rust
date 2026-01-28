@@ -53,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "7cb5a41a_5724c867",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 6987,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "55344522_1b50d81a",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c95a13d2_6c983459",
@@ -84,6 +102,24 @@
       "side": 1,
       "message": "The api returns them in reversed order.  This reverses them into the correct order.",
       "parentUuid": "c95a13d2_6c983459",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "72e23811_436ad1af",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7026,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "aac7e97b_dd89e61b",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -123,6 +159,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d305924f_7da77e6b",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7032,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "29241f49_e5fc31b6",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "ac9615cf_1ba09a9d",
@@ -154,6 +208,24 @@
       "side": 1,
       "message": "In order to make the simulation as accurate as possible, the failJob method ultimately causes the fake executor to actually check the contents of the git repo on disk in order to decide if the job should fail when presented with the git repo contents of the change that should cause it to fail.  In other words, failJob means \"fail this job if you see the contents of this change\".  Very useful for testing a gating system.",
       "parentUuid": "ac9615cf_1ba09a9d",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0138e4ab_5d6e99ef",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7117,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Oh I didn\u0027t realize it was a change level state rather than just an executor behavior.",
+      "parentUuid": "c7b4ac4f_f4da362c",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -193,6 +265,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "8db7873a_64e36799",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 12013,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "d362d64b_12975470",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "73c0216c_1c8ebb6e",
@@ -228,6 +318,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "63e72f93_336a5361",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 530,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "ec1aa769_e253212c",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e1229fba_680cd479",
@@ -259,6 +367,24 @@
       "side": 1,
       "message": "Same.",
       "parentUuid": "e1229fba_680cd479",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "48558243_8f279c6e",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 544,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "1b2da1fa_cbba9af9",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -329,6 +455,24 @@
       "side": 1,
       "message": "Yes -- or the slightly different way I view it: the job graph *expands* to include reporter jobs after a certain point in the lifecycle of the item, so that all the existing logic around how to request nodes and when to start jobs, etc, remains the same.  We just get some new jobs at the end of the process.\n\nIt\u0027s nice (and harmless) to see all the jobs in the web UI though, so we just always include them there.  (It\u0027s actually a bit more complicated *not* to do that.)",
       "parentUuid": "84c35b87_f7a8ada3",
+      "revId": "4224aae46040131055300984c90bd147db91ad5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ba1ee400_0f89d671",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 7072,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:12:48Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "77450610_0486645c",
       "revId": "4224aae46040131055300984c90bd147db91ad5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
