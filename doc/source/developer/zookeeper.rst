@@ -121,6 +121,18 @@ This is a reference for object layout in Zookeeper.
    The connection branch cache root.  Contains the cache itself and a
    lock.
 
+.. path:: zuul/cache/connection/<connection>/project/<project>
+
+   The branch and project info cache for an individual project.
+
+.. path:: zuul/cache/connection/<connection>/project/<project>/data
+
+   This is a single sharded JSON blob that contains info about the project.
+
+.. path:: zuul/cache/connection/<connection>/project/<project>/lock
+
+   The lock for this project's branch cache.
+
 .. path:: zuul/cache/connection/<connection>/branches/data
    :type: BranchCacheZKObject (sharded)
 
