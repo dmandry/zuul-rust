@@ -100,6 +100,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "590b5124_9e1d0578",
+        "filename": "doc/source/config/queue.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 81,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:20:25Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "d55bd6ff_eb8f6310",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "3dbeca13_c7ae2dbc",
@@ -113,6 +131,24 @@
       "writtenOn": "2026-01-24T18:43:37Z",
       "side": 1,
       "message": "Looks like the answer to my behavior question in the documentation is that independent queues are assigned to project branches without an explicit assignment.",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "43b710cd_e21a0eae",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 12126,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:20:25Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "3dbeca13_c7ae2dbc",
       "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -175,6 +211,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "8c6bebe7_45900270",
+        "filename": "zuul/manager/shared.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 98,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:20:25Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "1766240c_7b441c99",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "2ac974a2_499a10d1",
@@ -210,6 +264,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "04aff44b_6ca0b54e",
+        "filename": "zuul/manager/shared.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 114,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:20:25Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "ccc1a999_83114862",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "6516eb21_dd1e86a2",
@@ -241,6 +313,24 @@
       "side": 1,
       "message": "I think I forgot to remove it after I moved it up to line 136.",
       "parentUuid": "6516eb21_dd1e86a2",
+      "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "39ea094f_e36b9374",
+        "filename": "zuul/manager/shared.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 150,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-01-28T00:20:25Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1af41424_18a591d2",
       "revId": "8324598299a89ff2330f2e7c995eca667280bc88",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
