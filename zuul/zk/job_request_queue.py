@@ -127,7 +127,7 @@ class JobRequestCache(ZuulTreeCache):
         if parts[0] == 'requests':
             key = (parts[0], parts[1])
             fetch = True
-        return (key, fetch)
+        return (key, fetch, None)
 
     def preCacheHook(self, event, exists, data=None, stat=None):
         parts = self._parsePath(event.path)
@@ -165,7 +165,7 @@ class JobRequestCache(ZuulTreeCache):
                 request.lock_contenders -= 1
             request.is_locked = bool(request.lock_contenders)
 
-    def objectFromRaw(self, key, data, stat):
+    def objectFromRaw(self, key, data, shard_index, stat):
         if key[0] == 'requests':
             content = self._bytesToDict(data)
             request = self.request_class.fromDict(content)
@@ -174,7 +174,7 @@ class JobRequestCache(ZuulTreeCache):
             request._old_state = request.state
             return request
 
-    def updateFromRaw(self, request, key, data, stat):
+    def updateFromRaw(self, request, key, data, shard_index, stat):
         content = self._bytesToDict(data)
         with request.thread_lock:
             # TODO: move thread locking into the TreeCache so we don't

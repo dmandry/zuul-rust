@@ -79,6 +79,7 @@ from tests.base import (
 )
 from zuul.zk.zkobject import (
     LockableZKObject,
+    LockableShardedZKObject,
     PolymorphicZKObjectMixin,
     ShardedZKObject,
     ZKContext,
@@ -3132,19 +3133,23 @@ class DummyLockable(LockableZKObject):
         return f"{self.ROOT}/{self.LOCKS_PATH}/{self.uuid}"
 
 
+class DummyLockableSharded(DummyLockable, LockableShardedZKObject):
+    pass
+
+
 class TestLockableZKObjectCache(ZooKeeperBaseTestCase):
 
-    def test_is_locked_contenders(self):
+    def _test_is_locked_contenders(self, zkobject_class):
         cache = LockableZKObjectCache(
             self.zk_client,
             None,
             root=DummyLockable.ROOT,
             items_path=DummyLockable.DUMMY_PATH,
             locks_path=DummyLockable.LOCKS_PATH,
-            zkobject_class=DummyLockable)
+            zkobject_class=zkobject_class)
 
         ctx = ZKContext(self.zk_client, None, None, self.log)
-        dummy = DummyLockable.new(ctx)
+        dummy = zkobject_class.new(ctx)
 
         for _ in iterate_timeout(10, "cache to sync"):
             if cache.getItems():
@@ -3153,6 +3158,8 @@ class TestLockableZKObjectCache(ZooKeeperBaseTestCase):
         # Acquire lock for all items
         for item in cache.getItems():
             item.acquireLock(ctx)
+            # Make sure the content of the object is the same
+            self.assertEqual(dummy.uuid, item.uuid)
 
         for _ in iterate_timeout(10, "cache to sync"):
             if all(d.is_locked for d in cache.getItems()):
@@ -3181,6 +3188,13 @@ class TestLockableZKObjectCache(ZooKeeperBaseTestCase):
         for _ in iterate_timeout(10, "cache to sync"):
             if not any(d.is_locked for d in cache.getItems()):
                 break
+
+    def test_is_locked_contenders(self):
+        self._test_is_locked_contenders(DummyLockable)
+
+    def test_is_locked_contenders_sharded(self):
+        with mock.patch("zuul.zk.sharding.NODE_BYTE_SIZE_LIMIT", 5):
+            self._test_is_locked_contenders(DummyLockableSharded)
 
 
 class TestRendezvousElection(ZooKeeperBaseTestCase):

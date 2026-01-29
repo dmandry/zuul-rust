@@ -29,6 +29,7 @@ from zuul.model import (
 )
 from zuul.zk.cache import ZuulTreeCache
 from zuul.zk.zkobject import ZKContext
+from zuul.zk import sharding
 
 
 def _dictToBytes(data):
@@ -51,6 +52,7 @@ class LockableZKObjectCache(ZuulTreeCache):
         self.items_path = items_path
         self.locks_path = locks_path
         self.zkobject_class = zkobject_class
+        self._object_shards = {}
         super().__init__(zk_client, root)
 
     def _parsePath(self, path):
@@ -67,22 +69,30 @@ class LockableZKObjectCache(ZuulTreeCache):
     def parsePath(self, path):
         key = None
         fetch = False
+        shard_index = None
         parts = self._parsePath(path)
         if parts is None:
-            return (key, fetch)
+            return (key, fetch, shard_index)
         if len(parts) < 2:
-            return (key, fetch)
+            return (key, fetch, shard_index)
 
-        object_type, item_uuid, *_ = parts
+        object_type, item_uuid, *rest = parts
         if object_type == self.items_path:
-            key = (item_uuid,)
-            fetch = True
+            if (self.zkobject_class.io_writer_class ==
+                sharding.BufferedShardWriter):
+                if len(rest) == 1:
+                    key = (item_uuid,)
+                    fetch = True
+                    shard_index = int(rest[0])
+            else:
+                key = (item_uuid,)
+                fetch = True
         elif object_type == self.locks_path:
             key = None
             if len(parts) == 3:
                 fetch = True
 
-        return (key, fetch)
+        return (key, fetch, shard_index)
 
     def preCacheHook(self, event, exists, data=None, stat=None):
         parts = self._parsePath(event.path)
@@ -135,12 +145,47 @@ class LockableZKObjectCache(ZuulTreeCache):
         if self.updated_event:
             self.updated_event()
 
-    def objectFromRaw(self, key, data, zstat):
-        return self.zkobject_class._fromRaw(
-            self._zk_context, data, zstat, None)
+    def _manageShard(self, key, data, shard_index):
+        if shard_index is None:
+            return data
+        # If this is the first shard, empty the list (in case we were
+        # interrupted previously.
+        if shard_index == 0:
+            self._object_shards[key] = []
+        self._object_shards[key].append(data)
+        data = b''.join(self._object_shards[key])
+        return data
 
-    def updateFromRaw(self, obj, key, data, zstat):
-        obj._updateFromRaw(self._zk_context, data, zstat, None)
+    def objectFromRaw(self, key, data, shard_index, zstat):
+        data = self._manageShard(key, data, shard_index)
+        obj = None
+        try:
+            obj = self.zkobject_class._fromRaw(
+                self._zk_context, data, zstat, None)
+            # If we succeeded in decoding, clear the temporary shard
+            # list (if relevant).
+            self._object_shards.pop(key, None)
+        except Exception:
+            if shard_index is None:
+                raise
+            # If we are sharded, we may just not be done yet
+            # TODO: determine a signaling system to indicate the last
+            # shard.
+        return obj
+
+    def updateFromRaw(self, obj, key, data, shard_index, zstat):
+        data = self._manageShard(key, data, shard_index)
+        try:
+            obj._updateFromRaw(self._zk_context, data, zstat, None)
+            # If we succeeded in decoding, clear the temporary shard
+            # list (if relevant).
+            self._object_shards.pop(key, None)
+        except Exception:
+            if shard_index is None:
+                raise
+            # If we are sharded, we may just not be done yet
+            # TODO: determine a signaling system to indicate the last
+            # shard.
 
     def getItem(self, item_id):
         self.ensureReady()
