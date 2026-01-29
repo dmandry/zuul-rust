@@ -679,6 +679,18 @@ class LockableZKObject(ZKObject):
         return self._lock.is_still_valid()
 
 
+class LockableShardedZKObject(LockableZKObject):
+    # If the node exists when we create we normally error, unless this
+    # is set, in which case we proceed and truncate.
+    truncate_on_create = False
+    # Normally we delete nodes which have syntax errors, but the
+    # pipeline summary is read without a write lock, so those are
+    # expected.  Don't delete them in that case.
+    delete_on_error = True
+    io_reader_class = sharding.BufferedShardReader
+    io_writer_class = sharding.BufferedShardWriter
+
+
 class PolymorphicZKObjectMixin(abc.ABC):
 
     # Make this mixin a true abstract base class that can't be
