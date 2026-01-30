@@ -1,0 +1,72 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2d513bad_873b8a59",
+        "filename": "tests/fixtures/config/authorization/single-tenant/rbac.yaml",
+        "patchSetId": 12
+      },
+      "lineNbr": 46,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-30T14:38:10Z",
+      "side": 1,
+      "message": "I think job may be too specific for this file.  Whenever possible, we should avoid referencing the in-repo config from the tenant config file.  I think we should stick with just \"project-level\" permissions since they don\u0027t change often.",
+      "revId": "071a3169c99f8a60a42afcca555709feed8f268a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "df136196_fde5aa82",
+        "filename": "tests/fixtures/config/authorization/single-tenant/rbac.yaml",
+        "patchSetId": 12
+      },
+      "lineNbr": 52,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-30T14:38:10Z",
+      "side": 1,
+      "message": "I don\u0027t think we should have conditions on this.  It would be easy to get into a state we can\u0027t get out of.",
+      "revId": "071a3169c99f8a60a42afcca555709feed8f268a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1669df4c_06afcc37",
+        "filename": "tests/fixtures/config/authorization/single-tenant/rbac.yaml",
+        "patchSetId": 12
+      },
+      "lineNbr": 58,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-30T14:38:10Z",
+      "side": 1,
+      "message": "I think this may be too specific.",
+      "revId": "071a3169c99f8a60a42afcca555709feed8f268a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c3319d81_4db6faa7",
+        "filename": "tests/fixtures/config/authorization/single-tenant/rbac.yaml",
+        "patchSetId": 12
+      },
+      "lineNbr": 64,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-01-30T14:38:10Z",
+      "side": 1,
+      "message": "This is also too specific.",
+      "revId": "071a3169c99f8a60a42afcca555709feed8f268a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
