@@ -12,3 +12,7 @@
           - zuul/zuul-jobs:
               include:
                 - job
+          - openstack/zuul-jobs:
+              include:
+                - job
+                - role

@@ -1,11 +1,7 @@
-- job:
-    name: testjob
-    run: playbooks/testjob.yaml
-
 - project:
     check:
       jobs:
-        - testjob
+        - openstack-tox-linters
     gate:
       jobs:
-        - testjob
+        - openstack-tox-linters
