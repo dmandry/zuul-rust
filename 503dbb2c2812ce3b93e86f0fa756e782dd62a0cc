@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "51bae6d1_97d3b1f1",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1887,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-02T08:22:07Z",
+      "side": 1,
+      "message": "Do we still need the checkout of affected files with the new mapping method?",
+      "revId": "503dbb2c2812ce3b93e86f0fa756e782dd62a0cc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
