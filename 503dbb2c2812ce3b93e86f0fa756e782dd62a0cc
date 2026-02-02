@@ -16,6 +16,24 @@
       "message": "Do we still need the checkout of affected files with the new mapping method?",
       "revId": "503dbb2c2812ce3b93e86f0fa756e782dd62a0cc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5a3048cf_38f6ea45",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1887,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-02T23:39:21Z",
+      "side": 1,
+      "message": "Good point -- not only do we not need the file list, we actually don\u0027t even need the checkout.  I\u0027ve removed it in the next ps (and updated one test that asserted a file was checked out specifically for line mapping).",
+      "parentUuid": "51bae6d1_97d3b1f1",
+      "revId": "503dbb2c2812ce3b93e86f0fa756e782dd62a0cc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
