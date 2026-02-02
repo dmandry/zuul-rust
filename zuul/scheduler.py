@@ -879,6 +879,19 @@ class Scheduler(threading.Thread):
             start_ltime = self.zk_client.getCurrentLtime()
             # lock and refresh the pipeline
             for tenant in self.abide.tenants.values():
+                start_wait = time.time()
+                while not self.isTenantLayoutUpToDate(tenant.name):
+                    # If we don't have an up-to-date config from all
+                    # the tenants, it may be dangerous to clean the
+                    # blob store.  Wait a reasonable amount of time
+                    # for each tenant to update in the unlikely event
+                    # any given tenant is not up to date.
+                    time.sleep(10)
+                    if (time.time() - start_wait) > 300:
+                        self.log.info("Skipping blob store cleanup due to "
+                                      "out of date tenant config: %s",
+                                      tenant.name)
+                        return
                 for manager in tenant.layout.pipeline_managers.values():
                     with (pipeline_lock(
                             self.zk_client, tenant.name,
