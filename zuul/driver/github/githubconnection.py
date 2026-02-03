@@ -970,7 +970,7 @@ class GithubClientManager:
             return
 
         if app_id:
-            self.app_id = int(app_id)
+            self.app_id = app_id
         if app_key:
             self.app_key = app_key
 
