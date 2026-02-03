@@ -1,5 +1,5 @@
 # Copyright (c) 2017 Red Hat
-# Copyright 2021-2025 Acme Gating, LLC
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -2505,6 +2505,42 @@ class ZuulWebAPI(object):
             event.trigger_name, event)
 
     @cherrypy.expose
+    @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
+    @cherrypy.tools.handle_options(allowed_methods=['POST'])
+    @cherrypy.tools.check_tenant_auth(require_admin=True)
+    def image_upload_upload(self, tenant_name, tenant, auth, upload_id):
+        upload = self.zuulweb.image_upload_registry.getItem(upload_id)
+        if upload:
+            iba = self.zuulweb.image_build_registry.getItem(
+                upload.artifact_uuid)
+        else:
+            iba = None
+
+        if not iba or tenant.name != iba.build_tenant_name:
+            raise cherrypy.HTTPError(
+                404, "Image upload not found in tenant")
+
+        with self.zuulweb.createZKContext(None, self.log) as ctx:
+            # We just let the LockException propagate up if we can't lock
+            # it.
+            with upload.locked(ctx, blocking=False):
+                upload.refresh(ctx)
+                if upload.state != upload.State.FAILED:
+                    self.log.info(
+                        'User %s denied image re-upload on %s',
+                        auth.uid, upload)
+                    raise cherrypy.HTTPError(400, 'Invalid upload state')
+                self.log.info(
+                    'User %s requesting image re-upload on %s',
+                    auth.uid, upload)
+                with upload.activeContext(ctx):
+                    new_upload = upload.copy(ctx, attempt=0)
+                    self.log.debug("Replacing upload %s with %s",
+                                   upload, new_upload)
+                    self.log.debug("Marking upload %s deleting", upload)
+                    upload.state = upload.State.DELETING
+
+    @cherrypy.expose
     @cherrypy.tools.save_params()
     @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
     @cherrypy.tools.handle_options()
@@ -3384,6 +3420,12 @@ class ZuulWeb(object):
                           controller=api,
                           conditions=dict(method=['POST', 'OPTIONS']),
                           action='image_upload_validate')
+        route_map.connect('api',
+                          '/api/tenant/{tenant_name}/'
+                          'image-upload/{upload_id}/upload',
+                          controller=api,
+                          conditions=dict(method=['POST', 'OPTIONS']),
+                          action='image_upload_upload')
         route_map.connect('api', '/api/tenant/{tenant_name}/labels',
                           controller=api, action='labels')
         route_map.connect('api', '/api/tenant/{tenant_name}/nodes',

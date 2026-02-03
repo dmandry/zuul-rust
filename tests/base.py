@@ -3308,6 +3308,16 @@ class ZuulTestCase(BaseTestCase):
             if len(artifacts) == count:
                 return artifacts
 
+    def waitForUploads(self, image_name, count=None):
+        for _ in iterate_timeout(60, "upload to complete"):
+            uploads = self.launcher.image_upload_registry.getUploadsForImage(
+                image_name)
+            pending = [u for u in uploads
+                       if u.state not in (u.State.READY, u.State.FAILED)]
+            if not pending:
+                if count is None or count == len(uploads):
+                    return uploads
+
     def __haveAllBuildsReported(self):
         # The build requests will be deleted from ZooKeeper once the
         # scheduler processed their result event. Thus, as long as

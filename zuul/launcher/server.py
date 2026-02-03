@@ -1,5 +1,5 @@
 # Copyright 2024 BMW Group
-# Copyright 2024-2025 Acme Gating, LLC
+# Copyright 2024-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain

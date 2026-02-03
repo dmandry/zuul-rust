@@ -1,6 +1,6 @@
 # Copyright 2014 Hewlett-Packard Development Company, L.P.
 # Copyright 2014 Rackspace Australia
-# Copyright 2021-2022 Acme Gating, LLC
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -1818,6 +1818,90 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         else:
             raise Exception("Upload not found")
         self.assertTrue(new_upload['validated'])
+
+    @simple_layout('layouts/nodepool-image.yaml',
+                   enable_nodepool=True)
+    @return_data(
+        'build-ubuntu-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.ubuntu_return_data,
+    )
+    @okay_tracebacks('Upload test failure')
+    def test_web_upload_retry(self):
+        self.startWebServer()
+        self.executor_server.hold_jobs_in_build = False
+        self._ubuntu_images = []
+
+        def _upload_run(this, *args, **kw):
+            # Fail on first upload of this image
+            if 'ubuntu-local' in this.image_name:
+                upload_id = this.metadata['zuul_upload_uuid']
+                upload = self.launcher.image_upload_registry.getItem(upload_id)
+                artifact_id = upload.artifact_uuid
+                if artifact_id not in self._ubuntu_images:
+                    self._ubuntu_images.append(artifact_id)
+                if self._ubuntu_images[0] == artifact_id:
+                    self._addFinishedUpload(upload_id)
+                    raise Exception("Upload test failure")
+            return "test_external_id"
+
+        with mock.patch.object(
+                zuul.driver.aws.awsendpoint.AwsImageUploadJob,
+                'run',
+                _upload_run):
+            self.addImageBuildEvent(
+                'tenant-one',
+                'review.example.com/org/common-config',
+                'master',
+                ['ubuntu-local'],
+            )
+            self.waitUntilSettled()
+
+            self.assertHistory([
+                dict(name='build-ubuntu-local-image', result='SUCCESS'),
+            ])
+            cname = 'review.example.com%2Forg%2Fcommon-config/ubuntu-local'
+            self.waitForUploads(cname, 1)
+
+            resp = self.get_url('api/tenant/tenant-one/images')
+            data = resp.json()
+            self.assertEqual(4, len(data))
+            image = [i for i in data if i['canonical_name'] == cname][0]
+            self.assertEqual(1, len(image['build_artifacts']))
+            self.assertEqual(1, len(image['build_artifacts'][0]['uploads']))
+            upload = image['build_artifacts'][0]['uploads'][0]
+            self.assertEqual('failed', upload['state'])
+
+        def _upload_run(this, *args, **kw):
+            # Fail on first upload of this image
+            return "test_external_id"
+
+        with mock.patch.object(
+                zuul.driver.aws.awsendpoint.AwsImageUploadJob,
+                'run',
+                _upload_run):
+            # Now retrigger upload
+            url = f"api/tenant/tenant-one/image-upload/{upload['uuid']}/upload"
+            # Test that unauthenticated access fails
+            resp = self.post_url(url)
+            self.assertEqual(401, resp.status_code, resp.text)
+            # Do it again with auth
+            token = self._getToken(['tenant-one'])
+            resp = self.post_url(
+                url,
+                headers={'Authorization': 'Bearer %s' % token})
+            self.assertEqual(200, resp.status_code, resp.text)
+            self.waitUntilSettled("image retry")
+
+            self.waitForUploads(cname, 1)
+            resp = self.get_url('api/tenant/tenant-one/images')
+            data = resp.json()
+            self.assertEqual(4, len(data))
+            image = [i for i in data if i['canonical_name'] == cname][0]
+            self.assertEqual(1, len(image['build_artifacts']))
+            self.assertEqual(1, len(image['build_artifacts'][0]['uploads']))
+            upload = image['build_artifacts'][0]['uploads'][0]
+            self.assertEqual('ready', upload['state'])
 
     @return_data(
         'build-debian-local-image',

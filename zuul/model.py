@@ -1538,9 +1538,12 @@ class ImageUpload(zkobject.LockableZKObject):
             lock_holder=None,
         )
 
-    def copy(self, context):
+    def copy(self, context, attempt=None):
         upload_uuid = uuid.uuid4().hex
-        attempt = self.attempt + 1
+        if attempt is None:
+            attempt = self.attempt + 1
+        else:
+            attempt = attempt
         return ImageUpload.new(
             context,
             uuid=upload_uuid,
