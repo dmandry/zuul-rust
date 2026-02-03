@@ -34,7 +34,11 @@ import {
 import { fetchImages } from '../../actions/images'
 import { fetchProviders } from '../../actions/providers'
 import { addNotification, addApiError } from '../../actions/notifications'
-import { deleteImageUpload, validateImageUpload } from '../../api'
+import {
+  deleteImageUpload,
+  retryImageUpload,
+  validateImageUpload,
+} from '../../api'
 
 const STATE_STYLES = {
   ready: {
@@ -55,6 +59,7 @@ function ImageUploadTable(props) {
   const { build, uploads, fetching } = props
   const [showDeleteUploadModal, setShowDeleteUploadModal] = useState(false)
   const [showValidateUploadModal, setShowValidateUploadModal] = useState(false)
+  const [showRetryUploadModal, setShowRetryUploadModal] = useState(false)
   const [pendingActionRow, setPendingActionRow] = useState(null)
   const tenant = useSelector((state) => state.tenant)
   const user = useSelector((state) => state.user)
@@ -160,6 +165,13 @@ function ImageUploadTable(props) {
             setShowValidateUploadModal(true)
           }
         },
+        {
+          title: 'Retry upload',
+          onClick: () => {
+            setPendingActionRow(rowData)
+            setShowRetryUploadModal(true)
+          }
+        },
       ]
     }
     return []
@@ -251,6 +263,49 @@ function ImageUploadTable(props) {
     )
   }
 
+  function renderRetryUploadModal() {
+    const title = 'Retry image upload'
+    return (
+      <Modal
+        variant={ModalVariant.small}
+        isOpen={showRetryUploadModal}
+        title={title}
+        onClose={() => { setShowRetryUploadModal(false) }}
+        actions={[
+          <Button key="confirm" variant="primary"
+                  onClick={() => {
+                    setShowRetryUploadModal(false)
+                    retryImageUpload(tenant.apiPrefix,
+                                     pendingActionRow._uuid
+                                    ).then(() => {
+                      dispatch(addNotification(
+                        {
+                          text: 'Upload pending.',
+                          type: 'success',
+                          status: '',
+                          url: '',
+                        }))
+                      dispatch(fetchProviders(tenant))
+                      dispatch(fetchImages(tenant))
+                    })
+                      .catch(error => {
+                        dispatch(addApiError(error))
+                      })
+                  }}>
+            Confirm
+          </Button>,
+          <Button key="cancel" variant="link"
+                  onClick={() => {setShowRetryUploadModal(false) }}>
+            Cancel
+          </Button>,
+        ]}>
+        <p>
+          Please confirm that you want to validate this image upload.
+        </p>
+      </Modal>
+    )
+  }
+
   const haveUploads = uploads && uploads.length > 0
 
   let rows = []
@@ -291,6 +346,7 @@ function ImageUploadTable(props) {
       )}
       {renderDeleteUploadModal()}
       {renderValidateUploadModal()}
+      {renderRetryUploadModal()}
     </>
   )
 }

@@ -277,6 +277,13 @@ function validateImageUpload(apiPrefix, uploadId) {
   )
 }
 
+function retryImageUpload(apiPrefix, uploadId) {
+  return makeRequest(
+    apiPrefix + 'image-upload/' + uploadId + '/upload',
+    'post'
+  )
+}
+
 function fetchFlavors(apiPrefix) {
   return makeRequest(apiPrefix + 'flavors')
 }
@@ -485,6 +492,7 @@ export {
   getLogFile,
   getStreamUrl,
   promote,
+  retryImageUpload,
   setNodeState,
   setTenantState,
   validateImageUpload,
