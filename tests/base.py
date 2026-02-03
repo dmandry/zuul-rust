@@ -15,7 +15,7 @@
 # under the License.
 
 import configparser
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from configparser import ConfigParser
 from contextlib import contextmanager
 import errno
@@ -3307,6 +3307,14 @@ class ZuulTestCase(BaseTestCase):
                 artifacts = [a for a in artifacts if a.format == format]
             if len(artifacts) == count:
                 return artifacts
+
+    def waitForUploads(self, image_name, **states):
+        for _ in iterate_timeout(60, "upload to complete"):
+            uploads = self.launcher.image_upload_registry.getUploadsForImage(
+                image_name)
+            uploads_by_state = Counter(u.state for u in uploads)
+            if uploads_by_state == states:
+                return
 
     def __haveAllBuildsReported(self):
         # The build requests will be deleted from ZooKeeper once the
