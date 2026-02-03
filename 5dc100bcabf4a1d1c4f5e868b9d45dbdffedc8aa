@@ -16,6 +16,24 @@
       "message": "I think we also want to loop over `self.unparsed_abide.tenants` here in case a tenant wasn\u0027t yet/properly loaded (similar to the run handler).",
       "revId": "5dc100bcabf4a1d1c4f5e868b9d45dbdffedc8aa",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "cff4c00a_49e3a91d",
+        "filename": "zuul/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 881,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-03T15:23:02Z",
+      "side": 1,
+      "message": "Good idea.  Done in ps2.",
+      "parentUuid": "a673bcbf_2b829b81",
+      "revId": "5dc100bcabf4a1d1c4f5e868b9d45dbdffedc8aa",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
