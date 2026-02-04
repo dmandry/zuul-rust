@@ -78,6 +78,7 @@ class TestSelectProviders(LauncherBaseTestCase):
             tenant_name='tenant-one',
             pipeline_name="check",
             buildset_uuid=uuid.uuid4().hex,
+            build_uuid=uuid.uuid4().hex,
             job_uuid=uuid.uuid4().hex,
             job_name="foobar",
             labels=labels,

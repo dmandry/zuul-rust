@@ -88,7 +88,8 @@ class TestNodepool(TestNodepoolBase):
         job.uuid = uuid.uuid4().hex
         job.nodeset = nodeset
         request = self.nodepool.requestNodes(
-            "test-uuid", job, "tenant", "pipeline", "provider", 0, 0)
+            "test-uuid", "build-uuid", job, "tenant", "pipeline", "provider",
+            0, 0)
         for x in iterate_timeout(30, 'requests are complete'):
             if len(self.nodepool.provisioned_requests) == 1:
                 break
@@ -135,7 +136,8 @@ class TestNodepool(TestNodepoolBase):
         job.nodeset = nodeset
         self.fake_nodepool.pause()
         request = self.nodepool.requestNodes(
-            "test-uuid", job, "tenant", "pipeline", "provider", 0, 0)
+            "test-uuid", "build-uuid", job, "tenant", "pipeline", "provider",
+            0, 0)
         for x in iterate_timeout(30, 'request created'):
             if len(self.nodepool.zk_nodepool._node_request_cache):
                 break
@@ -162,9 +164,11 @@ class TestNodepool(TestNodepoolBase):
         job.nodeset = nodeset
         self.fake_nodepool.pause()
         request1 = self.nodepool.requestNodes(
-            "test-uuid", job, "tenant", "pipeline", "provider", 0, 1)
+            "test-uuid", "build-uuid", job, "tenant", "pipeline", "provider",
+            0, 1)
         request2 = self.nodepool.requestNodes(
-            "test-uuid", job, "tenant", "pipeline", "provider", 0, 0)
+            "test-uuid", "build-uuid", job, "tenant", "pipeline", "provider",
+            0, 0)
         self.fake_nodepool.unpause()
         for x in iterate_timeout(30, 'requests are complete'):
             if len(self.nodepool.provisioned_requests) == 2:
