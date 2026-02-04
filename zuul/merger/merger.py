@@ -744,6 +744,23 @@ class Repo(object):
             }
         return {}
 
+    def noMerge(self, ref, zuul_event_id=None, timestamp=None, ops=None):
+        log = get_annotated_logger(self.log, zuul_event_id)
+        with self.createRepoObject(zuul_event_id) as repo:
+            log.debug("Fetching %s", ref)
+            self.fetch(ref, zuul_event_id=zuul_event_id)
+            if ops is not None:
+                ops.append(zuul.model.MergeOp(
+                    cmd=['git', 'fetch', 'origin', ref],
+                    path=self.workspace_project_path))
+            log.debug("Checking out %s", ref)
+            repo.git.checkout('FETCH_HEAD')
+            if ops is not None:
+                ops.append(zuul.model.MergeOp(
+                    cmd=['git', 'checkout', 'FETCH_HEAD'],
+                    path=self.workspace_project_path,timestamp=timestamp))
+            return repo.head.commit.hexsha
+
     def merge(self, ref, strategy=None, zuul_event_id=None, timestamp=None,
               ops=None):
         log = get_annotated_logger(self.log, zuul_event_id)
@@ -1371,6 +1388,10 @@ class Merger(object):
             elif mode == zuul.model.MERGER_REBASE:
                 hexsha = repo.rebaseMerge(
                     item, base, zuul_event_id=zuul_event_id,
+                    timestamp=timestamp, ops=ops)
+            elif mode == zuul.model.NO_MERGE:
+                hexsha = repo.noMerge(
+                    item['ref'], zuul_event_id=zuul_event_id,
                     timestamp=timestamp, ops=ops)
             else:
                 raise Exception("Unsupported merge mode: %s" % mode)
