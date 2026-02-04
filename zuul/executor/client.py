@@ -14,7 +14,6 @@
 
 import logging
 import time
-from uuid import uuid4
 
 import zuul.executor.common
 from zuul.lib.logutil import get_annotated_logger
@@ -65,7 +64,7 @@ class ExecutorClient(object):
                 dependent_changes=[], merger_items=[]):
         log = get_annotated_logger(self.log, item.event)
         tracer = trace.get_tracer("zuul")
-        uuid = str(uuid4().hex)
+        uuid = item.current_build_set.getBuildUUID(job)
         manager = item.manager
         log.info(
             "Execute job %s (uuid: %s) on nodes %s for %s "

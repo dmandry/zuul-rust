@@ -190,17 +190,18 @@ class Nodepool(object):
             self.statsd.incr(
                 key, value * duration, project=project, resource=resource)
 
-    def requestNodes(self, build_set_uuid, job, tenant_name, pipeline_name,
-                     provider, priority, relative_priority, event=None):
+    def requestNodes(self, build_set_uuid, build_uuid, job, tenant_name,
+                     pipeline_name, provider, priority, relative_priority,
+                     event=None):
         log = get_annotated_logger(self.log, event)
         labels = [n.label for n in job.nodeset.getNodes()]
         if event:
             event_id = event.zuul_event_id
         else:
             event_id = None
-        req = model.NodeRequest(self.system_id, build_set_uuid, tenant_name,
-                                pipeline_name, job.uuid, job.name, labels,
-                                provider, relative_priority, event_id)
+        req = model.NodeRequest(self.system_id, build_set_uuid, build_uuid,
+                                tenant_name, pipeline_name, job.uuid, job.name,
+                                labels, provider, relative_priority, event_id)
 
         if job.nodeset.nodes:
             self.zk_nodepool.submitNodeRequest(req, priority)

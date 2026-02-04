@@ -71,6 +71,7 @@ class LauncherClient:
                 tenant_name=item.manager.tenant.name,
                 pipeline_name=item.manager.pipeline.name,
                 buildset_uuid=buildset.uuid,
+                build_uuid=buildset.getBuildUUID(job),
                 job_uuid=job.uuid,
                 job_name=job.name,
                 labels=labels,
