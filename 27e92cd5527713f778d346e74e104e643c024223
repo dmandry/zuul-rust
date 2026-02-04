@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8fdbbacb_0495fe78",
+        "filename": "zuul/zk/zkobject.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 687,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-04T11:47:30Z",
+      "side": 1,
+      "message": "Is this a copy\u0026paste?",
+      "range": {
+        "startLine": 687,
+        "startChar": 6,
+        "endLine": 687,
+        "endChar": 22
+      },
+      "revId": "27e92cd5527713f778d346e74e104e643c024223",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
