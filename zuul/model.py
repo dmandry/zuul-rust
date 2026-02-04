@@ -69,6 +69,7 @@ from zuul.zk.change_cache import ChangeKey
 from zuul.zk.components import COMPONENT_REGISTRY
 
 
+NO_MERGE = 0                # "git checkout"
 MERGER_MERGE = 1            # "git merge"
 MERGER_MERGE_RESOLVE = 2    # "git merge -s resolve"
 MERGER_CHERRY_PICK = 3      # "git cherry-pick"
@@ -78,6 +79,7 @@ MERGER_MERGE_RECURSIVE = 6  # "git merge -s recursive"
 MERGER_MERGE_ORT = 7        # "git merge -s ort"
 
 MERGER_MAP = {
+    'no-merge': NO_MERGE,
     'merge': MERGER_MERGE,
     'merge-resolve': MERGER_MERGE_RESOLVE,
     'merge-recursive': MERGER_MERGE_RECURSIVE,

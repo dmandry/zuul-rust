@@ -1407,7 +1407,7 @@ class ProjectParser(object):
             'branches': to_list(vs.Any(ZUUL_REGEX, str)),
             'vars': ansible_vars_dict,
             'templates': [str],
-            'merge-mode': vs.Any('merge', 'merge-resolve',
+            'merge-mode': vs.Any('no-merge', 'merge', 'merge-resolve',
                                  'cherry-pick', 'squash-merge',
                                  'rebase'),
             'default-branch': str,
