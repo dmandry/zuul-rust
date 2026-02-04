@@ -16,6 +16,24 @@
       "message": "The finally handler acks the connection event, but the connection event won\u0027t be assigned if this times out.",
       "revId": "aacaf1bfc48f582e83ae51b39fed537374db2819",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c22fab90_02a94a3c",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 707,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-04T14:49:33Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "f9657641_903b1dcd",
+      "revId": "aacaf1bfc48f582e83ae51b39fed537374db2819",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
