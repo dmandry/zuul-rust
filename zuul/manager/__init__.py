@@ -1230,8 +1230,9 @@ class PipelineManager(metaclass=ABCMeta):
         pipeline_name = self.pipeline.name
         item = build_set.item
         req = self.sched.nodepool.requestNodes(
-            build_set.uuid, job, tenant_name, pipeline_name, provider,
-            priority, relative_priority, event=item.event)
+            build_set.uuid, build_set.getBuildUUID(job), job, tenant_name,
+            pipeline_name, provider, priority, relative_priority,
+            event=item.event)
         log.debug("Adding node request %s for job %s to item %s",
                   req, job, item)
         build_set.setJobNodeRequestID(job, req.id)

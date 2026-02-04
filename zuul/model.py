@@ -2395,11 +2395,12 @@ class NodeSet(ConfigObject):
 class NodeRequest(object):
     """A request for a set of nodes."""
 
-    def __init__(self, requestor, build_set_uuid, tenant_name, pipeline_name,
-                 job_uuid, job_name, labels, provider, relative_priority,
-                 event_id=None, span_info=None):
+    def __init__(self, requestor, build_set_uuid, build_uuid, tenant_name,
+                 pipeline_name, job_uuid, job_name, labels, provider,
+                 relative_priority, event_id=None, span_info=None):
         self.requestor = requestor
         self.build_set_uuid = build_set_uuid
+        self.build_uuid = build_uuid
         self.tenant_name = tenant_name
         self.pipeline_name = pipeline_name
         self.job_uuid = job_uuid
@@ -2471,6 +2472,7 @@ class NodeRequest(object):
         # nodepool when it fulfills the request.
         d["requestor_data"] = {
             "build_set_uuid": self.build_set_uuid,
+            "build_uuid": self.build_uuid,
             "tenant_name": self.tenant_name,
             "pipeline_name": self.pipeline_name,
             "job_uuid": self.job_uuid,
@@ -2518,6 +2520,7 @@ class NodeRequest(object):
         request = cls(
             requestor=data["requestor"],
             build_set_uuid=requestor_data.get("build_set_uuid"),
+            build_uuid=requestor_data.get("build_uuid"),
             tenant_name=requestor_data.get("tenant_name"),
             pipeline_name=requestor_data.get("pipeline_name"),
             job_uuid=requestor_data.get("job_uuid"),
@@ -2595,6 +2598,7 @@ class NodesetRequest(zkobject.LockableZKObject):
             tenant_name="",
             pipeline_name="",
             buildset_uuid="",
+            build_uuid="",
             job_uuid="",
             job_name="",
             labels=[],
@@ -2662,6 +2666,7 @@ class NodesetRequest(zkobject.LockableZKObject):
         request_attrs = (
             "pipeline_name",
             "buildset_uuid",
+            "build_uuid",
             "job_uuid",
             "job_name",
             "labels",
@@ -6710,6 +6715,11 @@ class BuildSet(zkobject.ZKObject):
 
     def getTries(self, job):
         return self.tries.get(job.uuid, 0)
+
+    def getBuildUUID(self, job):
+        attempts = self.getTries(job)
+        ns = uuid.UUID(self.uuid)
+        return uuid.uuid5(ns, str((job.uuid, attempts))).hex
 
     def getMergeMode(self, change):
         # We may be called before this build set has a shadow layout
