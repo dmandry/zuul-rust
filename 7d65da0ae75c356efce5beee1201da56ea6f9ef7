@@ -41,6 +41,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "4d5fb0ab_6b0822ea",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 7127,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T17:02:37Z",
+      "side": 1,
+      "message": "Done in next PS.  Note i changed the projects to \"project2\" and \"project4\" because \"project\" uses in-repo config so it\u0027s branch-specific.  2 and 4 are configured in a config project, so they\u0027re easier to use with multiple branches.  That distinction isn\u0027t important for this test (it\u0027s tested elsewhere).",
+      "parentUuid": "3fb7838b_d61e9a56",
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "0159f9b8_cead72e0",
@@ -54,6 +72,24 @@
       "writtenOn": "2026-02-05T15:22:28Z",
       "side": 1,
       "message": "This is project1+master, project2+master, project1+project2+red-queue, and project1+project2+gold-queue right? Just making sure I understand the eventual layout.",
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1df86d6b_fe707a3e",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 12217,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T17:02:37Z",
+      "side": 1,
+      "message": "Yes, and notably, the \"red\" changes are enqueued on different schedulers, so we\u0027re exercising a similar split as in the other new test.",
+      "parentUuid": "0159f9b8_cead72e0",
       "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -81,6 +117,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "44bfbed7_d7535eac",
+        "filename": "zuul/model.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 914,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T17:02:37Z",
+      "side": 1,
+      "message": "Correct.",
+      "parentUuid": "71e4203a_70e2fc12",
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "3355c0cf_2ff4cef9",
@@ -100,6 +154,24 @@
         "endLine": 915,
         "endChar": 73
       },
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5e9454a1_efc1bbf6",
+        "filename": "zuul/model.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 915,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T17:02:37Z",
+      "side": 1,
+      "message": "Good idea, but since this is serialized, I don\u0027t want to change that right now.  Will keep in mind for future.",
+      "parentUuid": "3355c0cf_2ff4cef9",
       "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
