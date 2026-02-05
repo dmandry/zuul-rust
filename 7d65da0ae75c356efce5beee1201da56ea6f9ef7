@@ -1,0 +1,107 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "488ccb6a_dc0eeaf6",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 7
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-05T15:22:28Z",
+      "side": 1,
+      "message": "+2 but I did have some minor nits and comments inline that may be worth looking at before approving this.",
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3fb7838b_d61e9a56",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 7127,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-05T15:22:28Z",
+      "side": 1,
+      "message": "Should this test also include a change on a branch other than master then we can see that we get more than one queue?",
+      "range": {
+        "startLine": 7127,
+        "startChar": 13,
+        "endLine": 7127,
+        "endChar": 30
+      },
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0159f9b8_cead72e0",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 12217,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-05T15:22:28Z",
+      "side": 1,
+      "message": "This is project1+master, project2+master, project1+project2+red-queue, and project1+project2+gold-queue right? Just making sure I understand the eventual layout.",
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "71e4203a_70e2fc12",
+        "filename": "zuul/model.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 914,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-05T15:22:28Z",
+      "side": 1,
+      "message": "Is this saying `There will only be one per project, so use the project to find the queue manager`? Basically once we know the project we can find the queue manager in this case.",
+      "range": {
+        "startLine": 913,
+        "startChar": 26,
+        "endLine": 914,
+        "endChar": 60
+      },
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3355c0cf_2ff4cef9",
+        "filename": "zuul/model.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 915,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-05T15:22:28Z",
+      "side": 1,
+      "message": "I almost wonder if we should be using named tuples with the project_branches set. Just to make code like this more clear. I think named tuples are hashable so should work in sets.",
+      "range": {
+        "startLine": 915,
+        "startChar": 51,
+        "endLine": 915,
+        "endChar": 73
+      },
+      "revId": "7d65da0ae75c356efce5beee1201da56ea6f9ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
