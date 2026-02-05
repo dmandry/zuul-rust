@@ -44,6 +44,11 @@ class FakePoll:
         self._fail = self._INIT_FAIL
 
     def register(self, fd, bitmap):
+        if isinstance(fd, FakeSocket):
+            # This isn't perfect, but it's enough to avoid collisions
+            # in tests.
+            fd.fd = len(self.fds) + 1
+            fd = fd.fd
         self.fds.append(fd)
 
     def unregister(self, fd):
@@ -54,8 +59,6 @@ class FakePoll:
         if self._fail:
             return []
         fds = self.fds[:]
-        self.fds = [f for f in fds if not isinstance(f, FakeSocket)]
-        fds = [f.fileno() if hasattr(f, 'fileno') else f for f in fds]
         return [(f, 0) for f in fds]
 
 
