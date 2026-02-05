@@ -2145,6 +2145,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         # * Deleting the request
         self.waitUntilSettled()
         self.startWebServer()
+        ctx = self.createZKContext(None)
 
         request = self.requestNodes(['debian-normal'])
         self.assertEqual(request.state,
@@ -2170,22 +2171,12 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         self.assertEqual(201, resp.status_code)
         self.waitUntilSettled()
 
-        node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
-        self.assertEqual(node.State.HOLD, node.state)
-
-        resp = self.put_url(
-            f"api/tenant/tenant-one/nodes/{nodes[0]['uuid']}",
-            headers={'Authorization': 'Bearer %s' % token},
-            json={'state': 'used'},
-        )
-        self.assertEqual(201, resp.status_code)
-        self.waitUntilSettled()
-
+        # Now work on deleting the request so that it can move to the
+        # hold state.
         requests = self.get_url(
             'api/tenant/tenant-one/nodeset-requests').json()
         self.assertEqual(len(requests), 1)
         self.assertEqual(request.uuid, requests[0]['uuid'])
-
         # Test that unauthenticated access fails
         resp = self.delete_url(
             f"api/tenant/tenant-one/nodeset-requests/{requests[0]['uuid']}",
@@ -2199,12 +2190,26 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         self.assertEqual(204, resp.status_code)
         self.waitUntilSettled()
 
-        ctx = self.createZKContext(None)
         for _ in iterate_timeout(10, "request to be deleted"):
             try:
                 request.refresh(ctx)
             except NoNodeError:
                 break
+
+        node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
+        for _ in iterate_timeout(10, "node to hold"):
+            node.refresh(ctx)
+            if node.state == node.State.HOLD:
+                break
+
+        resp = self.put_url(
+            f"api/tenant/tenant-one/nodes/{nodes[0]['uuid']}",
+            headers={'Authorization': 'Bearer %s' % token},
+            json={'state': 'used'},
+        )
+        self.assertEqual(201, resp.status_code)
+        self.waitUntilSettled()
+
         for _ in iterate_timeout(10, "node to be deleted"):
             try:
                 node.refresh(ctx)
