@@ -16,6 +16,24 @@
       "message": "Shouldn\u0027t this comment go above line 95? I think we can figure this out based on context so its probably fine as is, but the backwards compat code is above not below.",
       "revId": "96ccade9444b802eece4d9498625a09ea7b9aa73",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "dcbb8fa4_8e92f956",
+        "filename": "zuul/executor/common.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 99,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T17:14:22Z",
+      "side": 1,
+      "message": "Good point, let\u0027s fix.",
+      "parentUuid": "3e9119b9_f731f50d",
+      "revId": "96ccade9444b802eece4d9498625a09ea7b9aa73",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
