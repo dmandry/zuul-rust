@@ -4100,3 +4100,129 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                     sub1.request_id == request1.uuid and
                     sub2.request_id == request2.uuid):
                     break
+
+    @simple_layout('layouts/nodepool-reuse.yaml', enable_nodepool=True)
+    def test_reuse_deactivate(self):
+        # Deactivate a reusable node and make sure it's deleted.
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+        node = nodes[0]
+        # Get a copy so we're not modifying the launcher's
+        node = model.ProviderNode.fromZK(ctx, path=node.getPath())
+
+        client = LauncherClient(self.zk_client, None)
+        client.setNextNodeState(node, node.State.OUTDATED,
+                                cache=self.launcher.api.nodes_cache)
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                request.delete(ctx)
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "node to be deleted"):
+            try:
+                node.refresh(ctx)
+            except NoNodeError:
+                break
+
+    @simple_layout('layouts/nodepool-subnodes-reuse.yaml',
+                   enable_nodepool=True)
+    def test_subnodes_reuse_deactivate_subnode(self):
+        # Deactivate a reusable subnode and make sure it's deleted
+        # (but not the main node).
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(3, len(nodes))
+        # Get a list with the main node first and the subnode last
+        nodes.sort(key=lambda x: len(x.subnodes))
+        nodes.reverse()
+        main = nodes[0]
+        sub1 = nodes[1]
+        sub2 = nodes[2]
+        # Get a copy so we're not modifying the launcher's
+        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
+        sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
+        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
+        node = sub2
+        other = sub1
+
+        client = LauncherClient(self.zk_client, None)
+        client.setNextNodeState(node, node.State.OUTDATED,
+                                cache=self.launcher.api.nodes_cache)
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                request.delete(ctx)
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "node to be deleted"):
+            try:
+                node.refresh(ctx)
+            except NoNodeError:
+                break
+
+        # Main and other subnode should still exist
+        main.refresh(ctx)
+        other.refresh(ctx)
+
+    @simple_layout('layouts/nodepool-subnodes-reuse.yaml',
+                   enable_nodepool=True)
+    def test_subnodes_reuse_deactivate_main(self):
+        # Deactivate the main node with subnodes and make sure they
+        # are all deleted.
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(3, len(nodes))
+        # Get a list with the main node first and the subnode last
+        nodes.sort(key=lambda x: len(x.subnodes))
+        nodes.reverse()
+        main = nodes[0]
+        sub1 = nodes[1]
+        sub2 = nodes[2]
+        # Get a copy so we're not modifying the launcher's
+        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
+        sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
+        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
+        node = sub2
+        other = sub1
+
+        client = LauncherClient(self.zk_client, None)
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                request.delete(ctx)
+                node.setState(node.State.USED)
+
+            client.setNextNodeState(main, main.State.OUTDATED,
+                                    cache=self.launcher.api.nodes_cache)
+
+            for _ in iterate_timeout(10, "other subnode to be deleted"):
+                try:
+                    other.refresh(ctx)
+                except NoNodeError:
+                    break
+
+            # Main and in-use node should still exist
+            main.refresh(ctx)
+            node.refresh(ctx)
+
+        for _ in iterate_timeout(10, "used subnode to be deleted"):
+            try:
+                node.refresh(ctx)
+            except NoNodeError:
+                break
+        for _ in iterate_timeout(10, "main node to be deleted"):
+            try:
+                main.refresh(ctx)
+            except NoNodeError:
+                break

@@ -663,7 +663,7 @@ class LockableZKObject(ZKObject):
 
     def delete(self, context):
         super().delete(context)
-        self._set(_deleted=True)
+        self._set(_deleted=True, _zstat=None)
         # Most lockable zkobjects are deleted while holding the lock,
         # so we let releaseLock delete the lock path.  But for those
         # that aren't, we should delete the lock path now.

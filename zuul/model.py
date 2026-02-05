@@ -2879,6 +2879,8 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
         snapshot._set(node=self)
         assignment = ProviderNodeAssignment()
         assignment._set(node=self)
+        lifecycle = ProviderNodeLifecycle()
+        lifecycle._set(node=self)
         self._set(
             uuid=uuid4().hex,
             zuul_event_id=None,
@@ -2938,6 +2940,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             nodescan_request=None,
             snapshot=snapshot,
             assignment=assignment,
+            lifecycle=lifecycle,
             # Attributes set by the launcher
             _lscores=None,
         )
@@ -3011,6 +3014,28 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             pass
         self.assignment._clear()
 
+    @property
+    def next_state(self):
+        if self.lifecycle.getZKVersion() is not None:
+            return self.lifecycle.next_state
+        return None
+
+    def setNextState(self, context, next_state):
+        if self.lifecycle.getZKVersion() is not None:
+            self.lifecycle.updateAttributes(
+                context,
+                next_state=next_state)
+        else:
+            self.lifecycle._set(next_state=next_state)
+            self.lifecycle.internalCreate(context)
+
+    def clearNextState(self, context):
+        try:
+            self.lifecycle.delete(context)
+        except NoNodeError:
+            pass
+        self.lifecycle._clear()
+
     def deserialize(self, raw, context, extra=None):
         # Update our UUID first so that our subnode paths are accurate
         data = super().deserialize(raw, context)
@@ -3019,6 +3044,10 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             self.assignment.refresh(context)
         except NoNodeError:
             self.assignment._clear()
+        try:
+            self.lifecycle.refresh(context)
+        except NoNodeError:
+            self.lifecycle._clear()
         resources = data.get('quota') or {}
         data['quota'] = QuotaInformation(**resources)
         # TODO: remove this backwards compat code at any time
@@ -3241,6 +3270,48 @@ class ProviderNodeAssignment(zkobject.ZKObject):
             request_id=None,
             min_request_version=None,
             tenant_name=None,
+        )
+
+
+class ProviderNodeLifecycle(zkobject.ZKObject):
+    # We don't want to re-create the node in case it was deleted
+    makepath = False
+    log_error_missing = False
+    LIFECYCLE_PATH = 'lifecycle'
+
+    # This object allows us to request that a node be deleted or
+    # otherwise removed from service without locking it.  That allows
+    # us to request that an in-use reusable node be deleted at the
+    # completion of its service, main nodes to be deleted when all
+    # subnodes are finished, and static nodes to be kept out of
+    # service.
+
+    # There is no locking for this since it is only ever set by user
+    # interaction, and any conflict resolution (either first or last
+    # wins) is acceptable.
+
+    def __init__(self):
+        super().__init__()
+        self._set(
+            next_state=None,
+            # Not serialized
+            node=None,
+        )
+
+    def getPath(self):
+        return f"{self.node.getPath()}/{self.LIFECYCLE_PATH}"
+
+    def serialize(self, context):
+        data = dict(
+            next_state=self.next_state,
+        )
+        return json.dumps(data, sort_keys=True).encode("utf-8")
+
+    def _clear(self):
+        # Internal method used to reset values on deletion.
+        self._set(
+            next_state=None,
+            _zstat=None,
         )
 
 

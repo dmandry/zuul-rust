@@ -373,3 +373,20 @@ class LauncherClient:
             )
         # Use default states
         return dict()
+
+    def setNextNodeState(self, node, next_state, cache=None):
+        if cache:
+            getNode = cache.getItem
+        else:
+            getNode = self.getProviderNode
+
+        if node.subnodes:
+            nodes = [getNode(n) for n in node.subnodes]
+        else:
+            nodes = [node]
+
+        with self.createZKContext(None, self.log) as ctx:
+            for n in nodes:
+                n.setNextState(ctx, next_state)
+
+        return nodes

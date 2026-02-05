@@ -24,6 +24,7 @@ from zuul.model import (
     NodesetRequest,
     ProviderNode,
     ProviderNodeAssignment,
+    ProviderNodeLifecycle,
     ProviderNodeSnapshot,
     QuotaInformation,
 )
@@ -297,6 +298,7 @@ class NodeCache(LockableZKObjectCache):
         # (<self.items_path>, <uuid>, snapshot,)
         # (<self.items_path>, <uuid>, snapshot-lock,)
         # (<self.items_path>, <uuid>, assignment,)
+        # (<self.items_path>, <uuid>, lifecycle,)
         if len(parts) >= 3:
             # Ignore anything related to snapshots
             if (parts[0] == ProviderNode.NODES_PATH and
@@ -316,6 +318,20 @@ class NodeCache(LockableZKObjectCache):
                 else:
                     node.assignment._clear()
                 self._handleLabelCount(key, node)
+                return self.STOP_OBJECT_UPDATE
+            if (parts[0] == ProviderNode.NODES_PATH and
+                parts[2] == ProviderNodeLifecycle.LIFECYCLE_PATH):
+                key = (parts[1],)
+                node = self._cached_objects.get(key)
+                if not node:
+                    return
+                if exists:
+                    node.lifecycle._updateFromRaw(
+                        self._zk_context, data, stat, None)
+                else:
+                    node.lifecycle._clear()
+                if self.updated_event:
+                    self.updated_event()
                 return self.STOP_OBJECT_UPDATE
         return super().preCacheHook(event, exists, data, stat)
 
