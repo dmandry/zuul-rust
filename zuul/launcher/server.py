@@ -1963,6 +1963,21 @@ class Launcher:
                     self.api.requests_cache.waitForSync()
                     request = self.api.getNodesetRequest(node.request_id)
 
+        # TODO: use these below
+        # missing_request = node.request_id and not request
+        # no_request = not node.request_id
+        active_request = node.request_id and request
+
+        # A user has requested to move the node to a new state
+        if node.next_state and not active_request:
+            state = node.next_state
+            log.debug("Marking node %s as %s", node, state)
+            with self.createZKContext(node._lock, self.log) as ctx:
+                with node.activeContext(ctx):
+                    node.setState(state)
+                node.unassign(ctx)
+                node.clearNextState(ctx)
+
         # Mark outdated nodes w/o a request for cleanup when ...
         if not request and (
                 # ... it expired
@@ -1986,8 +2001,7 @@ class Launcher:
                 node.unassign(ctx)
 
         # Recycle a node if the label allows reuse
-        elif (node.request_id and not request
-                and node.state == node.State.USED):
+        elif node.state == node.State.USED:
             if provider := self._getProviderForNode(node):
                 if label := provider.labels.get(node.label):
                     if self._canReuseNode(provider, node, label):
@@ -2030,7 +2044,10 @@ class Launcher:
                     log.exception("Error in node cleanup")
                     self.wake_event.set()
 
-        if node.state == model.ProviderNode.State.READY:
+        if node.state in (
+                model.ProviderNode.State.READY,
+                model.ProviderNode.State.HOLD,
+        ):
             with self.createZKContext(None, self.log) as ctx:
                 node.releaseLock(ctx)
 
@@ -2060,13 +2077,20 @@ class Launcher:
         if node.state in node.LAUNCHER_STATES:
             return True
 
+        request = self.api.getNodesetRequest(node.request_id)
+        active_request = node.request_id and request
+
+        if node.next_state and not active_request:
+            # An unlocked node that should be moved to a new state
+            return True
+
         if node.state == node.State.HOLD:
             if node.hasHoldExpired():
                 return True
             return False
 
         if node.request_id:
-            request_exists = bool(self.api.getNodesetRequest(node.request_id))
+            request_exists = bool(request)
             return not request_exists
         elif node.hasExpired():
             return True
@@ -2256,6 +2280,7 @@ class Launcher:
                     if main_node and main_node.state == main_node.State.FAILED:
                         raise Exception("Main node is failed")
                     done = self._checkNodescanRequest(node, log)
+                    state = node.State.READY
                 except Exception:
                     state = node.State.FAILED
                     log.exception("Marking node %s as %s", node, state)
@@ -2273,7 +2298,6 @@ class Launcher:
                     self.wake_event.set()
                     return
 
-                state = node.State.READY
                 log.debug("Marking node %s as %s for reuse",
                           node, state)
                 node.unassign(ctx)
