@@ -96,7 +96,17 @@ class NodesPage extends React.Component {
   renderNodeState(node) {
     const style = getNodeStyle(node)
 
-    return <span style={{color:style.color}}>{node.state}</span>
+    // 2192 is right arrow
+    return (
+      <>
+        <span style={{color:style.color}}>{node.state}</span>
+        {node.next_state &&
+         (<>
+            \u2192 <span style={{color:style.color}}>{node.next_state}</span>
+          </>)
+        }
+      </>
+    )
   }
 
   render () {
@@ -171,6 +181,10 @@ class NodesPage extends React.Component {
                   {
                     title: 'Set to HOLD',
                     onClick: () => this.handleStateChange(node.uuid, 'hold')
+                  },
+                  {
+                    title: 'Set to OUTDATED',
+                    onClick: () => this.handleStateChange(node.uuid, 'outdated')
                   },
                   {
                     title: 'Set to USED',

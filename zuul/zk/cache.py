@@ -378,7 +378,14 @@ class ZuulTreeCache(abc.ABC):
             if obj:
                 # Don't update to older data
                 # Don't update a locked object
-                if (stat.mzxid > obj._zstat.mzxid and
+                if obj_zstat := getattr(obj, '_zstat'):
+                    old_mzxid = obj_zstat.mzxid
+                else:
+                    old_mzxid = -1
+                # TODO: we may need a thread lock here to make sure
+                # that the next few lines don't race with a
+                # lock+save+unlock series of calls in another thread.
+                if (stat.mzxid > old_mzxid and
                     getattr(obj, 'lock', None) is None):
                     self.updateFromRaw(obj, key, data, stat)
             else:

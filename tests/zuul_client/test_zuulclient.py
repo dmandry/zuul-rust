@@ -886,8 +886,10 @@ class TestZuulClientNodesets(LauncherBaseTestCase, BaseTestWeb):
         self.assertEqual(p.returncode, 0, output)
         self.waitUntilSettled()
 
-        node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
-        self.assertEqual(node.State.HOLD, node.state)
+        for _ in iterate_timeout(10, "node to change"):
+            node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
+            if node.next_state == node.State.HOLD:
+                break
 
         token = self._getToken()
         p = subprocess.Popen(

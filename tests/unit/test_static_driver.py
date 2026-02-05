@@ -13,6 +13,7 @@
 # under the License.
 
 from collections import Counter
+import time
 from unittest import mock
 
 import testtools
@@ -488,3 +489,187 @@ class TestStaticDriver(ZuulTestCase):
     @simple_layout('layouts/static/nodepool.yaml', enable_nodepool=True)
     def test_static_node_aliases(self):
         self._test_static_node_lifecycle('special-hardware')
+
+    @simple_layout('layouts/static/nodepool.yaml', enable_nodepool=True)
+    def test_static_node_reuse_deactivate(self):
+        # Deactivate a reusable node and make sure it's deleted.
+        self._waitForRegistration()
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+        node = nodes[0]
+        # Get a copy so we're not modifying the launcher's
+        node = model.ProviderNode.fromZK(ctx, path=node.getPath())
+
+        client = LauncherClient(self.zk_client, None)
+        client.setNextNodeState(node, node.State.HOLD,
+                                cache=self.launcher.api.nodes_cache)
+
+        with mock.patch.object(
+            zuul.driver.static.staticendpoint, 'DELETE_RECYCLE_TIME', 0
+        ):
+
+            with node.locked(ctx):
+                with node.activeContext(ctx):
+                    request.delete(ctx)
+                    node.setState(node.State.USED)
+
+            for _ in iterate_timeout(10, "node to be deactivated"):
+                node.refresh(ctx)
+                if (node.state == node.State.HOLD and
+                    node.lifecycle.getZKVersion() is None):
+                    break
+
+            request = self.requestNodes(['debian-normal'], timeout=None)
+            # No nodes available for now
+            time.sleep(5)
+            request.refresh(ctx)
+            self.assertEqual(request.State.REQUESTED, request.state)
+
+            # Re-activate the node and wait for it to be assigned
+            client.setNextNodeState(node, node.State.USED,
+                                    cache=self.launcher.api.nodes_cache)
+
+            for _ in iterate_timeout(10, "request to be fulfilled"):
+                request.refresh(ctx)
+                if request.state == request.State.FULFILLED:
+                    break
+
+    @simple_layout('layouts/static/subnodes.yaml', enable_nodepool=True)
+    def test_static_subnodes_deactivate_subnode(self):
+        self._waitForRegistration()
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(3, len(nodes))
+        # Get a list with the main node first and the subnodes last
+        nodes.sort(key=lambda x: len(x.subnodes))
+        nodes.reverse()
+        main = nodes[0]
+        sub1 = nodes[1]
+        sub2 = nodes[2]
+        # Get a copy so we're not modifying the launcher's
+        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
+        sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
+        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
+
+        node = sub2
+        other = sub1
+
+        client = LauncherClient(self.zk_client, None)
+        client.setNextNodeState(node, node.State.HOLD,
+                                cache=self.launcher.api.nodes_cache)
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                request.delete(ctx)
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "node to be deactivated"):
+            node.refresh(ctx)
+            if (node.state == node.State.HOLD and
+                node.lifecycle.getZKVersion() is None):
+                break
+
+        # Main and other subnode should still exist
+        main.refresh(ctx)
+        other.refresh(ctx)
+        self.assertEqual(node.State.SLOT_HOST, main.state)
+        self.assertEqual(node.State.READY, other.state)
+
+        with mock.patch.object(
+            zuul.driver.static.staticendpoint, 'DELETE_RECYCLE_TIME', 0
+        ):
+            # Re-activate the node
+            client.setNextNodeState(node, node.State.USED,
+                                    cache=self.launcher.api.nodes_cache)
+
+            for _ in iterate_timeout(10, "node to be reactivated"):
+                node.refresh(ctx)
+                if node.state == node.State.READY:
+                    break
+
+    @simple_layout('layouts/static/subnodes.yaml', enable_nodepool=True)
+    def test_static_subnodes_deactivate_main(self):
+        self._waitForRegistration()
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(3, len(nodes))
+        # Get a list with the main node first and the subnodes last
+        nodes.sort(key=lambda x: len(x.subnodes))
+        nodes.reverse()
+        main = nodes[0]
+        sub1 = nodes[1]
+        sub2 = nodes[2]
+        # Get a copy so we're not modifying the launcher's
+        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
+        sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
+        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
+
+        node = sub2
+        other = sub1
+
+        client = LauncherClient(self.zk_client, None)
+        client.setNextNodeState(main, main.State.HOLD,
+                                cache=self.launcher.api.nodes_cache)
+
+        for _ in iterate_timeout(10, "unused node to be deactivated"):
+            other.refresh(ctx)
+            if other.state == other.State.HOLD:
+                break
+
+        # Main and other subnode should still exist
+        main.refresh(ctx)
+        node.refresh(ctx)
+        other.refresh(ctx)
+        self.assertEqual(node.State.SLOT_HOST, main.state)
+        self.assertEqual(node.State.READY, node.state)
+        self.assertEqual(node.State.HOLD, other.state)
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                request.delete(ctx)
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "used node to be deactivated"):
+            node.refresh(ctx)
+            if node.state == node.State.HOLD:
+                break
+
+        # Main and other subnode should still exist
+        main.refresh(ctx)
+        node.refresh(ctx)
+        other.refresh(ctx)
+        self.assertEqual(node.State.SLOT_HOST, main.state)
+        self.assertEqual(node.State.HOLD, node.state)
+        self.assertEqual(node.State.HOLD, other.state)
+
+        with mock.patch.object(
+            zuul.driver.static.staticendpoint, 'DELETE_RECYCLE_TIME', 0
+        ):
+            # Re-activate the node
+            client.setNextNodeState(main, main.State.USED,
+                                    cache=self.launcher.api.nodes_cache)
+
+            for _ in iterate_timeout(10, "main to be reactivated"):
+                main.refresh(ctx)
+                if main.state == main.State.SLOT_HOST:
+                    break
+
+            for _ in iterate_timeout(10, "node to be reactivated"):
+                node.refresh(ctx)
+                if node.state == node.State.READY:
+                    break
+
+            for _ in iterate_timeout(10, "other to be reactivated"):
+                other.refresh(ctx)
+                if other.state == other.State.READY:
+                    break
