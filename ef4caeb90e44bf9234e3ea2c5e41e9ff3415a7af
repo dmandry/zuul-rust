@@ -16,6 +16,42 @@
       "message": "Small nit that just occurred to me. Since the command and shell tasks are both only writing to stdout not stderr we aren\u0027t really checking that stderr isn\u0027t included. We probably need to have content written to both streams to make these test cases fully effective.",
       "revId": "ef4caeb90e44bf9234e3ea2c5e41e9ff3415a7af",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "bd40da6f_0719b77d",
+        "filename": "tests/fixtures/config/remote-zuul-stream/git/org_project/playbooks/command.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 91,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T18:05:05Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "98e56d27_1a7afca3",
+      "revId": "ef4caeb90e44bf9234e3ea2c5e41e9ff3415a7af",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ce3389f3_ad37bcfe",
+        "filename": "tests/fixtures/config/remote-zuul-stream/git/org_project/playbooks/command.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 91,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-05T18:05:05Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "98e56d27_1a7afca3",
+      "revId": "ef4caeb90e44bf9234e3ea2c5e41e9ff3415a7af",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
