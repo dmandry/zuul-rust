@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "61ea0a9a_8dfd9b76",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 1794,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-07T20:11:22Z",
+      "side": 1,
+      "message": "These two should be removed as we\u0027re no longer checking them as an explicit permission.",
+      "range": {
+        "startLine": 1789,
+        "startChar": 4,
+        "endLine": 1794,
+        "endChar": 5
+      },
+      "revId": "df1243b28806e1453546d5ff557e5717cba34746",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ee2a69e3_d802d7ff",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 1867,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-07T20:11:22Z",
+      "side": 1,
+      "message": "See above.",
+      "range": {
+        "startLine": 1866,
+        "startChar": 8,
+        "endLine": 1867,
+        "endChar": 47
+      },
+      "revId": "df1243b28806e1453546d5ff557e5717cba34746",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
