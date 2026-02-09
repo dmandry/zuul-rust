@@ -46,8 +46,8 @@ import { autohold_delete } from '../../api'
 import { addNotification } from '../../actions/notifications'
 import { addAutoholdError } from '../../actions/adminActions'
 import { fetchAutoholds } from '../../actions/autoholds'
-
 import { IconProperty } from '../../MiscComponents'
+import { isAuthorized } from '../../Misc'
 
 function AutoholdTable(props) {
   const { autoholds, fetching, tenant, user, dispatch } = props
@@ -121,7 +121,7 @@ function AutoholdTable(props) {
   function createAutoholdRow(autohold) {
     const count = autohold.current_count + '/' + autohold.max_count
     const node_expiration = (autohold.node_expiration === 0) ? 'Indefinitely' : moment.duration(autohold.node_expiration, 'seconds').humanize()
-    const delete_button = (user.isAdmin && user.scope.indexOf(tenant.name) !== -1) ? renderAutoholdDeleteButton(autohold.id) : ''
+    const delete_button = isAuthorized(user, 'autohold') ? renderAutoholdDeleteButton(autohold.id) : ''
 
     return {
       cells: [

@@ -26,6 +26,7 @@ import {
 import PropTypes from 'prop-types'
 import { addNotification, addApiError } from '../../actions/notifications'
 import { buildImage } from '../../api'
+import { isAuthorized } from '../../Misc'
 
 function ProviderDetail(props) {
   const {image} = props
@@ -102,7 +103,7 @@ function ProviderDetail(props) {
         </DescriptionListGroup>
       </DescriptionList>
 
-      {(user.isAdmin && user.scope.indexOf(tenant.name) !== -1) &&
+      {isAuthorized(user, 'build-image') &&
        <Button onClick={() => {setShowBuildModal(true)}}>
          Build Image
        </Button>

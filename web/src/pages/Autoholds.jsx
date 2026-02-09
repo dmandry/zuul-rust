@@ -25,6 +25,7 @@ import {
 } from '@patternfly/react-icons'
 import AutoholdModal from '../containers/autohold/autoholdModal'
 import { IconProperty } from '../MiscComponents'
+import { isAuthorized } from '../Misc'
 
 
 class AutoholdsPage extends React.Component {
@@ -93,7 +94,7 @@ class AutoholdsPage extends React.Component {
 
     return (
       <>
-        {(user.isAdmin && user.scope.indexOf(tenant.name) !== -1) && (
+        {isAuthorized(user, 'autohold') && (
           <PageSection>
             <Flex flex={{ default: 'flex_1' }}>
               <FlexItem>

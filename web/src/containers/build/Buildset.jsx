@@ -43,7 +43,11 @@ import momentDurationSetup from 'moment-duration-format'
 import moment from 'moment'
 import moment_tz from 'moment-timezone'
 
-import { buildExternalLink, renderRefInfo } from '../../Misc'
+import {
+  buildExternalLink,
+  isAuthorized,
+  renderRefInfo,
+} from '../../Misc'
 import { IconProperty } from '../../MiscComponents'
 import { BuildResultBadge, BuildResultWithIcon } from './Misc'
 import { enqueue, enqueue_ref } from '../../api'
@@ -383,7 +387,7 @@ function Buildset({ buildset, timezone, tenant, user, preferences }) {
                   </>
                 }
               />
-              {(user.isAdmin && user.scope.indexOf(tenant.name) !== -1) &&
+              {isAuthorized(user, 'enqueue') &&
                <>
                  {renderEnqueueButton()}
                </>}
