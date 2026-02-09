@@ -40,6 +40,7 @@ import {
 import {
   formatProviderName,
   getNodeStyle,
+  isAuthorized,
 } from '../Misc'
 import {
   IconProperty,
@@ -165,7 +166,7 @@ class NodesPage extends React.Component {
           {title: formatProviderName(node.provider), props: {column: 'Provider'}},
           {title: node.comment, props: {column: 'Comment'}},
         ]
-      if (node.uuid && this.props.user.isAdmin && this.props.user.scope.indexOf(this.props.tenant.name) !== -1) {
+      if (node.uuid && isAuthorized(this.props.user, 'modify-node')) {
         r.push({title:
                 <ActionsColumn items={[
                   {

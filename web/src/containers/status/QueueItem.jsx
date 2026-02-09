@@ -55,6 +55,7 @@ import {
   JobLink,
   JobResultOrStatus,
 } from './MiscComponents'
+import { isAuthorized } from '../../Misc'
 
 import QueueItemProgress from './QueueItemProgress'
 
@@ -445,28 +446,36 @@ function QueueItem({ item, pipeline, tenant, user, jobsExpanded }) {
 
   const times = calculateQueueItemTimes(item)
 
-  const adminActions = [
-    <DropdownItem
-      key="dequeue"
-      icon={<BanIcon style={{
-        color: 'var(--pf-global--danger-color--100)',
-      }} />}
-      description="Stop all jobs for this change"
-      onClick={() => showDequeueModal()}
-    >
-      Dequeue
-    </DropdownItem>,
-    <DropdownItem
-      key="promote"
-      icon={<AngleDoubleUpIcon style={{
-        color: 'var(--pf-global--default-color--200)',
-      }} />}
-      description="Promote this change to the top of the queue"
-      onClick={() => showPromoteModal()}
-    >
-      Promote
-    </DropdownItem>
-  ]
+  const adminActions = []
+
+  if (isAuthorized(user, 'dequeue')) {
+    adminActions.push(
+      <DropdownItem
+        key="dequeue"
+        icon={<BanIcon style={{
+          color: 'var(--pf-global--danger-color--100)',
+        }} />}
+        description="Stop all jobs for this change"
+        onClick={() => showDequeueModal()}
+      >
+        Dequeue
+      </DropdownItem>
+    )
+  }
+  if (isAuthorized(user, 'promote')) {
+    adminActions.push(
+      <DropdownItem
+        key="promote"
+        icon={<AngleDoubleUpIcon style={{
+          color: 'var(--pf-global--default-color--200)',
+        }} />}
+        description="Promote this change to the top of the queue"
+        onClick={() => showPromoteModal()}
+      >
+        Promote
+      </DropdownItem>
+    )
+  }
 
   return (
     <>
@@ -475,7 +484,7 @@ function QueueItem({ item, pipeline, tenant, user, jobsExpanded }) {
           {item.live === true ?
             <CardActions>
               {pipeline && <FilterDropdown item={item} pipeline={pipeline} />}
-              {pipeline && user.isAdmin && user.scope.indexOf(tenant.name) !== -1 ?
+              {pipeline && (adminActions.length > 0) ?
                 <Dropdown
                   className="zuul-admin-dropdown"
                   onSelect={onSelect}
