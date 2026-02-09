@@ -2039,12 +2039,14 @@ class ZuulWebAPI(object):
 
         # Modern RBAC based authorizations
         if role_mappings:
+            permissions = {}
             if not tenant:
                 scope = '<root>'
             read = False
             if anonymous_read_access:
                 read = True
             ret = {'zuul': {'read': read,
+                            'permissions': permissions,
                             'scope': [scope, ]}}
             for rule_name, roles in role_mappings.items():
                 rule = abide.authz_rules.get(rule_name)
@@ -2054,7 +2056,10 @@ class ZuulWebAPI(object):
                 matched = rule(auth.claims, tenant)
                 if matched:
                     for role_name in roles:
-                        ret['zuul'][role_name] = True
+                        role = abide.authz_roles.get(role_name)
+                        for perm in role.permissions.keys():
+                            if perm:
+                                permissions[perm] = True
             return ret
         # Backward compatibility for the old authorization rule based
         # auth system
