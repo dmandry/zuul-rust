@@ -67,6 +67,7 @@ import {
 import { EmptyBox } from '../containers/Errors'
 import { countPipelineItems } from '../containers/status/Misc'
 import { useDocumentVisibility, useInterval } from '../Hooks'
+import { isAuthorized } from '../Misc'
 
 function PipelineGallery({ pipelines, tenant, showAllPipelines, expandAll, isLoading, filters, onClearFilters, sortKey }) {
   // Filter out empty pipelines if necessary
@@ -380,8 +381,7 @@ function PipelineOverviewPageComponent() {
           <LevelItem>
             <Toolbar>
               <ToolbarContent style={{paddingRight: '0'}}>
-
-                {(user.isAdmin && user.scope.indexOf(tenant.name) !== -1) && (
+                {isAuthorized(user, 'set-tenant-state') && (
                   <ToolbarItem>
                     <Button onClick={() => {setShowPauseModal(true)}}>
                       Manage Events

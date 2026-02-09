@@ -38,6 +38,7 @@ import { fetchImages } from '../../actions/images'
 import { fetchProviders } from '../../actions/providers'
 import { addNotification, addApiError } from '../../actions/notifications'
 import { deleteImageBuildArtifact } from '../../api'
+import { isAuthorized } from '../../Misc'
 
 const STATE_STYLES = {
   ready: {
@@ -190,8 +191,7 @@ function ImageBuildTable(props) {
   const actionResolver = (rowData) => {
     if (rowData.parent === undefined &&
         rowData.canDelete &&
-        user.isAdmin &&
-        user.scope.indexOf(tenant.name) !== -1) {
+        isAuthorized(user, 'delete-image-build-artifact')) {
       return [
         {
           title: 'Delete build',

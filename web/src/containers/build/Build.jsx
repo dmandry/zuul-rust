@@ -38,7 +38,11 @@ import _ from 'lodash'
 import 'moment-duration-format'
 
 import { BuildResultBadge, BuildResultWithIcon } from './Misc'
-import { buildExternalLink, renderRefInfo } from '../../Misc'
+import {
+  buildExternalLink,
+  isAuthorized,
+  renderRefInfo,
+} from '../../Misc'
 import { ExternalLink, IconProperty } from '../../MiscComponents'
 
 import AutoholdModal from '../autohold/autoholdModal'
@@ -285,7 +289,7 @@ function Build({ build, tenant, timezone, user }) {
                   )
                 }
               />
-              {(user.isAdmin && user.scope.indexOf(tenant.name) !== -1) && renderAutoholdButton()}
+              {isAuthorized(user, 'autohold') && renderAutoholdButton()}
             </List>
           </FlexItem>
         </Flex>

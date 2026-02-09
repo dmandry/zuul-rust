@@ -56,6 +56,7 @@ export const userLoggedOut = () => (dispatch) => {
 const fetchUserACLSuccess = (json) => ({
   type: USER_ACL_SUCCESS,
   isAdmin: json.zuul.admin,
+  permissions: json.zuul.permissions,
   scope: json.zuul.scope,
 })
 
