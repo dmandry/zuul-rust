@@ -25,6 +25,8 @@ import {
   ButtonVariant,
   ClipboardCopy,
   ClipboardCopyVariant,
+  List,
+  ListItem,
   Modal,
   ModalVariant
 } from '@patternfly/react-core'
@@ -170,6 +172,7 @@ class AuthContainerComponent extends React.Component {
     const { isModalOpen, showZuulClientConfig } = this.state
     let config = this.ZuulClientConfig(tenant, user.data)
     let valid_until = moment_tz.unix(user.data.expires_at).tz(timezone).format('YYYY-MM-DD HH:mm:ss')
+    console.log("JEB", user.permissions)
     return (
       <React.Fragment>
         <Modal
@@ -192,10 +195,14 @@ class AuthContainerComponent extends React.Component {
         >
           <div>
             <p key="user">Name: <strong>{user.data.profile.name}</strong></p>
-            <p key="preferred_username">Logged in as: <strong>{user.data.profile.preferred_username}</strong>&nbsp;
-              {(user.isAdmin && user.scope.indexOf(tenant.name) !== -1) && (
-                <HatWizardIcon title='This user can perform admin tasks' />
-              )}</p>
+            <p key="preferred_username">Logged in as: <strong>{user.data.profile.preferred_username}</strong></p>
+            <p>Permissions:</p>
+            <List>
+              {
+                Object.entries(user.permissions).map((perm, value) =>
+                  <ListItem>{perm}</ListItem>)
+              }
+            </List>
             <Accordion asDefinitionList>
               <AccordionItem>
                 <AccordionToggle

@@ -1911,7 +1911,7 @@ class ZuulWebAPI(object):
 
         # Determine basic read access
         access = False
-        if not access_rules and not role_mappings:
+        if not access_rules and not role_mappings and anonymous_read_access:
             access = True
         elif role_mappings and anonymous_read_access:
             access = True
