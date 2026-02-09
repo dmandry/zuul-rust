@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "297de367_df6a02bf",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2037,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-09T23:35:53Z",
+      "side": 1,
+      "message": "`auth.admin` actually means RW access to the specific permission rather than global admin when using rbac. So I don\u0027t think we should set it this way here it isn\u0027t fine grained enough (it is in the non rbac cases we handle because its all or nothing there). But we allow you to configure admin as a built in rbac role so I think it may show up proeprly in your permissions setting on line 2068?",
+      "revId": "1c73e8c8240935e3b0c2966e861a22b2c20002f1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5e870dca_b6336b20",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2054,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-09T23:35:53Z",
+      "side": 1,
+      "message": "I think we can drop this entry entirely to avoid confusing `{read: False permissions {read: True}}` type entries.",
+      "range": {
+        "startLine": 2054,
+        "startChar": 28,
+        "endLine": 2054,
+        "endChar": 41
+      },
+      "revId": "1c73e8c8240935e3b0c2966e861a22b2c20002f1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
