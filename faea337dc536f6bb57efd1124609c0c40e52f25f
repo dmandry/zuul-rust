@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "eab159ec_fe53a5b3",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 8
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-09T16:04:27Z",
+      "side": 1,
+      "message": "recheck has setuptools\u0027 removal of pkg_resources broken container image builds (and other jobs)?",
+      "revId": "faea337dc536f6bb57efd1124609c0c40e52f25f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
