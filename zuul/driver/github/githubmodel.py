@@ -108,6 +108,7 @@ class GithubTriggerEvent(TriggerEvent):
         super(GithubTriggerEvent, self).__init__()
         self.title = None
         self.label = None
+        self.permission = None
         self.unlabel = None
         self.action = None
         self.delivery = None
@@ -122,6 +123,7 @@ class GithubTriggerEvent(TriggerEvent):
         d = super().toDict()
         d["title"] = self.title
         d["label"] = self.label
+        d["permission"] = self.permission
         d["unlabel"] = self.unlabel
         d["action"] = self.action
         d["delivery"] = self.delivery
@@ -137,6 +139,7 @@ class GithubTriggerEvent(TriggerEvent):
         super().updateFromDict(d)
         self.title = d["title"]
         self.label = d["label"]
+        self.permission = d["permission"]
         self.unlabel = d["unlabel"]
         self.action = d["action"]
         self.delivery = d["delivery"]
@@ -181,12 +184,18 @@ class GithubTriggerEvent(TriggerEvent):
 
 
 class GithubEventFilter(EventFilter):
+    _perm_mapping = {
+        'read': 0,
+        'write': 1,
+        'admin': 2,
+    }
+
     def __init__(self, connection_name, trigger, types=[],
                  branches=[], refs=[], comments=[], actions=[],
                  labels=[], unlabels=[], states=[], statuses=[],
-                 required_statuses=[], check_runs=[],
-                 ignore_deletes=True,
-                 require=None, reject=None, debug=None):
+                 required_statuses=[], check_runs=[], permission=None,
+                 ignore_deletes=True, require=None, reject=None,
+                 debug=None):
 
         EventFilter.__init__(self, connection_name, trigger, debug)
 
@@ -215,6 +224,7 @@ class GithubEventFilter(EventFilter):
         self.refs = refs
         self.comments = comments
         self.actions = actions
+        self.permission = permission
         self.labels = labels
         self.unlabels = unlabels
         self.states = states
@@ -239,6 +249,8 @@ class GithubEventFilter(EventFilter):
             ret += ' actions: %s' % ', '.join(self.actions)
         if self.check_runs:
             ret += ' check_runs: %s' % ','.join(self.check_runs)
+        if self.permission:
+            ret += ' permission: %s' % self.permission
         if self.labels:
             ret += ' labels: %s' % ', '.join(self.labels)
         if self.unlabels:
@@ -322,6 +334,14 @@ class GithubEventFilter(EventFilter):
             if not check_run_found:
                 return FalseWithReason("Check runs %s do not match %s" % (
                     self.check_runs, event.check_run))
+
+        if self.permission:
+            required_perm = self._perm_mapping[self.permission]
+            event_perm = self._perm_mapping[event.permission]
+            if event_perm < required_perm:
+                return FalseWithReason(
+                    "User with %s does not mach required permission %s" % (
+                        event.permission, self.permission))
 
         # labels are ORed
         if self.labels and event.label not in self.labels:
