@@ -79,6 +79,24 @@
       "message": "I think we returned \u0027*\u0027 in this case, based on old line 1916.",
       "revId": "df1243b28806e1453546d5ff557e5717cba34746",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c8a7aa2e_00c9ece8",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 2043,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-09T23:29:08Z",
+      "side": 1,
+      "message": "Hrm, this looks like you might be making an improvement, setting it to \u003croot\u003e to indicate this is explicitly scoped to the root level and has no bearing on tenant level.  That sounds like it might be a good idea.  If you can confirm the intent, I think I\u0027m on board with it.",
+      "parentUuid": "a1d7d5b8_b58733c7",
+      "revId": "df1243b28806e1453546d5ff557e5717cba34746",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
