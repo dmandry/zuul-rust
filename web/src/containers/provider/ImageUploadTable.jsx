@@ -39,6 +39,7 @@ import {
   retryImageUpload,
   validateImageUpload,
 } from '../../api'
+import { isAuthorized } from '../../Misc'
 
 const STATE_STYLES = {
   ready: {
@@ -147,34 +148,37 @@ function ImageUploadTable(props) {
   }
 
   const actionResolver = (rowData) => {
-    if (rowData.canModify &&
-        user.isAdmin &&
-        user.scope.indexOf(tenant.name) !== -1) {
-      return [
-        {
+    const actions = []
+    if (rowData.canModify) {
+      if (isAuthorized(user, 'delete-image-upload')) {
+        actions.push({
           title: 'Delete upload',
           onClick: () => {
             setPendingActionRow(rowData)
             setShowDeleteUploadModal(true)
           }
-        },
-        {
+        })
+      }
+      if (isAuthorized(user, 'validate-image-upload')) {
+        actions.push({
           title: 'Validate upload',
           onClick: () => {
             setPendingActionRow(rowData)
             setShowValidateUploadModal(true)
           }
-        },
-        {
+        })
+      }
+      if (isAuthorized(user, 'upload-image')) {
+        actions.push({
           title: 'Retry upload',
           onClick: () => {
             setPendingActionRow(rowData)
             setShowRetryUploadModal(true)
           }
-        },
-      ]
+        })
+      }
     }
-    return []
+    return actions
   }
 
   function renderDeleteUploadModal() {

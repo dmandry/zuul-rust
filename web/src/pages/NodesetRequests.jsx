@@ -42,6 +42,7 @@ import {
 import { Link } from 'react-router-dom'
 import {
   getNodeStyle,
+  isAuthorized,
 } from '../Misc'
 import {
   IconProperty,
@@ -223,7 +224,7 @@ class NodesetRequestsPage extends React.Component {
         {title: request.job_name, props: {column: 'Job'}},
       ]
 
-      if (this.props.user.isAdmin && this.props.user.scope.indexOf(this.props.tenant.name) !== -1) {
+      if (isAuthorized(this.props.user, 'modify-nodeset-request')) {
         r.push({title:
                 <ActionsColumn items={[
                   {
