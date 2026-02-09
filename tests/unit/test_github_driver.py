@@ -381,6 +381,21 @@ class TestGithubDriver(ZuulTestCase):
         self.assertEqual(2, len(self.history))
         self.assertEqual(['other label'], C.labels)
 
+    @simple_layout('layouts/labeling-permission-github.yaml', driver='github')
+    def test_labels_permission(self):
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
+        self.fake_github.emitEvent(A.addLabel('test'))
+        self.waitUntilSettled()
+        self.assertEqual(0, len(self.history))
+
+        A.removeLabel('test')
+        A.admins.append('ghuser')
+        self.fake_github.emitEvent(A.addLabel('test'))
+        self.waitUntilSettled()
+        self.assertEqual(1, len(self.history))
+        self.assertEqual('project-labels', self.history[0].name)
+        self.assertEqual(['tests passed'], A.labels)
+
     @simple_layout('layouts/reviews-github.yaml', driver='github')
     def test_reviews(self):
         A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')

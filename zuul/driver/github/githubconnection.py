@@ -457,6 +457,9 @@ class GithubEventProcessor(object):
                     self.log.debug("Refreshed change %s,%s",
                                    event.change_number, event.patch_number)
 
+                if event.account:
+                    event.permission = self.connection.getRepoPermission(
+                        project.name, event.account)
                 # If this event references a branch and we're excluding
                 # unprotected branches, we might need to check whether the
                 # branch is now protected.
