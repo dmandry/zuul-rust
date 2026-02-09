@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    The GitHub driver now supports the ability to restrict triggers to
+    actions perfomed by accounts with certain access levels.  See
+    :attr:`pipeline.trigger.<github source>.permission`.
