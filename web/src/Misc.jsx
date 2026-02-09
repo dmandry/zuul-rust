@@ -204,16 +204,28 @@ function useTimeMinute() {
   return time
 }
 
+function isAuthorized(user, permission) {
+  console.log(user.permissions, permission)
+  if (user.isAdmin) {
+    return true
+  }
+  if (user.permissions && user.permissions[permission]) {
+    return true
+  }
+  return false
+}
+
 export {
   buildExternalLink,
   buildExternalTableLink,
   describeRef,
-  formatTime,
   formatProviderName,
+  formatTime,
+  getNodeStyle,
+  isAuthorized,
   removeHash,
   renderRefInfo,
   resolveDarkMode,
   setDarkMode,
-  getNodeStyle,
   useTimeMinute,
 }
