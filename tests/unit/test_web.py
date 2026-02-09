@@ -4807,7 +4807,7 @@ class TestTenantScopedWebApiWithRBAC(BaseTestWeb):
                             headers={'Authorization': 'Bearer %s' % token})
         self.assertEqual(200, req.status_code)
         auths = req.json()['zuul']
-        self.assertEqual(auths['scope'], ['<root>'])
+        self.assertEqual(auths['scope'], ['*'])
         self.assertTrue(auths['read'])
 
         # Check tenant scoped authorizations

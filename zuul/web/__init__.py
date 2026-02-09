@@ -2030,11 +2030,20 @@ class ZuulWebAPI(object):
             anonymous_read_access = abide.api_root.anonymous_read_access
         scope = tenant_name
         override = auth.claims.get('zuul', {}).get('admin', [])
+        permissions = {}
+        if anonymous_read_access:
+            permissions['read'] = True
+        if auth.admin:
+            permissions['admin'] = True
+        # TODO: remove zuul.admin value once everything is only
+        # checking permissions.
         if override == '*':
             return {'zuul': {'admin': auth.admin,
+                             'permissions': permissions,
                              'scope': [scope]}, }
         elif isinstance(override, list) and tenant_name in override:
             return {'zuul': {'admin': auth.admin,
+                             'permissions': permissions,
                              'scope': [scope, ]}, }
 
         # Modern RBAC based authorizations
@@ -2042,9 +2051,8 @@ class ZuulWebAPI(object):
             if not tenant:
                 scope = '<root>'
             read = False
-            if anonymous_read_access:
-                read = True
             ret = {'zuul': {'read': read,
+                            'permissions': permissions,
                             'scope': [scope, ]}}
             for rule_name, roles in role_mappings.items():
                 rule = abide.authz_rules.get(rule_name)
@@ -2054,12 +2062,16 @@ class ZuulWebAPI(object):
                 matched = rule(auth.claims, tenant)
                 if matched:
                     for role_name in roles:
-                        ret['zuul'][role_name] = True
+                        role = abide.authz_roles.get(role_name)
+                        for perm in role.permissions.keys():
+                            if perm:
+                                permissions[perm] = True
             return ret
         # Backward compatibility for the old authorization rule based
         # auth system
         else:
             return {'zuul': {'admin': auth.admin,
+                             'permissions': permissions,
                              'scope': [scope, ]}, }
 
     @cherrypy.expose
