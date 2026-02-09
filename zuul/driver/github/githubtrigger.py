@@ -120,6 +120,7 @@ class GithubTrigger(BaseTrigger):
                 refs=refs,
                 comments=comments,
                 check_runs=to_list(trigger.get('check')),
+                permission=trigger.get('permission'),
                 labels=to_list(trigger.get('label')),
                 unlabels=to_list(trigger.get('unlabel')),
                 states=to_list(trigger.get('state')),
@@ -155,6 +156,7 @@ def getNewSchema():
     pull_request_base_schema = base_schema.extend({
         vs.Required('event'): 'pull_request',
         'branch': scalar_or_list(vs.Any(ZUUL_REGEX, str)),
+        'permission': vs.Any('read', 'write', 'admin'),
     })
 
     pull_request_default_schema = pull_request_base_schema.extend({
@@ -266,6 +268,7 @@ def getSchema():
         'comment': scalar_or_list(vs.Any(ZUUL_REGEX, str)),
         'label': scalar_or_list(str),
         'unlabel': scalar_or_list(str),
+        'permission': vs.Any('read', 'write', 'admin'),
         'state': scalar_or_list(str),
         'require-status': scalar_or_list(str),
         'require': githubsource.getRequireSchema(),

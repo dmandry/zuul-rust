@@ -457,6 +457,10 @@ class GithubEventProcessor(object):
                     self.log.debug("Refreshed change %s,%s",
                                    event.change_number, event.patch_number)
 
+                if self.connection.query_actor_permission:
+                    if account := getattr(event, 'account', None):
+                        event.permission = self.connection.getRepoPermission(
+                            project.name, account)
                 # If this event references a branch and we're excluding
                 # unprotected branches, we might need to check whether the
                 # branch is now protected.
@@ -1281,6 +1285,27 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
 
         self.graphql_client = GraphQLClient(
             '%s/graphql' % self._github_client_manager.api_base_url)
+        self.watched_event_filters_by_tenant = {}
+        self.watched_event_filters_lock = threading.Lock()
+        self.query_actor_permission = False
+
+    def setWatchedEventFilters(self, tenant_name, filters):
+        # TODO: This does not remove filters when tenants are deleted
+        self.log.debug("Setting watched event filters for %s to %s",
+                       tenant_name, filters)
+        with self.watched_event_filters_lock:
+            self.watched_event_filters_by_tenant[tenant_name] = filters
+            query_actor_permission = False
+            # Check filters across all tenants
+            for tenant_filters in \
+                self.watched_event_filters_by_tenant.values():
+                for event_filter in tenant_filters:
+                    if event_filter.permission:
+                        query_actor_permission = True
+                        break
+                if query_actor_permission:
+                    break
+            self.query_actor_permission = query_actor_permission
 
     def toDict(self):
         d = super().toDict()

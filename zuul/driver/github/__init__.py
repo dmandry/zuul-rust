@@ -25,6 +25,19 @@ class GithubDriver(Driver, ConnectionInterface, TriggerInterface,
                    SourceInterface, ReporterInterface):
     name = 'github'
 
+    def reconfigure(self, tenant):
+        connection_filter_map = {}
+        for manager in tenant.layout.pipeline_managers.values():
+            pipeline = manager.pipeline
+            for event_filter in pipeline.event_filters:
+                trigger = event_filter.trigger
+                if isinstance(trigger, githubtrigger.GithubTrigger):
+                    con = trigger.connection
+                    filters = connection_filter_map.setdefault(con, [])
+                    filters.append(event_filter)
+        for (con, filters) in connection_filter_map.items():
+            con.setWatchedEventFilters(tenant.name, filters)
+
     def getConnection(self, name, config):
         return githubconnection.GithubConnection(self, name, config)
 
