@@ -26,6 +26,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "146996e9_724f79a7",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 1844,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-09T22:52:19Z",
+      "side": 1,
+      "message": "Two things:\n1) I\u0027m sure we don\u0027t want to use underscores, we always use hyphens in zuul config files (except for ansible variables and pass-through config).\n2) Are we sure we want two different permissions here?  I think the more intuinitive thing is to allow both actions.",
+      "revId": "df1243b28806e1453546d5ff557e5717cba34746",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "ee2a69e3_d802d7ff",
         "filename": "zuul/configloader.py",
         "patchSetId": 15
