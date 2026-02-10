@@ -60,6 +60,7 @@ from zuul.driver.gerrit.gerriteventgcloudpubsub import (
 )
 from zuul.driver.git.gitwatcher import GitWatcher
 from zuul.lib import tracing
+from zuul.lib.dependson import find_dependency_headers
 from zuul.lib.logutil import get_annotated_logger
 from zuul.model import Ref, Tag, Branch, Project, FalseWithReason
 from zuul.zk.branch_cache import BranchCache, BranchFlag, BranchInfo
@@ -249,6 +250,12 @@ class GerritChangeData(object):
             if related:
                 self.parseRelatedHTTP(data, related)
 
+    def get_dependency_messages(self):
+        matches = find_dependency_headers(self.message)
+        for hashtag in self.hashtags:
+            matches.extend(find_dependency_headers(hashtag))
+        return matches
+
     def parseSSH(self, data):
         self.needed_by = []
         self.depends_on = None
@@ -256,6 +263,7 @@ class GerritChangeData(object):
         self.current_patchset = str(data['currentPatchSet']['number'])
         self.number = str(data['number'])
         self.id = data['id']
+        self.hashtags = data['hashtags']
 
         if 'dependsOn' in data:
             parts = data['dependsOn'][0]['ref'].split('/')
@@ -271,6 +279,7 @@ class GerritChangeData(object):
         self.current_patchset = str(rev['_number'])
         self.number = str(data['_number'])
         self.id = data['change_id']
+        self.hashtags = data['hashtags']
 
     def parseRelatedHTTP(self, data, related):
         self.needed_by = []

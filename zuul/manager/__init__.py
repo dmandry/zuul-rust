@@ -1145,7 +1145,7 @@ class PipelineManager(metaclass=ABCMeta):
             log.debug("  Updating commit dependencies for %s", change)
             dependencies = []
             seen = set()
-            for match in find_dependency_headers(change.message):
+            for match in change.get_dependency_messages():
                 log.debug("  Found Depends-On header: %s", match)
                 if match in seen:
                     continue
