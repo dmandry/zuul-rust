@@ -59,6 +59,7 @@ from zuul.lib import tracing
 from zuul.lib import yamlutil as yaml
 from zuul.lib.capabilities import capabilities_registry
 from zuul.lib.config import get_default
+from zuul.lib.dependson import find_dependency_headers
 from zuul.lib.jsonutil import json_dumps
 from zuul.lib.logutil import get_annotated_logger
 from zuul.lib.result_data import get_artifacts_from_result_data
@@ -8508,6 +8509,10 @@ class Change(Branch):
         # The sha of the base commit, e.g. the sha of the target branch
         # from which the feature branch is created.
         self.base_sha = None
+
+    def get_dependency_messages(self):
+        matches = find_dependency_headers(self.message)
+        return matches
 
     def deserialize(self, data):
         super().deserialize(data)

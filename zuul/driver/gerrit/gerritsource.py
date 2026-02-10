@@ -25,7 +25,6 @@ from zuul.driver.util import (
     scalar_or_list,
     ZUUL_REGEX,
 )
-from zuul.lib.dependson import find_dependency_headers
 from zuul.zk.change_cache import ChangeKey
 
 
@@ -140,7 +139,7 @@ class GerritSource(BaseSource):
         self.log.debug('%s possible depending changes found', len(results))
         seen = set()
         for result in results:
-            for match in find_dependency_headers(result.message):
+            for match in result.get_dependency_messages():
                 found = False
                 for uri in change.uris:
                     if uri in match:
@@ -158,6 +157,7 @@ class GerritSource(BaseSource):
                                        str(result.current_patchset))
                 change = self.connection._getChange(change_key)
                 changes.append(change)
+
         return changes
 
     def useDependenciesByTopic(self):
