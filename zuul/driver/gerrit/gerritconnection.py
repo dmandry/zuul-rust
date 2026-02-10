@@ -256,6 +256,7 @@ class GerritChangeData(object):
         self.current_patchset = str(data['currentPatchSet']['number'])
         self.number = str(data['number'])
         self.id = data['id']
+        self.hashtags = data.get('hashtags', [])
 
         if 'dependsOn' in data:
             parts = data['dependsOn'][0]['ref'].split('/')
@@ -271,6 +272,7 @@ class GerritChangeData(object):
         self.current_patchset = str(rev['_number'])
         self.number = str(data['_number'])
         self.id = data['change_id']
+        self.hashtags = data.get('hashtags', [])
 
     def parseRelatedHTTP(self, data, related):
         self.needed_by = []

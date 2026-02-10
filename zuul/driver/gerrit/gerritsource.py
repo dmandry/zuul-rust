@@ -20,12 +20,11 @@ import voluptuous as vs
 from urllib.parse import urlparse
 from zuul.source import BaseSource
 from zuul.model import Project
-from zuul.driver.gerrit.gerritmodel import GerritRefFilter
+from zuul.driver.gerrit.gerritmodel import GerritRefFilter, GerritChange
 from zuul.driver.util import (
     scalar_or_list,
     ZUUL_REGEX,
 )
-from zuul.lib.dependson import find_dependency_headers
 from zuul.zk.change_cache import ChangeKey
 
 
@@ -140,7 +139,9 @@ class GerritSource(BaseSource):
         self.log.debug('%s possible depending changes found', len(results))
         seen = set()
         for result in results:
-            for match in find_dependency_headers(result.message):
+            c = GerritChange(None)
+            c.update(result, {}, self.connection)
+            for match in c.get_dependency_messages():
                 found = False
                 for uri in change.uris:
                     if uri in match:
@@ -148,16 +149,17 @@ class GerritSource(BaseSource):
                         break
                 if not found:
                     continue
-                key = (result.number, result.current_patchset)
+                key = (c.number, c.patchset)
                 if key in seen:
                     continue
                 seen.add(key)
                 change_key = ChangeKey(self.connection.connection_name, None,
                                        'GerritChange',
-                                       str(result.number),
-                                       str(result.current_patchset))
+                                       str(c.number),
+                                       str(c.patchset))
                 change = self.connection._getChange(change_key)
                 changes.append(change)
+
         return changes
 
     def useDependenciesByTopic(self):

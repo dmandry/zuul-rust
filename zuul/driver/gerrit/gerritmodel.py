@@ -22,6 +22,7 @@ import json
 from zuul.model import EventFilter, RefFilter
 from zuul.model import Change, TriggerEvent, FalseWithReason
 from zuul.driver.util import time_to_seconds, to_list, make_regex
+from zuul.lib.dependson import find_dependency_headers
 from zuul import exceptions
 from zuul.zk.change_cache import ChangeKey
 
@@ -41,6 +42,12 @@ class GerritChange(Change):
         self.commit = None
         self.hashtags = []
         self.zuul_query_ltime = None
+
+    def get_dependency_messages(self):
+        matches = find_dependency_headers(self.message)
+        for hashtag in self.hashtags:
+            matches.extend(find_dependency_headers(hashtag))
+        return matches
 
     def update(self, data, extra, connection):
         if not (self.zuul_query_ltime and
