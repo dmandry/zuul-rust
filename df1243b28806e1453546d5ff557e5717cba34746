@@ -97,6 +97,24 @@
       "parentUuid": "a1d7d5b8_b58733c7",
       "revId": "df1243b28806e1453546d5ff557e5717cba34746",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "56ebdeb3_46abfafc",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 2043,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-10T23:23:43Z",
+      "side": 1,
+      "message": "Yes, basically rbac rules are tenant specific or only apply to the root level. I think being explicit about which of those we are talking about is a good idea to avoid confusion since there isn\u0027t a truly global rbac scope.",
+      "parentUuid": "c8a7aa2e_00c9ece8",
+      "revId": "df1243b28806e1453546d5ff557e5717cba34746",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
