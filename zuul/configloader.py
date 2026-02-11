@@ -442,6 +442,7 @@ class LabelParser(object):
         'max-ready-age': int,
         'max-age': int,
         'min-retention-time': int,
+        'max-nodes': int,
     }
     schema = vs.Schema(label)
 
@@ -455,6 +456,7 @@ class LabelParser(object):
         label = model.Label(conf['name'], conf['image'], conf['flavor'],
                             conf.get('description'), conf.get('min-ready'),
                             conf.get('max-ready-age'), conf.get('max-age'),
+                            conf.get('max-nodes'),
                             conf.get('min-retention-time'))
         label.source_context = conf.get('_source_context')
         label.start_mark = conf.get('_start_mark')
