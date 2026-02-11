@@ -1728,7 +1728,7 @@ class Label(ConfigObject):
     """
 
     def __init__(self, name, image, flavor, description, min_ready,
-                 max_ready_age, max_age, min_retention_time):
+                 max_ready_age, max_age, max_nodes, min_retention_time):
         super().__init__()
         self.name = name
         self.image = image
@@ -1737,6 +1737,7 @@ class Label(ConfigObject):
         self.min_ready = min_ready
         self.max_ready_age = max_ready_age
         self.max_age = max_age
+        self.max_nodes = max_nodes
         self.min_retention_time = min_retention_time
 
     @property
@@ -1766,6 +1767,7 @@ class Label(ConfigObject):
                 self.min_ready == other.min_ready and
                 self.max_ready_age == other.max_ready_age and
                 self.max_age == other.max_age and
+                self.max_nodes == other.max_nodes and
                 self.min_retention_time == other.min_retention_time)
 
     def toDict(self):
@@ -1778,6 +1780,7 @@ class Label(ConfigObject):
             'min_ready': self.min_ready,
             'max_ready_age': self.max_ready_age,
             'max_age': self.max_age,
+            'max_nodes': self.max_nodes,
             'min_retention_time': self.min_retention_time,
         }
 
@@ -1790,6 +1793,7 @@ class Label(ConfigObject):
             # min-ready is only permitted at the top level
             'max-ready-age': self.max_ready_age,
             'max-age': self.max_age,
+            # max-nodes is only permitted at the top level
             'min-retention-time': self.min_retention_time,
         }
 
@@ -2105,6 +2109,7 @@ class ProviderConfig(ConfigObject):
             label['project_canonical_name'] =\
                 label_object.project_canonical_name
             label['min_ready'] = label_object.min_ready
+            label['max_nodes'] = label_object.max_nodes
 
     def _getLabelConfigHash(self, label, image_hashes, flavor_hashes):
         label_hash = hashlib.sha256(
