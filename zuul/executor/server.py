@@ -3367,7 +3367,7 @@ class AnsibleJob(object):
                     partial(self.proc.stdout.readline, OUTPUT_MAX_LINE_BYTES),
                     b''):
                 if line and line[-1:] != b'\n':
-                    self.log.warning(
+                    self.log.debug(
                         "Ansible output exceeds max. line size of %s KiB",
                         OUTPUT_MAX_LINE_BYTES / 1024)
                 if first:
