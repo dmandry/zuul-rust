@@ -139,19 +139,6 @@ base_label = vs.Schema({
         The flavor to use with this label.
         """,
     ): Nullable(str),
-    Optional(
-        'min-ready',
-        doc="""\
-        Minimum number of instances that should be in a ready
-        state. Zuul always creates more nodes as necessary in
-        response to demand, but setting ``min-ready`` can speed
-        processing by attempting to keep nodes on-hand and ready for
-        immedate use.  This is best-effort based on available
-        capacity and is not a guaranteed allocation.  The default of 0
-        means that Zuul will only create nodes of this label when
-        there is demand.
-        """,
-        default=0): int,
 })
 
 # Azure doesn't take a key-name, so this is separate.
