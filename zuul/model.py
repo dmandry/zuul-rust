@@ -1787,7 +1787,7 @@ class Label(ConfigObject):
             'image': self.image,
             'flavor': self.flavor,
             'description': self.description,
-            'min-ready': self.min_ready,
+            # min-ready is only permitted at the top level
             'max-ready-age': self.max_ready_age,
             'max-age': self.max_age,
             'min-retention-time': self.min_retention_time,
@@ -2104,6 +2104,7 @@ class ProviderConfig(ConfigObject):
                 label['config_hash'] = None
             label['project_canonical_name'] =\
                 label_object.project_canonical_name
+            label['min_ready'] = label_object.min_ready
 
     def _getLabelConfigHash(self, label, image_hashes, flavor_hashes):
         label_hash = hashlib.sha256(

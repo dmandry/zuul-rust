@@ -1486,19 +1486,6 @@
 
          The time (in seconds) an unassigned node should stay in ready state.
 
-      .. attr:: min-ready
-         :type: int
-         :default: 0
-
-         Minimum number of instances that should be in a ready
-         state. Zuul always creates more nodes as necessary in
-         response to demand, but setting ``min-ready`` can speed
-         processing by attempting to keep nodes on-hand and ready for
-         immedate use.  This is best-effort based on available
-         capacity and is not a guaranteed allocation.  The default of 0
-         means that Zuul will only create nodes of this label when
-         there is demand.
-
       .. attr:: min-retention-time
          :type: int
          :default: 0
