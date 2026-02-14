@@ -3,6 +3,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "cd5cee4e_ad7dcc12",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 16
+      },
+      "lineNbr": 1539,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-14T18:27:37Z",
+      "side": 1,
+      "message": "Needs a permission: \"promote\"",
+      "revId": "3b5855a5132317dc80576c218f8c9009574768d7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "e921c33e_31cc5b68",
         "filename": "zuul/web/__init__.py",
         "patchSetId": 16
