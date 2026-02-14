@@ -16,6 +16,23 @@
       "message": "I think this needs \"and anonymous_read_access\" added to it.  We\u0027re handling the case where the user has specified no rules and no roles.  If they also didn\u0027t specify anonymous_read_access, then this is fine: we allow access (the default is true).  But if they specified it as \"false\", then I think we should deny access.  That situation is essentially \"deny all\", so it\u0027s not very useful, but I think it\u0027s the correct behavior, and is intuitive.  It\u0027s not likely to happen for real in production, but is somewhat likely to happen in testing (users want to verify their config is correct etc).",
       "revId": "3b5855a5132317dc80576c218f8c9009574768d7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bc25e909_782c6e56",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 16
+      },
+      "lineNbr": 2683,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-14T18:22:26Z",
+      "side": 1,
+      "message": "Needs a permission; I used \"upload-image\"",
+      "revId": "3b5855a5132317dc80576c218f8c9009574768d7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
