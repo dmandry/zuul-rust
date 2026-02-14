@@ -67,6 +67,40 @@
       "message": "Needs a permission; I used \"upload-image\"",
       "revId": "3b5855a5132317dc80576c218f8c9009574768d7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1a218406_c1e52600",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 16
+      },
+      "lineNbr": 2792,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-14T18:33:26Z",
+      "side": 1,
+      "message": "Maybe this should be \"modify-nodes\"?",
+      "revId": "3b5855a5132317dc80576c218f8c9009574768d7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "cddeeaee_f7b82ce1",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 16
+      },
+      "lineNbr": 2833,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-14T18:33:26Z",
+      "side": 1,
+      "message": "And maybe this should be modify-nodeset-requests?",
+      "revId": "3b5855a5132317dc80576c218f8c9009574768d7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
