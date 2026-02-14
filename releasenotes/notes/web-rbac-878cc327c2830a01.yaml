@@ -1,0 +1,11 @@
+---
+features:
+  - |
+    Fine-grained role-based access control for the API and web UI is
+    available using the new :attr:`role` definition and related
+    constructs in the tenant config file.
+deprecations:
+  - |
+    The :attr:`tenant.admin-rules` and
+    :attr:`tenant.access-rules` attributes are now deprecated in favor
+    of the new :attr:`tenant.role-mappings` attribute.
