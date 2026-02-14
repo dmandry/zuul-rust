@@ -558,6 +558,10 @@ configuration. Some examples of tenant definitions are:
 
    .. attr:: admin-rules
 
+      .. note:: This option is deprecated and will be removed in a
+                future version of Zuul.  See
+                :attr:`tenant.role-mappings` instead.
+
       A list of authorization rules to be checked in order to grant
       administrative access to the tenant through Zuul's REST API and
       web interface.
@@ -572,6 +576,10 @@ configuration. Some examples of tenant definitions are:
 
    .. attr:: access-rules
 
+      .. note:: This option is deprecated and will be removed in a
+                future version of Zuul.  See
+                :attr:`tenant.role-mappings` instead.
+
       A list of authorization rules to be checked in order to grant
       read access to the tenant through Zuul's REST API and web
       interface.
@@ -583,6 +591,72 @@ configuration. Some examples of tenant definitions are:
 
       More information on tenant-scoped actions can be found in
       :ref:`authentication`.
+
+   .. attr:: anonymous-read-access
+      :default: true
+
+      Whether anonymous users are permitted read access to this
+      tenant.  If this is set to ``false`` then at least one entry
+      must appear in :attr:`tenant.role-mappings` in order to grant
+      the ``read`` permission.
+
+   .. attr:: role-mappings
+
+      A dictionary that maps :attr:`authorization-rule` entries
+      to one or more :attr:`role` entries.  For example:
+
+      .. code-block:: yaml
+
+         - authorization-rule:
+             name: admin-user
+             conditions:
+               - preferred_username: admin
+
+         - authorization-rule:
+             name: alice
+             conditions:
+               - preferred_username: alice
+
+         - authorization-rule:
+             name: everyone
+             conditions:
+               - iss: our-institution
+
+         - role:
+             name: autohold
+             permissions:
+               autohold: true
+
+         - role:
+             name: enqueue-post
+             permissions:
+               enqueue:
+                 conditions:
+                   pipeline: post
+                   project: foo
+
+         - tenant:
+             name: example
+             anonymous-read-access: false
+             role-mappings:
+               admin-user: admin
+               everyone: [read, autohold]
+               alice: enqueue-post
+
+      This indicates that the `admin` (identified by the `admin-user`
+      rule) has full administrative access (granted via the built-in
+      `admin` role); all authenticated users have permissions to read
+      and set autoholds (via the built-in `read` role, and the
+      `autohold` role defined above); and `alice` additionally has
+      permissions to enqueue items for the `foo` project in the `post`
+      pipeline.
+
+      If any role-mappings are provided, then
+      :attr:`tenant.admin-rules` and :attr:`tenant.access-rules` are
+      disregarded.
+
+      See also :attr:`tenant.anonymous-read-access` for configuring
+      read access.
 
    .. attr:: authentication-realm
 
@@ -669,9 +743,10 @@ An authorization rule is a set of conditions the claims of a user's
 JWT must match in order to be allowed to perform actions at a tenant's
 level.
 
-When an authorization rule is included in the tenant's `admin-rules`,
-the protected actions available are **autohold**, **enqueue**,
-**dequeue** and **promote**.
+Authorization rules may be used with the deprecated
+:attr:`tenant.admin-rules` system, in which case they grant all
+permissions, or via the newer :attr:`tenant.role-mappings` system, in
+which case they may be used to grant fine-grained permissions.
 
 .. note::
 
@@ -708,8 +783,8 @@ will be removed in a future version of Zuul.
    .. attr:: name
       :required:
 
-      The name of the rule, so that it can be referenced in the ``admin-rules``
-      attribute of a tenant's definition. It must be unique.
+      The name of the rule, so that it can be referenced in the
+      tenant's definition. It must be unique.
 
    .. attr:: conditions
       :required:
@@ -835,6 +910,147 @@ and **tenant-two**:
      'iat': 1234556780,
      'groups': ['tenant-one', 'tenant-two'],
     }
+
+.. _authz_role_definition:
+
+Role
+----
+
+A role is used in conjunction with :attr:`authorization-rule` and
+:attr:`tenant.role-mappings` to specify fine-grained permissions for
+use with authorization.
+
+Zuul contains two built-in roles: ``admin`` which always grants all
+permissions (and will continue to do so as new permissions are added
+in the future), and ``read`` which grants only the ``read``
+permission.
+
+.. attr:: role
+
+   The following attributes are supported:
+
+   .. attr:: name
+      :required:
+
+      The name of the role, so that it can be referenced in the
+      tenant's definition. It must be unique.
+
+   .. attr:: permissions
+
+      A dictionary where keys are the names of permissions and the
+      values are either ``true`` to grant that permission, or a
+      dictionary of conditions that the request must match in order to
+      grant the permission.
+
+      .. attr:: read
+         :type: bool
+
+         Grant read access to the tenant.  This is only effective if
+         :attr:`tenant.anonymous-read-access` is set to false.  In
+         that case, either the built-in ``read`` role, or a
+         user-defined role with the ``read`` permission must be used.
+
+         Setting this value to ``False`` may not be effective.
+
+      .. attr:: promote
+         :type: bool
+
+         Permission to promote items in any pipeline.  Only accepts a
+         boolean value.
+
+      .. attr:: set-tenant-state
+         :type: bool
+
+         Permission to modify the tenant state (such as disabling
+         event processing).  Only accepts a boolean value.
+
+      .. attr:: build-image
+         :type: bool
+
+         Permission to build any image in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: upload-image
+         :type: bool
+
+         Permission to upload any image in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: delete-image-build-artifact
+         :type: bool
+
+         Permission to delete any image build artifact in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: delete-image-upload
+         :type: bool
+
+         Permission to delete any image upload in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: validate-image-upload
+         :type: bool
+
+         Permission to validate any image upload in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: modify-node
+         :type: bool
+
+         Permission to modify any node in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: modify-nodeset-request
+         :type: bool
+
+         Permission to modify any nodeset request in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: autohold
+         :type: bool
+
+         Permission to create or delete any autohold in the tenant.
+         Only accepts a boolean value.
+
+      .. attr:: dequeue
+         :type: boolean or dict
+
+         Permission to dequeue a change.  If set to ``true``,
+         permission is granted to dequeue any change.
+
+         .. attr:: conditions
+            :type: dict
+
+            Further conditions may be applied with the following
+            attributes:
+
+            .. attr:: project
+
+               The name of a project.
+
+            .. attr:: ref
+
+               The name of a ref (e.g., `refs/heads/stable`).
+
+      .. attr:: enqueue
+         :type: boolean or dict
+
+         Permission to enqueue a change.  If set to ``true``,
+         permission is granted to enqueue any change.
+
+         .. attr:: conditions
+            :type: dict
+
+            Further conditions may be applied with the following
+            attributes:
+
+            .. attr:: project
+
+               The name of a project.
+
+            .. attr:: ref
+
+               The name of a ref (e.g., `refs/heads/stable`).
 
 API Root
 --------
