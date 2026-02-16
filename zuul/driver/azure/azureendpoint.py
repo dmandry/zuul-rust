@@ -201,6 +201,10 @@ class AzureCreateStateMachine(statemachine.StateMachine):
 
         if self.state == self.NIC_QUERY:
             self.nic = self.endpoint._refresh(self.nic, force=True)
+            if not self.endpoint._succeeded(self.nic):
+                return
+            elif self.endpoint._failed(self.nic):
+                raise exceptions.LaunchStatusException("NIC in failed state")
             all_found = True
             for ip_config_data in self.nic['properties']['ipConfigurations']:
                 ip_config_prop = ip_config_data['properties']
