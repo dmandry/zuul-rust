@@ -119,6 +119,14 @@ _DEFAULT_SERVER_LOGGING_CONFIG = {
             'handlers': ['console'],
             'level': 'WARN',
         },
+        'paramiko.transport': {
+            'handlers': ['console'],
+            'level': 'CRITICAL',
+        },
+        'keystoneauth': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
     },
     'root': {'handlers': []},
 }
