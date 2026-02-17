@@ -36,16 +36,27 @@ class AwsConnection(BaseConnection):
             'access_key_id')
         self.secret_access_key = self.connection_config.get(
             'secret_access_key')
+        self.role_arn = self.connection_config.get(
+            'role_arn')
+        self.web_identity_token_file = self.connection_config.get(
+            'web_identity_token_file')
+
         self.profile = self.connection_config.get(
-            'profile')
+            'profile', 'default')
         # Rate limit: requests/second
         self.rate = self.connection_config.get('rate', 2)
 
-        if (not self.access_key_id) and self.shared_credentials_file:
+        if self.shared_credentials_file:
             path = os.path.expanduser(self.shared_credentials_file)
             config = configparser.ConfigParser()
             config.read(path)
 
             section = config[self.profile]
-            self.access_key_id = section['access_key_id']
-            self.secret_access_key = section['secret_access_key']
+            self.access_key_id = section.get(
+                'access_key_id', self.access_key_id)
+            self.secret_access_key = section.get(
+                'secret_access_key', self.secret_access_key)
+            self.role_arn = section.get(
+                'role_arn', self.role_arn)
+            self.web_identity_token_file = section.get(
+                'web_identity_token_file', self.web_identity_token_file)
