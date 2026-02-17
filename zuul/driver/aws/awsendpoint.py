@@ -32,6 +32,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 import botocore.exceptions
+import botocore.session
+import botocore.utils
+from botocore.credentials import AssumeRoleWithWebIdentityProvider
 
 from zuul import exceptions
 from zuul.driver.aws.awsmodel import AwsResource, AwsInstance
@@ -601,13 +604,58 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
         self.not_our_images = set()
         self.not_our_snapshots = set()
 
-    def _getClients(self):
-        # A separate method for unit tests
-        self.aws = boto3.Session(
+    def _getSessionFromCredentials(self):
+        return boto3.Session(
             aws_access_key_id=self.connection.access_key_id,
             aws_secret_access_key=self.connection.secret_access_key,
             profile_name=self.connection.profile,
         )
+
+    def _getSessionFromWebIdentity(self):
+        # Boto3 does not allow passing web_identity_token_file as a
+        # constructor argument to the boto3.Session object, so we
+        # create the identity provider ourselves and add it to the
+        # botocore session.  This allows us to benefit from the
+        # automatic token refresh without needing to use a config file
+        # or environment variables (though those are supported as
+        # well).
+        botocore_session = botocore.session.Session()
+        config = {
+            'profiles': {
+                self.connection.profile: {
+                    'role_arn': self.connection.role_arn,
+                    'web_identity_token_file':
+                    self.connection.web_identity_token_file,
+                }
+            }
+        }
+
+        # Based on code in botocore/credentials.py (ASL2)
+        def client_creator(service_name, **kwargs):
+            create_client_kwargs = {'region_name': self.region}
+            create_client_kwargs.update(**kwargs)
+            return botocore.utils.create_nested_client(
+                botocore_session, service_name, **create_client_kwargs
+            )
+        cache = {}
+        id_provider = AssumeRoleWithWebIdentityProvider(
+            load_config=lambda: config,
+            client_creator=client_creator,
+            cache=cache,
+            profile_name=self.connection.profile,
+            disable_env_vars=False,
+        )
+        resolver = botocore_session.get_component('credential_provider')
+        first = resolver.providers[0].METHOD
+        resolver.insert_before(first, id_provider)
+        return boto3.Session(botocore_session=botocore_session)
+
+    def _getClients(self):
+        # A separate method for unit tests
+        if self.connection.role_arn:
+            self.aws = self._getSessionFromWebIdentity()
+        else:
+            self.aws = self._getSessionFromCredentials()
         self.ec2_client = self.aws.client("ec2", region_name=self.region)
         self.s3 = self.aws.resource('s3', region_name=self.region)
         self.s3_client = self.aws.client('s3', region_name=self.region)
