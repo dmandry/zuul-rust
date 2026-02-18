@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6aaa1c7c_3e913ede",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 18
+      },
+      "lineNbr": 1867,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-18T18:05:43Z",
+      "side": 1,
+      "message": "nit: I would put this all in a single static dict, but we can do that later.",
+      "revId": "a8ee6ac150cec2ca6c4bd9b4be3253bac4771762",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
