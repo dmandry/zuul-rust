@@ -40,6 +40,15 @@ function AuthCallbackPage(props) {
   useEffect(() => {
     if (user.redirect) {
       history.push(user.redirect)
+    } else if (user.data && !user.redirect) {
+      // If the page is currently on AuthCallback, but the user state got updated
+      // without redirect, it is updated by receiving a token from another tab.
+      // This could happen in race condition in some Browser (e.g. Chrome), that
+      // the login process is triggered before a token is received from another tab.
+      // In this case, we fall back to the redirect target saved in localStorage,
+      // other wise it would hanging on the AuthCallback page.
+      const fallback = localStorage.getItem('zuul_auth_redirect')
+      history.push(fallback)
     }
   }, [history, user])
 
