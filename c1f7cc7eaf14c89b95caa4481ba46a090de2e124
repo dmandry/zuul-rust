@@ -43,6 +43,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "22d49a43_8897d501",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 216,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-18T14:24:15Z",
+      "side": 1,
+      "message": "Good point, but i think this is more expressive... er, actually, if we were to change it at all we should probably change it to Counter.",
+      "parentUuid": "45076287_4ee92f30",
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "542b841c_d3dbbaac",
         "filename": "zuul/zk/launcher.py",
         "patchSetId": 2
@@ -60,6 +78,23 @@
         "endLine": 280,
         "endChar": 39
       },
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0542cefc_13a32813",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 280,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-18T14:24:15Z",
+      "side": 1,
+      "message": "One of the important and typical cases is where we transition to and from node assignment.  We would enter this section with:\n\n(record in cache)\nrecord.tenant \u003d None\nrecord.provider \u003d foo\ntenant \u003d bar\nprovider \u003d None\ntenant_used \u003d 0\nprovider_used \u003d 1\n\nIn your suggested change, because of the top-level else clause, we would run:\n\nprovider_used -\u003d 1\n\nBut we would not run the corresponding tenant_used +\u003d 1.\n\nIn other words, some cases we will be changing only one counter (creation/deletion); but in other cases we will be changing two: assignment/unassignment.\n\nIf we name my cases A,B,C,D, we could expect the method to do any of the following in one call:\n* D\n* B,C\n* A,D\n* C\n* A\n* B\n\nIf it helps, I tried to structure this to be easy to follow with those caveats.  It\u0027s a little verbose to make sure that we catch all the cases.  Basically, \"record\" is always the old state (whether it\u0027s new or not), and the bare variables are the new state.  So each case is strictly comparing old to new.",
       "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
