@@ -1,0 +1,67 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5000c4eb_639dc5c1",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 3226,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-18T12:39:02Z",
+      "side": 1,
+      "message": "nit: this could be moved two lines down as we don\u0027t need the providers when max-nodes is not configured.",
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "45076287_4ee92f30",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 216,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-18T12:39:02Z",
+      "side": 1,
+      "message": "nit: `int` will also do the trick",
+      "range": {
+        "startLine": 216,
+        "startChar": 12,
+        "endLine": 216,
+        "endChar": 21
+      },
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "542b841c_d3dbbaac",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 280,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-18T12:39:02Z",
+      "side": 1,
+      "message": "Just wondering if we could make the possible cases more clear as this is a bit hard to follow. I also think we don\u0027t always have to check each and every case, but I might be missing some.\n\nE.g. rather than to check every condition make this depend on whether we have a record in the cache.\n\n```python\n        # Have we previously counted this object?\n        if record \u003d\u003d self._label_count_cache.get(key)\n            if record.tenant and not tenant:\n                # We should decrement the tenant counter\n                self._tenant_label_nodes_used[\n                    (record.tenant, record.label)] -\u003d 1\n            elif record.provider and not provider:\n                # We should decrement the provider counter\n                self._provider_label_nodes_used[\n                    (record.provider, record.label)] -\u003d 1\n        else:\n            record \u003d self.NodeCountRecord()\n            record.tenant \u003d tenant\n            record.provider \u003d provider\n            record.label \u003d label\n            if record.tenant:\n                # We should increment the tenant counter\n                self._tenant_label_nodes_used[\n                    (tenant, label)] +\u003d 1\n            elif record.provider:\n                # We should increment the provider counter\n                self._provider_label_nodes_used[\n                    (provider, label)] +\u003d 1\n```",
+      "range": {
+        "startLine": 260,
+        "startChar": 0,
+        "endLine": 280,
+        "endChar": 39
+      },
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
