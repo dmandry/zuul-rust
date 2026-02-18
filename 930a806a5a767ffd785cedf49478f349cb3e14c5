@@ -38,6 +38,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "627efd0f_f06d84f7",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 1442,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-18T18:08:20Z",
+      "side": 1,
+      "message": "This looks like what I would expect.",
+      "parentUuid": "6d25cad8_9e5e9581",
+      "revId": "930a806a5a767ffd785cedf49478f349cb3e14c5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "33c619c6_263190bb",
         "filename": "zuul/web/__init__.py",
         "patchSetId": 6
