@@ -212,7 +212,11 @@ class StaticProvider(BaseProvider, subclass_id='static'):
         ret = super().parseConfig(config, connection)
         nodes = {}
         for node in config['nodes']:
-            label = ret['labels'][node['label']]
+            label = ret['labels'].get(node['label'])
+            if label is None:
+                raise Exception(
+                    f'Label "{node["label"]}" is not attached to provider')
+            # These were validated in the super
             image = ret['images'][label.image]
             flavor = ret['flavors'][label.flavor]
             node = self.parseNodeConfig(node, config, connection)

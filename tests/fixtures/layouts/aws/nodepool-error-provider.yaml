@@ -1,0 +1,32 @@
+# An error in the provider configuration
+
+- flavor:
+    name: normal
+
+- image:
+    name: debian
+    type: cloud
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+
+- section:
+    name: aws-base
+    connection: aws
+    flavors:
+      - name: normal
+        instance-type: t3.large
+        market-type: spot
+        dedicated-host: true
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+    labels:
+      - name: debian-normal
+
+- provider:
+    name: aws-us-east-1-main
+    region: us-east-1
+    section: aws-base

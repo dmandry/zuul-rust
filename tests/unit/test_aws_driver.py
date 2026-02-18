@@ -1031,6 +1031,16 @@ class TestAwsDriver(AwsBaseTest):
         self.assertFalse(hasattr(dc, 'import_method'))
         self.waitUntilSettled()
 
+    @simple_layout('layouts/aws/nodepool-error-provider.yaml',
+                   enable_nodepool=True)
+    def test_aws_config_error_provider(self):
+        # Test a syntax error in validateConfig
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('Label "debian-normal": spot instances can not '
+                      'be used on dedicated hosts',
+                      layout.loading_errors[0].error)
+
 
 class TestAwsSnapshot(AnsibleZuulTestCase, AwsBaseTest):
     tenant_config_file = 'config/snapshot/main.yaml'

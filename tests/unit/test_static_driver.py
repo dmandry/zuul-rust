@@ -488,3 +488,12 @@ class TestStaticDriver(ZuulTestCase):
     @simple_layout('layouts/static/nodepool.yaml', enable_nodepool=True)
     def test_static_node_aliases(self):
         self._test_static_node_lifecycle('special-hardware')
+
+    @simple_layout('layouts/static/nodepool-error-provider.yaml',
+                   enable_nodepool=True)
+    def test_static_config_error_provider(self):
+        # Test a syntax error in parseConfig
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('Label "does-not-exist" is not attached to provider',
+                      layout.loading_errors[0].error)

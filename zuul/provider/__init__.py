@@ -550,7 +550,15 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
         flavors = self.parseFlavors(config, connection)
         labels = self.parseLabels(config, connection)
         for label in labels.values():
-            label.inheritFrom(images[label.image], flavors[label.flavor])
+            image = images.get(label.image)
+            if image is None:
+                raise Exception(
+                    f'Image "{label.image}" is not attached to provider')
+            flavor = images.get(label.image)
+            if flavor is None:
+                raise Exception(
+                    f'Flavor "{label.flavor}" is not attached to provider')
+            label.inheritFrom(image, flavor)
         ret.update(dict(
             images=images,
             flavors=flavors,

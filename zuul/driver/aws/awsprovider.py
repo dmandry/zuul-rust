@@ -685,10 +685,12 @@ class AwsProvider(BaseProvider, subclass_id='aws'):
             if flavor.dedicated_host:
                 if flavor.market_type == 'spot':
                     raise Exception(
-                        "Spot instances can not be used on dedicated hosts")
+                        f'Label "{label.name}": spot instances can not '
+                        'be used on dedicated hosts')
                 if not label.az:
                     raise Exception(
-                        "Availability-zone is required for dedicated hosts")
+                        f'Label "{label.name}": availability-zone is '
+                        'required for dedicated hosts')
 
     def getCreateStateMachine(self, node, image_external_id, log):
         # TODO: decide on a method of producing a hostname

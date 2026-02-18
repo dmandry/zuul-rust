@@ -1745,6 +1745,34 @@ class TestNodepoolConfig(LauncherBaseTestCase):
         tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
         self.assertTrue('newprovider' in tenant.layout.providers)
 
+    @simple_layout('layouts/nodepool-error-provider.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_config_error_provider(self):
+        # Test a provider referencing an image unattached to it.
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('Image "debian" is not attached to provider',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/nodepool-error-provider2.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_config_error_provider2(self):
+        # Test a syntax error deep in the provider construct
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn("not a valid value @ data['flavors'][0]['foo']",
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/nodepool-error-provider3.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_config_error_provider3(self):
+        # Test a syntax error at the top of the provider construct
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn("expected a dictionary for dictionary "
+                      "value @ data['object-storage']",
+                      layout.loading_errors[0].error)
+
     @simple_layout('layouts/nodepool-provider-flavors.yaml',
                    enable_nodepool=True)
     def test_nodepool_provider_flavors(self):
