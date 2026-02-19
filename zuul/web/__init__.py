@@ -82,6 +82,7 @@ from zuul.zk.event_queues import (
     PipelineTriggerEventQueue,
     TENANT_EVENT_STATE,
 )
+from zuul.zk.exceptions import LockException
 from zuul.zk.executor import ExecutorApi
 from zuul.zk.image_registry import (
     ImageBuildRegistry,
@@ -2435,6 +2436,7 @@ class ZuulWebAPI(object):
     def image_build_artifact_delete(self, tenant_name, tenant, auth,
                                     artifact_id):
         iba = self.zuulweb.image_build_registry.getItem(artifact_id)
+        iur = self.zuulweb.image_upload_registry
 
         if not iba or tenant.name != iba.build_tenant_name:
             raise cherrypy.HTTPError(
@@ -2450,6 +2452,16 @@ class ZuulWebAPI(object):
             with iba.locked(ctx, blocking=False):
                 with iba.activeContext(ctx):
                     iba.state = model.STATE_DELETING
+
+            for upload in iur.getUploadsForImage(iba.canonical_name):
+                # This is best effort to change all the uploads
+                try:
+                    with upload.locked(ctx, blocking=False):
+                        with upload.activeContext(ctx):
+                            upload.state = model.STATE_DELETING
+                except LockException:
+                    self.log.info("Unable to lock %s for deletion", upload)
+
         cherrypy.response.status = 204
 
     @cherrypy.expose
