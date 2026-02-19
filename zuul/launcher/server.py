@@ -3105,9 +3105,11 @@ class Launcher:
         else:
             valid_uploads = [
                 upload for upload in uploads
-                if (upload.isPermittedForProvider(image, provider) and
+                if (upload.state == upload.State.READY and
                     upload.validated and
-                    upload.external_id)
+                    upload.external_id and
+                    upload.isPermittedForProvider(image, provider))
+
             ]
         if not valid_uploads:
             raise Exception("No image found")
