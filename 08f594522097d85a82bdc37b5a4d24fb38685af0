@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ec3c7559_89da4ff5",
+        "filename": "zuul/zk/zkobject.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 623,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-20T11:17:03Z",
+      "side": 1,
+      "message": "Could we use False here directly as the default?",
+      "range": {
+        "startLine": 623,
+        "startChar": 49,
+        "endLine": 623,
+        "endChar": 53
+      },
+      "revId": "08f594522097d85a82bdc37b5a4d24fb38685af0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
