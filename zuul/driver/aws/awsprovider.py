@@ -450,6 +450,12 @@ class AwsProviderFlavor(BaseProviderFlavor):
             :attr:`provider[aws].flavors.instance-type`.
             """,
         ), 'instance'): fleet_schema,
+        Optional(
+            'nested-virtualization',
+            doc="""\
+            Indicates whether nested-virtualization should be enabled for the
+            instance.""",
+            default=False): bool,
     })
 
     inheritable_schema = assemble(

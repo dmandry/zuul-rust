@@ -1959,6 +1959,11 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                     'HttpProtocolIpv6': 'enabled',
                 }
 
+            if flavor.nested_virtualization:
+                template_data['CpuOptions'] = {
+                    'NestedVirtualization': 'enabled'
+                }
+
             if label.userdata:
                 userdata_base64 = base64.b64encode(
                     label.userdata.encode('utf-8')).decode('utf-8')
@@ -2175,6 +2180,11 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
 
         if flavor.public_ipv6:
             args['NetworkInterfaces'][0]['Ipv6AddressCount'] = 1
+
+        if flavor.nested_virtualization:
+            args['CpuOptions'] = {
+                'NestedVirtualization': 'enabled'
+            }
 
         if label.userdata:
             args['UserData'] = label.userdata
