@@ -21,3 +21,4 @@ documentation instead.
    reporter-jobs
    branch-assigned-queues
    web-rbac
+   parameterized-builds
