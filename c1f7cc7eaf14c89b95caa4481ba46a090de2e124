@@ -77,6 +77,48 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b8880aef_933513e4",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 216,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-20T06:30:58Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "22d49a43_8897d501",
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8d53f390_abfc54ec",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 216,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-20T06:30:58Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "45076287_4ee92f30",
+      "range": {
+        "startLine": 216,
+        "startChar": 12,
+        "endLine": 216,
+        "endChar": 21
+      },
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "542b841c_d3dbbaac",
@@ -113,6 +155,48 @@
       "writtenOn": "2026-02-18T14:24:15Z",
       "side": 1,
       "message": "One of the important and typical cases is where we transition to and from node assignment.  We would enter this section with:\n\n(record in cache)\nrecord.tenant \u003d None\nrecord.provider \u003d foo\ntenant \u003d bar\nprovider \u003d None\ntenant_used \u003d 0\nprovider_used \u003d 1\n\nIn your suggested change, because of the top-level else clause, we would run:\n\nprovider_used -\u003d 1\n\nBut we would not run the corresponding tenant_used +\u003d 1.\n\nIn other words, some cases we will be changing only one counter (creation/deletion); but in other cases we will be changing two: assignment/unassignment.\n\nIf we name my cases A,B,C,D, we could expect the method to do any of the following in one call:\n* D\n* B,C\n* A,D\n* C\n* A\n* B\n\nIf it helps, I tried to structure this to be easy to follow with those caveats.  It\u0027s a little verbose to make sure that we catch all the cases.  Basically, \"record\" is always the old state (whether it\u0027s new or not), and the bare variables are the new state.  So each case is strictly comparing old to new.",
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ef0f8afa_0cf3853c",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 280,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-20T06:30:58Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "542b841c_d3dbbaac",
+      "range": {
+        "startLine": 260,
+        "startChar": 0,
+        "endLine": 280,
+        "endChar": 39
+      },
+      "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9952d09d_89625cdc",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 280,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-20T06:30:58Z",
+      "side": 1,
+      "message": "Ok, then I guess let\u0027s keep it as is.",
+      "parentUuid": "0542cefc_13a32813",
       "revId": "c1f7cc7eaf14c89b95caa4481ba46a090de2e124",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
