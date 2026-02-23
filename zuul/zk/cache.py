@@ -270,7 +270,7 @@ class ZuulTreeCache(abc.ABC):
             # fetch anything.
             fetch = False
 
-        key, should_fetch = self.parsePath(event.path)
+        key, should_fetch, shard_index = self.parsePath(event.path)
 
         if ((not should_fetch) and event.type != EventType.NONE
                 and event.path != self.sync_path):
@@ -285,9 +285,9 @@ class ZuulTreeCache(abc.ABC):
         else:
             future = None
         if self._async_worker:
-            self._playback_queue.put((event, future, key))
+            self._playback_queue.put((event, future, key, shard_index))
         else:
-            self._handlePlayback(event, future, key)
+            self._handlePlayback(event, future, key, shard_index)
 
     def _playbackWorker(self):
         while not (self._stopped or self._stop_workers):
@@ -309,14 +309,14 @@ class ZuulTreeCache(abc.ABC):
                         self.root, qsize)
                     self._last_playback_warning = now
 
-            event, future, key = item
+            event, future, key, shard_index = item
             try:
-                self._handlePlayback(event, future, key)
+                self._handlePlayback(event, future, key, shard_index)
             except Exception:
                 self.log.exception("Error playing back event %s:", event)
             self._playback_queue.task_done()
 
-    def _handlePlayback(self, event, future, key):
+    def _handlePlayback(self, event, future, key, shard_index):
         # self.event_log.debug("Cache playback event %s", event)
         exists = None
         data, stat = None, None
@@ -380,10 +380,11 @@ class ZuulTreeCache(abc.ABC):
                 # Don't update a locked object
                 if (stat.mzxid > obj._zstat.mzxid and
                     getattr(obj, 'lock', None) is None):
-                    self.updateFromRaw(obj, key, data, stat)
+                    self.updateFromRaw(obj, key, data, shard_index, stat)
             else:
-                obj = self.objectFromRaw(key, data, stat)
-                self._cached_objects[key] = obj
+                obj = self.objectFromRaw(key, data, shard_index, stat)
+                if obj is not None:
+                    self._cached_objects[key] = obj
         else:
             try:
                 obj = self._cached_objects[key]
@@ -456,16 +457,18 @@ class ZuulTreeCache(abc.ABC):
         A convention is to use a tuple of relevant path components as
         the key.
 
-        Returns a tuple: (key, should_fetch)
+        Returns a tuple: (key, should_fetch, shard_index)
 
         Return a key of None to indicate the path is not relevant to the cache.
         The should_fetch return value indicates whether the cache should
           fetch the contents of the path.
+        The shard_index should be None or an integer indicating which shard
+          this is, if the object is sharded.
         """
         return None
 
     @abc.abstractmethod
-    def objectFromRaw(self, key, data, stat):
+    def objectFromRaw(self, key, data, shard_index, stat):
         """Construct an object from ZooKeeper data
 
         Given data from ZK and cache key, construct
@@ -473,12 +476,13 @@ class ZuulTreeCache(abc.ABC):
 
         :param object key: The key as returned by parsePath.
         :param dict data: The raw data.
+        :param int shard_index: The shard index as returned by parsePath.
         :param Zstat stat: The zstat of the znode.
         """
         pass
 
     @abc.abstractmethod
-    def updateFromRaw(self, obj, key, data, stat):
+    def updateFromRaw(self, obj, key, data, shard_index, stat):
         """Construct an object from ZooKeeper data
 
         Update an existing object with new data.
@@ -486,6 +490,7 @@ class ZuulTreeCache(abc.ABC):
         :param object obj: The old object.
         :param object key: The key as returned by parsePath.
         :param dict data: The raw data.
+        :param int shard_index: The shard index as returned by parsePath.
         :param Zstat stat: The zstat of the znode.
         """
         pass

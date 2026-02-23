@@ -566,7 +566,7 @@ class ShardedZKObject(ZKObject):
     io_writer_class = sharding.BufferedShardWriter
 
 
-class LockableZKObject(ZKObject):
+class LockableZKObjectMixin(abc.ABC):
     _lock = None
     _deleted = False
 
@@ -703,6 +703,10 @@ class LockableZKObject(ZKObject):
         return self._lock.is_still_valid()
 
 
+class LockableZKObject(LockableZKObjectMixin, ZKObject):
+    pass
+
+
 class PolymorphicZKObjectMixin(abc.ABC):
 
     # Make this mixin a true abstract base class that can't be
@@ -798,4 +802,9 @@ class ExpandableZKObject(ZKObject):
 
     @staticmethod
     def getZKObjectMetadata(data):
-        return sharding.ObjectMetadata.fromRaw(data)[0]
+        # Return the metadata and the remainder
+        return sharding.ObjectMetadata.fromRaw(data)
+
+
+class ExpandableLockableZKObject(LockableZKObjectMixin, ExpandableZKObject):
+    pass
