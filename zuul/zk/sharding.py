@@ -64,7 +64,7 @@ class ObjectMetadata:
         # Return a new instance from the header, and also the
         # remaining data.
         md = cls()
-        return md.loadHeader(data)
+        return md, md.loadHeader(data)
 
 
 class RawZKIO(io.RawIOBase):
