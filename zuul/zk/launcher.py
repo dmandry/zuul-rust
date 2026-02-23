@@ -28,7 +28,7 @@ from zuul.model import (
     QuotaInformation,
 )
 from zuul.zk.cache import ZuulTreeCache
-from zuul.zk.zkobject import ZKContext
+from zuul.zk.zkobject import ZKContext, ExpandableZKObject
 
 
 def _dictToBytes(data):
@@ -51,6 +51,9 @@ class LockableZKObjectCache(ZuulTreeCache):
         self.items_path = items_path
         self.locks_path = locks_path
         self.zkobject_class = zkobject_class
+        self._object_shards = {}
+        self.expandable_zkobject = issubclass(self.zkobject_class,
+                                              ExpandableZKObject)
         super().__init__(zk_client, root)
 
     def _parsePath(self, path):
@@ -67,22 +70,36 @@ class LockableZKObjectCache(ZuulTreeCache):
     def parsePath(self, path):
         key = None
         fetch = False
+        if self.expandable_zkobject:
+            shard_index = 0
+        else:
+            shard_index = None
         parts = self._parsePath(path)
         if parts is None:
-            return (key, fetch)
+            return (key, fetch, shard_index)
         if len(parts) < 2:
-            return (key, fetch)
+            return (key, fetch, shard_index)
 
-        object_type, item_uuid, *_ = parts
+        object_type, item_uuid, *rest = parts
         if object_type == self.items_path:
-            key = (item_uuid,)
-            fetch = True
+            if self.expandable_zkobject:
+                if len(rest) == 1:
+                    key = (item_uuid,)
+                    fetch = True
+                    if len(rest[0]) == 10:
+                        try:
+                            shard_index = int(rest[0])
+                        except ValueError:
+                            pass
+                else:
+                    key = (item_uuid,)
+                    fetch = True
         elif object_type == self.locks_path:
             key = None
             if len(parts) == 3:
                 fetch = True
 
-        return (key, fetch)
+        return (key, fetch, shard_index)
 
     def preCacheHook(self, event, exists, data=None, stat=None):
         parts = self._parsePath(event.path)
@@ -135,11 +152,35 @@ class LockableZKObjectCache(ZuulTreeCache):
         if self.updated_event:
             self.updated_event()
 
-    def objectFromRaw(self, key, data, zstat):
+    def _manageShard(self, key, data, shard_index):
+        if shard_index is None:
+            return data
+        # If this is the first shard, empty the list (in case we were
+        # interrupted previously.
+        if shard_index == 0:
+            metadata, data = self.zkobject_class.getZKObjectMetadata(data)
+            self._object_shards[key] = [
+                None for x in range(metadata.max_shard + 1)
+            ]
+        self._object_shards[key][shard_index] = data
+        if all(x is not None for x in self._object_shards[key]):
+            # We have all the shards
+            data = b''.join(self._object_shards[key])
+            del self._object_shards[key]
+            return data
+        return None
+
+    def objectFromRaw(self, key, data, shard_index, zstat):
+        data = self._manageShard(key, data, shard_index)
+        if data is None:
+            return None
         return self.zkobject_class._fromRaw(
             self._zk_context, data, zstat, None)
 
-    def updateFromRaw(self, obj, key, data, zstat):
+    def updateFromRaw(self, obj, key, data, shard_index, zstat):
+        data = self._manageShard(key, data, shard_index)
+        if data is None:
+            return None
         obj._updateFromRaw(self._zk_context, data, zstat, None)
 
     def getItem(self, item_id):

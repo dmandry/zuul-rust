@@ -73,7 +73,7 @@ class QuotaCache(ZuulTreeCache):
         super().__init__(client, root, async_worker=False)
         self.zk_client.client.ensure_path(resource_path)
 
-    def objectFromRaw(self, key, data, zstat):
+    def objectFromRaw(self, key, data, shard_index, zstat):
         if len(key) == 2:
             resource = key[1]
         else:
@@ -84,7 +84,7 @@ class QuotaCache(ZuulTreeCache):
                  resource=resource)
         return obj
 
-    def updateFromRaw(self, obj, key, data, zstat):
+    def updateFromRaw(self, obj, key, data, shard_index, zstat):
         obj._updateFromRaw(self._zk_context, data, zstat, None)
 
     def _makeKey(self, kind, resource=None):
@@ -103,7 +103,7 @@ class QuotaCache(ZuulTreeCache):
         elif len(parts) == 2 and parts[0] == QuotaCache.Kind.RESOURCE:
             key = self._makeKey(QuotaCache.Kind.RESOURCE, parts[1])
         # We should fetch if we have a matching key
-        return (key, bool(key))
+        return (key, bool(key), None)
 
     def hasLimits(self):
         key = self._makeKey(QuotaCache.Kind.LIMITS)
