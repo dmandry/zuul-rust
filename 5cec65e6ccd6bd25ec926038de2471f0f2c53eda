@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f1fbb006_93e55421",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 37053
+      },
+      "writtenOn": "2026-02-24T07:29:30Z",
+      "side": 1,
+      "message": "Would it be possible to add an option to the parameters to say if a parameter is required to be filled in or optional?",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
