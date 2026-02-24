@@ -16,6 +16,23 @@
       "message": "Would it be possible to add an option to the parameters to say if a parameter is required to be filled in or optional?",
       "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a4898037_9471cc5b",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 37053
+      },
+      "writtenOn": "2026-02-24T07:39:11Z",
+      "side": 1,
+      "message": "For some experimental pipelines we currently have a job that all other jobs are dependent on, which runs first and makes it possible to select which other jobs in the pipeline should run, with zuul_return and child_jobs. Could that type of functionality be implemented here, so selection of jobs in the pipeline is possible in the UI?\n\nIf job selection is moved into the web ui, it opens the opportunity to only display parameters relevant for the selected job/jobs, mapping the frozen job vars with the parameters for example.\n\nIf not we would still be able to use a similar solution as we have with experimental for job selection, but if that approach is used there would possibly be many parameters in the ui that are not relevant for the selected job.",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
