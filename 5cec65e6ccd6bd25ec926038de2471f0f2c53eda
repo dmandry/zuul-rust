@@ -33,6 +33,42 @@
       "message": "For some experimental pipelines we currently have a job that all other jobs are dependent on, which runs first and makes it possible to select which other jobs in the pipeline should run, with zuul_return and child_jobs. Could that type of functionality be implemented here, so selection of jobs in the pipeline is possible in the UI?\n\nIf job selection is moved into the web ui, it opens the opportunity to only display parameters relevant for the selected job/jobs, mapping the frozen job vars with the parameters for example.\n\nIf not we would still be able to use a similar solution as we have with experimental for job selection, but if that approach is used there would possibly be many parameters in the ui that are not relevant for the selected job.",
       "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "39fe3ed1_73cd428f",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-25T00:05:49Z",
+      "side": 1,
+      "message": "That sounds like a good idea.  I\u0027m going to mark this comment thread as unresolved so I remember to add that in a future revision.",
+      "parentUuid": "f1fbb006_93e55421",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "7e95e616_f01133f2",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-25T00:05:49Z",
+      "side": 1,
+      "message": "Selecting jobs in the UI is somewhat in opposition to our goal for repeatability and also the way we define workflows in pipelines; we\u0027re still trying to be a project gating system first and foremost, not a general purpose job runner.  So I think that we should still expect people to define workflows using pipelines, etc.\n\nBut having said that, yes, you should still be able to have a dispatch job, and you will be able to use variables supplied through the web UI as input to that job, so you can make a construct to choose the appropriate jobs.  If that ends up having too many unrelated parameters, I would seriously recommend looking at adding pipelines based on workflow needs.\n\nIf I\u0027m wrong about this and we decide we need to add job selection in the web UI later, I don\u0027t think anything about this current proposal would prevent that.",
+      "parentUuid": "a4898037_9471cc5b",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
