@@ -1660,6 +1660,8 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         change.review_decision = canmerge_data['reviewDecision']
         change.unresolved_conversations = canmerge_data.get(
             'unresolvedConversations', False)
+        change.unsigned_commits = canmerge_data.get(
+            'unsignedCommits', False)
         change.required_contexts = set(
             canmerge_data['requiredStatusCheckContexts']
         )
@@ -1988,6 +1990,12 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
                       'it has unresolved conversations',
                       change)
             return FalseWithReason('unresolved conversations')
+
+        if change.unsigned_commits:
+            log.debug('Change %s can not merge because '
+                      'it has unsigned commits',
+                      change)
+            return FalseWithReason('unsigned_commits')
 
         return True
 
