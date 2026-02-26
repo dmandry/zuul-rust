@@ -138,6 +138,8 @@ class GraphQLClient:
                 'requiresCodeOwnerReviews')
             result['requiresConversationResolution'] = matching_rule.get(
                 'requiresConversationResolution')
+            result['requiresCommitSignatures'] = matching_rule.get(
+                'requiresCommitSignatures')
             result['protected'] = True
         else:
             result['requiredStatusCheckContexts'] = []
@@ -163,6 +165,15 @@ class GraphQLClient:
                     github, log, pull_request):
                 if not thread.get('isResolved'):
                     result['unresolvedConversations'] = True
+                    break
+
+        if result.get('requiresCommitSignatures'):
+            result['unsignedCommits'] = False
+            for pr_commit in self._fetch_canmerge_commits(
+                    github, log, pull_request):
+                signature = pr_commit['commit']['signature']
+                if not (signature and signature.get('isValid')):
+                    result['unsignedCommits'] = True
                     break
 
         # Add status checks
@@ -225,6 +236,21 @@ class GraphQLClient:
                 return
             data = self._run_query(
                 log, github, 'canmerge-page-threads',
+                pull_node_id=pull_id,
+                cursor=page_info['endCursor'])
+            pull_request = nested_get(data, 'data', 'node')
+
+    def _fetch_canmerge_commits(self, github, log, pull_request):
+        pull_id = pull_request['id']
+        while True:
+            for pr_commit in nested_get(
+                    pull_request, 'commits', 'nodes', default=[]):
+                yield pr_commit
+            page_info = nested_get(pull_request, 'commits', 'pageInfo')
+            if not page_info['hasNextPage']:
+                return
+            data = self._run_query(
+                log, github, 'canmerge-page-commits',
                 pull_node_id=pull_id,
                 cursor=page_info['endCursor'])
             pull_request = nested_get(data, 'data', 'node')

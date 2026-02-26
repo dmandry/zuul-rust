@@ -16,7 +16,8 @@ query canMergeData(
         requiredStatusCheckContexts
         requiresApprovingReviews
         requiresCodeOwnerReviews
-	requiresConversationResolution
+        requiresCommitSignatures
+        requiresConversationResolution
         matchingRefs(first: 100, query: $ref_name) {
           nodes {
             name
@@ -36,6 +37,19 @@ query canMergeData(
         }
         nodes {
           isResolved
+        }
+      }
+      commits(first: 100) {
+        pageInfo {
+          endCursor
+          hasNextPage
+        }
+        nodes {
+          commit {
+            signature {
+              isValid
+            }
+          }
         }
       }
     }
