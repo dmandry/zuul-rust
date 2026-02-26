@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "69d8cf19_af10edd6",
+        "filename": "doc/source/tenants.rst",
+        "patchSetId": 4
+      },
+      "lineNbr": 635,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-26T00:42:48Z",
+      "side": 1,
+      "message": "Below project and ref are valid enqueue conditions but we don\u0027t document pipeline. I think that the documentation below is correct and pipeline may not be checked. We should probably update this example to match.",
+      "range": {
+        "startLine": 635,
+        "startChar": 19,
+        "endLine": 635,
+        "endChar": 33
+      },
+      "revId": "6af9cdd79fd26e5749635f9047b44f47fa773d6c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
