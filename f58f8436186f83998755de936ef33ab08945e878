@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0e3b5bab_c87d425b",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 9
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-26T00:50:35Z",
+      "side": 1,
+      "message": "Just the debug console output that should be cleaned up but looks good to me otherwise.",
+      "revId": "f58f8436186f83998755de936ef33ab08945e878",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0ba00c1a_ed78a994",
+        "filename": "web/src/containers/auth/Auth.jsx",
+        "patchSetId": 9
+      },
+      "lineNbr": 174,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-26T00:50:35Z",
+      "side": 1,
+      "message": "We should probably drop this debug info now that we\u0027re happy with the functionality in this change.",
+      "revId": "f58f8436186f83998755de936ef33ab08945e878",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5cad9ec4_b63c85ef",
+        "filename": "web/src/containers/auth/Auth.jsx",
+        "patchSetId": 9
+      },
+      "lineNbr": 202,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-26T00:50:35Z",
+      "side": 1,
+      "message": "I guess we can handle both old and new style permissions here since the API will return appropriate data for both. We don\u0027t need to conditionally handle the two different cases here as a result.",
+      "revId": "f58f8436186f83998755de936ef33ab08945e878",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
