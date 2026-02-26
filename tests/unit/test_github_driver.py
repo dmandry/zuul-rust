@@ -429,6 +429,31 @@ class TestGithubDriver(ZuulTestCase):
             dict(name='project-test2', result='SUCCESS'),
         ], ordered=False)
 
+    @simple_layout('layouts/gate-github.yaml', driver='github')
+    def test_signed_commits(self):
+        project = self.fake_github.getProject('org/project')
+        github = self.fake_github.getGithubClient(project.name)
+        repo = github.repo_from_project('org/project')
+        repo._set_branch_protection('master',
+                                    require_commit_signatures=True,
+                                    protected=True)
+
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
+        self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+        self.assertHistory([])
+
+        # "sign" all PR commits
+        for commit in A.commits:
+            commit.signature = "SIGNED"
+
+        self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-test1', result='SUCCESS'),
+            dict(name='project-test2', result='SUCCESS'),
+        ], ordered=False)
+
     @simple_layout('layouts/basic-github.yaml', driver='github')
     def test_timer_event(self):
         self.executor_server.hold_jobs_in_build = True

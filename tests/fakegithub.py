@@ -49,7 +49,7 @@ class FakeGithubPullRequest:
     _graphene_type = 'PullRequest'
 
     def __init__(self, github, number, project, branch,
-                 subject, upstream_root, files=None, number_of_commits=1,
+                 subject, upstream_root, files=None,
                  writers=[], body=None, body_text=None, draft=False,
                  mergeable=True, base_sha=None):
         """Creates a new PR with several commits.
@@ -69,7 +69,6 @@ class FakeGithubPullRequest:
         self.body_text = body_text
         self.draft = draft
         self.mergeable = mergeable
-        self.number_of_commits = 0
         self.upstream_root = upstream_root
         # Dictionary of FakeFile -> content
         self.files = {}
@@ -80,8 +79,8 @@ class FakeGithubPullRequest:
         self.review_threads = []
         self.writers = []
         self.admins = []
+        self.commits = []
         self.updated_at = None
-        self.head_sha = None
         self.is_merged = False
         self.merge_message = None
         self.state = 'open'
@@ -89,8 +88,11 @@ class FakeGithubPullRequest:
                                               project, number)
         self.base_sha = base_sha
         self.pr_ref = self._createPRRef(base_sha=base_sha)
-        self._addCommitToRepo(files=files)
-        self._updateTimeStamp()
+        self.addCommit(files=files)
+
+    @property
+    def head_sha(self):
+        return self.commits[-1].sha
 
     def addCommit(self, files=None, delete_files=None):
         """Adds a commit on top of the actual PR head."""
@@ -267,9 +269,8 @@ class FakeGithubPullRequest:
         repo = self._getRepo()
         ref = repo.references[self.getPRReference()]
         if reset:
-            self.number_of_commits = 0
+            self.commits.clear()
             ref.set_object('refs/tags/init')
-        self.number_of_commits += 1
         repo.head.reference = ref
         repo.head.reset(working_tree=True)
         repo.git.clean('-x', '-f', '-d')
@@ -289,7 +290,7 @@ class FakeGithubPullRequest:
             content = f"test {self.branch} {self.number}\n"
             self.files.update({FakeFile(fn): content})
 
-        msg = self.subject + '-' + str(self.number_of_commits)
+        msg = self.subject + '-' + str(len(self.commits) + 1)
         for fake_file, content in self.files.items():
             fn = os.path.join(repo.working_dir, fake_file.filename)
             with open(fn, 'w') as f:
@@ -303,16 +304,18 @@ class FakeGithubPullRequest:
                 fn = os.path.join(repo.working_dir, fn)
                 repo.index.remove([fn])
 
-        self.head_sha = repo.index.commit(msg).hexsha
-        repo.create_head(self.getPRReference(), self.head_sha, force=True)
-        self.pr_ref.set_commit(self.head_sha)
+        sha = repo.index.commit(msg).hexsha
+        repo.create_head(self.getPRReference(), sha, force=True)
+        self.pr_ref.set_commit(sha)
         # Create an empty set of statuses for the given sha,
         # each sha on a PR may have a status set on it
-        self.statuses[self.head_sha] = []
+        self.statuses[sha] = []
         repo.head.reference = 'master'
         repo.head.reset(working_tree=True)
         repo.git.clean('-x', '-f', '-d')
         repo.heads['master'].checkout()
+
+        self.commits.append(FakeCommit(sha))
 
     def _updateTimeStamp(self):
         self.updated_at = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.localtime())
@@ -630,6 +633,7 @@ class FakeCommit:
         self.sha = sha
         self._check_suites = defaultdict(FakeCheckSuite)
         self.id = str(uuid.uuid4())
+        self.signature = None
 
     def set_status(self, state, url, description, context, user):
         status = FakeStatus(
@@ -727,6 +731,7 @@ class FakeRepository(object):
     def _set_branch_protection(self, branch_name, protected=True,
                                contexts=None, require_review=False,
                                require_conversation_resolution=False,
+                               require_commit_signatures=False,
                                locked=False):
         if not protected:
             if branch_name in self._branch_protection_rules:
@@ -738,6 +743,7 @@ class FakeRepository(object):
         rule.required_contexts = contexts or []
         rule.require_reviews = require_review
         rule.require_conversation_resolution = require_conversation_resolution
+        rule.require_commit_signatures = require_commit_signatures
         rule.matching_refs = [branch_name]
         rule.lock_branch = locked
         return rule
@@ -1259,6 +1265,7 @@ class FakeBranchProtectionRule:
         self.required_contexts = []
         self.require_reviews = False
         self.require_conversation_resolution = False
+        self.require_commit_signatures = False
         self.require_codeowners_review = False
 
 

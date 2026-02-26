@@ -1,0 +1,23 @@
+query canMergeDataPageCommits(
+  $pull_node_id: ID!
+  $cursor: String
+) {
+  node(id: $pull_node_id) {
+    ... on PullRequest {
+      commits(first: 100, after: $cursor) {
+        pageInfo {
+          endCursor
+          hasNextPage
+        }
+        nodes {
+          commit {
+            oid
+            signature {
+              isValid
+            }
+          }
+        }
+      }
+    }
+  }
+}

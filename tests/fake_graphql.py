@@ -88,6 +88,7 @@ class BranchProtectionRule(ObjectType):
     pattern = String()
     requiredStatusCheckContexts = List(String)
     requiresApprovingReviews = Boolean()
+    requiresCommitSignatures = Boolean()
     requiresConversationResolution = Boolean()
     requiresCodeOwnerReviews = Boolean()
     matchingRefs = Field(MatchingRefs, first=Int(), after=String(),
@@ -105,6 +106,9 @@ class BranchProtectionRule(ObjectType):
 
     def resolve_requiresApprovingReviews(parent, info):
         return parent.require_reviews
+
+    def resolve_requiresCommitSignatures(parent, info):
+        return parent.require_commit_signatures
 
     def resolve_requiresConversationResolution(parent, info):
         return parent.require_conversation_resolution
@@ -250,6 +254,16 @@ class CheckSuites(ObjectType):
         return parent
 
 
+class GitSignature(ObjectType):
+
+    isValid = Boolean()
+
+    def resolve_isValid(parent, info):
+        # For testing we currently only check if the fake commit
+        # has a signature and consider it valid.
+        return bool(parent)
+
+
 class Commit(ObjectType):
 
     class Meta:
@@ -258,6 +272,7 @@ class Commit(ObjectType):
     id = ID(required=True)
     status = Field(Status)
     checkSuites = Field(CheckSuites, first=Int(), after=String())
+    signature = Field(GitSignature)
 
     def resolve_status(parent, info):
         seen = set()
@@ -281,6 +296,27 @@ class Commit(ObjectType):
             first=first,
             after=after,
         )
+
+    def resolve_signature(parent, info):
+        return parent.signature
+
+
+class PullRequestCommit(ObjectType):
+    commit = Field(Commit)
+
+    def resolve_commit(parent, info):
+        return parent
+
+
+class PullRequestCommits(ObjectType):
+    nodes = List(PullRequestCommit)
+    pageInfo = Field(PageInfo)
+
+    def resolve_nodes(parent, info):
+        return parent['nodes']
+
+    def resolve_pageInfo(parent, info):
+        return parent
 
 
 class PullRequestReviewThread(ObjectType):
@@ -312,6 +348,8 @@ class PullRequest(ObjectType):
     merged = Boolean()
     reviewThreads = Field(PullRequestReviewThreads,
                           first=Int(), after=String())
+    commits = Field(PullRequestCommits,
+                    first=Int(), after=String())
 
     def resolve_id(parent, info):
         return parent.id
@@ -330,6 +368,18 @@ class PullRequest(ObjectType):
             after = '0'
         after = int(after)
         values = parent.review_threads
+        return dict(
+            length=len(values),
+            nodes=values[after:after + first],
+            first=first,
+            after=after,
+        )
+
+    def resolve_commits(parent, info, first, after=None):
+        if after is None:
+            after = '0'
+        after = int(after)
+        values = parent.commits
         return dict(
             length=len(values),
             nodes=values[after:after + first],
