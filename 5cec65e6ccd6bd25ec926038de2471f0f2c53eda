@@ -90,6 +90,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "980df645_d8a367b5",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 54,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-26T01:31:23Z",
+      "side": 1,
+      "message": "I agree it\u0027s a risk and I don\u0027t want to do that.  I think we should agree that it is not our intent.  There are a few things in this spec that discourage that (like still tying queue items to git refs, and workflow pipeline definitions).\n\nMaybe I should revise the spec to explicitly state the intention not to change the fundamental identity of the system.  I see it as expanding to cover an edge case that is related to software development that we did not (and could not have) had in OpenStack.",
+      "parentUuid": "60d9c1d4_b39d92a6",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "4a9de221_f6a5958a",
         "filename": "doc/source/developer/specs/parameterized-builds.rst",
         "patchSetId": 1
@@ -101,6 +119,30 @@
       "writtenOn": "2026-02-26T01:24:00Z",
       "side": 1,
       "message": "I\u0027m wondering if we would consider this valid for any pipeline. And in the case where a project has not defined any parameters I guess we would end up with a frozen config that doesn\u0027t want any parameters and the enqueue wouldn\u0027t be any different than what is possible today when enqueing builds without parameters?\n\nOr would we try to limit it specifically to special pipelines that are configured to accept parameters? I think this may end up being less confusing to users, but also potentially less functional since the alternative described above is a bit more flexible.",
+      "range": {
+        "startLine": 150,
+        "startChar": 51,
+        "endLine": 150,
+        "endChar": 63
+      },
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1ec06508_e36800ae",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 150,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-26T01:31:23Z",
+      "side": 1,
+      "message": "See below.",
+      "parentUuid": "4a9de221_f6a5958a",
       "range": {
         "startLine": 150,
         "startChar": 51,
@@ -130,6 +172,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "d981ac07_a73ac0a1",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 187,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-26T01:31:23Z",
+      "side": 1,
+      "message": "Yes -- I think it\u0027s important for tenant admins to be able to selectively enable this so that users don\u0027t evade their workflow definitions.",
+      "parentUuid": "00140040_38f0f82c",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "32117b0c_0c03e7ed",
         "filename": "doc/source/developer/specs/parameterized-builds.rst",
         "patchSetId": 1
@@ -141,6 +201,24 @@
       "writtenOn": "2026-02-26T01:24:00Z",
       "side": 1,
       "message": "I think that we would also need to warn against or prevent the case of the artifact being a git commit. Specifically, you could theoretically configure a gate queue to be parameterized then supply the ref as a gerrit change ref (or the github PR equivalent), have that get tested and if the pipeline is configured to submit merge the change?\n\nIn this case I think we can prevent this from happening by disallowing allow-parameters: true and submit: true in the same pipeline definition? This weird corner case may be worth calling out explicitly simply because it has some hard to think about consequences if used this way.",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "44459274_52a6e14d",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 210,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-26T01:31:23Z",
+      "side": 1,
+      "message": "I agree.",
+      "parentUuid": "32117b0c_0c03e7ed",
       "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
