@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2efd3ac3_7c35adb1",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 9
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-26T00:55:58Z",
+      "side": 1,
+      "message": "Gerrit renders the rebase diff a bit weird here between patchset 8 and 9, but there don\u0027t appear to be any consequential changes between those two patchsets so I\u0027m carrying over my +2.",
+      "revId": "afa5312b8fcef54fdfcf204c51a157f85d959937",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
