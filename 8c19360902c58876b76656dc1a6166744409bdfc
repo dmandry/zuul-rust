@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "96e0c8d0_8d6b3825",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 448,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-26T19:55:59Z",
+      "side": 1,
+      "message": "Should we have a negative test?  Just to make sure we exercise the code where we raise the error?",
+      "revId": "8c19360902c58876b76656dc1a6166744409bdfc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "222952aa_9ef92463",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 1998,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-26T19:55:59Z",
+      "side": 1,
+      "message": "This should be a human-readable string, so we should change the underscore to a space.",
+      "revId": "8c19360902c58876b76656dc1a6166744409bdfc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
