@@ -16,6 +16,23 @@
       "message": "recheck has setuptools\u0027 removal of pkg_resources broken container image builds (and other jobs)?",
       "revId": "faea337dc536f6bb57efd1124609c0c40e52f25f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4ed5430d_5f70c2f8",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 8
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-27T18:30:46Z",
+      "side": 1,
+      "message": "recheck docs build pkg_resources problems were hit that should be fixed now",
+      "revId": "faea337dc536f6bb57efd1124609c0c40e52f25f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
