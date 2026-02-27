@@ -12518,6 +12518,37 @@ class TestIncludeExcludeProjects(ZuulTestCase):
             dict(name='exclude-all-but-item-job', result='SUCCESS'),
         ], ordered=False)
 
+    def test_dynamic_playbook_checkout(self):
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: project-test
+                run: playbooks/project-test.yaml
+                workspace-checkout: false
+                include-projects: []
+
+            - project:
+                check:
+                  jobs:
+                    - project-test
+            """)
+        in_repo_playbook = textwrap.dedent(
+            """
+            - hosts: all
+              tasks: []
+            """)
+        file_dict = {'.zuul.yaml': in_repo_conf,
+                     'playbooks/project-test.yaml': in_repo_playbook}
+
+        A = self.fake_gerrit.addFakeChange('org/project4', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
 
 class TestBranchAssignedQueues(ZuulTestCase):
     @simple_layout('layouts/branch-assigned.yaml')
