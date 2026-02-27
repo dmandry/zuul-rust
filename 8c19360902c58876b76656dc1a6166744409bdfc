@@ -20,6 +20,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "fa0c4735_1a198bed",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 448,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-27T06:41:37Z",
+      "side": 1,
+      "message": "In line 444 we assert that no jobs are executed when unsigned commits are present. Or do you mean a mix of signed/unsigned commits?",
+      "parentUuid": "96e0c8d0_8d6b3825",
+      "revId": "8c19360902c58876b76656dc1a6166744409bdfc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "222952aa_9ef92463",
         "filename": "zuul/driver/github/githubconnection.py",
         "patchSetId": 3
@@ -31,6 +49,24 @@
       "writtenOn": "2026-02-26T19:55:59Z",
       "side": 1,
       "message": "This should be a human-readable string, so we should change the underscore to a space.",
+      "revId": "8c19360902c58876b76656dc1a6166744409bdfc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "d0136f5f_73b9680d",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 1998,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-02-27T06:41:37Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "222952aa_9ef92463",
       "revId": "8c19360902c58876b76656dc1a6166744409bdfc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
