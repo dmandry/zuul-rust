@@ -514,7 +514,9 @@ class TestExecutorRepos(ZuulTestCase, ExecutorReposMixin):
         self.assertTrue(os.path.exists(path))
         path = os.path.join(build.jobdir.src_root,
                             'review.example.com', 'org', 'project3')
-        self.assertTrue(os.path.exists(path))
+        # org/project3 is used for include-vars but it shouldn't be
+        # part of the workspace checkout
+        self.assertFalse(os.path.exists(path))
 
         build = self.getBuildByName('testjob2')
         path = os.path.join(build.jobdir.src_root,

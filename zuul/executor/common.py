@@ -183,13 +183,24 @@ def construct_build_params(uuid, connections, job, item, pipeline,
             projects.add(project)
             required_projects.add(project)
 
-    if job.include_vars:
+    exec_projects = set()
+    if dependent_changes:
         for iv in job.include_vars:
-            source = connections.getSource(iv['connection'])
-            project = source.getProject(iv['project'])
-            if project not in projects:
-                params['projects'].append(make_project_dict(project))
-                projects.add(project)
+            trusted, project = item.manager.tenant.getProject(iv['project'])
+            if project and not trusted:
+                exec_projects.add(project)
+        for pb in job.all_playbooks:
+            trusted, project = item.manager.tenant.getProject(iv['project'])
+            # We ignore roles here as roles from untrusted projects
+            # will not be considered for trusted playbooks anyways.
+            if project is None or trusted:
+                continue
+            exec_projects.add(project)
+            for role in pb['roles']:
+                trusted, project = item.manager.tenant.getProject(
+                    iv['project'])
+                if project and not trusted:
+                    exec_projects.add(project)
 
     for dep_change in dependent_changes:
         try:
@@ -204,7 +215,11 @@ def construct_build_params(uuid, connections, job, item, pipeline,
                 dep_change['project']['canonical_hostname'])
             project = source.getProject(dep_change['project']['name'])
 
-        if not job.includesProject(project, change, item):
+        # When the project is required for job execution and
+        # there is a change we need to consider, we must prepare
+        # the project regardless.
+        if not (job.includesProject(project, change, item)
+                or project in exec_projects):
             continue
         if project not in projects:
             params['projects'].append(make_project_dict(project))
