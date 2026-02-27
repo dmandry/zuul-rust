@@ -36,6 +36,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "3dbbf758_e4e2f2e3",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 448,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-02-27T14:30:28Z",
+      "side": 1,
+      "message": "Ah great, I didn\u0027t see a check for the error message so this slipped by me.  But I agree this should be sufficient (especially with the traceback detector).",
+      "parentUuid": "96e0c8d0_8d6b3825",
+      "revId": "8c19360902c58876b76656dc1a6166744409bdfc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "222952aa_9ef92463",
