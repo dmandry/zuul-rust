@@ -191,6 +191,19 @@ def construct_build_params(uuid, connections, job, item, pipeline,
                 params['projects'].append(make_project_dict(project))
                 projects.add(project)
 
+    for pb in job.all_playbooks:
+        source = connections.getSource(pb['connection'])
+        project = source.getProject(pb['project'])
+        if project not in projects:
+            params['projects'].append(make_project_dict(project))
+            projects.add(project)
+        for role in pb['roles']:
+            source = connections.getSource(role['connection'])
+            project = source.getProject(role['project'])
+            if project not in projects:
+                params['projects'].append(make_project_dict(project))
+                projects.add(project)
+
     for dep_change in dependent_changes:
         try:
             (_, project) = item.manager.tenant.getProject(
