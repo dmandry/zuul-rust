@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a2060bbc_827e95b6",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-02-28T17:50:04Z",
+      "side": 1,
+      "message": "Any idea why the logging config for zuul processes lives in zuul/ansible? I checked and zuul/cmd/__init__.py does import the config from zuul/ansible so this is the correct location to update. Just odd that it is part of the ansible code. Maybe it is so that Ansible and Zuul can share some common logging config?",
+      "revId": "363b8f1f64eed6618e79086b2272ea2ec1c9160b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
