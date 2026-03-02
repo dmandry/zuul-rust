@@ -2069,10 +2069,14 @@ class ProviderConfig(ConfigObject):
 
         # Validate the overall schema
         schema = connection.driver.getProviderSchema()
-        config = schema(config)
+        schema(config)
 
         # Set internal attributes
         self._setInternalAttributes(layout, config)
+
+        # Make sure the launcher will be able to parse this
+        internal_schema = connection.driver.getProviderSchema(internal=True)
+        internal_schema(config)
 
         return config
 
@@ -2108,8 +2112,8 @@ class ProviderConfig(ConfigObject):
                 label['config_hash'] = None
             label['project_canonical_name'] =\
                 label_object.project_canonical_name
-            label['min_ready'] = label_object.min_ready
-            label['max_nodes'] = label_object.max_nodes
+            label['min-ready'] = label_object.min_ready
+            label['max-nodes'] = label_object.max_nodes
 
     def _getLabelConfigHash(self, label, image_hashes, flavor_hashes):
         label_hash = hashlib.sha256(
