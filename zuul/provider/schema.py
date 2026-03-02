@@ -1,4 +1,4 @@
-# Copyright 2024 Acme Gating, LLC
+# Copyright 2024-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -139,6 +139,13 @@ base_label = vs.Schema({
         The flavor to use with this label.
         """,
     ): Nullable(str),
+})
+
+internal_base_label = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): vs.Any(None, str),
+    Optional('min-ready', default=None): vs.Any(None, int),
+    Optional('max-nodes', default=None): vs.Any(None, int),
 })
 
 # Azure doesn't take a key-name, so this is separate.
@@ -321,6 +328,12 @@ base_image = vs.Schema({
     ),
 })
 
+internal_base_image = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
+    Required('branch'): str,
+})
+
 # Flavors
 
 # The flavor attributes that can appear in a section/provider flavor or
@@ -337,6 +350,11 @@ base_flavor = vs.Schema({
         doc="""\
         A textual description of the image for reference purposes.""",
     ): Nullable(str),
+})
+
+internal_base_flavor = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
 })
 
 common_flavor = vs.Schema({

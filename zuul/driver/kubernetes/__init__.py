@@ -41,9 +41,9 @@ class KubernetesDriver(Driver, EndpointCacheMixin,
     def getProviderClass(self):
         return kubernetesprovider.KubernetesProvider
 
-    def getProviderSchema(self):
+    def getProviderSchema(self, internal=False):
         return kubernetesprovider.KubernetesProviderSchema().\
-            getProviderSchema()
+            getProviderSchema(internal)
 
     def getProviderSchemaClass(self):
         return kubernetesprovider.KubernetesProviderSchema

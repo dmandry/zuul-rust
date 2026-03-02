@@ -41,8 +41,8 @@ class AzureDriver(Driver, EndpointCacheMixin,
     def getProviderClass(self):
         return azureprovider.AzureProvider
 
-    def getProviderSchema(self):
-        return azureprovider.AzureProviderSchema().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        return azureprovider.AzureProviderSchema().getProviderSchema(internal)
 
     def getProviderSchemaClass(self):
         return azureprovider.AzureProviderSchema
