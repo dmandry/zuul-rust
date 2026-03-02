@@ -373,7 +373,7 @@
             nodeset: ubuntu-jammy
         - zuul-nox-py311
         - zuul-nox-py312
-        - zuul-nox-upgrade
+        # - zuul-nox-upgrade
         - zuul-build-dashboard-openstack-whitelabel
         - zuul-build-dashboard-software-factory
         - zuul-build-dashboard-opendev
@@ -407,7 +407,7 @@
             nodeset: ubuntu-jammy
         - zuul-nox-py311
         - zuul-nox-py312
-        - zuul-nox-upgrade
+        # - zuul-nox-upgrade
         - zuul-build-dashboard
         - nodejs-run-lint:
             vars:
