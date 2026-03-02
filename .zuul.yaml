@@ -366,7 +366,7 @@
     check:
       jobs:
         - noop
-        #- zuul-nox-upgrade
+        - zuul-nox-upgrade
     experimental:
       jobs:
         - zuul-nox-py311-multi-scheduler
