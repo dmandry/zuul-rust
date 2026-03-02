@@ -59,7 +59,6 @@ class StaticProviderFlavor(BaseProviderFlavor):
 
 class StaticProviderLabel(BaseProviderLabel):
     static_label_schema = vs.Schema({})
-
     inheritable_schema = assemble(
         BaseProviderLabel.inheritable_schema,
         provider_schema.ssh_label,
@@ -70,7 +69,10 @@ class StaticProviderLabel(BaseProviderLabel):
         provider_schema.ssh_label,
         static_label_schema,
     )
-
+    internal_schema = assemble(
+        schema,
+        provider_schema.internal_base_label,
+    )
     image_flavor_inheritable_schema = vs.Schema({})
 
     def __init__(self, label_config, provider_config):
@@ -130,8 +132,11 @@ class StaticNodeConfig:
         ): Nullable(str),
     })
 
-    def __init__(self, node_config):
-        self.__dict__.update(self.schema(node_config))
+    internal_schema = schema
+
+    def __init__(self, node_config, provider_config):
+        new_config = node_config.copy()
+        self.__dict__.update(self.internal_schema(new_config))
 
     def inheritFrom(self, image, flavor):
         for attr in ['username', 'connection_port']:
@@ -142,14 +147,17 @@ class StaticNodeConfig:
 
 
 class StaticProviderSchema(BaseProviderSchema):
-    def getLabelSchema(self):
-        return StaticProviderLabel.schema
+    def getLabelSchema(self, internal=False):
+        if internal:
+            return StaticProviderLabel.internal_schema
+        else:
+            return StaticProviderLabel.schema
 
     def getInheritableLabelSchema(self):
         return StaticProviderLabel.inheritable_schema
 
-    def getProviderSchema(self):
-        schema = super().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        schema = super().getProviderSchema(internal)
 
         resource_limits = {}
         resource_limits[Optional(
@@ -184,6 +192,7 @@ class StaticProviderSchema(BaseProviderSchema):
 class StaticProvider(BaseProvider, subclass_id='static'):
     log = logging.getLogger("zuul.StaticProvider")
     schema = StaticProviderSchema().getProviderSchema()
+    internal_schema = StaticProviderSchema().getProviderSchema(internal=True)
 
     @property
     def endpoint(self):
@@ -203,7 +212,7 @@ class StaticProvider(BaseProvider, subclass_id='static'):
         return StaticProviderLabel(label_config, provider_config)
 
     def parseNodeConfig(self, node_config, provider_config, connection):
-        return StaticNodeConfig(node_config)
+        return StaticNodeConfig(node_config, provider_config)
 
     def getEndpoint(self):
         return self.driver.getEndpoint(self)

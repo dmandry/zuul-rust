@@ -21,6 +21,7 @@ from zuul.driver.openstack import openstackprovider
 from zuul.driver.aws import awsprovider
 from zuul.driver.azure import azureprovider
 from zuul.driver.static import staticprovider
+from zuul.driver.kubernetes import kubernetesprovider
 from zuul.lib.voluputil import AsList, Nullable, Constant, UNDEFINED
 
 import voluptuous as vs
@@ -53,6 +54,8 @@ class SchemaWalker:
             return dict(type="bool", doc=self.doc)
         if self.schema == float:  # noqa
             return dict(type="float", doc=self.doc)
+        if self.schema == dict:  # noqa
+            return dict(type="dict", doc=self.doc)
         if self.schema == None:  # noqa
             return dict(type="const", value='null', doc=self.doc)
         if isinstance(self.schema, Constant):
@@ -235,6 +238,8 @@ if __name__ == '__main__':
         ps = staticprovider.StaticProviderSchema()
     elif args.driver == 'azure':
         ps = azureprovider.AzureProviderSchema()
+    elif args.driver == 'kubernetes':
+        ps = kubernetesprovider.KubernetesProviderSchema()
     else:
         raise Exception("Unknown driver")
     s = ps.getProviderSchema()

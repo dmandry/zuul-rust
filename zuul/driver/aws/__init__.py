@@ -36,8 +36,8 @@ class AwsDriver(Driver, EndpointCacheMixin,
     def getProviderClass(self):
         return awsprovider.AwsProvider
 
-    def getProviderSchema(self):
-        return awsprovider.AwsProviderSchema().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        return awsprovider.AwsProviderSchema().getProviderSchema(internal)
 
     def getProviderSchemaClass(self):
         return awsprovider.AwsProviderSchema
