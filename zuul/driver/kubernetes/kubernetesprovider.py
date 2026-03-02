@@ -15,6 +15,7 @@
 import logging
 import math
 
+import zuul.provider.schema as provider_schema
 from zuul.lib.voluputil import (
     AsList,
     Constant,
@@ -195,6 +196,11 @@ class KubernetesProviderLabel(BaseProviderLabel):
         kubernetes_label_common_schema,
     )
 
+    internal_schema = assemble(
+        schema,
+        provider_schema.internal_base_label,
+    )
+
     image_flavor_inheritable_schema = vs.Schema({})
 
     def __init__(self, label_config, provider_config):
@@ -203,14 +209,23 @@ class KubernetesProviderLabel(BaseProviderLabel):
 
 
 class KubernetesProviderSchema(BaseProviderSchema):
-    def getLabelSchema(self):
-        return KubernetesProviderLabel.schema
+    def getLabelSchema(self, internal=False):
+        if internal:
+            return KubernetesProviderLabel.internal_schema
+        else:
+            return KubernetesProviderLabel.schema
 
-    def getImageSchema(self):
-        return KubernetesProviderImage.schema
+    def getImageSchema(self, internal=False):
+        if internal:
+            return KubernetesProviderImage.internal_schema
+        else:
+            return KubernetesProviderImage.schema
 
-    def getFlavorSchema(self):
-        return KubernetesProviderFlavor.schema
+    def getFlavorSchema(self, internal=False):
+        if internal:
+            return KubernetesProviderFlavor.internal_schema
+        else:
+            return KubernetesProviderFlavor.schema
 
     def getInheritableLabelSchema(self):
         return KubernetesProviderLabel.inheritable_schema
@@ -227,8 +242,8 @@ class KubernetesProviderSchema(BaseProviderSchema):
     def getInheritableFlavorSchema(self):
         return KubernetesProviderFlavor.inheritable_schema
 
-    def getProviderSchema(self):
-        schema = super().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        schema = super().getProviderSchema(internal)
 
         resource_limits = {
             Optional(
@@ -268,6 +283,8 @@ class KubernetesProviderSchema(BaseProviderSchema):
 class KubernetesProvider(BaseProvider, subclass_id='kubernetes'):
     log = logging.getLogger("zuul.KubernetesProvider")
     schema = KubernetesProviderSchema().getProviderSchema()
+    internal_schema = KubernetesProviderSchema().getProviderSchema(
+        internal=True)
 
     @property
     def endpoint(self):
