@@ -12,11 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from tests.base import ZuulTestCase, iterate_timeout
+from tests.base import iterate_timeout
+from tests.unit.test_launcher import LauncherBaseTestCase
 
 
-class TestUpgradeNew(ZuulTestCase):
-    tenant_config_file = "config/single-tenant/main.yaml"
+class TestUpgradeNew(LauncherBaseTestCase):
+    tenant_config_file = "config/single-tenant/main-launcher.yaml"
     scheduler_count = 1
     random_databases = False
     delete_databases = True
