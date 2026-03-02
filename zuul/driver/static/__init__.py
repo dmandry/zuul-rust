@@ -42,8 +42,9 @@ class StaticDriver(Driver, EndpointCacheMixin,
     def getProviderClass(self):
         return staticprovider.StaticProvider
 
-    def getProviderSchema(self):
-        return staticprovider.StaticProviderSchema().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        return staticprovider.StaticProviderSchema().getProviderSchema(
+            internal)
 
     def getProviderSchemaClass(self):
         return staticprovider.StaticProviderSchema

@@ -130,8 +130,11 @@ class StaticNodeConfig:
         ): Nullable(str),
     })
 
+    internal_schema = schema
+
     def __init__(self, node_config):
-        self.__dict__.update(node_config)
+        new_config = node_config.copy()
+        self.__dict__.update(self.internal_schema(new_config))
 
     def inheritFrom(self, image, flavor):
         for attr in ['username', 'connection_port']:
@@ -142,14 +145,17 @@ class StaticNodeConfig:
 
 
 class StaticProviderSchema(BaseProviderSchema):
-    def getLabelSchema(self):
-        return StaticProviderLabel.schema
+    def getLabelSchema(self, internal=False):
+        if internal:
+            return StaticProviderLabel.internal_schema
+        else:
+            return StaticProviderLabel.schema
 
     def getInheritableLabelSchema(self):
         return StaticProviderLabel.inheritable_schema
 
-    def getProviderSchema(self):
-        schema = super().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        schema = super().getProviderSchema(internal)
 
         resource_limits = {}
         resource_limits[Optional(
@@ -203,7 +209,7 @@ class StaticProvider(BaseProvider, subclass_id='static'):
         return StaticProviderLabel(label_config, provider_config)
 
     def parseNodeConfig(self, node_config, provider_config, connection):
-        return StaticNodeConfig(node_config)
+        return StaticNodeConfig(node_config, provider_config)
 
     def getEndpoint(self):
         return self.driver.getEndpoint(self)
