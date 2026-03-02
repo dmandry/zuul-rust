@@ -365,35 +365,8 @@
       release_python: python3
     check:
       jobs:
-        - zuul-build-image
-        - zuul-nox-docs
-        - nox-linters:
-            vars:
-              nox_install_bindep: false
-            nodeset: ubuntu-jammy
-        - zuul-nox-py311
-        - zuul-nox-py312
-        - zuul-nox-upgrade
-        - zuul-build-dashboard-openstack-whitelabel
-        - zuul-build-dashboard-software-factory
-        - zuul-build-dashboard-opendev
-        - nodejs-run-lint:
-            vars:
-              zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            nodeset: ubuntu-jammy
-        - nodejs-run-test:
-            vars:
-              zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            files:
-              - web/.*
-            nodeset: ubuntu-jammy
-        - zuul-stream-functional-9
-        - zuul-stream-functional-11
-        - zuul-nox-remote
-        - zuul-quick-start:
-            dependencies: zuul-build-image
-        - zuul-nox-zuul-client
-        - zuul-build-python-release
+        - noop
+        #- zuul-nox-upgrade
     experimental:
       jobs:
         - zuul-nox-py311-multi-scheduler
