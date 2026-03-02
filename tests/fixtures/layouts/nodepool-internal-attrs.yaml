@@ -1,0 +1,34 @@
+- image:
+    name: debian
+    type: cloud
+
+- flavor:
+    name: normal
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: debian-normal
+        project_canonical_name: foo

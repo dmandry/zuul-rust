@@ -1,0 +1,88 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: debian-normal
+          name: controller
+
+- job:
+    name: check-job
+    run: playbooks/check.yaml
+
+- image:
+    name: debian
+    type: cloud
+
+- flavor:
+    name: normal
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+    max-nodes: 2
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    launch-timeout: 600
+    launch-attempts: 2
+    object-storage:
+      bucket-name: zuul
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+      tags:
+        event_id: "{zuul_event_id}"
+        tenant: "{tenant_name}"
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+    resource-limits:
+      # High enough that any provider could fulfill all the nodes in
+      # the test if necessary, but low enough that one node increases
+      # the utilization percentage enough that we get an even
+      # distribution across providers.
+      instances: 4
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: debian-normal
+
+- section:
+    name: aws-us-west-1
+    parent: aws-base
+    region: us-west-1
+
+- provider:
+    name: aws-us-west-1-main
+    section: aws-us-west-1
+    labels:
+      - name: debian-normal

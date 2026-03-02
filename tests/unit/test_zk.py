@@ -2993,6 +2993,70 @@ class TestLauncherApi(ZooKeeperBaseTestCase):
             if used.quota.get('instances') == 0:
                 break
 
+    def test_node_tenant_quota_cache(self):
+        context = ZKContext(self.zk_client, None, None, self.log)
+
+        class Dummy:
+            pass
+
+        tenant = Dummy()
+        tenant.name = 'tenant-one'
+        # An unused tenant, so we can query only the floating nodes
+        # on the providers.
+        no_tenant = Dummy()
+        no_tenant.name = 'no tenant'
+        provider = Dummy()
+        provider.canonical_name = 'provider'
+        label = Dummy()
+        label.name = 'foo'
+
+        quota = QuotaInformation(instances=1)
+        node_class = DummyAProviderNode
+
+        def get_count():
+            tenant_count = self.api.nodes_cache.getNodeCount(
+                tenant.name, [], label)
+            provider_count = self.api.nodes_cache.getNodeCount(
+                no_tenant.name, [provider], label)
+            all_count = self.api.nodes_cache.getNodeCount(
+                tenant.name, [provider], label)
+            return (tenant_count, provider_count, all_count)
+
+        node1 = node_class.new(
+            context, uuid='1', quota=quota, label=label.name,
+            provider='provider', state=node_class.State.REQUESTED)
+        for _ in iterate_timeout(10, "cache to sync"):
+            count = get_count()
+            if count == (0, 1, 1):
+                break
+
+        node2 = node_class.new(
+            context, uuid='2', quota=quota, label=label.name,
+            provider='provider', state=node_class.State.BUILDING)
+        for _ in iterate_timeout(10, "cache to sync"):
+            count = get_count()
+            if count == (0, 2, 2):
+                break
+
+        node2.assign(context, request_id=uuid.uuid4().hex,
+                     tenant_name=tenant.name)
+        for _ in iterate_timeout(10, "cache to sync"):
+            count = get_count()
+            if count == (1, 1, 2):
+                break
+
+        node1.delete(context)
+        for _ in iterate_timeout(10, "cache to sync"):
+            count = get_count()
+            if count == (1, 0, 1):
+                break
+
+        node2.delete(context)
+        for _ in iterate_timeout(10, "cache to sync"):
+            count = get_count()
+            if count == (0, 0, 0):
+                break
+
     def test_node_order(self):
         context = ZKContext(self.zk_client, None, None, self.log)
 

@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    A new label attribute, :attr:`label.max-nodes` is available to
+    limit the number of nodes of that label available in each tenant
+    in which it appears.

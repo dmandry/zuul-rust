@@ -1,4 +1,4 @@
-# Copyright 2024 Acme Gating, LLC
+# Copyright 2024-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -116,8 +116,6 @@ common_label = vs.Schema({
 # The label attributes that can appear in a section/provider label or
 # a standalone label (but not in the section body).
 base_label = vs.Schema({
-    Required('project_canonical_name'): str,
-    Required('config_hash'): str,
     Required(
         'name',
         doc="""\
@@ -141,19 +139,13 @@ base_label = vs.Schema({
         The flavor to use with this label.
         """,
     ): Nullable(str),
-    Optional(
-        'min-ready',
-        doc="""\
-        Minimum number of instances that should be in a ready
-        state. Zuul always creates more nodes as necessary in
-        response to demand, but setting ``min-ready`` can speed
-        processing by attempting to keep nodes on-hand and ready for
-        immedate use.  This is best-effort based on available
-        capacity and is not a guaranteed allocation.  The default of 0
-        means that Zuul will only create nodes of this label when
-        there is demand.
-        """,
-        default=0): int,
+})
+
+internal_base_label = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
+    Optional('min-ready', default=None): vs.Any(None, int),
+    Optional('max-nodes', default=None): vs.Any(None, int),
 })
 
 # Azure doesn't take a key-name, so this is separate.
@@ -313,9 +305,6 @@ common_image_zuul = vs.Schema({
 # a section/provider image or a standalone image (but not in the
 # section body).
 base_image = vs.Schema({
-    Required('project_canonical_name'): str,
-    Required('config_hash'): str,
-    Required('branch', doc="UNDOCUMENTED"): str,
     Required(
         'name',
         doc="""\
@@ -339,13 +328,17 @@ base_image = vs.Schema({
     ),
 })
 
+internal_base_image = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
+    Required('branch'): str,
+})
+
 # Flavors
 
 # The flavor attributes that can appear in a section/provider flavor or
 # a standalone flavor (but not in the section body).
 base_flavor = vs.Schema({
-    Required('project_canonical_name'): str,
-    Required('config_hash'): str,
     Required(
         'name',
         doc="""\
@@ -357,6 +350,11 @@ base_flavor = vs.Schema({
         doc="""\
         A textual description of the image for reference purposes.""",
     ): Nullable(str),
+})
+
+internal_base_flavor = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
 })
 
 common_flavor = vs.Schema({
