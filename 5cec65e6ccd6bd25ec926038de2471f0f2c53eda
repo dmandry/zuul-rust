@@ -108,6 +108,29 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "213a1b3b_cbe3095e",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 136,
+      "author": {
+        "id": 37053
+      },
+      "writtenOn": "2026-03-02T16:12:47Z",
+      "side": 1,
+      "message": "For the selection field with multiple values, could it be possible to specify if the selection is multi select or select one?",
+      "range": {
+        "startLine": 132,
+        "startChar": 0,
+        "endLine": 136,
+        "endChar": 20
+      },
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "4a9de221_f6a5958a",
         "filename": "doc/source/developer/specs/parameterized-builds.rst",
         "patchSetId": 1
