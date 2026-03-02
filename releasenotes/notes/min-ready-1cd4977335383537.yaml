@@ -1,0 +1,6 @@
+---
+upgrade:
+  - |
+    The `min-ready` setting on labels is now only available for
+    top-level label objects and may not be set within a provider or
+    section stanza.

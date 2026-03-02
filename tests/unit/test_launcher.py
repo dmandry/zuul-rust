@@ -272,13 +272,6 @@ class TestLauncher(LauncherBaseTestCase):
                 if count is None or count == len(uploads):
                     return uploads
 
-    def _waitForLauncherLayoutSync(self, tenant='tenant-one'):
-        for _ in iterate_timeout(
-                30, "scheduler and launcher to have the same layout"):
-            if (self.scheds.first.sched.local_layout_state.get(tenant) ==
-                self.launcher.local_layout_state.get(tenant)):
-                break
-
     def _waitForNoChildren(self, path):
         for _ in iterate_timeout(10, f"empty path {path}"):
             znodes = self.zk_client.client.get_children('/zuul/nodeset/locks')
@@ -1905,7 +1898,7 @@ class TestLauncher(LauncherBaseTestCase):
             'org/common-config',
             'layouts/launcher-image-lifecycle/phase2.yaml')
         self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
-        self._waitForLauncherLayoutSync()
+        self.waitForLauncherLayoutSync()
 
         self.waitUntilSettled("phase2")
         uploads = self._waitForUploads(image_cname)
@@ -1930,7 +1923,7 @@ class TestLauncher(LauncherBaseTestCase):
             'org/common-config',
             'layouts/launcher-image-lifecycle/phase3.yaml')
         self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
-        self._waitForLauncherLayoutSync()
+        self.waitForLauncherLayoutSync()
 
         self.waitUntilSettled("phase3")
         uploads = self._waitForUploads(image_cname)
@@ -1955,7 +1948,7 @@ class TestLauncher(LauncherBaseTestCase):
             'org/common-config',
             'layouts/launcher-image-lifecycle/phase4.yaml')
         self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
-        self._waitForLauncherLayoutSync()
+        self.waitForLauncherLayoutSync()
 
         self.waitUntilSettled("phase4")
         uploads = self._waitForUploads(image_cname)
@@ -1970,7 +1963,7 @@ class TestLauncher(LauncherBaseTestCase):
             'org/common-config',
             'layouts/launcher-image-lifecycle/phase5.yaml')
         self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
-        self._waitForLauncherLayoutSync()
+        self.waitForLauncherLayoutSync()
 
         self.waitUntilSettled("phase5")
         uploads = self._waitForUploads(image_cname, count=0)
@@ -2402,6 +2395,69 @@ class TestLauncher(LauncherBaseTestCase):
                 request2.refresh(ctx)
                 if request2.state == request2.State.FULFILLED:
                     break
+
+
+class TestLauncherTenantLimits(LauncherBaseTestCase):
+    # We use a multi-tenant config here to make sure we don't end up
+    # using provider objects from different tenants during provider
+    # selection.
+    tenant_config_file = "config/launcher-multi-tenant/main.yaml"
+
+    def test_label_max_nodes_single_tenant(self):
+        self.commitConfigUpdate(
+            'common-config',
+            'config/launcher-multi-tenant/git/'
+            'common-config/zuul-max-nodes.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitForLauncherLayoutSync()
+
+        ctx = self.createZKContext(None)
+
+        # Request 2 nodes that will reach our tenant max-nodes
+        request1 = self.requestNodes(['debian-normal'])
+        self.assertEqual(request1.State.FULFILLED, request1.state)
+
+        request2 = self.requestNodes(['debian-normal'])
+        self.assertEqual(request2.State.FULFILLED, request2.state)
+        node2 = model.ProviderNode.fromZK(
+            ctx, path=model.ProviderNode._getPath(request2.nodes[0]))
+
+        # Request one more which will wait for capacity
+        request3 = self.requestNodes(['debian-normal'], timeout=0)
+        time.sleep(5)
+        request3.refresh(ctx)
+        self.assertEqual(request3.State.REQUESTED, request3.state)
+
+        # Delete the second node
+        with node2.locked(ctx):
+            request2.delete(ctx)
+            with node2.activeContext(ctx):
+                node2.setState(node2.State.USED)
+
+        # Wait for the third to be created once we have capacity
+        for _ in iterate_timeout(60, "request is fulfilled"):
+            request3.refresh(ctx)
+            if request3.state == request2.State.FULFILLED:
+                break
+
+    def test_label_max_nodes_two_tenants(self):
+        self.commitConfigUpdate(
+            'common-config',
+            'config/launcher-multi-tenant/git/'
+            'common-config/zuul-max-nodes.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitForLauncherLayoutSync()
+
+        # Request 2 nodes that will reach our tenant max-nodes
+        request1 = self.requestNodes(['debian-normal'])
+        self.assertEqual(request1.State.FULFILLED, request1.state)
+
+        request2 = self.requestNodes(['debian-normal'])
+        self.assertEqual(request2.State.FULFILLED, request2.state)
+
+        # Request one more in a different tenant, it should be fulfilled
+        request3 = self.requestNodes(['debian-normal'], tenant="tenant-two")
+        self.assertEqual(request3.State.FULFILLED, request3.state)
 
 
 class TestLauncherLocality(LauncherBaseTestCase):

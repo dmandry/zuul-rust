@@ -171,15 +171,26 @@ class AwsProviderImage(BaseProviderImage):
                 """,
             ), 'spec'): AsList(aws_image_filters),
     })
+    main_cloud_schema = assemble(
+        BaseProviderImage.cloud_schema,
+        aws_cloud_schema,
+        inheritable_aws_image_schema,
+    )
+    internal_main_cloud_schema = assemble(
+        main_cloud_schema,
+        provider_schema.internal_base_image,
+    )
+    cloud_schema_exclusion = RequiredExclusive(
+        'image_id', 'image_filters',
+        msg=('Provide either '
+             '"image-filters", or "image-id" keys'))
     cloud_schema = vs.All(
-        assemble(
-            BaseProviderImage.cloud_schema,
-            aws_cloud_schema,
-            inheritable_aws_image_schema,
-        ),
-        RequiredExclusive('image_id', 'image_filters',
-                          msg=('Provide either '
-                               '"image-filters", or "image-id" keys'))
+        main_cloud_schema,
+        cloud_schema_exclusion,
+    )
+    internal_cloud_schema = vs.All(
+        internal_main_cloud_schema,
+        cloud_schema_exclusion,
     )
     inheritable_aws_zuul_schema = vs.Schema({
         Optional(
@@ -307,6 +318,10 @@ class AwsProviderImage(BaseProviderImage):
         inheritable_aws_image_schema,
         inheritable_aws_zuul_schema,
     )
+    internal_zuul_schema = assemble(
+        zuul_schema,
+        provider_schema.internal_base_image,
+    )
     inheritable_cloud_schema = assemble(
         BaseProviderImage.inheritable_cloud_schema,
         inheritable_aws_image_schema,
@@ -318,6 +333,11 @@ class AwsProviderImage(BaseProviderImage):
     )
     schema = vs.Union(
         cloud_schema, zuul_schema,
+        discriminant=discriminate(
+            lambda val, alt: val['type'] == alt['type'].validators[0])
+    )
+    internal_schema = vs.Union(
+        internal_cloud_schema, internal_zuul_schema,
         discriminant=discriminate(
             lambda val, alt: val['type'] == alt['type'].validators[0])
     )
@@ -465,16 +485,32 @@ class AwsProviderFlavor(BaseProviderFlavor):
         AwsProviderImage.inheritable_aws_image_schema,
         provider_schema.cloud_flavor,
     )
-    schema = vs.All(
-        assemble(
-            BaseProviderFlavor.schema,
-            provider_schema.cloud_flavor,
-            AwsProviderImage.inheritable_aws_image_schema,
-            aws_flavor_schema,
-        ),
+
+    main_schema = assemble(
+        BaseProviderFlavor.schema,
+        provider_schema.cloud_flavor,
+        AwsProviderImage.inheritable_aws_image_schema,
+        aws_flavor_schema,
+    )
+
+    internal_main_schema = assemble(
+        main_schema,
+        provider_schema.internal_base_flavor,
+    )
+
+    main_schema_exclusion =\
         RequiredExclusive('instance_type', 'fleet',
                           msg=('Provide either '
                                '"instance-type", or "fleet" keys'))
+
+    schema = vs.All(
+        main_schema,
+        main_schema_exclusion,
+    )
+
+    internal_schema = vs.All(
+        internal_main_schema,
+        main_schema_exclusion,
     )
 
     def __init__(self, flavor_config, provider_config):
@@ -560,6 +596,10 @@ class AwsProviderLabel(BaseProviderLabel):
         provider_schema.ssh_label,
         aws_label_schema,
     )
+    internal_schema = assemble(
+        schema,
+        provider_schema.internal_base_label,
+    )
 
     image_flavor_inheritable_schema = assemble(
         AwsProviderImage.inheritable_aws_image_schema,
@@ -567,14 +607,23 @@ class AwsProviderLabel(BaseProviderLabel):
 
 
 class AwsProviderSchema(BaseProviderSchema):
-    def getLabelSchema(self):
-        return AwsProviderLabel.schema
+    def getLabelSchema(self, internal=False):
+        if internal:
+            return AwsProviderLabel.internal_schema
+        else:
+            return AwsProviderLabel.schema
 
-    def getImageSchema(self):
-        return AwsProviderImage.schema
+    def getImageSchema(self, internal=False):
+        if internal:
+            return AwsProviderImage.internal_schema
+        else:
+            return AwsProviderImage.schema
 
-    def getFlavorSchema(self):
-        return AwsProviderFlavor.schema
+    def getFlavorSchema(self, internal=False):
+        if internal:
+            return AwsProviderFlavor.internal_schema
+        else:
+            return AwsProviderFlavor.schema
 
     def getInheritableLabelSchema(self):
         return AwsProviderLabel.inheritable_schema
@@ -591,8 +640,8 @@ class AwsProviderSchema(BaseProviderSchema):
     def getInheritableFlavorSchema(self):
         return AwsProviderFlavor.inheritable_schema
 
-    def getProviderSchema(self):
-        schema = super().getProviderSchema()
+    def getProviderSchema(self, internal=False):
+        schema = super().getProviderSchema(internal)
         object_storage = {
             Required(
                 'bucket-name',
@@ -664,6 +713,7 @@ class AwsProviderSchema(BaseProviderSchema):
 class AwsProvider(BaseProvider, subclass_id='aws'):
     log = logging.getLogger("zuul.AwsProvider")
     schema = AwsProviderSchema().getProviderSchema()
+    internal_schema = AwsProviderSchema().getProviderSchema(internal=True)
 
     @property
     def endpoint(self):

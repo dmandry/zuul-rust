@@ -4101,6 +4101,13 @@ class ZuulTestCase(BaseTestCase):
                 if request.state == model.NodesetRequest.State.FULFILLED:
                     return
 
+    def waitForLauncherLayoutSync(self, tenant='tenant-one'):
+        for _ in iterate_timeout(
+                30, "scheduler and launcher to have the same layout"):
+            if (self.scheds.first.sched.local_layout_state.get(tenant) ==
+                self.launcher.local_layout_state.get(tenant)):
+                break
+
     def requestNodes(self, labels, tenant="tenant-one", pipeline="check",
                      provider=None, timeout=10):
         result_queue = PipelineResultEventQueue(

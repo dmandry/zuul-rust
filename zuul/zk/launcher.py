@@ -185,6 +185,12 @@ class RequestCache(LockableZKObjectCache):
 
 
 class NodeCache(LockableZKObjectCache):
+    class NodeCountRecord:
+        def __init__(self):
+            self.tenant = None
+            self.provider = None
+            self.label = None
+
     def __init__(self, *args, **kw):
         # The states we're interested in
         self._quota_states_used = ProviderNode.ALLOCATED_STATES
@@ -199,6 +205,19 @@ class NodeCache(LockableZKObjectCache):
             lambda: QuotaInformation())
         self._provider_quota_requested = collections.defaultdict(
             lambda: QuotaInformation())
+
+        # The following dicts account for nodes that are allocated to
+        # tenants, or unallocated nodes attached to providers.  A
+        # given node should be accounted for in exactly one of these
+        # dicts: the tenant dict if it's assigned to a request, or the
+        # provider dict if not.
+        # (provider, label) -> number of nodes
+        self._provider_label_nodes_used = collections.defaultdict(
+            lambda: 0)
+        # (tenant, label) -> number of nodes
+        self._tenant_label_nodes_used = collections.defaultdict(
+            lambda: 0)
+        self._label_count_cache = {}
         super().__init__(*args, **kw)
 
     def _handleQuota(self, quota_states, quota_cache, provider_cache,
@@ -225,6 +244,49 @@ class NodeCache(LockableZKObjectCache):
             else:
                 quota_cache[key] = new_quota
 
+    def _handleLabelCount(self, key, obj):
+        # key -> [tenant, provider]
+        quota_states = self._quota_states_requested
+        tenant = None
+        provider = None
+        label = None
+        if obj and obj.state in quota_states and key in self._cached_objects:
+            tenant = obj.tenant_name
+            if tenant is None:
+                # A node counts toward a tenant or provider, not both
+                provider = obj.provider
+            label = obj.label
+
+        # Have we previously counted this object?
+        record = self._label_count_cache.get(key)
+        if record is None:
+            record = self.NodeCountRecord()
+
+        if record.tenant is not None and tenant is None:
+            # We should decrement the tenant counter
+            self._tenant_label_nodes_used[
+                (record.tenant, record.label)] -= 1
+        if record.tenant is None and tenant is not None:
+            # We should increment the tenant counter
+            self._tenant_label_nodes_used[
+                (tenant, label)] += 1
+        if record.provider is not None and provider is None:
+            # We should decrement the provider counter
+            self._provider_label_nodes_used[
+                (record.provider, record.label)] -= 1
+        if record.provider is None and provider is not None:
+            # We should increment the provider counter
+            self._provider_label_nodes_used[
+                (provider, label)] += 1
+
+        if label:
+            record.tenant = tenant
+            record.provider = provider
+            record.label = label
+            self._label_count_cache[key] = record
+        else:
+            self._label_count_cache.pop(key, None)
+
     def preCacheHook(self, event, exists, data=None, stat=None):
         parts = self._parsePath(event.path)
         if parts is None:
@@ -246,12 +308,14 @@ class NodeCache(LockableZKObjectCache):
                 key = (parts[1],)
                 node = self._cached_objects.get(key)
                 if not node:
+                    self._handleLabelCount(key, node)
                     return
                 if exists:
                     node.assignment._updateFromRaw(
                         self._zk_context, data, stat, None)
                 else:
                     node.assignment._clear()
+                self._handleLabelCount(key, node)
                 return self.STOP_OBJECT_UPDATE
         return super().preCacheHook(event, exists, data, stat)
 
@@ -266,6 +330,7 @@ class NodeCache(LockableZKObjectCache):
             self._cached_quota_requested,
             self._provider_quota_requested,
             event, data, stat, key, obj)
+        self._handleLabelCount(key, obj)
         super().postCacheHook(event, data, stat, key, obj)
 
     def getQuota(self, provider, include_requested=False):
@@ -273,6 +338,14 @@ class NodeCache(LockableZKObjectCache):
             return self._provider_quota_requested[provider.canonical_name]
         else:
             return self._provider_quota_used[provider.canonical_name]
+
+    def getNodeCount(self, tenant_name, providers, label):
+        count = 0
+        count += self._tenant_label_nodes_used[(tenant_name, label.name)]
+        for provider in providers:
+            count += self._provider_label_nodes_used[
+                (provider.canonical_name, label.name)]
+        return count
 
 
 class LauncherApi:
