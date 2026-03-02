@@ -1484,7 +1484,7 @@ class Launcher:
                     if not bool(request.provider_node_data):
                         try:
                             has_quota = self.doesProviderHaveQuotaForLabel(
-                                provider, label, messages)
+                                request.tenant_name, provider, label, messages)
                         except Exception:
                             self.log.exception(
                                 "Error checking quota for label %s "
@@ -1603,7 +1603,8 @@ class Launcher:
                 # larger than the capacity.
                 try:
                     if not self.doesProviderHaveQuotaForLabel(
-                            provider, label, messages, include_usage=False):
+                            request.tenant_name, provider, label, messages,
+                            include_usage=False):
                         continue
                 except Exception:
                     self.log.exception(
@@ -3213,8 +3214,31 @@ class Launcher:
             pct = round(pct, 1)
         return pct
 
-    def doesProviderHaveQuotaForLabel(self, provider, label, messages,
-                                      include_usage=True):
+    def doesTenantHaveQuotaForLabel(self, tenant_name, label, messages):
+        # This is a simplified quota calculation because we are only
+        # concerned with instances(nodes).  The node cache keeps track
+        # of node usage by either tenant (if the node is assigned to a
+        # request) or provider if it's unassigned.  The method we call
+        # returns the sum of the nodes for all the providers we pass
+        # in as well as the tenant.  Together, that constitutes the
+        # "usage" of these nodes for this tenant.  This includes
+        # requested nodes, since the only time this is called is in
+        # the context of getting current usage (not in the context of
+        # determining general cloud capacity).
+        if label.max_nodes is None:
+            return True
+        providers = self.tenant_providers[tenant_name]
+        node_limit = label.max_nodes
+        node_usage = self.api.nodes_cache.getNodeCount(
+            tenant_name, providers, label)
+        messages.append(f"Label {label} node usage: {node_usage} "
+                        f"limit: {node_limit}")
+        if node_usage < node_limit:
+            return True
+        return False
+
+    def doesProviderHaveQuotaForLabel(self, tenant_name, provider, label,
+                                      messages, include_usage=True):
         if include_usage:
             # When include_usage is True, we include requested nodes here
             # because this is called to decide whether to add a new request
@@ -3242,6 +3266,12 @@ class Launcher:
         total.subtract(label_quota)
         messages.append(
             f"Label {label} required quota: {label_quota}")
+
+        if include_usage:
+            if not self.doesTenantHaveQuotaForLabel(
+                    tenant_name, label, messages):
+                return False
+
         return total.nonNegative()
 
     def doesProviderHaveQuotaForNode(self, provider, node, messages):

@@ -1,0 +1,847 @@
+.. attr:: provider[kubernetes]
+   :type: dict
+
+   The attributes available for configuring a Kubernetes
+   provider are below.
+
+   .. attr:: abstract
+      :type: bool
+      :default: False
+
+      Whether a section is intended to be inherited by
+      another :attr:`section` or a :attr:`provider`.  This
+      setting is currently unused (but may be used in the
+      future).  If a section is used to provide common
+      values to other sections, set this to `true`.
+      Otherwise, the default of `false` indicates that the
+      section should be referenced directly by providers.
+
+   .. attr:: connection
+      :type: str
+
+      The name of the :ref:`connection <connections>` to
+      use.  This attribute is only used by :attr:`section`
+      objects and may not be changed via inheritance.
+
+   .. attr:: flavor-defaults
+      :type: dict
+
+      Attributes to be set as default values for any flavor
+      used with this provider.  Many attributes which may be
+      set on an individual flavor may be set once in this
+      section and used for all the flavors in this provider.
+      Values set on individual flavors may still override the
+      values set here.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the flavor may be updated
+         by values in flavor-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The flavor may not be updated or overidden.
+
+         .. value:: False
+
+            The flavor may be updated or overidden.
+
+         .. value:: allow-override
+
+            The flavor may not be updated by flavor-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'flavor' entry.
+
+   .. attr:: flavors
+      :type: dict
+
+      A list of flavors associated with this provider.
+
+      .. attr:: description
+         :type: str
+
+         A textual description of the image for reference purposes.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the flavor may be updated
+         by values in flavor-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The flavor may not be updated or overidden.
+
+         .. value:: False
+
+            The flavor may be updated or overidden.
+
+         .. value:: allow-override
+
+            The flavor may not be updated by flavor-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'flavor' entry.
+
+      .. attr:: name
+         :type: str
+
+         The name of the flavor.  Used to refer to the flavor in Zuul
+         configuration.
+
+   .. attr:: image-defaults
+      :type: dict
+
+      Attributes to be set as default values for any image
+      used with this provider.  Many attributes which may be
+      set on an individual image may be set once in this
+      section and used for all the images in this provider.
+      Values set on individual images may still override the
+      values set here.
+
+      .. attr:: connection-port
+         :type: int
+
+         The port that Zuul should use when connecting to the node.
+         For most nodes this is not necessary. This defaults to 22 when
+         ``connection-type`` is 'ssh' and 5986 when it is 'winrm'.
+
+      .. attr:: connection-type
+
+         The connection type that a consumer should use when connecting
+         to the node.
+
+         .. value:: winrm
+
+            A winrm connection.
+
+         .. value:: ssh
+
+            An ssh connection.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the label may be updated
+         by values in label-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The label may not be updated or overidden.
+
+         .. value:: False
+
+            The label may be updated or overidden.
+
+         .. value:: allow-override
+
+            The label may not be updated by label-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'label' entry.
+
+      .. attr:: import-timeout
+         :type: int
+         :default: 300
+
+         The limit on the amount of time a successful image import can
+         take.
+
+      .. attr:: python-path
+         :type: str
+
+         The path of the default python interpreter.  Used by Zuul to set
+         ``ansible_python_interpreter``.  The special value ``auto`` will
+         direct Zuul to use inbuilt Ansible logic to select the
+         interpreter.
+
+      .. attr:: shell-type
+         :type: str
+
+         The shell type of the node's default shell executable. Used by Zuul
+         to set ``ansible_shell_type``. This setting should only be used
+
+         - For a windows image with the experimental `connection-type` ``ssh``
+           in which case ``cmd`` or ``powershell`` should be set
+           and reflect the node's ``DefaultShell`` configuration.
+         - If the default shell is not Bourne compatible (sh), but instead
+           e.g. ``csh`` or ``fish``, and the user is aware that there is a
+           long-standing issue with ``ansible_shell_type`` in combination
+           with ``become``.
+
+      .. attr:: tags
+         :type: dict
+
+         A dictionary of tags to add to uploaded images, and to nodes
+         created from them.  Avoid the use of `zuul_` as a key prefix since
+         Zuul uses this for internal values.
+
+      .. attr:: upload-methods
+         :type: list
+         :default: ['copy', 'import', 'upload']
+
+         An ordered list of methods to use when creating an image in
+         the provider.
+
+         .. value:: copy
+
+            Copy the image from another provider if available.
+
+         .. value:: import
+
+            Import the image directly from its storage location.
+
+         .. value:: upload
+
+            Download the image from its storage location and
+            upload it to the provider.
+
+      .. attr:: username
+         :type: str
+
+         The username Zuul should use when connecting to the node.
+
+   .. attr:: images
+      :type: list
+
+      A list of images associated with this provider.
+
+   .. attr:: images[cloud]
+      :type: dict
+
+      These are the attributes available for a cloud image.
+
+      .. attr:: connection-port
+         :type: int
+
+         The port that Zuul should use when connecting to the node.
+         For most nodes this is not necessary. This defaults to 22 when
+         ``connection-type`` is 'ssh' and 5986 when it is 'winrm'.
+
+      .. attr:: connection-type
+
+         The connection type that a consumer should use when connecting
+         to the node.
+
+         .. value:: winrm
+
+            A winrm connection.
+
+         .. value:: ssh
+
+            An ssh connection.
+
+      .. attr:: description
+         :type: str
+
+         A textual description of the image for reference purposes.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the label may be updated
+         by values in label-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The label may not be updated or overidden.
+
+         .. value:: False
+
+            The label may be updated or overidden.
+
+         .. value:: allow-override
+
+            The label may not be updated by label-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'label' entry.
+
+      .. attr:: import-timeout
+         :type: int
+         :default: 300
+
+         The limit on the amount of time a successful image import can
+         take.
+
+      .. attr:: name
+         :type: str
+
+         The name of the image.  Used to refer to the image in Zuul
+         configuration.
+
+      .. attr:: python-path
+         :type: str
+
+         The path of the default python interpreter.  Used by Zuul to set
+         ``ansible_python_interpreter``.  The special value ``auto`` will
+         direct Zuul to use inbuilt Ansible logic to select the
+         interpreter.
+
+      .. attr:: shell-type
+         :type: str
+
+         The shell type of the node's default shell executable. Used by Zuul
+         to set ``ansible_shell_type``. This setting should only be used
+
+         - For a windows image with the experimental `connection-type` ``ssh``
+           in which case ``cmd`` or ``powershell`` should be set
+           and reflect the node's ``DefaultShell`` configuration.
+         - If the default shell is not Bourne compatible (sh), but instead
+           e.g. ``csh`` or ``fish``, and the user is aware that there is a
+           long-standing issue with ``ansible_shell_type`` in combination
+           with ``become``.
+
+      .. attr:: type
+
+         The type of image.
+
+         .. value:: cloud
+
+            An existing image available in the cloud.
+
+      .. attr:: username
+         :type: str
+
+         The username Zuul should use when connecting to the node.
+
+   .. attr:: images[zuul]
+      :type: dict
+
+      These are the attributes available for a Zuul image.
+
+      .. attr:: connection-port
+         :type: int
+
+         The port that Zuul should use when connecting to the node.
+         For most nodes this is not necessary. This defaults to 22 when
+         ``connection-type`` is 'ssh' and 5986 when it is 'winrm'.
+
+      .. attr:: connection-type
+
+         The connection type that a consumer should use when connecting
+         to the node.
+
+         .. value:: winrm
+
+            A winrm connection.
+
+         .. value:: ssh
+
+            An ssh connection.
+
+      .. attr:: description
+         :type: str
+
+         A textual description of the image for reference purposes.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the label may be updated
+         by values in label-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The label may not be updated or overidden.
+
+         .. value:: False
+
+            The label may be updated or overidden.
+
+         .. value:: allow-override
+
+            The label may not be updated by label-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'label' entry.
+
+      .. attr:: import-timeout
+         :type: int
+         :default: 300
+
+         The limit on the amount of time a successful image import can
+         take.
+
+      .. attr:: name
+         :type: str
+
+         The name of the image.  Used to refer to the image in Zuul
+         configuration.
+
+      .. attr:: python-path
+         :type: str
+
+         The path of the default python interpreter.  Used by Zuul to set
+         ``ansible_python_interpreter``.  The special value ``auto`` will
+         direct Zuul to use inbuilt Ansible logic to select the
+         interpreter.
+
+      .. attr:: shell-type
+         :type: str
+
+         The shell type of the node's default shell executable. Used by Zuul
+         to set ``ansible_shell_type``. This setting should only be used
+
+         - For a windows image with the experimental `connection-type` ``ssh``
+           in which case ``cmd`` or ``powershell`` should be set
+           and reflect the node's ``DefaultShell`` configuration.
+         - If the default shell is not Bourne compatible (sh), but instead
+           e.g. ``csh`` or ``fish``, and the user is aware that there is a
+           long-standing issue with ``ansible_shell_type`` in combination
+           with ``become``.
+
+      .. attr:: tags
+         :type: dict
+
+         A dictionary of tags to add to uploaded images, and to nodes
+         created from them.  Avoid the use of `zuul_` as a key prefix since
+         Zuul uses this for internal values.
+
+      .. attr:: type
+
+         The type of image.
+
+         .. value:: zuul
+
+            An image managed by Zuul.
+
+      .. attr:: upload-methods
+         :type: list
+         :default: ['copy', 'import', 'upload']
+
+         An ordered list of methods to use when creating an image in
+         the provider.
+
+         .. value:: copy
+
+            Copy the image from another provider if available.
+
+         .. value:: import
+
+            Import the image directly from its storage location.
+
+         .. value:: upload
+
+            Download the image from its storage location and
+            upload it to the provider.
+
+      .. attr:: username
+         :type: str
+
+         The username Zuul should use when connecting to the node.
+
+   .. attr:: label-defaults
+      :type: dict
+
+      Attributes to be set as default values for any label
+      used with this provider.  Many attributes which may be
+      set on an individual label may be set once in this
+      section and used for all the labels in this provider.
+      Values set on individual labels may still override the
+      values set here.
+
+      .. attr:: annotations
+         :type: dict
+
+         A dictionary of additional values to be added to the pod
+         metadata.  The value of this field is added to the
+         `metadata.annotations` field in Kubernetes.  This field
+         contains arbitrary key/value pairs that can be accessed by
+         tools and libraries.  
+
+      .. attr:: boot-timeout
+         :type: int
+         :default: 300
+
+         The time (in seconds) to wait for a node to boot.
+
+      .. attr:: executor-zone
+         :type: str
+
+         Specify that a Zuul executor in the specified zone is
+         used to run jobs with nodes from this label.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the label may be updated
+         by values in label-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The label may not be updated or overidden.
+
+         .. value:: False
+
+            The label may be updated or overidden.
+
+         .. value:: allow-override
+
+            The label may not be updated by label-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'label' entry.
+
+      .. attr:: image-pull-secrets
+         :type: dict
+
+
+         The imagePullSecrets needed to pull container images from
+         a private registry.  Because Zuul creates pods in a new
+         namespace, and image pull secrets must exist in the
+         namespace of the pods that use them, the referenced
+         secrets will be copied into the temporary namespace that
+         Zuul creates before creating the pod.  The new secrets
+         will have the same name as the old secrets.
+
+         Each entry is a dictionary with the following keys:
+
+         .. attr:: name
+            :type: str
+
+            Identifier for this secret.  The referenced secret must
+            already exist under this name so that Nodepool may copy
+            it.  It will be copied into the new namespace with the
+            same name, therefore, if multiple entries are provided,
+            they must have distinct names.
+
+         .. attr:: namespace
+            :type: str
+            :default: default
+
+            The namespace of the existing secret to copy.
+
+      .. attr:: kind
+
+         The Kubernetes driver supports two types of labels:
+
+         .. value:: pod
+
+            Pod labels provide a dedicated namespace with a single
+            pod and a service account that can exec and get the
+            logs of the pod.
+
+         .. value:: namespace
+
+            Namespace labels provide an empty namespace configured
+            with a service account that can create pods, services,
+            configmaps, etc.
+
+      .. attr:: max-age
+         :type: int
+         :default: 0
+
+         The time (in seconds) since creation that a node may be
+         available for use.  Ready nodes older than this time will be
+         deleted.
+
+      .. attr:: max-ready-age
+         :type: int
+         :default: 0
+
+         The time (in seconds) an unassigned node should stay in ready state.
+
+      .. attr:: min-retention-time
+         :type: int
+         :default: 0
+
+         The time (in seconds) since an instance was launched, during
+         which a node will not be deleted. For node resources with
+         minimum billing times, this can be used to ensure that the
+         instance is retained for at least the minimum billing interval.
+
+         This setting takes precedence over `max-[ready-]age`.
+
+      .. attr:: reuse
+         :type: bool
+         :default: False
+
+         Should the node be reused (True) or deleted (False) after use.
+
+      .. attr:: slots
+         :type: int
+         :default: 1
+
+         How many jobs are permitted run on the same node simultaneously.
+
+      .. attr:: snapshot-expiration
+         :type: int
+         :default: 604800
+
+         The time (in seconds) until a snapshot expires.
+
+      .. attr:: snapshot-timeout
+         :type: int
+         :default: 3600
+
+         The time (in seconds) to wait for a snapshot to complete.
+
+      .. attr:: tags
+         :type: dict
+
+         A dictionary of tags to add to nodes.  Avoid the use of
+         `zuul_` as a key prefix since Zuul uses this for internal
+         values.
+
+   .. attr:: labels
+      :type: dict
+
+      A list of labels associated with this provider.
+
+      .. attr:: annotations
+         :type: dict
+
+         A dictionary of additional values to be added to the pod
+         metadata.  The value of this field is added to the
+         `metadata.annotations` field in Kubernetes.  This field
+         contains arbitrary key/value pairs that can be accessed by
+         tools and libraries.  
+
+      .. attr:: boot-timeout
+         :type: int
+         :default: 300
+
+         The time (in seconds) to wait for a node to boot.
+
+      .. attr:: description
+         :type: str
+
+         A textual description of the label for reference purposes.
+
+      .. attr:: executor-zone
+         :type: str
+
+         Specify that a Zuul executor in the specified zone is
+         used to run jobs with nodes from this label.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the label may be updated
+         by values in label-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The label may not be updated or overidden.
+
+         .. value:: False
+
+            The label may be updated or overidden.
+
+         .. value:: allow-override
+
+            The label may not be updated by label-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'label' entry.
+
+      .. attr:: flavor
+         :type: str
+
+         The flavor to use with this label.
+
+      .. attr:: image
+         :type: str
+
+         The image to use with this label.
+
+      .. attr:: image-pull-secrets
+         :type: dict
+
+
+         The imagePullSecrets needed to pull container images from
+         a private registry.  Because Zuul creates pods in a new
+         namespace, and image pull secrets must exist in the
+         namespace of the pods that use them, the referenced
+         secrets will be copied into the temporary namespace that
+         Zuul creates before creating the pod.  The new secrets
+         will have the same name as the old secrets.
+
+         Each entry is a dictionary with the following keys:
+
+         .. attr:: name
+            :type: str
+
+            Identifier for this secret.  The referenced secret must
+            already exist under this name so that Nodepool may copy
+            it.  It will be copied into the new namespace with the
+            same name, therefore, if multiple entries are provided,
+            they must have distinct names.
+
+         .. attr:: namespace
+            :type: str
+            :default: default
+
+            The namespace of the existing secret to copy.
+
+      .. attr:: kind
+
+         The Kubernetes driver supports two types of labels:
+
+         .. value:: pod
+
+            Pod labels provide a dedicated namespace with a single
+            pod and a service account that can exec and get the
+            logs of the pod.
+
+         .. value:: namespace
+
+            Namespace labels provide an empty namespace configured
+            with a service account that can create pods, services,
+            configmaps, etc.
+
+      .. attr:: max-age
+         :type: int
+         :default: 0
+
+         The time (in seconds) since creation that a node may be
+         available for use.  Ready nodes older than this time will be
+         deleted.
+
+      .. attr:: max-ready-age
+         :type: int
+         :default: 0
+
+         The time (in seconds) an unassigned node should stay in ready state.
+
+      .. attr:: min-retention-time
+         :type: int
+         :default: 0
+
+         The time (in seconds) since an instance was launched, during
+         which a node will not be deleted. For node resources with
+         minimum billing times, this can be used to ensure that the
+         instance is retained for at least the minimum billing interval.
+
+         This setting takes precedence over `max-[ready-]age`.
+
+      .. attr:: name
+         :type: str
+
+         The name of the label.  Used to refer to the label in Zuul
+         configuration.
+
+      .. attr:: reuse
+         :type: bool
+         :default: False
+
+         Should the node be reused (True) or deleted (False) after use.
+
+      .. attr:: slots
+         :type: int
+         :default: 1
+
+         How many jobs are permitted run on the same node simultaneously.
+
+      .. attr:: snapshot-expiration
+         :type: int
+         :default: 604800
+
+         The time (in seconds) until a snapshot expires.
+
+      .. attr:: snapshot-timeout
+         :type: int
+         :default: 3600
+
+         The time (in seconds) to wait for a snapshot to complete.
+
+      .. attr:: spec
+         :type: dict
+
+
+         Zuul will supply the contents of this value verbatim to
+         Kubernetes as the ``spec`` attribute of the Kubernetes
+         ``Pod`` definition.
+
+         This attribute allows for the creation of arbitrary
+         complex pod definitions but the user is responsible for
+         ensuring that they are suitable.  The first container in
+         the pod is expected to be a long-running container that
+         hosts a shell environment for running commands.  The
+         following minimal definition is recommended as a starting
+         point:
+
+         .. code-block:: yaml
+
+            labels:
+              - name: custom-pod
+                kind: pod
+                spec:
+                  containers:
+                    - name: custom-pod
+                      image: ubuntu:jammy
+                      imagePullPolicy: IfNotPresent
+                      command: ["/bin/sh", "-c"]
+                      args: ["sleep infinity"]
+
+      .. attr:: tags
+         :type: dict
+
+         A dictionary of tags to add to nodes.  Avoid the use of
+         `zuul_` as a key prefix since Zuul uses this for internal
+         values.
+
+   .. attr:: launch-attempts
+      :type: int
+      :default: 3
+
+      The number of times to attempt launching a node before
+      considering the request failed.
+
+   .. attr:: launch-timeout
+      :type: int
+
+      The time to wait from issuing the command to create a
+      new node until the node is reporting as running.  If
+      the timeout is exceeded, the node launch is aborted
+      and the node deleted.
+
+   .. attr:: name
+      :type: str
+
+      The name of the provider.  Used to refer to the
+      provider in Zuul configuration.
+
+   .. attr:: parent
+      :type: str
+
+      The name of the parent section from which to inherit.
+      This attribute is only used by :attr:`section`
+      objects.  To indicate which section a provider should
+      be attached to, use
+      :attr:`provider[kubernetes].section`
+
+   .. attr:: resource-limits
+      :type: dict
+
+      Resource limits for this provider.  Configure these
+      values to cause Zuul to attempt to limit the resource
+      usage.  This can be used to limit Zuul's usage to a
+      level below the cloud quota.
+
+      .. attr:: namespaces
+         :type: int
+
+         The number of pods.
+
+      .. attr:: pods
+         :type: int
+
+         The number of pods.
+
+   .. attr:: section
+      :type: str
+
+      The name of the :attr:`section` from which to inherit.
+
+
