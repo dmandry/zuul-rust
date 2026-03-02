@@ -86,19 +86,6 @@ The attributes available to top-level label objects are:
       available for use.  Ready nodes older than this time will be
       deleted.
 
-   .. attr:: max-nodes
-      :type: int
-
-      The maximum number of nodes for this label that should be
-      created in any tenant.
-
-      If a provider appears in more than one tenant, then any
-      unallocated `ready` nodes are visible in all the tenants that
-      use that provider, and therefore, count toward the label maximum
-      in all of those tenants.  Once one of those nodes is assigned to
-      a request in a tenant, it only counts toward the total in that
-      one tenant.
-
    .. attr:: max-ready-age
       :type: int
       :default: 0
@@ -107,7 +94,7 @@ The attributes available to top-level label objects are:
 
    .. attr:: min-ready
       :type: int
-      :default: 0
+      :required:
 
       Minimum number of instances that should be in a ready
       state. Zuul always creates more nodes as necessary in response

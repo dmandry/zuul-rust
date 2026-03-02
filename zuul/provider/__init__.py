@@ -90,7 +90,7 @@ class BaseProviderImage(CNameMixin, metaclass=abc.ABCMeta):
 
     def __init__(self, image_config, provider_config):
         new_config = image_config.copy()
-        self.__dict__.update(new_config)
+        self.__dict__.update(self.schema(new_config))
 
 
 class BaseProviderFlavor(CNameMixin, metaclass=abc.ABCMeta):
@@ -104,7 +104,7 @@ class BaseProviderFlavor(CNameMixin, metaclass=abc.ABCMeta):
 
     def __init__(self, flavor_config, provider_config):
         new_config = flavor_config.copy()
-        self.__dict__.update(new_config)
+        self.__dict__.update(self.schema(new_config))
 
 
 class BaseProviderLabel(CNameMixin, metaclass=abc.ABCMeta):
@@ -119,7 +119,7 @@ class BaseProviderLabel(CNameMixin, metaclass=abc.ABCMeta):
 
     def __init__(self, label_config, provider_config):
         new_config = label_config.copy()
-        self.__dict__.update(new_config)
+        self.__dict__.update(self.schema(new_config))
 
     def __repr__(self):
         return (f"<{self.__class__.__name__} "
@@ -545,7 +545,8 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
         return self.schema
 
     def parseConfig(self, config, connection):
-        ret = config.copy()
+        schema = self.getProviderSchema()
+        ret = schema(config)
         images = self.parseImages(config, connection)
         flavors = self.parseFlavors(config, connection)
         labels = self.parseLabels(config, connection)

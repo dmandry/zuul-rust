@@ -1918,15 +1918,3 @@ class TestNodepoolConfig(LauncherBaseTestCase):
         self.assertEqual(1, len(layout.loading_errors))
         self.assertIn('Flavor configuration not permitted in',
                       layout.loading_errors[0].error)
-
-    @simple_layout('layouts/nodepool-internal-attrs.yaml',
-                   enable_nodepool=True)
-    def test_nodepool_internal_attrs(self):
-        # Test that an attempt to set an internal attribute fails
-        # schema validation.
-        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
-        self.assertEqual(1, len(layout.loading_errors))
-        self.assertIn('extra keys not allowed',
-                      layout.loading_errors[0].error)
-        self.assertIn('project_canonical_name',
-                      layout.loading_errors[0].error)

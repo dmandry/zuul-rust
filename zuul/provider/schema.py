@@ -116,6 +116,8 @@ common_label = vs.Schema({
 # The label attributes that can appear in a section/provider label or
 # a standalone label (but not in the section body).
 base_label = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
     Required(
         'name',
         doc="""\
@@ -139,6 +141,19 @@ base_label = vs.Schema({
         The flavor to use with this label.
         """,
     ): Nullable(str),
+    Optional(
+        'min-ready',
+        doc="""\
+        Minimum number of instances that should be in a ready
+        state. Zuul always creates more nodes as necessary in
+        response to demand, but setting ``min-ready`` can speed
+        processing by attempting to keep nodes on-hand and ready for
+        immedate use.  This is best-effort based on available
+        capacity and is not a guaranteed allocation.  The default of 0
+        means that Zuul will only create nodes of this label when
+        there is demand.
+        """,
+        default=0): int,
 })
 
 # Azure doesn't take a key-name, so this is separate.
@@ -298,6 +313,9 @@ common_image_zuul = vs.Schema({
 # a section/provider image or a standalone image (but not in the
 # section body).
 base_image = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
+    Required('branch', doc="UNDOCUMENTED"): str,
     Required(
         'name',
         doc="""\
@@ -326,6 +344,8 @@ base_image = vs.Schema({
 # The flavor attributes that can appear in a section/provider flavor or
 # a standalone flavor (but not in the section body).
 base_flavor = vs.Schema({
+    Required('project_canonical_name'): str,
+    Required('config_hash'): str,
     Required(
         'name',
         doc="""\

@@ -37,9 +37,8 @@ provided with each driver's documentation.
 
    * :attr:`provider[aws]`
    * :attr:`provider[azure]`
-   * :attr:`provider[kubernetes]`
-   * :attr:`provider[openstack]`
    * :attr:`provider[static]`
+   * :attr:`provider[openstack]`
 
    .. attr:: name
       :type: str

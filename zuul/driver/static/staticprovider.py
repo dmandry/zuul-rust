@@ -131,7 +131,7 @@ class StaticNodeConfig:
     })
 
     def __init__(self, node_config):
-        self.__dict__.update(node_config)
+        self.__dict__.update(self.schema(node_config))
 
     def inheritFrom(self, image, flavor):
         for attr in ['username', 'connection_port']:
