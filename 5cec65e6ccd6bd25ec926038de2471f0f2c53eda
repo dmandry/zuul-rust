@@ -71,6 +71,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "a83865c0_46121873",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-05T01:00:54Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "39fe3ed1_73cd428f",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "60d9c1d4_b39d92a6",
@@ -119,6 +137,30 @@
       "writtenOn": "2026-03-02T16:12:47Z",
       "side": 1,
       "message": "For the selection field with multiple values, could it be possible to specify if the selection is multi select or select one?",
+      "range": {
+        "startLine": 132,
+        "startChar": 0,
+        "endLine": 136,
+        "endChar": 20
+      },
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4aa2d448_f4690ca5",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 136,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-05T01:00:54Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "213a1b3b_cbe3095e",
       "range": {
         "startLine": 132,
         "startChar": 0,
@@ -242,6 +284,24 @@
       "side": 1,
       "message": "I agree.",
       "parentUuid": "32117b0c_0c03e7ed",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c2f7ab17_3f07ea1f",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 210,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-05T01:00:54Z",
+      "side": 1,
+      "message": "Added a line about this in the next revision.",
+      "parentUuid": "44459274_52a6e14d",
       "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
