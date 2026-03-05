@@ -1771,6 +1771,48 @@ class TestLauncher(LauncherBaseTestCase):
             ctx, path=model.ProviderNode._getPath(request.nodes[0]))
         self.assertEqual(['fake key fake base64'], node.host_keys)
 
+    @simple_layout('layouts/nodepool-image-hash.yaml', enable_nodepool=True)
+    @return_data(
+        'build-debian-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.debian_return_data,
+    )
+    @return_data(
+        'build-ubuntu-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.ubuntu_return_data,
+    )
+    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
+                return_value="ami-1e749f67")
+    def test_image_hash(self, mock_uploadimage):
+        # Test that we avoid uploads of duplicate image hashes
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local', 'ubuntu-local'],
+        )
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='build-debian-local-image', result='SUCCESS'),
+            dict(name='build-ubuntu-local-image', result='SUCCESS'),
+        ], ordered=False)
+
+        for _ in iterate_timeout(60, "upload to complete"):
+            uploads = self.launcher.image_upload_registry.getUploadsForImage(
+                'review.example.com%2Forg%2Fcommon-config/debian-local')
+            self.assertEqual(1, len(uploads))
+            pending1 = [u for u in uploads if u.external_id is None]
+
+            uploads = self.launcher.image_upload_registry.getUploadsForImage(
+                'review.example.com%2Forg%2Fcommon-config/ubuntu-local')
+            self.assertEqual(2, len(uploads))
+            pending2 = [u for u in uploads if u.external_id is None]
+            if not (pending1 or pending2):
+                break
+        # The above ensures that we have 1 debian upload (its hash is
+        # identical) and 2 ubuntu uploads (different hashes).
+
     @simple_layout('layouts/nodepool-image.yaml', enable_nodepool=True)
     @return_data(
         'build-debian-local-image',

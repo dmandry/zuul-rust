@@ -337,6 +337,15 @@ class BaseProviderSchema(metaclass=abc.ABCMeta):
     def getInheritableFlavorSchema(self):
         return BaseProviderFlavor.inheritable_schema
 
+    def getZuulImageSchema(self):
+        return BaseProviderImage.zuul_schema
+
+    def getImageConfigKeys(self):
+        schema = self.getZuulImageSchema()
+        for key in schema.schema.keys():
+            if key.config:
+                yield key
+
     def getProviderSchema(self, internal=False):
         schema = vs.Schema({
             '_source_context': model.SourceContext,
