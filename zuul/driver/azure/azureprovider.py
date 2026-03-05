@@ -489,6 +489,9 @@ class AzureProviderSchema(BaseProviderSchema):
     def getInheritableFlavorSchema(self):
         return AzureProviderFlavor.inheritable_schema
 
+    def getZuulImageSchema(self):
+        return AzureProviderImage.zuul_schema
+
     def getProviderSchema(self, internal=False):
         schema = super().getProviderSchema(internal)
 

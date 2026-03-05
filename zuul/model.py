@@ -2072,7 +2072,7 @@ class ProviderConfig(ConfigObject):
         schema(config)
 
         # Set internal attributes
-        self._setInternalAttributes(layout, config)
+        self._setInternalAttributes(layout, config, schema_class)
 
         # Make sure the launcher will be able to parse this
         internal_schema = connection.driver.getProviderSchema(internal=True)
@@ -2080,15 +2080,20 @@ class ProviderConfig(ConfigObject):
 
         return config
 
-    def _setInternalAttributes(self, layout, config):
+    def _setInternalAttributes(self, layout, config, schema_class):
         # Set config hashes
         image_hashes = {}
+        image_hash_keys = set(schema_class.getImageConfigKeys())
         for image in config.get('images', []):
             # This is used for identifying unique image configurations
             # across multiple providers.
             image_object = layout.images[image['name']]
+            image_hash_dict = {
+                k: v for k, v in image.items() if k in image_hash_keys
+            }
             image['config_hash'] = hashlib.sha256(
-                json.dumps(image, sort_keys=True).encode("utf8")).hexdigest()
+                json.dumps(image_hash_dict, sort_keys=True).encode(
+                    "utf8")).hexdigest()
             image['project_canonical_name'] =\
                 image_object.project_canonical_name
             image['branch'] = image_object.branch

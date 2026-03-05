@@ -195,6 +195,7 @@ class AwsProviderImage(BaseProviderImage):
     inheritable_aws_zuul_schema = vs.Schema({
         Optional(
             'import-method',
+            config=False,
             doc="""The method to use when importing the image.""",
             default='snapshot'
         ): vs.Any(
@@ -639,6 +640,9 @@ class AwsProviderSchema(BaseProviderSchema):
 
     def getInheritableFlavorSchema(self):
         return AwsProviderFlavor.inheritable_schema
+
+    def getZuulImageSchema(self):
+        return AwsProviderImage.zuul_schema
 
     def getProviderSchema(self, internal=False):
         schema = super().getProviderSchema(internal)

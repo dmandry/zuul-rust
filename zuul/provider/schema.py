@@ -186,12 +186,14 @@ ssh_label = assemble(
 common_image = vs.Schema({
     Optional(
         'username',
+        config=False,
         doc="""\
         The username Zuul should use when connecting to the node.
         """,
     ): Nullable(str),
     Optional(
         'connection-type',
+        config=False,
         doc="""\
         The connection type that a consumer should use when connecting
         to the node.
@@ -204,6 +206,7 @@ common_image = vs.Schema({
     )),
     Optional(
         'connection-port',
+        config=False,
         doc="""\
         The port that Zuul should use when connecting to the node.
         For most nodes this is not necessary. This defaults to 22 when
@@ -211,6 +214,7 @@ common_image = vs.Schema({
     ): Nullable(int),
     Optional(
         'python-path',
+        config=False,
         doc="""\
         The path of the default python interpreter.  Used by Zuul to set
         ``ansible_python_interpreter``.  The special value ``auto`` will
@@ -219,6 +223,7 @@ common_image = vs.Schema({
     ): Nullable(str),
     Optional(
         'shell-type',
+        config=False,
         doc="""\
         The shell type of the node's default shell executable. Used by Zuul
         to set ``ansible_shell_type``. This setting should only be used
@@ -234,12 +239,14 @@ common_image = vs.Schema({
     ): Nullable(str),
     Optional(
         'import-timeout',
+        config=False,
         doc="""\
         The limit on the amount of time a successful image import can
         take.""",
         default=300): int,
     Optional(
         'final',
+        config=False,
         doc="""\
         Whether the configuration of the label may be updated
         by values in label-defaults or overidden with a new definition
@@ -272,6 +279,7 @@ cloud_image = vs.Schema({
 common_image_zuul = vs.Schema({
     Optional(
         'upload-methods',
+        config=False,
         doc="""\
         An ordered list of methods to use when creating an image in
         the provider.""",
@@ -313,6 +321,7 @@ base_image = vs.Schema({
     ): str,
     Optional(
         'description',
+        config=False,
         doc="""\
         A textual description of the image for reference purposes.""",
     ): Nullable(str),
