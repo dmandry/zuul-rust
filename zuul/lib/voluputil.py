@@ -98,8 +98,15 @@ class Required(vs.Required):
     hyphens with underscares.  This enables the output of the
     validator to be used directly in setting python object attributes.
 
+    :param str output: Override the output name of the attribute
+    :param str doc: A docstring for the attribute
+    :param bool config: Whether the attribute represents a
+      configuration attribute inherent to the object's identity (used
+      for image config hashes)
+
     """
-    def __init__(self, schema, default=UNDEFINED, output=None, doc=None):
+    def __init__(self, schema, default=UNDEFINED, output=None, doc=None,
+                 config=True):
         if not isinstance(schema, str):
             raise Exception("Only strings are supported")
         super().__init__(schema, default=default)
@@ -107,6 +114,7 @@ class Required(vs.Required):
             output = str(schema).replace('-', '_').lower()
         self.output = output
         self.doc = doc
+        self.config = config
 
     def __call__(self, data):
         # Superclass ensures that data==schema
@@ -123,8 +131,16 @@ class Optional(vs.Optional):
     validator to be used directly in setting python object attributes.
 
     This works in conjuction with Nullable.
+
+    :param str output: Override the output name of the attribute
+    :param str doc: A docstring for the attribute
+    :param bool config: Whether the attribute represents a
+      configuration attribute inherent to the object's identity (used
+      for image config hashes)
+
     """
-    def __init__(self, schema, default=UNDEFINED, output=None, doc=None):
+    def __init__(self, schema, default=UNDEFINED, output=None, doc=None,
+                 config=True):
         if not isinstance(schema, str):
             raise Exception("Only strings are supported")
         super().__init__(schema, default=default)
@@ -132,6 +148,7 @@ class Optional(vs.Optional):
             output = str(schema).replace('-', '_').lower()
         self.output = output
         self.doc = doc
+        self.config = config
 
     def __call__(self, data):
         # Superclass ensures that data==schema

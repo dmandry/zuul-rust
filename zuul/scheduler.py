@@ -3421,7 +3421,7 @@ class Scheduler(threading.Thread):
                                     # This image is needed, add this endpoint
                                     endpoint = provider.getEndpoint()
                                     key = (endpoint.canonical_name,
-                                           image.config_hash)
+                                           image.zuul_config_hash)
                                     uploads[key].append(
                                         provider.canonical_name)
                     for (endpoint_name, config_hash), providers in \
