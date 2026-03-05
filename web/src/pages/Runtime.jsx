@@ -17,10 +17,16 @@ import PropTypes from 'prop-types'
 import { connect } from 'react-redux'
 import { useHistory, useLocation } from 'react-router-dom'
 import {
+  DatePicker,
   PageSection,
   PageSectionVariants,
   Text,
   TextContent,
+  Toolbar,
+  ToolbarContent,
+  ToolbarGroup,
+  ToolbarItem,
+  ToolbarToggleGroup,
 } from '@patternfly/react-core'
 import { fetchBuildTimes } from '../api'
 import {
@@ -169,6 +175,8 @@ function RuntimePage(props) {
   const [currentProject, setCurrentProject] = useState()
   const [currentBranch, setCurrentBranch] = useState()
   const [currentJobName, setCurrentJobName] = useState()
+  const [currentStartTime, setCurrentStartTime] = useState()
+  const [currentEndTime, setCurrentEndTime] = useState()
   const [buildList, setBuildList] = useState()
   const history = useHistory()
   const location = useLocation()
@@ -178,17 +186,35 @@ function RuntimePage(props) {
     const pipeline = urlParams.get('pipeline')
     const project = urlParams.get('project')
     const branch = urlParams.get('branch')
-    const job_name = urlParams.get('job_name')
-    if (pipeline && branch && project && job_name) {
+    const jobName = urlParams.get('job_name')
+    const startTime = urlParams.get('start_time')
+    const endTime = urlParams.get('end_time')
+    if (pipeline && branch && project && jobName) {
       setCurrentPipeline(pipeline)
       setCurrentProject(project)
       setCurrentBranch(branch)
-      setCurrentJobName(job_name)
+      setCurrentJobName(jobName)
+    }
+    if (startTime) {
+      setCurrentStartTime(startTime)
+    }
+    if (endTime) {
+      setCurrentEndTime(endTime)
     }
   }
 
   const updateData = useCallback(() => {
-    const queryString=`&pipeline=${currentPipeline}&project=${currentProject}&branch=${currentBranch}&job_name=${currentJobName}`
+    let queryString=`&pipeline=${currentPipeline}&project=${currentProject}&branch=${currentBranch}&job_name=${currentJobName}`
+    if (currentStartTime || currentEndTime) {
+      queryString += '&limit=5000'
+    }
+    if (currentStartTime) {
+      queryString += `&start_time=${currentStartTime}`
+    }
+    if (currentEndTime) {
+      queryString += `&end_time=${currentEndTime}`
+    }
+
     fetchBuildTimes(tenant.apiPrefix, queryString).then((response) => {
       const { compare } = Intl.Collator('en-US')
       const builds = response.data
@@ -196,7 +222,7 @@ function RuntimePage(props) {
       setBuildList(builds)
     })
   }, [currentPipeline, currentProject,
-      currentBranch, currentJobName, tenant.apiPrefix])
+      currentBranch, currentJobName, currentStartTime, currentEndTime, tenant.apiPrefix])
 
   useEffect(() => {
     document.title = 'Zuul Job Runtimes'
@@ -204,19 +230,47 @@ function RuntimePage(props) {
       updateData()
     }
   }, [updateData, tenant, currentPipeline, currentProject,
-      currentBranch, currentJobName])
+      currentBranch, currentJobName, currentStartTime, currentEndTime])
 
-  function onChange(pipeline, project, branch, job_name) {
+  function onPipelineToolbarChange(pipeline, project, branch, jobName) {
     setCurrentPipeline(pipeline)
     setCurrentProject(project)
     setCurrentBranch(branch)
-    setCurrentJobName(job_name)
+    setCurrentJobName(jobName)
 
+    onInputChange(pipeline, project, branch, jobName, currentStartTime, currentEndTime)
+  }
+
+  function onStartTimeChange(startTime) {
+    if (startTime) {
+      startTime = startTime.toISOString()
+    }
+    setCurrentStartTime(startTime)
+    onInputChange(currentPipeline, currentProject, currentBranch, currentJobName,
+                  startTime, currentEndTime)
+  }
+
+  function onEndTimeChange(endTime) {
+    if (endTime) {
+      endTime = endTime.toISOString()
+    }
+    setCurrentEndTime(endTime)
+    onInputChange(currentPipeline, currentProject, currentBranch, currentJobName,
+                  currentStartTime, endTime)
+  }
+
+  function onInputChange(pipeline, project, branch, jobName, startTime, endTime) {
     const searchParams = new URLSearchParams('')
     searchParams.append('pipeline', pipeline)
     searchParams.append('project', project)
     searchParams.append('branch', branch)
-    searchParams.append('job_name', job_name)
+    searchParams.append('job_name', jobName)
+    if (startTime) {
+      searchParams.append('start_time', startTime)
+    }
+    if (endTime) {
+      searchParams.append('end_time', endTime)
+    }
     history.push({
       pathname: location.pathname,
       search: searchParams.toString(),
@@ -231,6 +285,11 @@ function RuntimePage(props) {
     }
   }
 
+  const startDateValue = (currentStartTime && currentStartTime.length > 10 ) ?
+        currentStartTime.substring(0, 10) : undefined
+  const endDateValue = (currentEndTime && currentEndTime.length > 10 ) ?
+        currentEndTime.substring(0, 10) : undefined
+
   return (
     <>
       <PageSection variant={PageSectionVariants.light}>
@@ -238,13 +297,38 @@ function RuntimePage(props) {
           <Text component="h1">Job Runtimes</Text>
         </TextContent>
         <FreezeJobToolbar
-          onChange={onChange}
+          onChange={onPipelineToolbarChange}
           defaultPipeline={currentPipeline}
           defaultProject={currentProject}
           defaultBranch={currentBranch}
           defaultJob={currentJobName}
           buttonText="Fetch"
         />
+        <Toolbar collapseListedFiltersBreakpoint="md">
+          <ToolbarContent>
+            <ToolbarToggleGroup breakpoint="md">
+              <ToolbarGroup variant="filter-group">
+                <ToolbarItem key="start-date">
+                  <DatePicker
+                    value={startDateValue}
+                    onBlur={(_event, str, date) => onStartTimeChange(date)}
+                    onChange={(_event, str, date) => onStartTimeChange(date)}
+                    helperText="Start date"
+                  />
+                </ToolbarItem>
+                &nbsp;
+                <ToolbarItem key="end-date">
+                  <DatePicker
+                    value={endDateValue}
+                    onBlur={(_event, str, date) => onEndTimeChange(date)}
+                    onChange={(_event, str, date) => onEndTimeChange(date)}
+                    helperText="End date"
+                  />
+                </ToolbarItem>
+              </ToolbarGroup>
+            </ToolbarToggleGroup>
+          </ToolbarContent>
+        </Toolbar>
         <>
           {renderBuilds(buildList)}
         </>
