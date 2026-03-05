@@ -12,15 +12,27 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import PropTypes from 'prop-types'
 import { connect } from 'react-redux'
 import { useHistory, useLocation } from 'react-router-dom'
 import {
+  Dropdown,
+  DropdownItem,
+  DropdownPosition,
+  DropdownToggle,
+  DatePicker,
   PageSection,
   PageSectionVariants,
   Text,
   TextContent,
+  Toolbar,
+  ToolbarContent,
+  ToolbarGroup,
+  ToolbarItem,
+  ToolbarToggleGroup,
+  HelperText,
+  HelperTextItem,
 } from '@patternfly/react-core'
 import { fetchBuildTimes } from '../api'
 import {
@@ -169,26 +181,74 @@ function RuntimePage(props) {
   const [currentProject, setCurrentProject] = useState()
   const [currentBranch, setCurrentBranch] = useState()
   const [currentJobName, setCurrentJobName] = useState()
+  const [currentStartTime, setCurrentStartTime] = useState()
+  const [currentEndTime, setCurrentEndTime] = useState()
+  const [currentPreset, setCurrentPreset] = useState()
+  const [isPresetOpen, setIsPresetOpen] = useState(false)
   const [buildList, setBuildList] = useState()
   const history = useHistory()
   const location = useLocation()
+  const presets = useMemo( () => {
+    return [
+      [undefined, "None"],
+      [24*60*60, "24 hours"],
+      [7*24*60*60, "7 days"],
+      [30*24*60*60, "30 days"],
+      [90*24*60*60, "90 days"],
+      [180*24*60*60, "6 months"],
+      [365*24*60*60, "1 year"],
+      [2*365*24*60*60, "2 years"],
+    ]
+  }, [])
 
   if (!currentBranch) {
     const urlParams = new URLSearchParams(location.search)
     const pipeline = urlParams.get('pipeline')
     const project = urlParams.get('project')
     const branch = urlParams.get('branch')
-    const job_name = urlParams.get('job_name')
-    if (pipeline && branch && project && job_name) {
+    const jobName = urlParams.get('job_name')
+    const startTime = urlParams.get('start_time')
+    const endTime = urlParams.get('end_time')
+    const preset = urlParams.get('preset')
+    if (pipeline && branch && project && jobName) {
       setCurrentPipeline(pipeline)
       setCurrentProject(project)
       setCurrentBranch(branch)
-      setCurrentJobName(job_name)
+      setCurrentJobName(jobName)
+    }
+    if (startTime) {
+      setCurrentStartTime(startTime)
+    }
+    if (endTime) {
+      setCurrentEndTime(endTime)
+    }
+    if (preset) {
+      setCurrentPreset(preset)
     }
   }
 
   const updateData = useCallback(() => {
-    const queryString=`&pipeline=${currentPipeline}&project=${currentProject}&branch=${currentBranch}&job_name=${currentJobName}`
+    let queryString=`&pipeline=${currentPipeline}&project=${currentProject}&branch=${currentBranch}&job_name=${currentJobName}`
+    if (currentStartTime || currentEndTime || currentPreset) {
+      queryString += '&limit=5000'
+    }
+    if (currentPreset) {
+      const seconds = presets.filter((x) => {
+        return x[1] == currentPreset
+      })[0][0]
+      const end = new Date()
+      const start = new Date(end - (seconds * 1000))
+      console.log(currentPreset, seconds, start, end)
+      queryString += `&start_time=${start.toISOString()}&end_time=${end.toISOString()}`
+    }
+    else {
+      if (currentStartTime) {
+        queryString += `&start_time=${currentStartTime}`
+      }
+      if (currentEndTime) {
+        queryString += `&end_time=${currentEndTime}`
+     }
+    }
     fetchBuildTimes(tenant.apiPrefix, queryString).then((response) => {
       const { compare } = Intl.Collator('en-US')
       const builds = response.data
@@ -196,7 +256,8 @@ function RuntimePage(props) {
       setBuildList(builds)
     })
   }, [currentPipeline, currentProject,
-      currentBranch, currentJobName, tenant.apiPrefix])
+      currentBranch, currentJobName, currentStartTime, currentEndTime,
+      currentPreset, tenant.apiPrefix, presets])
 
   useEffect(() => {
     document.title = 'Zuul Job Runtimes'
@@ -204,19 +265,62 @@ function RuntimePage(props) {
       updateData()
     }
   }, [updateData, tenant, currentPipeline, currentProject,
-      currentBranch, currentJobName])
+      currentBranch, currentJobName, currentStartTime, currentEndTime,
+      currentPreset])
 
-  function onChange(pipeline, project, branch, job_name) {
+  function onPipelineToolbarChange(pipeline, project, branch, jobName) {
     setCurrentPipeline(pipeline)
     setCurrentProject(project)
     setCurrentBranch(branch)
-    setCurrentJobName(job_name)
+    setCurrentJobName(jobName)
 
+    onInputChange(pipeline, project, branch, jobName,
+                  currentStartTime, currentEndTime, currentPreset)
+  }
+
+  function onStartTimeChange(startTime) {
+    if (startTime) {
+      startTime = startTime.toISOString()
+    }
+    setCurrentStartTime(startTime)
+    onInputChange(currentPipeline, currentProject, currentBranch, currentJobName,
+                  startTime, currentEndTime, currentPreset)
+  }
+
+  function onEndTimeChange(endTime) {
+    if (endTime) {
+      endTime = endTime.toISOString()
+    }
+    setCurrentEndTime(endTime)
+    onInputChange(currentPipeline, currentProject, currentBranch, currentJobName,
+                  currentStartTime, endTime, currentPreset)
+  }
+
+  function onPresetChange(event) {
+    let preset = event.target.innerText
+    preset = preset == "None" ? undefined : preset
+    setCurrentPreset(preset)
+    onInputChange(currentPipeline, currentProject, currentBranch, currentJobName,
+                  currentStartTime, currentEndTime, preset)
+    setIsPresetOpen(false)
+  }
+
+  function onInputChange(pipeline, project, branch, jobName, startTime, endTime, preset) {
     const searchParams = new URLSearchParams('')
     searchParams.append('pipeline', pipeline)
     searchParams.append('project', project)
     searchParams.append('branch', branch)
-    searchParams.append('job_name', job_name)
+    searchParams.append('job_name', jobName)
+    if (preset) {
+      searchParams.append('preset', preset)
+    } else {
+      if (startTime) {
+        searchParams.append('start_time', startTime)
+      }
+      if (endTime) {
+        searchParams.append('end_time', endTime)
+      }
+    }
     history.push({
       pathname: location.pathname,
       search: searchParams.toString(),
@@ -231,6 +335,11 @@ function RuntimePage(props) {
     }
   }
 
+  const startDateValue = (currentStartTime && currentStartTime.length > 10 ) ?
+        currentStartTime.substring(0, 10) : undefined
+  const endDateValue = (currentEndTime && currentEndTime.length > 10 ) ?
+        currentEndTime.substring(0, 10) : undefined
+
   return (
     <>
       <PageSection variant={PageSectionVariants.light}>
@@ -238,13 +347,66 @@ function RuntimePage(props) {
           <Text component="h1">Job Runtimes</Text>
         </TextContent>
         <FreezeJobToolbar
-          onChange={onChange}
+          onChange={onPipelineToolbarChange}
           defaultPipeline={currentPipeline}
           defaultProject={currentProject}
           defaultBranch={currentBranch}
           defaultJob={currentJobName}
           buttonText="Fetch"
         />
+        <Toolbar collapseListedFiltersBreakpoint="md">
+          <ToolbarContent>
+            <ToolbarToggleGroup breakpoint="md">
+              <ToolbarGroup variant="filter-group">
+                <ToolbarItem key="start-date">
+                  <DatePicker
+                    value={startDateValue}
+                    onBlur={(_event, str, date) => onStartTimeChange(date)}
+                    onChange={(_event, str, date) => onStartTimeChange(date)}
+                    helperText="Start date"
+                  />
+                </ToolbarItem>
+                &nbsp;
+                <ToolbarItem key="end-date">
+                  <DatePicker
+                    value={endDateValue}
+                    onBlur={(_event, str, date) => onEndTimeChange(date)}
+                    onChange={(_event, str, date) => onEndTimeChange(date)}
+                    helperText="End date"
+                  />
+                </ToolbarItem>
+                <ToolbarItem
+                  key="preset"
+                  style={{flexDirection: "column", marginLeft: "4px"}}>
+                  <Dropdown
+                    onSelect={onPresetChange}
+                    position={DropdownPosition.left}
+                    toggle={
+                      <DropdownToggle
+                        onToggle={(open) => setIsPresetOpen(open)}
+                        style={{ width: '100%' }}
+                      >
+                        Preset: {currentPreset}
+                      </DropdownToggle>
+                    }
+                    isOpen={isPresetOpen}
+                    dropdownItems={presets.map((preset) => (
+                      <DropdownItem key={preset[1]}>{preset[1]}</DropdownItem>
+                    ))}
+                    style={{ width: '100%' }}
+                    menuAppendTo={document.body}
+                    helperText="Preset"
+                  /><br/>
+                  <HelperText style={{marginTop: "4px"}}>
+                    <HelperTextItem>
+                      &nbsp;
+                  </HelperTextItem>
+                  </HelperText>
+                </ToolbarItem>
+              </ToolbarGroup>
+            </ToolbarToggleGroup>
+          </ToolbarContent>
+        </Toolbar>
         <>
           {renderBuilds(buildList)}
         </>
