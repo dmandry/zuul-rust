@@ -7831,7 +7831,7 @@ class TestOIDCConfiguration(ZuulTestCase):
                                            files=file_dict)
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
-        self.assertIn("Build succeeded.", A.messages[0],
+        self.assertIn("Build succeeded", A.messages[0],
                       "oidc config should allow null value")
 
     def test_max_ttl_reached(self):

@@ -5868,30 +5868,30 @@ For CI problems and help debugging, contact ci@example.org"""
         # The first 6 (ABCDEF) jobs should have reported back to gerrt thus
         # leaving a message on each change
         self.assertEqual(1, len(A.messages))
-        self.assertIn('Build failed.', A.messages[0])
+        self.assertIn('Build failed', A.messages[0])
         self.assertEqual(1, len(B.messages))
-        self.assertIn('Build failed.', B.messages[0])
+        self.assertIn('Build failed', B.messages[0])
         self.assertEqual(1, len(C.messages))
-        self.assertIn('Build succeeded.', C.messages[0])
+        self.assertIn('Build succeeded', C.messages[0])
         self.assertEqual(1, len(D.messages))
-        self.assertIn('Build failed.', D.messages[0])
+        self.assertIn('Build failed', D.messages[0])
         self.assertEqual(1, len(E.messages))
-        self.assertIn('Build failed.', E.messages[0])
+        self.assertIn('Build failed', E.messages[0])
         self.assertEqual(1, len(F.messages))
-        self.assertIn('Build failed.', F.messages[0])
+        self.assertIn('Build failed', F.messages[0])
 
         # The last 3 (GHI) would have only reported via smtp.
         self.assertEqual(3, len(self.smtp_messages))
         self.assertEqual(0, len(G.messages))
-        self.assertIn('Build failed.', self.smtp_messages[0]['body'])
+        self.assertIn('Build failed', self.smtp_messages[0]['body'])
         self.assertIn(
             'project-test1 https://', self.smtp_messages[0]['body'])
         self.assertEqual(0, len(H.messages))
-        self.assertIn('Build failed.', self.smtp_messages[1]['body'])
+        self.assertIn('Build failed', self.smtp_messages[1]['body'])
         self.assertIn(
             'project-test1 https://', self.smtp_messages[1]['body'])
         self.assertEqual(0, len(I.messages))
-        self.assertIn('Build succeeded.', self.smtp_messages[2]['body'])
+        self.assertIn('Build succeeded', self.smtp_messages[2]['body'])
         self.assertIn(
             'project-test1 https://', self.smtp_messages[2]['body'])
 
@@ -5924,9 +5924,9 @@ For CI problems and help debugging, contact ci@example.org"""
 
         # J and K went back to gerrit
         self.assertEqual(1, len(J.messages))
-        self.assertIn('Build failed.', J.messages[0])
+        self.assertIn('Build failed', J.messages[0])
         self.assertEqual(1, len(K.messages))
-        self.assertIn('Build failed.', K.messages[0])
+        self.assertIn('Build failed', K.messages[0])
         # No more messages reported via smtp
         self.assertEqual(3, len(self.smtp_messages))
 
@@ -6728,14 +6728,24 @@ For CI problems and help debugging, contact ci@example.org"""
 
     @simple_layout('layouts/success-message.yaml')
     def test_success_message(self):
-        # Test the success_message (and failure_message) job attrs
+        # Test the success_message job and pipeline attrs
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(len(A.messages), 1)
+        self.assertIn('YAY', A.messages[0])
+        self.assertIn('Good build check.', A.messages[0])
+
+    @simple_layout('layouts/success-message.yaml')
+    def test_failure_message(self):
+        # Test the failure_message job and pipeline attrs
         A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
         self.executor_server.failJob('badjob', A)
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
         self.assertEqual(len(A.messages), 1)
-        self.assertTrue('YAY' in A.messages[0])
-        self.assertTrue('BOO' in A.messages[0])
+        self.assertIn('BOO', A.messages[0])
+        self.assertIn('Bad build check.', A.messages[0])
 
     @okay_tracebacks('git_fail.sh')
     def test_merge_error(self):

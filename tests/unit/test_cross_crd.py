@@ -184,7 +184,7 @@ class TestGerritToGithubCRD(ZuulTestCase):
         self.assertEqual(A.reported, 1)
         self.assertEqual(
             A.messages[0],
-            "Build failed.\n\n\nWarning:\n  "
+            "Build failed (gate pipeline).\n\n\nWarning:\n  "
             "Dependency cycle detected and project github/project2 "
             "doesn't allow circular dependencies\n")
         self.assertEqual(len(B.comments), 0)
