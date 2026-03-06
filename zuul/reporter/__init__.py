@@ -196,10 +196,12 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
             item_url=item.formatItemUrl())
 
     def _formatItemReportSuccess(self, item, change, with_jobs, short):
-        msg = item.manager.pipeline.success_message
+        item_url = item.formatItemUrl()
+        msg = item.manager.pipeline.success_message.format(
+            pipeline=item.manager.pipeline.getSafeAttributes(),
+            item_url=item_url)
         if with_jobs:
-            item_url = item.formatItemUrl()
-            if item_url is not None:
+            if item_url is not None and item_url not in msg:
                 msg += '\n' + item_url
             msg += '\n\n' + self._formatItemReportJobs(item, short)
         return msg
@@ -248,10 +250,12 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
             msg = str(item.getConfigErrors(
                 errors=True, warnings=False)[0].error)
         else:
-            msg = item.manager.pipeline.failure_message
+            item_url = item.formatItemUrl()
+            msg = item.manager.pipeline.failure_message.format(
+                pipeline=item.manager.pipeline.getSafeAttributes(),
+                item_url=item_url)
             if with_jobs:
-                item_url = item.formatItemUrl()
-                if item_url is not None:
+                if item_url is not None and item_url not in msg:
                     msg += '\n' + item_url
                 msg += '\n\n' + self._formatItemReportJobs(item, short)
         return msg
