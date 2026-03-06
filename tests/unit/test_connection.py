@@ -165,7 +165,8 @@ class TestSQLConnectionMysql(ZuulTestCase):
                 self.assertEqual(1, buildsets[0].refs[0].change)
                 self.assertEqual('1', buildsets[0].refs[0].patchset)
                 self.assertEqual('SUCCESS', buildsets[0].result)
-                self.assertEqual('Build succeeded.', buildsets[0].message)
+                self.assertEqual('Build succeeded (check pipeline).',
+                                 buildsets[0].message)
                 self.assertEqual('tenant-one', buildsets[0].tenant)
                 self.assertEqual(
                     'https://review.example.com/%d' %
@@ -186,7 +187,8 @@ class TestSQLConnectionMysql(ZuulTestCase):
                 self.assertEqual(2, buildsets[1].refs[0].change)
                 self.assertEqual('1', buildsets[1].refs[0].patchset)
                 self.assertEqual('FAILURE', buildsets[1].result)
-                self.assertEqual('Build failed.', buildsets[1].message)
+                self.assertEqual('Build failed (check pipeline).',
+                                 buildsets[1].message)
 
                 # Check the second result, which should be the project-test1
                 # job which failed
@@ -311,7 +313,8 @@ class TestSQLConnectionMysql(ZuulTestCase):
                 self.assertEqual(1, buildset0.refs[0].change)
                 self.assertEqual('1', buildset0.refs[0].patchset)
                 self.assertEqual('SUCCESS', buildset0.result)
-                self.assertEqual('Build succeeded.', buildset0.message)
+                self.assertEqual('Build succeeded (check pipeline).',
+                                 buildset0.message)
                 self.assertEqual('tenant-one', buildset0.tenant)
                 self.assertEqual(
                     'https://review.example.com/%d' % buildset0.refs[0].change,
@@ -474,7 +477,8 @@ class TestSQLConnectionMysql(ZuulTestCase):
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         # This exceeds 65535
         large_data = "very long test data" * 3500
-        interim_data = 'Build succeeded.\nWarning:\n  ' + large_data
+        interim_data = ('Build succeeded (check pipeline).\nWarning:\n  ' +
+                        large_data)
         expected_data = interim_data[:65535]
         self.executor_server.returnData(
             'project-test1', A,

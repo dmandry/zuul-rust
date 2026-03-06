@@ -4,6 +4,8 @@
     trigger:
       gerrit:
         - event: patchset-created
+    success-message: Good build {pipeline.name}.
+    failure-message: Bad build {pipeline.name}.
     success:
       gerrit:
         Verified: 1

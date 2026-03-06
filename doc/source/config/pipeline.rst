@@ -190,16 +190,28 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
       variant. It may appear in the status page or in documentation.
 
    .. attr:: success-message
-      :default: Build successful.
+      :default: Build succeeded ({pipeline.name} pipeline).
 
       The introductory text in reports when all the voting jobs are
       successful.
+      The following replacement fields are available:
+
+      pipeline
+        The name of the pipeline
+      item_url
+        The full URL to information about the item in the web UI
 
    .. attr:: failure-message
-      :default: Build failed.
+      :default: Build failed ({pipeline.name} pipeline).
 
       The introductory text in reports when at least one voting job
       fails.
+      The following replacement fields are available:
+
+      pipeline
+        The name of the pipeline
+      item_url
+        The full URL to information about the item in the web UI
 
    .. attr:: start-message
       :default: Starting {pipeline.name} jobs.
