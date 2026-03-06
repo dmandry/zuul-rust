@@ -1587,20 +1587,19 @@ class PipelineParser(object):
 
         precedence = model.PRECEDENCE_MAP[conf.get('precedence')]
         pipeline.precedence = precedence
-        pipeline.failure_message = conf.get('failure-message',
-                                            "Build failed.")
+        pipeline.failure_message = conf.get(
+            'failure-message', "Build failed ({pipeline.name} pipeline).")
         pipeline.merge_conflict_message = conf.get(
             'merge-conflict-message', "Merge Failed.\n\nThis change or one "
             "of its cross-repo dependencies was unable to be "
             "automatically merged with the current state of its "
             "repository. Please rebase the change and upload a new "
             "patchset.")
-
-        pipeline.success_message = conf.get('success-message',
-                                            "Build succeeded.")
+        pipeline.success_message = conf.get(
+            'success-message', "Build succeeded ({pipeline.name} pipeline).")
         pipeline.footer_message = conf.get('footer-message', "")
-        pipeline.start_message = conf.get('start-message',
-                                          "Starting {pipeline.name} jobs.")
+        pipeline.start_message = conf.get(
+            'start-message', "Starting {pipeline.name} jobs.")
         pipeline.enqueue_message = conf.get('enqueue-message', "")
         pipeline.no_jobs_message = conf.get('no-jobs-message', "")
         pipeline.dequeue_message = conf.get(
