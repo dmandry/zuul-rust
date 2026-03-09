@@ -3625,6 +3625,40 @@ class TestSnapshot(AnsibleZuulTestCase, LauncherBaseTestCase):
         image_cname = 'review.example.com%2Fcommon-config/debian-local'
         # We have an image, that's good enough for this test.
         self._waitForUploads(image_cname, 1)
+        # Check the result from the DB since snapshot failures
+        # override the playbook result.
+        connection = self.scheds.first.sched.sql.connection
+        builds = connection.getBuilds()
+        self.assertEqual(1, len(builds))
+        self.assertEqual('SUCCESS', builds[0].result)
+
+    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageImportJob.run',
+                return_value="test_external_id")
+    @okay_tracebacks('_checkNodeSnapshot')
+    def test_snapshot_failure_e2e(self, import_mock):
+        self.commitConfigUpdate(
+            "common-config",
+            'config/snapshot/git/common-config/timeout.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        def advance(self):
+            self.state = "not start"
+        self.patch(zuul.driver.aws.awsendpoint.AwsSnapshotStateMachine,
+                   'advance',
+                   advance)
+
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/common-config',
+            'master',
+            ['debian-local'],
+        )
+        self.waitUntilSettled()
+        connection = self.scheds.first.sched.sql.connection
+        builds = connection.getBuilds()
+        self.assertEqual(1, len(builds))
+        self.assertEqual('SNAPSHOT_FAILURE', builds[0].result)
 
 
 class TestSubnodesAndReuse(LauncherBaseTestCase):

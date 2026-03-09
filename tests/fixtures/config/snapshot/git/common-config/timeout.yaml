@@ -1,0 +1,86 @@
+- pipeline:
+    name: image
+    manager: independent
+    trigger:
+      zuul:
+        - event: image-build
+    success:
+      zuul:
+        image-built: true
+        image-validated: true
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/run.yaml
+    nodeset:
+      nodes:
+        - label: debian-normal
+          name: controller
+
+- job:
+    name: build-debian-local-image
+    image-build-name: debian-local
+    run: playbooks/snapshot.yaml
+    attempts: 1
+
+- flavor:
+    name: normal
+
+- image:
+    name: debian
+    type: cloud
+
+- image:
+    name: debian-local
+    type: zuul
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+
+- label:
+    name: debian-local-normal
+    image: debian-local
+    flavor: normal
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    launch-timeout: 600
+    launch-attempts: 2
+    object-storage:
+      bucket-name: zuul
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+      - name: debian-local
+        image-format: snapshot
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: debian-normal
+        snapshot-timeout: 1
+      - name: debian-local-normal
+
+- project:
+    name: common-config
+    image:
+      jobs:
+        - build-debian-local-image

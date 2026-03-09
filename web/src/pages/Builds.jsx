@@ -102,7 +102,9 @@ class BuildsPageComponent extends React.Component {
           'ABORTED',
           'LOST',
           'EXCEPTION',
-          'NO_HANDLE'],
+          'NO_HANDLE',
+          'SNAPSHOT_FAILURE',
+        ],
         fuzzy: false,
       },
       {
