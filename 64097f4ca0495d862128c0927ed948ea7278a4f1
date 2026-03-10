@@ -16,6 +16,24 @@
       "message": "Should we log a warning when we encounter such a case at it seems like this normally shouldn\u0027t happen.",
       "revId": "64097f4ca0495d862128c0927ed948ea7278a4f1",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "fd36997d_25dc6103",
+        "filename": "zuul/launcher/client.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 335,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-03-10T13:56:37Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "93849936_101ce8ab",
+      "revId": "64097f4ca0495d862128c0927ed948ea7278a4f1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
