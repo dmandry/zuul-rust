@@ -6900,6 +6900,7 @@ class EventInfo:
         self.timestamp = time.time()
         self.span_context = None
         self.ref = None
+        self.event_details = None
         # Image build related events carry information that's needed
         # by the reporter.
         self.image_names = None
@@ -6916,6 +6917,7 @@ class EventInfo:
             tinfo.ref = event_ref_key
         else:
             tinfo.ref = None
+        tinfo.event_details = event.toDict()
         tinfo.image_names = getattr(event, 'image_names', None)
         tinfo.image_upload_uuid = getattr(event, 'image_upload_uuid', None)
         tinfo.image_build_uuid = getattr(event, 'image_build_uuid', None)
@@ -6928,6 +6930,7 @@ class EventInfo:
         tinfo.timestamp = d["timestamp"]
         tinfo.span_context = d["span_context"]
         tinfo.ref = d["ref"]
+        tinfo.event_details = d.get("event_details")
         tinfo.image_names = d.get("image_names")
         tinfo.image_upload_uuid = d.get("image_upload_uuid")
         tinfo.image_build_uuid = d.get("image_build_uuid")
@@ -6963,6 +6966,7 @@ class EventInfo:
             "timestamp": self.timestamp,
             "span_context": self.span_context,
             "ref": self.ref,
+            "event_details": self.event_details,
             "image_names": self.image_names,
             "image_upload_uuid": self.image_upload_uuid,
             "image_build_uuid": self.image_build_uuid,
