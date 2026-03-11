@@ -604,6 +604,7 @@ class Pipeline(object):
         self.window_decrease_type = None
         self.window_decrease_factor = None
         self.ref_filters = []
+        self.ignore_ref_filters_on_parents = True
         self.event_filters = []
         self.builds_images = False
 

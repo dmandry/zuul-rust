@@ -794,7 +794,8 @@ class PipelineManager(metaclass=ABCMeta):
             warnings = []
             if not self.enqueueChangesAhead(
                     cycle, event, quiet,
-                    ignore_requirements,
+                    ignore_requirements or
+                    self.pipeline.ignore_ref_filters_on_parents,
                     change_queue, history=history,
                     dependency_graph=dependency_graph,
                     warnings=warnings, debug=debug):

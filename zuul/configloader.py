@@ -1549,6 +1549,7 @@ class PipelineParser(object):
                     'dequeue-message': str,
                     'dequeue-on-new-patchset': bool,
                     'ignore-dependencies': bool,
+                    'ignore-ref-filters-on-parents': bool,
                     'post-review': bool,
                     'disable-after-consecutive-failures':
                         vs.All(int, vs.Range(min=1)),
@@ -1606,6 +1607,9 @@ class PipelineParser(object):
             'dequeue-on-new-patchset', True)
         pipeline.ignore_dependencies = conf.get(
             'ignore-dependencies', False)
+        pipeline.ignore_ref_filters_on_parents = conf.get(
+            'ignore-ref-filters-on-parents', False,
+        )
         pipeline.post_review = conf.get(
             'post-review', False)
 
