@@ -151,6 +151,26 @@ class TestAzureDriver(BaseAzureDriverTest, BaseCloudDriverTest):
         self.assertEqual(
             len(vm_request['properties']['osProfile']['adminPassword']),
             64)
+        self.assertEqual(
+            len(vm_request['identity']['userAssignedIdentities']),
+            1)
+        uai = vm_request['identity']['userAssignedIdentities']
+        self.assertIn('/subscriptions/582c3efd-3e57-4073-82c5-d122636fb45c'
+                      '/resourceGroups/id-group'
+                      '/providers/Microsoft.ManagedIdentity'
+                      '/userAssignedIdentities/id-name', uai)
+        self.assertEqual(
+            len(vm_request['identity']['userAssignedIdentities']),
+            1)
+        self.assertEqual(
+            '/subscriptions/582c3efd-3e57-4073-82c5-d122636fb45c'
+            '/resourceGroups/not-nodepool'
+            '/providers/Microsoft.Network'
+            '/virtualNetworks/not-nodepool'
+            '/subnets/default',
+            vm_request['properties']['networkProfile']
+            ['networkInterfaceConfigurations'][0]['properties']
+            ['ipConfigurations'][0]['properties']['subnet']['id'])
 
     @simple_layout('layouts/azure/nodepool.yaml', enable_nodepool=True)
     @driver_config('azure', quotas={'cores': 1})

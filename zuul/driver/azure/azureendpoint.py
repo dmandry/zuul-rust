@@ -772,8 +772,8 @@ class AzureProviderEndpoint(BaseProviderEndpoint):
         # build resource id for all configured User-assigned Identities
         uai_resource_ids = set()
         for uai in label.user_assigned_identities:
-            uai_rg_name = uai.get("resource-group", resource_group)
-            uai_id = self._client.managed_identities.id(
+            uai_rg_name = uai.get("resource_group", resource_group)
+            uai_id = self._client.resource_group_managed_identities.id(
                 resourceGroupName=uai_rg_name, resourceName=uai['name'])
             uai_resource_ids.add(uai_id)
 
@@ -880,7 +880,7 @@ class AzureProviderEndpoint(BaseProviderEndpoint):
 
         ref = label.subnet_reference
         subnet_id = self._client.subnets.id(
-            resourceGroupName=ref.get('resource-group', resource_group),
+            resourceGroupName=ref.get('resource_group', resource_group),
             virtualNetworkName=ref['network'],
             resourceName=ref['subnet'],
         )
