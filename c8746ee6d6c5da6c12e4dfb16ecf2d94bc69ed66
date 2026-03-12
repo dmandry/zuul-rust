@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "28473452_6233150a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-12T15:13:46Z",
+      "side": 1,
+      "message": "Some of the confusion is happening upstream in Gerrit\u0027s repo-discuss as well: https://groups.google.com/g/repo-discuss/c/fIgEGcB2IAs/m/RkEY_YPSAAAJ I suspect that contributes to the confusion on our end. Basically it isn\u0027t clear when exactly this is meant to stop working but at least in some configurations it doesn\u0027t work with 3.13 at all.",
+      "revId": "c8746ee6d6c5da6c12e4dfb16ecf2d94bc69ed66",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
