@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "144d629f_5d55b730",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-13T16:08:40Z",
+      "side": 1,
+      "message": "Rereading the documentation for include-projects it isn\u0027t clear to me why the existing behavior isn\u0027t the existing behavior. Include-projects is used to filter projects that would otherwise be in the workspace due to changes for the current item or its dependencies. Setting it to [] effectively means `don\u0027t include these projects` right?",
+      "revId": "f2dc128e6f5e4c18b3f41b50a39554a6dba6dcb0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
