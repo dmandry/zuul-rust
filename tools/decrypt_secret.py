@@ -33,8 +33,7 @@ def main():
     (private_secrets_key, public_secrets_key) = \
         encryption.deserialize_rsa_keypair(open(args.private_key, 'rb').read())
     parser = zuul.configloader.SecretParser(None)
-    sc = zuul.model.SourceContext(None, 'project', None, 'master',
-                                  'path', False)
+    sc = zuul.model.SourceContext(None, 'project', None, 'master', 'path')
 
     data = zuul.configloader.safe_load_yaml(open(args.file).read(), sc)
     for element in data:
