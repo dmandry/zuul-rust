@@ -16,6 +16,24 @@
       "message": "https://review.opendev.org/c/zuul/zuul/+/945756/7/zuul/model.py is the change that updated the parameter list for SourceContext.__init__().\n\nThe old parameter list was: `self, project_canonical_name, project_name, project_connection_name, branch, path, trusted, implied_branch_matchers\u003dNone`. The new parameter list is: `self, project_canonical_name, project_name, project_connection_name, branch, path`.\n\nI think you need to drop the `False` argument at the end of the list rather than the None in the middle. This is because `project_connection_name` still exists before `branch` and `trusted` has been removed after `path`.",
       "revId": "bafac70b280fdda22677dc18749bd064378043e0",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "55230cef_3fb6f897",
+        "filename": "tools/decrypt_secret.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-13T16:19:54Z",
+      "side": 1,
+      "message": "And just to double check the code hasn\u0027t changed on master since the previously linked change: https://opendev.org/zuul/zuul/src/commit/0ae19fdfb10fa8b39d67fd1070dd2010d84a9b4a/zuul/model.py#L3453-L3454",
+      "parentUuid": "1e30af0a_5241a47d",
+      "revId": "bafac70b280fdda22677dc18749bd064378043e0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
