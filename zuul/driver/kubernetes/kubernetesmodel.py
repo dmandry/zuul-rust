@@ -30,12 +30,14 @@ class KubernetesProviderNode(model.ProviderNode, subclass_id="kubernetes"):
 
 
 class KubernetesInstance(statemachine.Instance):
-    def __init__(self, kubernetes_type, kubernetes_id, metadata, quota):
+    def __init__(self, kubernetes_type, kubernetes_id, metadata, quota,
+                 pod_ip=None):
         super().__init__()
         self.kubernetes_type = kubernetes_type
         self.kubernetes_id = kubernetes_id
         self.metadata = metadata
         self.quota = quota
+        self.interface_ip = pod_ip or kubernetes_id
 
     def getQuotaInformation(self):
         return self.quota

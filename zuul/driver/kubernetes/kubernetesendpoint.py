@@ -134,8 +134,13 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
 
         if self.state == self.COMPLETE:
             self.complete = True
+            pod_ip = None
+            if self.node.connection_type == 'ssh':
+                pod = self.endpoint.core_client.read_namespaced_pod(
+                    self.hostname, self.namespace)
+                pod_ip = pod.status.pod_ip
             return KubernetesInstance(self.label.kind, self.hostname,
-                                      self.node.tags, self.quota)
+                                      self.node.tags, self.quota, pod_ip)
 
 
 class KubernetesProviderEndpoint(BaseProviderEndpoint):
