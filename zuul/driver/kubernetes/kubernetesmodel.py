@@ -36,6 +36,7 @@ class KubernetesInstance(statemachine.Instance):
         self.kubernetes_id = kubernetes_id
         self.metadata = metadata
         self.quota = quota
+        self.interface_ip = kubernetes_id
 
     def getQuotaInformation(self):
         return self.quota
