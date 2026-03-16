@@ -34,6 +34,24 @@
       "parentUuid": "1e30af0a_5241a47d",
       "revId": "bafac70b280fdda22677dc18749bd064378043e0",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "60e71473_29aea7ff",
+        "filename": "tools/decrypt_secret.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 38593
+      },
+      "writtenOn": "2026-03-16T15:06:07Z",
+      "side": 1,
+      "message": "Fixed",
+      "parentUuid": "55230cef_3fb6f897",
+      "revId": "bafac70b280fdda22677dc18749bd064378043e0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
