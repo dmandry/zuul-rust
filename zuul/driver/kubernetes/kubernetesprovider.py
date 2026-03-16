@@ -404,4 +404,6 @@ class KubernetesProvider(BaseProvider, subclass_id='kubernetes'):
         # So that we can disambiguate requests for namespaces and pods
         # (both of which create namespaces).
         tags['zuul_kubernetes_kind'] = label.kind
+        if self.endpoint.connection.use_provider_namespace:
+            tags['provider_namespace'] = self.name
         return tags
