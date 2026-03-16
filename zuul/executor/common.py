@@ -183,16 +183,12 @@ def construct_build_params(uuid, connections, job, item, pipeline,
             projects.add(project)
             required_projects.add(project)
 
-    if job.include_vars:
+    exec_projects = set()
+    if dependent_changes:
         for iv in job.include_vars:
             source = connections.getSource(iv['connection'])
             project = source.getProject(iv['project'])
-            if project not in projects:
-                params['projects'].append(make_project_dict(project))
-                projects.add(project)
-
-    exec_projects = set()
-    if dependent_changes:
+            exec_projects.add(project)
         for pb in job.all_playbooks:
             source = connections.getSource(pb['connection'])
             project = source.getProject(pb['project'])
