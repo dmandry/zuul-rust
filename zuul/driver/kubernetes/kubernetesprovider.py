@@ -302,6 +302,11 @@ class KubernetesProviderSchema(BaseProviderSchema):
                 doc="""The number of pods.""",
             ): Nullable(int),
         }
+        k8s_objects = vs.Schema({
+            'name': str,
+            'kind': str,
+            Optional('namespace'): Nullable(str),
+        })
 
         kubernetes_provider_schema = vs.Schema({
             Optional(
@@ -313,6 +318,15 @@ class KubernetesProviderSchema(BaseProviderSchema):
                 level below the cloud quota.""",
                 default=dict(),
             ): resource_limits,
+            Optional(
+                'k8s-objects',
+                doc="""\
+                k8s-objects that would get copied into the kubernetes
+                namespaces created by this provider. It requires the
+                object to exists in the namespace where the zuul launcher
+                pods live.""",
+                default=[],
+            ): AsList(k8s_objects),
         })
 
         return assemble(
@@ -359,6 +373,7 @@ class KubernetesProvider(BaseProvider, subclass_id='kubernetes'):
         flavor = self.flavors[label.flavor]
         image = self.images[label.image]
         return KubernetesCreateStateMachine(
+            self,
             self.endpoint,
             node,
             hostname,
@@ -389,4 +404,6 @@ class KubernetesProvider(BaseProvider, subclass_id='kubernetes'):
         # So that we can disambiguate requests for namespaces and pods
         # (both of which create namespaces).
         tags['zuul_kubernetes_kind'] = label.kind
+        if self.endpoint.connection.use_provider_namespace:
+            tags['provider_namespace'] = self.name
         return tags

@@ -38,12 +38,19 @@ class KubernetesDeleteStateMachine(statemachine.StateMachine):
         self.endpoint = endpoint
         self.use_openshift_projects =\
             endpoint.connection.use_openshift_projects
+        self.use_provider_namespace =\
+            endpoint.connection.use_provider_namespace
         super().__init__(node.delete_state)
 
     def advance(self):
         if self.state == self.START:
             if self.node.kubernetes_namespace_id:
-                if self.use_openshift_projects:
+                if self.use_provider_namespace:
+                    self.endpoint._deletePod(
+                        self.node.kubernetes_namespace_id,
+                        self.node.kubernetes_pod_id,
+                    )
+                elif self.use_openshift_projects:
                     self.endpoint._deleteProject(
                         self.node.kubernetes_namespace_id)
                 else:
@@ -63,13 +70,15 @@ class KubernetesDeleteStateMachine(statemachine.StateMachine):
 
 class KubernetesCreateStateMachine(statemachine.StateMachine):
     NAMESPACE_CREATING = 'creating namespace'
+    NAMESPACE_READY = "namespace ready for use"
     SA_CREATING = 'creating service account'
     RBAC_CREATING = 'creating rbac'
     POD_CREATING = 'creating pod'
 
-    def __init__(self, endpoint, node, hostname, label, flavor, image,
+    def __init__(self, provider, endpoint, node, hostname, label, flavor, image,
                  log):
         self.log = log
+        self.provider = provider
         self.endpoint = endpoint
         self.node = node
         self.hostname = hostname
@@ -77,7 +86,9 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
         self.label = label
         self.use_openshift_projects =\
             endpoint.connection.use_openshift_projects
-        if label.kind == 'pod':
+        self.use_provider_namespace =\
+            endpoint.connection.use_provider_namespace
+        if self.use_provider_namespace or label.kind == 'pod':
             self.create_pod = True
             self.restricted_access = True
             self.containers = [c['name'] for c in label.spec['containers']]
@@ -87,7 +98,10 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             self.containers = None
         self.quota = self.endpoint.getQuotaForLabel(label)
         self.user = 'zuul-worker'
-        self.namespace = self.hostname
+        if self.use_provider_namespace:
+            self.namespace = self.node.tags['provider_namespace']
+        else:
+            self.namespace = self.hostname
         self.node.kubernetes_connection['user'] = self.user
         self.node.kubernetes_connection['host'] =\
             self.endpoint.core_client.api_client.configuration.host
@@ -100,17 +114,28 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
 
     def advance(self):
         if self.state == self.START:
+            try:
+                self.endpoint.core_client.read_namespace(name=self.namespace)
+                self.state = self.NAMESPACE_CREATING
+            except Exception:
+                pass
+
+        if self.state == self.START:
             if self.use_openshift_projects:
-                self.endpoint._createProject(self.hostname, self.node.tags)
+                self.endpoint._createProject(self.namespace, self.node.tags)
             else:
-                self.endpoint._createNamespace(self.hostname, self.node.tags)
+                self.endpoint._createNamespace(self.namespace, self.node.tags)
             self.endpoint._createImagePullSecrets(self.namespace, self.label)
             self.endpoint._createServiceAccount(self.namespace,
                                                 self.user)
-            self.node.kubernetes_namespace_id = self.namespace
-            self.state = self.SA_CREATING
+            self.endpoint._createRole(self.namespace, self.user,
+                                    self.restricted_access)
+            self.state = self.NAMESPACE_CREATING
 
-        if self.state == self.SA_CREATING:
+        if self.state == self.NAMESPACE_CREATING:
+            self.endpoint._copyNamespaceObjects(
+                self.namespace, self.provider.k8s_objects)
+            self.node.kubernetes_namespace_id = self.namespace
             token = self.endpoint._getToken(self.namespace, self.user)
             if token is None:
                 return
@@ -118,14 +143,13 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             self.node.kubernetes_connection['token'] = token
             if not self.node.kubernetes_connection['skiptls']:
                 self.node.kubernetes_connection['ca_crt'] = ca_crt
-            self.endpoint._createRole(self.namespace, self.user,
-                                      self.restricted_access)
-            self.state = self.RBAC_CREATING
+            self.state = self.NAMESPACE_READY
 
-        if self.state == self.RBAC_CREATING:
+        if self.state == self.NAMESPACE_READY:
             if self.create_pod:
                 self.endpoint._createPod(self.namespace, self.hostname,
                                          self.label, self.node.tags)
+                self.node.kubernetes_pod_id = self.hostname
                 self.state = self.POD_CREATING
             else:
                 self.state = self.COMPLETE
@@ -137,8 +161,13 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
 
         if self.state == self.COMPLETE:
             self.complete = True
+            pod_ip = None
+            if self.node.connection_type == 'ssh':
+                pod = self.endpoint.core_client.read_namespaced_pod(
+                    self.hostname, self.namespace)
+                pod_ip = pod.status.pod_ip
             return KubernetesInstance(self.label.kind, self.hostname,
-                                      self.node.tags, self.quota)
+                                      self.node.tags, self.quota, pod_ip)
 
 
 class KubernetesProviderEndpoint(BaseProviderEndpoint):
@@ -168,24 +197,31 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
         return True
 
     def listResources(self, providers):
-        if self.connection.use_openshift_projects:
+        if self.connection.use_provider_namespace:
+            for provider in providers:
+                resources =  self.core_client.list_namespaced_pod(
+                    provider.name).items
+                resource_type = KubernetesResource.TYPE_POD
+        elif self.connection.use_openshift_projects:
             projects = self.dynamic_client.resources.get(
                 api_version='v1', kind='Project')
-            namespaces = projects.get().items
-            namespace_type = KubernetesResource.TYPE_PROJECT
+            resources = projects.get().items
+            resource_type = KubernetesResource.TYPE_PROJECT
         else:
-            namespaces = self.core_client.list_namespace().items
-            namespace_type = KubernetesResource.TYPE_NAMESPACE
+            resources = self.core_client.list_namespace().items
+            resource_type = KubernetesResource.TYPE_NAMESPACE
 
-        for namespace in namespaces:
-            yield KubernetesResource(namespace.metadata.labels or {},
-                                     namespace_type,
-                                     namespace.metadata.name)
+        for resource in resources:
+            yield KubernetesResource(resource.metadata.labels or {},
+                                     resource_type,
+                                     resource.metadata.name)
 
     def deleteResource(self, resource):
         self.log.info(f"Deleting leaked {resource.type}: {resource.id}")
         if resource.type == KubernetesResource.TYPE_NAMESPACE:
             self._deleteNamespace(resource.id)
+        elif resource.type == KubernetesResource.TYPE_POD: 
+            self._deletePod(resource.metadata['provider_namespace'], resource.id)
         elif resource.type == KubernetesResource.TYPE_PROJECT:
             self._deleteProject(resource.id)
 
@@ -246,6 +282,8 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
 
     def _createNamespace(self, namespace, labels):
         self.log.debug("Creating namespace %s", namespace)
+        if self.connection.use_provider_namespace:
+            labels = {}
 
         # Create the namespace
         ns_body = {
@@ -257,6 +295,70 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
             }
         }
         self.core_client.create_namespace(ns_body)
+
+    def _detectCurrentNamespace(self):
+        try:
+            kubernetes.config.load_incluster_config()
+            return open(
+                "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+            ).read().strip()
+        except Exception:
+            _, active_context = kubernetes.config.list_kube_config_contexts()
+            return active_context['context'].get('namespace', 'default')
+        
+    def _k8s_object_namespaced_method(self, action, object_kind):
+        mapping = {
+            "ConfigMap": "config_map",
+            "Secret": "secret",
+        }
+        return getattr(
+            self.core_client, f"{action}_namespaced_{mapping[object_kind]}"
+        )
+
+    def _copyNamespaceObjects(self, namespace, objects):
+        for object in objects:
+            object_namespace = object.get("namespace") or \
+                self._detectCurrentNamespace()
+            try:
+                provider_k8s_object = self._k8s_object_namespaced_method(
+                    "read", object["kind"]
+                )(
+                    object["name"], object_namespace,
+                )
+            except KeyError:
+                self.log.warning(
+                    "Unsupported object kind %s, skipping copy from namespace %s "
+                    "to namespace %s", object["kind"], object_namespace, namespace,
+                )
+                continue
+            except Exception:
+                self.log.exception(
+                    "Couldn't read %s %s from launcher namespace %s, "
+                    "cannot copy to namespace %s",
+                    object["kind"], object["name"], object_namespace, namespace,
+                )
+                continue
+            try:
+                current_k8s_object = self._k8s_object_namespaced_method(
+                    "read", object["kind"]
+                )(
+                    object["name"], namespace,
+                )
+                if current_k8s_object.data != provider_k8s_object.data:
+                    self._k8s_object_namespaced_method("delete", object["kind"])(
+                        object["name"], namespace,
+                    )
+                    raise Exception("%s data mismatch", object["kind"])
+            except Exception:
+                k8s_object_body = {
+                    'apiVersion': 'v1',
+                    'kind': object["kind"],
+                    'metadata': {'name': object["name"]},
+                    'data': provider_k8s_object.data,
+                }
+                self._k8s_object_namespaced_method("create", object["kind"])(
+                    namespace, k8s_object_body,
+                )
 
     def _createProject(self, project, labels):
         self.log.debug("Creating project %s", project)
@@ -398,6 +500,25 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
         }
         self.rbac_client.create_namespaced_role_binding(
             namespace, role_binding_body)
+        
+        # Give admin group access
+        dev_role_binding_body = {
+            'apiVersion': 'rbac.authorization.k8s.io/v1',
+            'kind': 'RoleBinding',
+            'metadata': {'name': 'zuul-dev-role'},
+            'roleRef': {
+                'apiGroup': 'rbac.authorization.k8s.io',
+                'kind': 'ClusterRole',
+                'name': 'admin',
+            },
+            'subjects': [{
+                'apiGroup': 'rbac.authorization.k8s.io',
+                'kind': 'Group',
+                'name': 'k8s-infra-zuul-testing-admin@arista.com',
+            }],
+        }
+        self.rbac_client.create_namespaced_role_binding(
+            namespace, dev_role_binding_body)
 
     def _createPod(self, namespace, name, label, tags):
         kubernetes_labels = tags
@@ -434,6 +555,18 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
             "propagationPolicy": "Background"
         }
         self.core_client.delete_namespace(namespace, body=delete_body)
+
+    def _deletePod(self, namespace, pod_name):
+        self.log.debug("Deleting namespaced pod %s/%s", namespace, pod_name)
+
+        delete_body = {
+            "apiVersion": "v1",
+            "kind": "DeleteOptions",
+            "propagationPolicy": "Background"
+        }
+        self.core_client.delete_namespaced_pod(
+            name=pod_name, namespace=namespace, body=delete_body,
+        )
 
     def _deleteProject(self, project):
         self.log.debug("Deleting project %s", project)
