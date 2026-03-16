@@ -21,11 +21,13 @@ class KubernetesProviderNode(model.ProviderNode, subclass_id="kubernetes"):
         super().__init__()
         self._set(
             kubernetes_namespace_id=None,
+            kubernetes_pod_id=None,
         )
 
     def getDriverData(self):
         return dict(
             kubernetes_namespace_id=self.kubernetes_namespace_id,
+            kubernetes_pod_id=self.kubernetes_pod_id,
         )
 
 
@@ -50,6 +52,7 @@ class KubernetesInstance(statemachine.Instance):
 class KubernetesResource(statemachine.Resource):
     TYPE_NAMESPACE = 'namespace'
     TYPE_PROJECT = 'project'
+    TYPE_POD = 'pod'
 
     def __init__(self, metadata, type, id):
         super().__init__(metadata, type)
