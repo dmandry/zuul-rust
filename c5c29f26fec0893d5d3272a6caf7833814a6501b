@@ -50,6 +50,24 @@
       "message": "recheck",
       "revId": "c5c29f26fec0893d5d3272a6caf7833814a6501b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "d3eb84c3_1652da5f",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-16T13:50:48Z",
+      "side": 1,
+      "message": "Yes.  To summarize my understanding of the reasoning:\n\nYour change makes a list of the projects that are required for playbooks, and if any of the dependent changes are from one of those projects, then that project is added to the workspace to receive speculative merges.  That way we\u0027re only adding these projects if they appear in the dependency chain.\n\nI think we can do the some thing for the include-vars in common.py.  And should still be able to remove the include-vars section in server.py.",
+      "parentUuid": "82e6b1eb_f15d9e0a",
+      "revId": "c5c29f26fec0893d5d3272a6caf7833814a6501b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
