@@ -16,6 +16,23 @@
       "message": "recheck",
       "revId": "c5c29f26fec0893d5d3272a6caf7833814a6501b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "82e6b1eb_f15d9e0a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-03-16T11:24:08Z",
+      "side": 1,
+      "message": "What I\u0027m wondering is if we should make the behavior here a bit more consistent. Currently we add all include-vars projects unconditionally. But this is not really necessary, but similar to playbooks only when there is a speculative change.",
+      "revId": "c5c29f26fec0893d5d3272a6caf7833814a6501b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
