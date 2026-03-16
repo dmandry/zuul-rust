@@ -38,10 +38,7 @@ class BranchCache:
         self._new_cache = None
         self._thread_lock = threading.Lock()
 
-        if COMPONENT_REGISTRY.model_api < 37:
-            self._makeOldCache()
-        else:
-            self._makeNewCache()
+        self._makeOldCache()
 
     def _makeOldCache(self):
         self._old_cache = BranchCacheOld(
