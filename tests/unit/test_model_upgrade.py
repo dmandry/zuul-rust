@@ -129,7 +129,8 @@ class TestModelUpgrade(ZuulTestCase):
         new_ltime1 = connection1._branch_cache._new_cache
         new_ltime2 = connection2._branch_cache._new_cache
         self.assertEqual(old_ltime1, old_ltime2)
-        self.assertEqual(None, new_ltime1, new_ltime2)
+        self.assertEqual(None, new_ltime1)
+        self.assertEqual(None, new_ltime2)
         # Remember this ltime for later
         stage1_ltime = old_ltime1
 
@@ -148,7 +149,8 @@ class TestModelUpgrade(ZuulTestCase):
         old_ltime2 = connection2._branch_cache._old_cache.ltime
         new_ltime1 = connection1._branch_cache._new_cache.ltime
         new_ltime2 = connection2._branch_cache._new_cache
-        self.assertEqual(stage1_ltime, old_ltime1, old_ltime2)
+        self.assertEqual(stage1_ltime, old_ltime1)
+        self.assertEqual(stage1_ltime, old_ltime2)
         self.assertNotEqual(None, new_ltime1)
         self.assertEqual(None, new_ltime2)
         self.assertTrue(new_ltime1 > stage1_ltime)
@@ -181,8 +183,108 @@ class TestModelUpgrade(ZuulTestCase):
         old_ltime2 = connection2._branch_cache._old_cache.ltime
         new_ltime1 = connection1._branch_cache._new_cache.ltime
         new_ltime2 = connection2._branch_cache._new_cache.ltime
-        self.assertEqual(stage1_ltime, old_ltime1, old_ltime2)
-        self.assertEqual(stage2_ltime, new_ltime1, new_ltime2)
+        self.assertEqual(stage1_ltime, old_ltime1)
+        self.assertEqual(stage1_ltime, old_ltime2)
+        self.assertEqual(stage2_ltime, new_ltime1)
+        self.assertEqual(stage2_ltime, new_ltime2)
+
+        branches2 = connection2.getProjectBranches(project2, tenant2)
+        self.assertEqual(['master'], branches2)
+
+    @model_version(36)
+    @simple_layout('layouts/simple.yaml')
+    def test_model_upgrade_36_37_serial(self):
+        # Test that the first component to start with no old-api
+        # components running is the one that performs the upgrade.
+        component_registry = ComponentRegistry(self.zk_client)
+        self.assertEqual(component_registry.model_api, 36)
+        self.waitUntilSettled()
+
+        first = self.scheds.first
+
+        tenant1 = first.sched.abide.tenants.get('tenant-one')
+        connection1 = first.connections.connections['gerrit']
+        source1 = connection1.source
+        project1 = source1.getProject('org/project')
+        branches1 = connection1.getProjectBranches(project1, tenant1)
+        self.assertEqual(['master'], branches1)
+
+        for _ in iterate_timeout(10, "until priming is complete"):
+            state_one = first.sched.local_layout_state.get("tenant-one")
+            if state_one:
+                break
+
+        old_ltime1 = connection1._branch_cache._old_cache.ltime
+        new_ltime1 = connection1._branch_cache._new_cache
+        self.assertEqual(None, new_ltime1)
+
+        # Remember this ltime for later
+        stage1_ltime = old_ltime1
+
+        # Upgrade our component
+        self.model_test_component_info.model_api = 37
+        for _ in iterate_timeout(30, "model api to update"):
+            if component_registry.model_api == 37:
+                break
+
+        self.log.debug("BranchCache start scheduler-1")
+        second = self.createScheduler()
+        second.start()
+
+        for _ in iterate_timeout(
+                10, "all schedulers to have the same layout state"):
+            if (second.sched.local_layout_state.get(
+                    "tenant-one") == state_one):
+                break
+
+        self.log.debug("BranchCache done start scheduler-1")
+        tenant2 = second.sched.abide.tenants.get('tenant-one')
+        connection2 = second.connections.connections['gerrit']
+        source2 = connection2.source
+        project2 = source2.getProject('org/project')
+
+        old_ltime1 = connection1._branch_cache._old_cache.ltime
+        old_ltime2 = connection2._branch_cache._old_cache.ltime
+        new_ltime1 = connection1._branch_cache._new_cache
+        new_ltime2 = connection2._branch_cache._new_cache.ltime
+        self.assertEqual(stage1_ltime, old_ltime1)
+        self.assertEqual(stage1_ltime, old_ltime2)
+        self.assertEqual(None, new_ltime1)
+        self.assertNotEqual(None, new_ltime2)
+        self.assertTrue(new_ltime2 > stage1_ltime)
+        stage2_ltime = new_ltime2
+
+        self.log.debug("Trigger upgrade on scheduler-0 and check")
+        event = model.TriggerEvent()
+        event.zuul_event_ltime = self.zk_client.getCurrentLtime()
+        second.sched.reconfigureTenant(tenant1, project1, event)
+        state_two = second.sched.local_layout_state.get("tenant-one")
+        for _ in iterate_timeout(
+                10, "all schedulers to have the same layout state"):
+            if (first.sched.local_layout_state.get(
+                    "tenant-one") == state_two):
+                break
+
+        with second.sched.run_handler_lock:
+            A = self.fake_gerrit.addFakeChange('org/project', "master", "A")
+            self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+            self.waitUntilSettled(matcher=[first])
+
+        self.assertHistory([
+            dict(name='check-job', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+        # The ltime checks will tell us the cache has upgraded without
+        # triggering an upgrade (like getProjectBranches would), so
+        # check them first.
+        old_ltime1 = connection1._branch_cache._old_cache.ltime
+        old_ltime2 = connection2._branch_cache._old_cache.ltime
+        new_ltime1 = connection1._branch_cache._new_cache.ltime
+        new_ltime2 = connection2._branch_cache._new_cache.ltime
+        self.assertEqual(stage1_ltime, old_ltime1)
+        self.assertEqual(stage1_ltime, old_ltime2)
+        self.assertEqual(stage2_ltime, new_ltime1)
+        self.assertEqual(stage2_ltime, new_ltime2)
 
         branches2 = connection2.getProjectBranches(project2, tenant2)
         self.assertEqual(['master'], branches2)
