@@ -40,3 +40,6 @@ class KubernetesConnection(BaseConnection):
         # Use openshift projects instead of namespaces
         self.use_openshift_projects = any_to_bool(self.connection_config.get(
             'use_openshift_projects', False))
+        # Use provider name as namespace for pods (a preserving namespace)
+        self.use_provider_namespace = any_to_bool(self.connection_config.get(
+            'use_provider_namespace', False))
