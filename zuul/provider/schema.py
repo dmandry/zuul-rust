@@ -299,6 +299,20 @@ common_image_zuul = vs.Schema({
         """,
         default=dict,
     ): {str: str},
+    Optional(
+        'retain-count',
+        doc="""\
+        How many images to keep available.  As new images are created,
+        the most recent `retain-count` validated images will be kept
+        available.  Keeping more than one image available allows
+        tenant admins to choose to fall-back on older images in case
+        new images exhibit problems.  The most recent (and therefore,
+        in-use) image is included in the count.  So a `retain-count`
+        of 1 means to only keep the current in-use image; a count of 2
+        means to keep one extra image as a backup.
+        """,
+        default=2,
+    ): vs.All(int, vs.Range(min=1))
 })
 
 # The image attributes that, in addition to those above, can appear in

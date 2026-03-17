@@ -3006,9 +3006,9 @@ class Launcher:
                 upload.validated and
                 upload.external_id)
         ]
-        # Keep the 2 most recent validated uploads (uploads are
+        # Keep the most recent validated uploads (uploads are
         # already sorted by timestamp)
-        newest_valid_uploads = valid_uploads[-2:]
+        newest_valid_uploads = valid_uploads[-image.retain_count:]
         keep_uploads.update(set(newest_valid_uploads))
         # And also keep any uploads (regardless of validation) newer
         # than that (since they may have validation jobs running).

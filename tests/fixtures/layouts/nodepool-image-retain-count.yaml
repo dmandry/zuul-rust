@@ -1,0 +1,185 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- pipeline:
+    name: image
+    manager: independent
+    trigger:
+      zuul:
+        - event: image-build
+    success:
+      zuul:
+        image-built: true
+        image-validated: true
+
+- pipeline:
+    name: gate
+    manager: dependent
+    success-message: Build succeeded (gate).
+    trigger:
+      gerrit:
+        - event: comment-added
+          approval:
+            - Approved: 1
+    success:
+      gerrit:
+        Verified: 2
+        submit: true
+    failure:
+      gerrit:
+        Verified: -2
+    start:
+      gerrit:
+        Verified: 0
+    precedence: high
+
+- pipeline:
+    name: post
+    manager: independent
+    trigger:
+      gerrit:
+        - event: ref-updated
+          ref: ^(?!refs/).*$
+
+- pipeline:
+    name: tag
+    manager: independent
+    trigger:
+      gerrit:
+        - event: ref-updated
+          ref: ^refs/tags/.*$
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: ubuntu-xenial
+          name: controller
+
+- job:
+    name: build-debian-local-image
+    image-build-name: debian-local
+
+- job:
+    name: build-ubuntu-local-image
+    image-build-name: ubuntu-local
+
+- job:
+    name: build-fedora-local-image
+    image-build-name: fedora-local
+
+- job:
+    name: check-job
+    run: playbooks/check.yaml
+
+- job:
+    name: post-job
+    run: playbooks/post.yaml
+
+- job:
+    name: tag-job
+    run: playbooks/tag.yaml
+
+- project:
+    name: org/common-config
+    image:
+      jobs:
+        # These jobs should run
+        - build-debian-local-image
+        - build-ubuntu-local-image
+        # This job should not because we don't emit a trigger event
+        # for this image.
+        - build-fedora-local-image
+
+- project:
+    name: org/project
+    check:
+      jobs:
+        - check-job
+    gate:
+      jobs:
+        - check-job
+    post:
+      jobs:
+        - post-job
+    tag:
+      jobs:
+        - tag-job
+
+- image:
+    name: debian
+    type: cloud
+
+- image:
+    name: debian-local
+    type: zuul
+    retain-count: 3
+
+- image:
+    name: ubuntu-local
+    type: zuul
+
+- image:
+    name: fedora-local
+    type: zuul
+
+- flavor:
+    name: normal
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+
+- label:
+    name: debian-local-normal
+    image: debian-local
+    flavor: normal
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    launch-timeout: 600
+    object-storage:
+      bucket-name: zuul
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+      - name: debian-local
+      - name: ubuntu-local
+      # Don't add fedora here, so that we don't emit a trigger event
+      # for it.
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    image-defaults:
+      retain-count: 3
+    labels:
+      - name: debian-normal
+      - name: debian-local-normal

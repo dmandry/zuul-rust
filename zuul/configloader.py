@@ -393,6 +393,7 @@ class ImageParser(object):
         vs.Required('name'): str,
         vs.Required('type'): vs.Any('zuul', 'cloud'),
         'description': str,
+        'retain-count': vs.All(int, vs.Range(min=1)),
     }
     schema = vs.Schema(image)
 

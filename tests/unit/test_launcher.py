@@ -290,20 +290,7 @@ class TestLauncher(LauncherBaseTestCase):
         self.assertEqual(errors[idx].name, 'Unknown Connection')
         self.assertIn('provider stanza', errors[idx].error)
 
-    @simple_layout('layouts/nodepool-image.yaml', enable_nodepool=True)
-    @return_data(
-        'build-debian-local-image',
-        'refs/heads/master',
-        LauncherBaseTestCase.debian_return_data,
-    )
-    @return_data(
-        'build-ubuntu-local-image',
-        'refs/heads/master',
-        LauncherBaseTestCase.ubuntu_return_data,
-    )
-    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
-                return_value="test_external_id")
-    def test_launcher_image_expire(self, mock_image_upload_run):
+    def _test_launcher_image_expire(self, count):
         self.addImageBuildEvent(
             'tenant-one',
             'review.example.com/org/common-config',
@@ -379,10 +366,46 @@ class TestLauncher(LauncherBaseTestCase):
             dict(name='build-ubuntu-local-image', result='SUCCESS'),
             dict(name='build-ubuntu-local-image', result='SUCCESS'),
         ], ordered=False)
-        artifacts3 = self._waitForArtifacts(image_cname, 2)
+        artifacts3 = self._waitForArtifacts(image_cname, count)
         artifacts3_uuids = set([x.uuid for x in artifacts3])
-        self.assertFalse(artifacts3_uuids.isdisjoint(artifacts2_uuids))
-        self.assertTrue(artifacts3_uuids.isdisjoint(artifacts1_uuids))
+        if count == 2:
+            self.assertFalse(artifacts3_uuids.isdisjoint(artifacts2_uuids))
+            self.assertTrue(artifacts3_uuids.isdisjoint(artifacts1_uuids))
+        else:
+            self.assertTrue(artifacts2_uuids < artifacts3_uuids)
+
+    @simple_layout('layouts/nodepool-image.yaml', enable_nodepool=True)
+    @return_data(
+        'build-debian-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.debian_return_data,
+    )
+    @return_data(
+        'build-ubuntu-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.ubuntu_return_data,
+    )
+    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
+                return_value="test_external_id")
+    def test_launcher_image_expire(self, mock_image_upload_run):
+        self._test_launcher_image_expire(count=2)
+
+    @simple_layout('layouts/nodepool-image-retain-count.yaml',
+                   enable_nodepool=True)
+    @return_data(
+        'build-debian-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.debian_return_data,
+    )
+    @return_data(
+        'build-ubuntu-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.ubuntu_return_data,
+    )
+    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
+                return_value="test_external_id")
+    def test_launcher_image_expire_retain_count(self, mock_image_upload_run):
+        self._test_launcher_image_expire(count=3)
 
     @simple_layout('layouts/nodepool-image-no-validate.yaml',
                    enable_nodepool=True)
