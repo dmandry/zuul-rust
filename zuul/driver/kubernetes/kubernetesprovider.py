@@ -23,6 +23,7 @@ from zuul.lib.voluputil import (
     Optional,
     Required,
     assemble,
+    discriminate,
 )
 
 import voluptuous as vs
@@ -42,6 +43,50 @@ from zuul.provider import (
 
 
 class KubernetesProviderImage(BaseProviderImage):
+    kubernetes_image_connection = vs.Schema({
+        Optional(
+            'connection-type',
+            doc="""\
+            The connection type that a consumer should use when connecting
+            to the node.
+            """,
+        ): Nullable(vs.Any(
+            Constant('winrm',
+                    doc="A winrm connection."),
+            Constant('ssh',
+                    doc="An ssh connection."),
+            Constant('namespace',
+                    doc="A namespace, no connection."),
+            Constant('project',
+                    doc="A namespace, no connection."),
+        )),
+    })
+    inheritable_cloud_schema = assemble(
+        BaseProviderImage.inheritable_cloud_schema,
+        kubernetes_image_connection,
+    )
+    inheritable_zuul_schema = assemble(
+        BaseProviderImage.inheritable_zuul_schema,
+        kubernetes_image_connection,
+    )
+    cloud_schema = assemble(
+        BaseProviderImage.cloud_schema,
+        kubernetes_image_connection,
+    )
+    zuul_schema = assemble(
+        BaseProviderImage.zuul_schema,
+        kubernetes_image_connection,
+    )
+    schema = vs.Union(
+        cloud_schema, zuul_schema,
+        discriminant=discriminate(
+            lambda val, alt: val['type'] == alt['type'].validators[0])
+    )
+    inheritable_schema = assemble(
+        inheritable_cloud_schema,
+        inheritable_zuul_schema,
+    )
+
     def __init__(self, image_config, provider_config):
         super().__init__(image_config, provider_config)
         # Implement provider defaults

@@ -123,9 +123,12 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             self.state = self.RBAC_CREATING
 
         if self.state == self.RBAC_CREATING:
-            self.endpoint._createPod(self.namespace, self.hostname,
-                                     self.label, self.node.tags)
-            self.state = self.POD_CREATING
+            if self.create_pod:
+                self.endpoint._createPod(self.namespace, self.hostname,
+                                         self.label, self.node.tags)
+                self.state = self.POD_CREATING
+            else:
+                self.state = self.COMPLETE
 
         if self.state == self.POD_CREATING:
             if not self.endpoint._getPod(self.namespace, self.hostname):
