@@ -11707,6 +11707,95 @@ class TestDynamicBranchesMultiProject(ZuulTestCase):
         ], ordered=False)
 
 
+class TestDynamicBranchFileMatchers(ZuulTestCase):
+    tenant_config_file = 'config/dynamic-branch-file-matcher/main.yaml'
+
+    def test_irrelevant_files_on_dynamic_branch(self):
+        """Test that irrelevant-files works on always-dynamic branches.
+
+        A change on an always-dynamic branch that only modifies files
+        listed in irrelevant-files should cause the job to be skipped,
+        even with match-on-config-updates enabled (the default).
+        """
+        self.create_branch('org/project', 'feature/foo')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'feature/foo'))
+        self.waitUntilSettled()
+
+        # Submit a change that only touches an irrelevant file.
+        file_dict = {'README': 'updated\n'}
+        A = self.fake_gerrit.addFakeChange('org/project', 'feature/foo', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # central-test has no file matchers so it should always run.
+        # project-test has irrelevant-files matching ^README$ so it
+        # should be skipped.
+        self.assertHistory([
+            dict(name='central-test', result='SUCCESS', changes='1,1'),
+        ])
+
+    def test_relevant_files_on_dynamic_branch(self):
+        """Test that jobs DO run when relevant files change."""
+        self.create_branch('org/project', 'feature/foo')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'feature/foo'))
+        self.waitUntilSettled()
+
+        # Submit a change that touches a relevant file.
+        file_dict = {'src/main.py': 'code\n'}
+        A = self.fake_gerrit.addFakeChange('org/project', 'feature/foo', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # Both jobs should run since src/main.py is not irrelevant.
+        self.assertHistory([
+            dict(name='central-test', result='SUCCESS', changes='1,1'),
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+    def test_config_change_on_dynamic_branch_overrides_matchers(self):
+        """Test that actual config changes still override file matchers."""
+        self.create_branch('org/project', 'feature/foo')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'feature/foo'))
+        self.waitUntilSettled()
+
+        # Submit a change that modifies zuul config (even though it
+        # also only has irrelevant non-config files).
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: project-test
+                tags: updated
+            - project:
+                check:
+                  jobs:
+                    - central-test
+                    - project-test:
+                        irrelevant-files:
+                          - ^README$
+                          - ^docs/.*$
+            """)
+        file_dict = {'zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'feature/foo', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # Both jobs should run because zuul.yaml was changed, which should
+        # override the file matchers via match-on-config-updates.
+        self.assertHistory([
+            dict(name='central-test', result='SUCCESS', changes='1,1'),
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+
 class TestMaxDeps(ZuulTestCase):
     tenant_config_file = 'config/single-tenant/main-max-deps.yaml'
 

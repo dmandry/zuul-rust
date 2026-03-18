@@ -8298,6 +8298,19 @@ class QueueItem(zkobject.ZKObject):
         if self.manager:
             layout_ahead = self.manager.getFallbackLayout(self)
         if layout_ahead and layout and layout is not layout_ahead:
+            # Always-dynamic branches always produce a new dynamic
+            # layout (since their config is never in the static
+            # cache), so "layout is not layout_ahead" is always true
+            # for them.  Only proceed with the config-change
+            # comparison when the change actually modifies config
+            # files; otherwise the layout difference is an artifact
+            # of dynamic loading, not a real config change, and we
+            # should let the normal file matchers decide.
+            tpc = layout.tenant.project_configs.get(project_cn)
+            if (tpc and hasattr(change, 'branch')
+                    and tpc.isAlwaysDynamicBranch(change.branch)
+                    and not change.updatesConfigFiles(tpc)):
+                return False
             # This change updates the layout.  Calculate the job as it
             # would be if the layout had not changed.
             if self.current_build_set._old_job_graph is None:
@@ -8490,6 +8503,30 @@ class Ref(object):
             if fn.startswith("zuul.d/"):
                 return True
             if fn.startswith(".zuul.d/"):
+                return True
+            for ef in tpc.extra_config_files:
+                if fn.startswith(ef):
+                    return True
+            for ed in tpc.extra_config_dirs:
+                if fn.startswith(ed):
+                    return True
+        return False
+
+    def updatesConfigFiles(self, tpc):
+        """Check whether this change modifies actual config files.
+
+        Unlike updatesConfig() this ignores the always-dynamic-branch
+        shortcut so that callers can distinguish "on a dynamic branch"
+        from "actually changed zuul config".
+        """
+        if self.files is None:
+            return True
+        for fn in self.files:
+            if fn == '/COMMIT_MSG':
+                continue
+            if fn in ('zuul.yaml', '.zuul.yaml'):
+                return True
+            if fn.startswith("zuul.d/") or fn.startswith(".zuul.d/"):
                 return True
             for ef in tpc.extra_config_files:
                 if fn.startswith(ef):
