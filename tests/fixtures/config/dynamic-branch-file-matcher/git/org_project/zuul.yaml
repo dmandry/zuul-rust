@@ -1,0 +1,11 @@
+- job:
+    name: project-test
+
+- project:
+    check:
+      jobs:
+        - central-test
+        - project-test:
+            irrelevant-files:
+              - ^README$
+              - ^docs/.*$
