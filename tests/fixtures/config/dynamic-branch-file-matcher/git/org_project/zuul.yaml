@@ -1,0 +1,18 @@
+- job:
+    name: files-test
+
+- job:
+    name: irrelevant-test
+
+- project:
+    check:
+      jobs:
+        - central-test
+        - files-test:
+            files:
+              - ^src/.*$
+        - irrelevant-test:
+            irrelevant-files:
+              - ^README$
+              - ^docs/.*$
+              - zuul.yaml
