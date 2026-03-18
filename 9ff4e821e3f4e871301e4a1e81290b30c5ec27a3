@@ -16,6 +16,41 @@
       "message": "recheck",
       "revId": "9ff4e821e3f4e871301e4a1e81290b30c5ec27a3",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2756aa78_f10990bd",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 38918
+      },
+      "writtenOn": "2026-03-18T09:07:14Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "177e6050_93a6bdf2",
+      "revId": "9ff4e821e3f4e871301e4a1e81290b30c5ec27a3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "142f5b21_12a41867",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 38918
+      },
+      "writtenOn": "2026-03-18T09:07:14Z",
+      "side": 1,
+      "message": "/recheck",
+      "revId": "9ff4e821e3f4e871301e4a1e81290b30c5ec27a3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
