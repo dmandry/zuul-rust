@@ -177,7 +177,9 @@ class BranchCacheNew:
     def _getProjectInfoForRead(self, project_name, min_ltime):
         # Get a ProjectInfo object from the cache, or ZK
         if self.cache.max_zxid < min_ltime:
+            self.log.debug("JEB wait %s %s", self.cache.max_zxid, min_ltime)
             self.cache.waitForSync()
+        self.log.debug("JEB synced %s %s", self.cache.max_zxid, min_ltime)
         safe_project = quote_plus(project_name)
         project_info = self.cache.getItem(safe_project)
         return project_info
