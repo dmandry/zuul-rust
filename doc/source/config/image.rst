@@ -95,3 +95,6 @@ The attributes available to top-level image objects are:
       in-use) image is included in the count.  So a `retain-count`
       of 1 means to only keep the current in-use image; a count of 2
       means to keep one extra image as a backup.
+
+      Once a value is explicitly set, sections and providers that
+      inherit it may not set it to a larger value.
