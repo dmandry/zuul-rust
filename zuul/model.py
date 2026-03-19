@@ -1983,6 +1983,18 @@ class ProviderConfig(ConfigObject):
         new_labels = {i['name']: copy.deepcopy(i)
                       for i in other_config.pop('labels', [])}
 
+        # Special handling for max-retain-count: make sure it never
+        # increases.
+        old_retain_count_max = config.get(
+            'image-defaults', {}).get('max-retain-count')
+        new_retain_count_max = other_config.get(
+            'image-defaults', {}).get('max-retain-count')
+        if (old_retain_count_max is not None and
+            new_retain_count_max is not None and
+            new_retain_count_max > old_retain_count_max):
+            raise Exception(
+                "Unable to increase image max-retain-count")
+
         # Merge the config dicts, except for images, flavors, labels
         config = ProviderConfig._mergeDict(config, other_config)
         # Apply the defaults to our saved images, flavors, labels
@@ -2025,10 +2037,21 @@ class ProviderConfig(ConfigObject):
         ]:
             for obj_name, obj in new_objects.items():
                 if obj_name in old_objects:
-                    old_final = old_objects[obj_name].get('final', False)
+                    old_obj = old_objects[obj_name]
+                    old_final = old_obj.get('final', False)
                     if old_final and old_final != 'allow-override':
                         raise Exception(
                             f"Unable to redefine final {obj_type} {obj_name}")
+                    # Special handling for max-retain-count: make sure
+                    # it never increases.
+                    if obj_type == 'image':
+                        if (old_obj.get('max-retain-count') is not None and
+                            obj.get('max-retain-count') is not None):
+                            if (obj['max-retain-count'] >
+                                old_obj['max-retain-count']):
+                                raise Exception(
+                                    "Unable to increase image "
+                                    "max-retain-count")
                 old_objects[obj_name] = obj
 
         # Add the images, flavors, labels back into the new config
@@ -2090,6 +2113,16 @@ class ProviderConfig(ConfigObject):
         # Validate the overall schema
         schema = connection.driver.getProviderSchema()
         schema(config)
+
+        # Complex validations
+        for image in config.get('images', []):
+            if ((rc := image.get('retain-count')) is not None and
+                (rcmax := image.get('max-retain-count')) is not None):
+                if rc > rcmax:
+                    raise Exception(
+                        f"Unable to retain {rc} images since "
+                        "that is more than the max-retain-count "
+                        f"of {rcmax}")
 
         # Set internal attributes
         self._setInternalAttributes(layout, config, schema_class)
