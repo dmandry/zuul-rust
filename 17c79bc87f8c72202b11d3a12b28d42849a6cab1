@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "3af27e12_048b1d62",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 3
+      },
+      "lineNbr": 7,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-19T15:51:15Z",
+      "side": 1,
+      "message": "Can we put a blank line between the commit message subject and the information below? This ensures the commit message renders properly in various tools.",
+      "revId": "17c79bc87f8c72202b11d3a12b28d42849a6cab1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "d2a3f301_1e7a7dfd",
