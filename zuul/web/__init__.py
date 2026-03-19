@@ -4076,6 +4076,7 @@ class ZuulWeb(object):
                     "Unable to update layout due to incomplete branch "
                     "cache, possibly due to in-progress tenant "
                     "reconfiguration; will retry")
+                raise
                 success = False
         self.log.debug("Done updating layout state")
         return success
