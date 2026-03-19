@@ -1965,6 +1965,18 @@ class ProviderConfig(ConfigObject):
         new_labels = {i['name']: copy.deepcopy(i)
                       for i in other_config.pop('labels', [])}
 
+        # Special handling for retain-count: make sure it never
+        # increases.
+        old_retain_count = config.get(
+            'image-defaults', {}).get('retain-count')
+        new_retain_count = other_config.get(
+            'image-defaults', {}).get('retain-count')
+        if (old_retain_count is not None and
+            new_retain_count is not None and
+            new_retain_count > old_retain_count):
+            raise Exception(
+                "Unable to increase image retain-count")
+
         # Merge the config dicts, except for images, flavors, labels
         config = ProviderConfig._mergeDict(config, other_config)
         # Apply the defaults to our saved images, flavors, labels
@@ -2007,10 +2019,19 @@ class ProviderConfig(ConfigObject):
         ]:
             for obj_name, obj in new_objects.items():
                 if obj_name in old_objects:
-                    old_final = old_objects[obj_name].get('final', False)
+                    old_obj = old_objects[obj_name]
+                    old_final = old_obj.get('final', False)
                     if old_final and old_final != 'allow-override':
                         raise Exception(
                             f"Unable to redefine final {obj_type} {obj_name}")
+                    # Special handling for retain-count: make sure it
+                    # never increases.
+                    if (obj_type == 'image' and
+                        old_obj.get('retain-count') is not None and
+                        obj.get('retain-count') is not None):
+                        if obj['retain-count'] > old_obj['retain-count']:
+                            raise Exception(
+                                "Unable to increase image retain-count")
                 old_objects[obj_name] = obj
 
         # Add the images, flavors, labels back into the new config
