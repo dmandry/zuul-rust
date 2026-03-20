@@ -1963,7 +1963,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             # Create launch templates only for labels which use fleet
             if not flavor.fleet:
                 continue
-            fleet_labels.append(label)
+            fleet_labels.append((label, flavor))
 
         self.log.info("Creating launch templates")
         # Include the provider name here so that identical templates
@@ -1985,7 +1985,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
         label_template_names = {}
 
         created = False
-        for label in fleet_labels:
+        for label, flavor in fleet_labels:
             template_data = {
                 'KeyName': label.key_name,
                 'MaintenanceOptions': {
