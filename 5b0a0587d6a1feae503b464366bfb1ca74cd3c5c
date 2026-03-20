@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a74ded25_e5421403",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-03-20T10:06:24Z",
+      "side": 1,
+      "message": "In case this merges after https://review.opendev.org/c/zuul/zuul/+/979040 it should also not be relevant for the image upload.\n\nFor k8s and static driver this is not really relevant, but I guess we allow it for simplicity?",
+      "revId": "5b0a0587d6a1feae503b464366bfb1ca74cd3c5c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
