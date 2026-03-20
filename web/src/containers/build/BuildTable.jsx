@@ -101,6 +101,12 @@ function BuildTable({
       dataLabel: 'Start time',
     },
     {
+      title: (
+        <IconProperty icon={<OutlinedCalendarAltIcon />} value="End time" />
+      ),
+      dataLabel: 'End time',
+    },
+    {
       title: <IconProperty icon={<PollIcon />} value="Result" />,
       dataLabel: 'Result',
     },
@@ -151,6 +157,12 @@ function BuildTable({
         {
           title: moment_tz
             .utc(build.start_time)
+            .tz(timezone)
+            .format('YYYY-MM-DD HH:mm:ss'),
+        },
+        {
+          title: moment_tz
+            .utc(build.end_time)
             .tz(timezone)
             .format('YYYY-MM-DD HH:mm:ss'),
         },
