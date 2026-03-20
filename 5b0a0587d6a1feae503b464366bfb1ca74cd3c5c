@@ -16,6 +16,24 @@
       "message": "In case this merges after https://review.opendev.org/c/zuul/zuul/+/979040 it should also not be relevant for the image upload.\n\nFor k8s and static driver this is not really relevant, but I guess we allow it for simplicity?",
       "revId": "5b0a0587d6a1feae503b464366bfb1ca74cd3c5c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b135ef62_38ce472e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-20T14:48:21Z",
+      "side": 1,
+      "message": "I rebased it to address the config hash key.\n\nIn those drivers, it\u0027s permitted in the \"image-defaults\" section, which allows\nsettings for either type of image.  In the other drivers, you\u0027ll notice it appears twice in the docs, once for the \"zuul\" image, and once for \"image-defaults\".\n\nI think we could adjust the schema system to accomodate a different class of \"image-defaults\" for providers that only have \"cloud\" images.  I think that\u0027s worth doing, but probably on its own change.",
+      "parentUuid": "a74ded25_e5421403",
+      "revId": "5b0a0587d6a1feae503b464366bfb1ca74cd3c5c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
