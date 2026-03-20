@@ -168,7 +168,6 @@ class ZuulTreeCache(abc.ABC):
                     AddWatchMode.PERSISTENT_RECURSIVE)
                 self.client.ensure_path(self.root)
                 self._walkTree()
-                self._ready.set()
                 # Transfer sentinel events
                 for (old_queue, new_queue) in [
                         (old_event_queue, self._event_queue),
@@ -182,6 +181,8 @@ class ZuulTreeCache(abc.ABC):
                                 new_queue.put(x)
                         except queue.Empty:
                             break
+                self.waitForSync()
+                self._ready.set()
                 self.log.debug("Cache at %s is ready", self.root)
             except Exception:
                 self.log.exception("Error initializing cache at %s", self.root)
