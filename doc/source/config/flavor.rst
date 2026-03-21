@@ -64,3 +64,32 @@ The attributes available to top-level flavor objects are:
       :type: str
 
       A textual description of the flavor.
+
+.. _flavor_connection_address:
+
+Connection address selection
+----------------------------
+
+For cloud drivers that support the ``public-ipv4`` and ``public-ipv6``
+flavor options (for example :attr:`provider[aws]`, :attr:`provider[azure]`,
+and :attr:`provider[openstack]`), the Zuul launcher picks the address it
+uses to reach a build node over SSH and Ansible, stored as the
+``interface_ip`` field on the node and exposed to jobs as
+:var:`nodepool.interface_ip`, as follows:
+
+* If ``public-ipv4`` is false and the cloud reports a private IPv4
+  address, that address is used.
+* Otherwise, if ``public-ipv6`` is false and the cloud reports a private
+  IPv6 address, that address is used.
+* Otherwise, if ``public-ipv4`` is true and a public IPv4 address is
+  available, that address is used; if ``public-ipv6`` is true and a
+  public IPv6 address is available, that address is used.
+* Otherwise, the provider’s default address for the instance
+  (its ``interface_ip``) is used.
+
+The cloud’s ``public_ipv4``, ``private_ipv4``, ``public_ipv6``, and
+``private_ipv6`` values on the node and job are still set from what the
+provider reports, regardless of which of those addresses is chosen for
+``interface_ip``.  This matters when a VM has no public address (for
+example, ``public-ipv4: false``) and Zuul must use a private address on
+a reachable network.

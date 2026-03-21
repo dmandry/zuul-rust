@@ -142,6 +142,98 @@ class ImageMocksFixture(fixtures.Fixture):
             status=403)
 
 
+class _TestInstance:
+    """Minimal stand-in for a provider instance in interface_ip unit tests."""
+
+    def __init__(self, **kwargs):
+        self.public_ipv4 = kwargs.get('public_ipv4')
+        self.public_ipv6 = kwargs.get('public_ipv6')
+        self.private_ipv4 = kwargs.get('private_ipv4')
+        self.private_ipv6 = kwargs.get('private_ipv6')
+        self.interface_ip = kwargs.get('interface_ip', 'provider-default-ip')
+        self.host_id = None
+        self.cloud = None
+        self.region = None
+        self.az = None
+        self.driver_data = None
+
+    def getQuotaInformation(self):
+        return model.QuotaInformation()
+
+
+class TestUpdateNodeFromInstance(testtools.TestCase):
+    """Unit tests for flavor-aware ``interface_ip`` selection (SSH address)."""
+
+    def _call(self, node, instance, use_public_ipv4, use_public_ipv6):
+        zuul.launcher.server.Launcher._updateNodeFromInstance(
+            None, node, instance, use_public_ipv4, use_public_ipv6)
+
+    def test_private_ipv4_when_public_ipv4_disabled(self):
+        node = model.Node('n1', 'l1')
+        inst = _TestInstance(
+            private_ipv4='10.0.0.1',
+            public_ipv4='203.0.113.1',
+            interface_ip='provider-default-ip',
+        )
+        self._call(node, inst, use_public_ipv4=False, use_public_ipv6=True)
+        self.assertEqual('10.0.0.1', node.interface_ip)
+        self.assertEqual('203.0.113.1', node.public_ipv4)
+
+    def test_private_ipv6_when_public_ipv4_enabled_but_no_private_v4(self):
+        node = model.Node('n1', 'l1')
+        inst = _TestInstance(
+            private_ipv4=None,
+            private_ipv6='2001:db8::1',
+            public_ipv4='203.0.113.1',
+            public_ipv6='2001:db8:1::1',
+        )
+        self._call(node, inst, use_public_ipv4=True, use_public_ipv6=False)
+        self.assertEqual('2001:db8::1', node.interface_ip)
+
+    def test_private_ipv6_when_v4_exhausted_branch_order(self):
+        # First branch false (wants public v4); second picks private v6
+        # when public-ipv6 is off.
+        node = model.Node('n1', 'l1')
+        inst = _TestInstance(
+            private_ipv4=None,
+            public_ipv4=None,
+            private_ipv6='fe80::1',
+        )
+        self._call(node, inst, use_public_ipv4=True, use_public_ipv6=False)
+        self.assertEqual('fe80::1', node.interface_ip)
+
+    def test_public_ipv4_when_flavor_asks_and_present(self):
+        node = model.Node('n1', 'l1')
+        inst = _TestInstance(
+            public_ipv4='198.51.100.1',
+            private_ipv4='10.0.0.2',
+        )
+        self._call(node, inst, use_public_ipv4=True, use_public_ipv6=True)
+        self.assertEqual('198.51.100.1', node.interface_ip)
+
+    def test_public_ipv6_when_flavor_asks_and_v4_unavailable(self):
+        node = model.Node('n1', 'l1')
+        inst = _TestInstance(
+            public_ipv4=None,
+            private_ipv4='10.0.0.3',
+            public_ipv6='2001:db8::2',
+        )
+        self._call(node, inst, use_public_ipv4=True, use_public_ipv6=True)
+        self.assertEqual('2001:db8::2', node.interface_ip)
+
+    def test_falls_back_to_instance_interface_ip(self):
+        node = model.Node('n1', 'l1')
+        inst = _TestInstance(
+            public_ipv4=None,
+            public_ipv6=None,
+            private_ipv4=None,
+            private_ipv6=None,
+            interface_ip='only-synthetic-default',
+        )
+        self._call(node, inst, use_public_ipv4=True, use_public_ipv6=True)
+        self.assertEqual('only-synthetic-default', node.interface_ip)
+
+
 class LauncherBaseTestCase(ZuulTestCase):
     config_file = 'zuul-connections-nodepool.conf'
     mock_aws = mock_aws()
@@ -3805,8 +3897,10 @@ class TestSnapshot(AnsibleZuulTestCase, LauncherBaseTestCase):
         orig_updateNodeFromInstance = zuul.launcher.server.Launcher.\
             _updateNodeFromInstance
 
-        def _updateNodeFromInstance(self, node, instance):
-            orig_updateNodeFromInstance(self, node, instance)
+        def _updateNodeFromInstance(
+                self, node, instance, use_public_ipv4, use_public_ipv6):
+            orig_updateNodeFromInstance(
+                self, node, instance, use_public_ipv4, use_public_ipv6)
             node.connection_type = 'local'
         self.patch(zuul.launcher.server.Launcher,
                    '_updateNodeFromInstance',

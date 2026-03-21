@@ -2169,7 +2169,15 @@ class Launcher:
                 elif node.nodescan_request is None:
                     # We just finished the create state machine,
                     # update with new info.
-                    self._updateNodeFromInstance(node, instance)
+                    label = provider.labels.get(node.label)
+                    flavor = provider.flavors[label.flavor]
+                    # Cloud flavors set public_ipv4/6; Kubernetes and other
+                    # providers do not—default True to match old interface_ip
+                    # behavior.
+                    use_public_ipv4 = getattr(flavor, 'public_ipv4', True)
+                    use_public_ipv6 = getattr(flavor, 'public_ipv6', True)
+                    self._updateNodeFromInstance(
+                        node, instance, use_public_ipv4, use_public_ipv6)
 
                 # Note this method has the side effect of updating
                 # node info from the instance.
@@ -2579,16 +2587,21 @@ class Launcher:
                 return provider
         raise ProviderNodeError(f"Unable to find provider for node {node}")
 
-    def _updateNodeFromInstance(self, node, instance):
+    def _updateNodeFromInstance(self, node, instance,
+                                use_public_ipv4, use_public_ipv6):
         if instance is None:
             return
 
-        # TODO:
-        # if (pool.use_internal_ip and
-        #     (instance.private_ipv4 or instance.private_ipv6)):
-        #     server_ip = instance.private_ipv4 or instance.private_ipv6
-        # else:
-        server_ip = instance.interface_ip
+        if (not use_public_ipv4 and instance.private_ipv4):
+            server_ip = instance.private_ipv4
+        elif (not use_public_ipv6 and instance.private_ipv6):
+            server_ip = instance.private_ipv6
+        elif (use_public_ipv4 and instance.public_ipv4):
+            server_ip = instance.public_ipv4
+        elif (use_public_ipv6 and instance.public_ipv6):
+            server_ip = instance.public_ipv6
+        else:
+            server_ip = instance.interface_ip
 
         node.interface_ip = server_ip
         node.public_ipv4 = instance.public_ipv4
