@@ -1106,8 +1106,10 @@ class TestAwsSnapshot(AnsibleZuulTestCase, AwsBaseTest):
         orig_updateNodeFromInstance = zuul.launcher.server.Launcher.\
             _updateNodeFromInstance
 
-        def _updateNodeFromInstance(self, node, instance):
-            orig_updateNodeFromInstance(self, node, instance)
+        def _updateNodeFromInstance(
+                self, node, instance, use_public_ipv4, use_public_ipv6):
+            orig_updateNodeFromInstance(
+                self, node, instance, use_public_ipv4, use_public_ipv6)
             node.connection_type = 'local'
         self.patch(zuul.launcher.server.Launcher,
                    '_updateNodeFromInstance',

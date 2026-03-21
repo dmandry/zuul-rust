@@ -1492,8 +1492,12 @@ executor running the job is available:
 
    .. var:: interface_ip
 
-      The best IP address to use to contact the node as determined by
-      the cloud provider and nodepool.
+      The address Zuul uses to contact the node (for example over SSH),
+      as chosen from the node’s public and private addresses.  For
+      :ref:`build nodes` on cloud :ref:`provider` objects that support flavor
+      flags ``public-ipv4`` and ``public-ipv6``, the launcher follows
+      the same rules as in :ref:`flavor_connection_address`;
+      otherwise it follows the provider’s default ``interface_ip``.
 
    .. var:: public_ipv4
 
