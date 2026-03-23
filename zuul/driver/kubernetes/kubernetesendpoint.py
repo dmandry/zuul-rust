@@ -67,9 +67,10 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
     RBAC_CREATING = 'creating rbac'
     POD_CREATING = 'creating pod'
 
-    def __init__(self, endpoint, node, hostname, label, flavor, image,
+    def __init__(self, provider, endpoint, node, hostname, label, flavor, image,
                  log):
         self.log = log
+        self.provider = provider
         self.endpoint = endpoint
         self.node = node
         self.hostname = hostname
@@ -107,6 +108,8 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             self.endpoint._createImagePullSecrets(self.namespace, self.label)
             self.endpoint._createServiceAccount(self.namespace,
                                                 self.user)
+            self.endpoint._copyNamespaceObjects(
+                self.namespace, self.provider.k8s_objects)
             self.node.kubernetes_namespace_id = self.namespace
             self.state = self.SA_CREATING
 
@@ -262,6 +265,70 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
             }
         }
         self.core_client.create_namespace(ns_body)
+
+    def _detectCurrentNamespace(self):
+        try:
+            kubernetes.config.load_incluster_config()
+            return open(
+                "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+            ).read().strip()
+        except Exception:
+            _, active_context = kubernetes.config.list_kube_config_contexts()
+            return active_context['context'].get('namespace', 'default')
+
+    def _k8s_object_namespaced_method(self, action, object_kind):
+        mapping = {
+            "ConfigMap": "config_map",
+            "Secret": "secret",
+        }
+        return getattr(
+            self.core_client, f"{action}_namespaced_{mapping[object_kind]}"
+        )
+
+    def _copyNamespaceObjects(self, namespace, objects):
+        for object in objects:
+            object_namespace = object.get("namespace") or \
+                self._detectCurrentNamespace()
+            try:
+                provider_k8s_object = self._k8s_object_namespaced_method(
+                    "read", object["kind"]
+                )(
+                    object["name"], object_namespace,
+                )
+            except KeyError:
+                self.log.warning(
+                    "Unsupported object kind %s, skipping copy from namespace %s "
+                    "to namespace %s", object["kind"], object_namespace, namespace,
+                )
+                continue
+            except Exception:
+                self.log.exception(
+                    "Couldn't read %s %s from launcher namespace %s, "
+                    "cannot copy to namespace %s",
+                    object["kind"], object["name"], object_namespace, namespace,
+                )
+                continue
+            try:
+                current_k8s_object = self._k8s_object_namespaced_method(
+                    "read", object["kind"]
+                )(
+                    object["name"], namespace,
+                )
+                if current_k8s_object.data != provider_k8s_object.data:
+                    self._k8s_object_namespaced_method("delete", object["kind"])(
+                        object["name"], namespace,
+                    )
+                    raise Exception("%s data mismatch", object["kind"])
+            except Exception:
+                k8s_object_body = {
+                    'apiVersion': 'v1',
+                    'kind': object["kind"],
+                    'metadata': {'name': object["name"]},
+                    'data': provider_k8s_object.data,
+                }
+                self._k8s_object_namespaced_method("create", object["kind"])(
+                    namespace, k8s_object_body,
+                )
 
     def _createProject(self, project, labels):
         self.log.debug("Creating project %s", project)
