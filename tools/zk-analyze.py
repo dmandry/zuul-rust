@@ -153,6 +153,15 @@ class Tree:
     def listConnections(self):
         return self.listChildren('/zuul/cache/connection')
 
+    def listBlobPrefixes(self):
+        return self.listChildren('/zuul/cache/blob/data')
+
+    def listBlobs(self, prefix):
+        return self.listChildren(f'/zuul/cache/blob/data/{prefix}')
+
+    def getBlob(self, prefix, blob_id):
+        return self.getShardedNode(f'/zuul/cache/blob/data/{prefix}/{blob_id}/data')
+
     def getBranchCache(self, connection):
         return self.getShardedNode(f'/zuul/cache/connection/{connection}'
                                    '/branches/data')
@@ -443,9 +452,23 @@ class Analyzer:
         for connection_name in self.tree.listConnections():
             self.summarizeConnectionCache(connection_name)
 
+    def summarizeBlobStore(self):
+        blob_summary = SummaryLine('Blob', '/zuul/cache/blob', 0, 0)
+        blob_summary.attrs['count'] = 0
+        for prefix in self.tree.listBlobPrefixes():
+            for blob_id in self.tree.listBlobs(prefix):
+                blob = self.tree.getBlob(prefix, blob_id)
+                blob_summary.size += blob.size
+                blob_summary.zk_size += blob.zk_size
+                blob_summary.attrs['count'] += 1
+
+        sys.stdout.write(blob_summary.toStr(
+            0, self.depth, self.conv, self.limit, self.use_zk_size))
+
     def summarize(self):
         self.summarizeConnections()
         self.summarizePipelines()
+        self.summarizeBlobStore()
 
 
 if __name__ == '__main__':
