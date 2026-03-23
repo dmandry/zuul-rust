@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import testtools
@@ -20,6 +22,7 @@ import testtools
 from zuul import exceptions
 from zuul.model import ProviderNode
 from zuul.launcher.server import NodescanWorker, NodescanRequest
+from zuul.web import ProviderNodeConverter
 from zuul.zk import zkobject
 
 from tests.base import (
@@ -191,3 +194,125 @@ class TestNodescanWorker(BaseTestCase):
         self.assertEqual(result2, ['fake key fake base64'])
         worker.stop()
         worker.join()
+
+    def test_nodescan_ssh_private_key_skipped_when_path_missing(self):
+        self.useFixture(NodescanFixture())
+        worker = NodescanWorker()
+        node = DummyProviderNode()
+        node._set(
+            interface_ip='198.51.100.1',
+            connection_port=22,
+            connection_type='ssh',
+            host_key_checking=True,
+            boot_timeout=300,
+            ssh_private_key='/no/such/zuul-test-ssh-key-file',
+            username='zuul',
+        )
+        worker.start()
+        request = NodescanRequest(node, self.log)
+        worker.addRequest(request)
+        for _ in iterate_timeout(30, 'waiting for nodescan'):
+            if request.complete:
+                break
+        self.assertEqual(FakeTransport.auth_publickey_calls, 0)
+        self.assertEqual(request.result(), ['fake key fake base64'])
+        worker.stop()
+        worker.join()
+
+    @patch('zuul.launcher.server.Path.exists', return_value=True)
+    @patch('paramiko.PKey.from_path')
+    def test_nodescan_ssh_private_key_verified_after_transport(
+            self, mock_from_path, mock_exists):
+        self.useFixture(NodescanFixture())
+        mock_from_path.return_value = object()
+        worker = NodescanWorker()
+        node = DummyProviderNode()
+        node._set(
+            interface_ip='198.51.100.1',
+            connection_port=22,
+            connection_type='ssh',
+            host_key_checking=True,
+            boot_timeout=300,
+            ssh_private_key='/fake/zuul-launcher-key',
+            username='zuul',
+        )
+        worker.start()
+        request = NodescanRequest(node, self.log)
+        worker.addRequest(request)
+        for _ in iterate_timeout(30, 'waiting for nodescan'):
+            if request.complete:
+                break
+        self.assertGreaterEqual(FakeTransport.auth_publickey_calls, 1)
+        mock_from_path.assert_called_with('/fake/zuul-launcher-key')
+        self.assertEqual(request.result(), ['fake key fake base64'])
+        worker.stop()
+        worker.join()
+
+    @okay_tracebacks(
+        'fake auth failure for nodescan tests',
+        'Timeout connecting to',
+    )
+    @patch('zuul.launcher.server.Path.exists', return_value=True)
+    @patch('paramiko.PKey.from_path')
+    def test_nodescan_ssh_private_key_openstack_reboot_once_on_timeout(
+            self, mock_from_path, mock_exists):
+        self.useFixture(NodescanFixture(auth_publickey_fail=True))
+        mock_from_path.return_value = object()
+
+        def fake_is_private_key_timeout(self, reboot_attempts):
+            return reboot_attempts == 0
+
+        patcher = patch.object(
+            NodescanRequest, '_isPrivateKeyTimeout',
+            fake_is_private_key_timeout)
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+        reboot = MagicMock()
+        csm = MagicMock()
+        csm.rebootServer = reboot
+
+        worker = NodescanWorker()
+        node = DummyProviderNode()
+        node._set(
+            interface_ip='198.51.100.1',
+            connection_port=22,
+            connection_type='ssh',
+            host_key_checking=True,
+            boot_timeout=8,
+            ssh_private_key='/fake/zuul-launcher-key',
+            username='zuul',
+            driver_name='openstack',
+            create_state_machine=csm,
+        )
+        worker.start()
+        request = NodescanRequest(node, self.log)
+        worker.addRequest(request)
+        for _ in iterate_timeout(60, 'waiting for nodescan failure'):
+            if request.complete:
+                break
+        with testtools.ExpectedException(
+                exceptions.ConnectionTimeoutException):
+            request.result()
+        reboot.assert_called_once()
+        worker.stop()
+        worker.join()
+
+    def test_provider_node_converter_includes_ssh_private_key(self):
+        now = time.time()
+        node = DummyProviderNode()
+        node._set(
+            label='test-label',
+            state=node.State.READY,
+            state_time=now,
+            request_time=now,
+            connection_type='ssh',
+            interface_ip='10.0.0.2',
+            username='cloud-user',
+            ssh_private_key='/var/lib/zuul/executor_rsa',
+            provider='openstack/main',
+            region='region-one',
+        )
+        d = ProviderNodeConverter.toDict(node)
+        self.assertEqual(
+            d['ssh_private_key'], '/var/lib/zuul/executor_rsa')

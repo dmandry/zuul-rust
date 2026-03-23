@@ -392,6 +392,9 @@ class OpenstackCreateStateMachine(statemachine.StateMachine):
             self.complete = True
             return self.endpoint._getInstance(self.server, self.node.quota)
 
+    def rebootServer(self):
+        self.endpoint._rebootServer(self.node.openstack_server_id)
+
 
 class OpenstackImageUploadJob(BaseImageUploadJob):
     def __init__(self, endpoint, provider_image, image_name,
@@ -899,6 +902,11 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
         if ret:
             return ret
         return obj
+
+    def _rebootServer(self, server_id):
+        server = self._getServerByIdNow(server_id)
+        if server['status'] == 'ACTIVE':
+            server.reboot(self._client.compute, 'SOFT')
 
     def _expandServer(self, server):
         return openstack.cloud.meta.add_server_interfaces(

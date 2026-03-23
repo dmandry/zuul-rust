@@ -24,6 +24,7 @@ import hashlib
 import logging
 import math
 import os
+from pathlib import Path
 import random
 import select
 import socket
@@ -520,6 +521,7 @@ class NodescanRequest:
         self.worker = None
         self.exception = None
         self.connect_start_time = None
+        self.reboot_attempts = 0
         # Stats
         self.init_connection_attempts = 0
         self.key_connection_failures = 0
@@ -606,6 +608,12 @@ class NodescanRequest:
         self.connect_start_time = time.monotonic()
         self.worker.registerDescriptor(self.sock)
 
+    def _isPrivateKeyTimeout(self, reboot_attempts):
+        now = time.monotonic()
+        if now - self.start_time > (self.timeout / 4) * (reboot_attempts + 1):
+            return True
+        return False
+
     def _start(self):
         # Use our Event subclass that will wake the worker when the
         # event is set.
@@ -686,6 +694,26 @@ class NodescanRequest:
                 self.state = self.START
                 self._checkTimeout()
                 return
+            # Need to check SSH private key connection here if specified
+            if (self.node.ssh_private_key and
+                Path(self.node.ssh_private_key).exists()):
+                try:
+                    pkey = paramiko.PKey.from_path(self.node.ssh_private_key)
+                    self.transport.auth_publickey(self.node.username, pkey)
+                except Exception:
+                    if (self._isPrivateKeyTimeout(self.reboot_attempts)
+                            and self.node.driver_name == 'openstack'
+                            and self.node.create_state_machine):
+                        # Reboot the OpenStack VM and restart NodescanRequest
+                        self.node.create_state_machine.rebootServer()
+                        self.reboot_attempts += 1
+                        self.log.exception(
+                            "Can't authenticate to %s with SSH private key",
+                            self.ip)
+                    self._close()
+                    self.state = self.START
+                    self._checkTimeout()
+                    return
             # This is our first successful connection.  Now that
             # we've done it, start again specifying the first key
             # type.
@@ -1747,10 +1775,12 @@ class Launcher:
             connection_port=connection_port,
             connection_type=image.connection_type,
             username=image.username,
+            ssh_private_key=image.ssh_private_key,
             python_path=image.python_path,
             shell_type=image.shell_type,
             quota=label_quota,
             provider=provider.canonical_name,
+            driver_name=provider.driver.name,
             endpoint_name=endpoint_name,
         )
 

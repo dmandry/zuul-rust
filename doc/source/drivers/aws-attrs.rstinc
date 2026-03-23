@@ -615,6 +615,18 @@
 
          The username Zuul should use when connecting to the node.
 
+      .. attr:: ssh-private-key
+         :type: str
+
+         Path on the zuul-launcher host to an SSH private key file. If this
+         path exists on the launcher, zuul-launcher performs an extra check
+         during node scanning: after opening an SSH transport to the node,
+         it attempts public-key authentication with this key so that SSH
+         access matches what zuul-executor will use when running jobs.
+
+         Automatic recovery when this check fails (soft reboot of the
+         instance) is only implemented for the OpenStack provider.
+
       .. attr:: volume-size
          :type: int
 
@@ -816,6 +828,18 @@
          :type: str
 
          The username Zuul should use when connecting to the node.
+
+      .. attr:: ssh-private-key
+         :type: str
+
+         Path on the zuul-launcher host to an SSH private key file. If this
+         path exists on the launcher, zuul-launcher performs an extra check
+         during node scanning: after opening an SSH transport to the node,
+         it attempts public-key authentication with this key so that SSH
+         access matches what zuul-executor will use when running jobs.
+
+         Automatic recovery when this check fails (soft reboot of the
+         instance) is only implemented for the OpenStack provider.
 
       .. attr:: volume-size
          :type: int
@@ -1121,6 +1145,18 @@
          :type: str
 
          The username Zuul should use when connecting to the node.
+
+      .. attr:: ssh-private-key
+         :type: str
+
+         Path on the zuul-launcher host to an SSH private key file. If this
+         path exists on the launcher, zuul-launcher performs an extra check
+         during node scanning: after opening an SSH transport to the node,
+         it attempts public-key authentication with this key so that SSH
+         access matches what zuul-executor will use when running jobs.
+
+         Automatic recovery when this check fails (soft reboot of the
+         instance) is only implemented for the OpenStack provider.
 
       .. attr:: volume-size
          :type: int
