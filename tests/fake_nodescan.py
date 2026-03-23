@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import fixtures
+import paramiko
 
 
 class FakeSocket:
@@ -77,6 +78,8 @@ class FakeKey:
 class FakeTransport:
     _INIT_ACTIVE = True
     _INIT_FAIL = False
+    _AUTH_PUBLICKEY_FAIL = False
+    auth_publickey_calls = 0
 
     def __init__(self, *args, **kw):
         self.active = self._INIT_ACTIVE
@@ -97,14 +100,21 @@ class FakeTransport:
     def get_exception(self):
         return Exception("Fake ssh error")
 
+    def auth_publickey(self, username, pkey):
+        type(self).auth_publickey_calls += 1
+        if self._AUTH_PUBLICKEY_FAIL:
+            raise paramiko.AuthenticationException(
+                "fake auth failure for nodescan tests")
+
 
 class NodescanFixture(fixtures.Fixture):
     def __init__(self, transport_active=True, transport_fail=False,
-                 poll_fail=False):
+                 poll_fail=False, auth_publickey_fail=False):
         super().__init__()
         self._transport_active = transport_active
         self._transport_fail = transport_fail
         self._poll_fail = poll_fail
+        self._auth_publickey_fail = auth_publickey_fail
 
     def _setUp(self):
         self.useFixture(fixtures.MonkeyPatch(
@@ -122,6 +132,12 @@ class NodescanFixture(fixtures.Fixture):
         self.useFixture(fixtures.MonkeyPatch(
             'tests.fake_nodescan.FakeTransport._INIT_FAIL',
             self._transport_fail))
+        self.useFixture(fixtures.MonkeyPatch(
+            'tests.fake_nodescan.FakeTransport._AUTH_PUBLICKEY_FAIL',
+            self._auth_publickey_fail))
+        self.useFixture(fixtures.MonkeyPatch(
+            'tests.fake_nodescan.FakeTransport.auth_publickey_calls',
+            0))
         self.useFixture(fixtures.MonkeyPatch(
             'tests.fake_nodescan.FakePoll._INIT_FAIL',
             self._poll_fail))

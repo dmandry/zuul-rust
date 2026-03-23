@@ -192,6 +192,15 @@ common_image = vs.Schema({
         """,
     ): Nullable(str),
     Optional(
+        'ssh-private-key',
+        doc="""\
+        Path to SSH private key stored on zuul-launcher. If exists on zuul-launcher,
+        it will be checked in NodescanRequest, to ensure that VM is availble by
+        SSH at zuul-executor with this key. This is required, because of instability of
+        OpenStack clouds and it's metadata service where VMs are not able to get SSH keys.
+        """,
+    ): Nullable(str),
+    Optional(
         'connection-type',
         config=False,
         doc="""\

@@ -93,3 +93,15 @@ provider reports, regardless of which of those addresses is chosen for
 ``interface_ip``.  This matters when a VM has no public address (for
 example, ``public-ipv4: false``) and Zuul must use a private address on
 a reachable network.
+
+SSH private key verification (optional)
+---------------------------------------
+
+Provider image configuration may include ``ssh-private-key``: a path on
+zuul-launcher to a private key file. When that path exists, zuul-launcher
+uses it during node scanning (after it can open an SSH transport to the
+node) to verify public-key authentication, aligning readiness with SSH
+keys that zuul-executor uses for Ansible. Drivers document this attribute
+alongside other image settings (for example OpenStack lists it under
+:attr:`provider[openstack]` image stanzas). Soft reboot of an instance when
+that check stalls is implemented for OpenStack only.
