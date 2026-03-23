@@ -258,6 +258,7 @@ class AwsCreateStateMachine(statemachine.StateMachine):
                 return
             self.instance = instance
             self.node.aws_instance_id = instance['InstanceId']
+            self.node.node_properties['instance_id'] = instance['InstanceId']
             self.state = self.INSTANCE_CREATING
 
         if self.state == self.INSTANCE_CREATING:

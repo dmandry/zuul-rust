@@ -938,6 +938,26 @@ class TestLauncher(LauncherBaseTestCase):
         self._waitForNoChildren('/zuul/nodes/locks')
         self._waitForNoChildren('/zuul/nodes/nodes')
 
+    @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
+    def test_zuul_node_data(self):
+        self.executor_server.hold_jobs_in_build = True
+
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        build = self.getBuildByName('check-job')
+        inv_path = os.path.join(build.jobdir.root, 'ansible', 'inventory.yaml')
+        with open(inv_path, 'r') as f:
+            inventory = yaml.safe_load(f)
+        instance_id = (inventory['all']['hosts']['controller']['zuul_node']
+                                ['node_properties']['instance_id'])
+        self.assertTrue(instance_id.startswith('i-'))
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
     @simple_layout('layouts/nodepool-image-attrs.yaml', enable_nodepool=True)
     def test_node_image_attributes(self):
         # Test that we supply node attributes from the image
