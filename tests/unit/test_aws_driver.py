@@ -284,6 +284,7 @@ class TestAwsDriver(AwsBaseTest):
             self.run_instances_calls[0]['BlockDeviceMappings'][0]['Ebs']
             ['Encrypted'], True)
         self.assertTrue(pnode.node_properties['spot'])
+        self.assertIsNotNone(pnode.node_properties['external_id'])
         instance = self.ec2_client.describe_instance_attribute(
             InstanceId=pnode.aws_instance_id,
             Attribute='userData',
@@ -306,6 +307,7 @@ class TestAwsDriver(AwsBaseTest):
             self.create_fleet_calls[0]['OnDemandOptions'][
                 'AllocationStrategy'])
         self.assertTrue(pnode.node_properties['fleet'])
+        self.assertTrue(pnode.node_properties['external_id'].startswith('i-'))
         instance = self.ec2_client.describe_instance_attribute(
             InstanceId=pnode.aws_instance_id,
             Attribute='userData',
