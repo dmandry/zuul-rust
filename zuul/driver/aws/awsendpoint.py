@@ -234,6 +234,7 @@ class AwsCreateStateMachine(statemachine.StateMachine):
             state = self.host['State'].lower()
             if state == 'available':
                 self.node.aws_dedicated_host_id = self.host['HostId']
+                self.node.node_properties['host_id'] = self.host['HostId']
                 self.state = self.INSTANCE_CREATING_START
             elif state in [
                     'permanent-failure', 'released',
@@ -258,6 +259,7 @@ class AwsCreateStateMachine(statemachine.StateMachine):
                 return
             self.instance = instance
             self.node.aws_instance_id = instance['InstanceId']
+            self.node.node_properties['instance_id'] = instance['InstanceId']
             self.state = self.INSTANCE_CREATING
 
         if self.state == self.INSTANCE_CREATING:
