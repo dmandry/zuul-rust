@@ -2595,6 +2595,7 @@ class Launcher:
         node.region = instance.region
         node.az = instance.az
         node.driver_data = instance.driver_data
+        node.external_id = instance.external_id
 
         # If we did not know the resource information before
         # launching, update it now.

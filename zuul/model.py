@@ -2190,6 +2190,7 @@ class Node(ConfigObject):
         self.tenant_name = None
         self.requestor = None
         self.node_properties = {}
+        self.external_id = None
 
     @property
     def state(self):
@@ -2950,6 +2951,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             host_keys=[],
             quota=QuotaInformation(),
             image_upload_uuid=None,
+            external_id=None,
             # This is provided to the job verbatim
             node_properties={},
             # Attributes that are not serialized
@@ -3178,6 +3180,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             resources=None,
             slot=self.slot,
             node_properties=self.node_properties,
+            external_id=self.external_id,
         )
         if not serialize_node:
             ret['tenant_name'] = self.tenant_name
