@@ -16,6 +16,24 @@
       "message": "If we want to ignore roles from untrusted playbooks, shouldn\u0027t this be\n`or not trusted`?\n\nOn second thought: Maybe the comment should be a few lines further down (line 199)?",
       "revId": "989ff13adaa58e958e7fe4b57cc76bef0bc585d7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4653e710_db7af925",
+        "filename": "zuul/executor/common.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 196,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-03-24T13:27:57Z",
+      "side": 1,
+      "message": "We only need to be concerned to merge changes for projects that are relevant for speculative execution. If this playbook comes from a trusted context we can ignore any role changes as those won\u0027t be used in the trusted context.",
+      "parentUuid": "ece5f655_a306226a",
+      "revId": "989ff13adaa58e958e7fe4b57cc76bef0bc585d7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
