@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8905e799_c242d5cd",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 13,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-24T21:05:44Z",
+      "side": 1,
+      "message": "I think we may be missing something here, because this shouldn\u0027t be a problem.\n\nAt a really high level, what should happen is:\n\n* Requests are processed in priority-timestamp order.\n* New nodes for requests are assigned to the provider with the most available quota.\n* Those node requests are processed in the order they were created.\n\nAgain, from a very high level, we should already be getting the desired behavior, or at least as close to it as we can manage with all the other constraints we have.\n\nI don\u0027t think that we want to pause all request handling for lower-priority requests.  It shouldn\u0027t be necessary, and in many cases, those other requests may be able to be handled without affecting the high-priority requests.",
+      "revId": "236469118438df2cad3288d22619e8ec435c13b1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e9365d5f_decc6cc3",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 3359,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-24T21:05:44Z",
+      "side": 1,
+      "message": "This is an example of a pattern we try to avoid in Zuul tests.  It\u0027s testing the implementation details rather than the functional outcome.  Instead, we would normally have this test verify that the node requests are handled the way we want (ie, that a high-priority one is handled before a lower-priority one).  I suspect that if we rewrote this test, it would pass without this change.  We may already have a version of this test.",
+      "revId": "236469118438df2cad3288d22619e8ec435c13b1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "485bc6a7_8f587dba",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1321,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-24T21:05:44Z",
+      "side": 1,
+      "message": "This won\u0027t work with multiple launchers; each one would have its own \"blocking\" request.",
+      "revId": "236469118438df2cad3288d22619e8ec435c13b1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
