@@ -1311,6 +1311,15 @@ class Launcher:
 
     def _processRequests(self):
         unassigned_nodes = self._getUnassignedNodes()
+
+        # Track the priority of any request that was deferred due to
+        # resource constraints (quota).  When a higher-priority request
+        # cannot be fulfilled because of quota, we should not accept
+        # lower-priority requests — this ensures that earlier buildsets
+        # in the gate queue get their nodes before later ones start
+        # consuming quota.
+        resource_blocked_priority = None
+
         for request in self.api.getMatchingRequests():
             log = get_annotated_logger(self.log, request, request=request.uuid)
             try:
@@ -1320,6 +1329,20 @@ class Launcher:
                         # Nothing to do here
                         continue
                     log.debug("Got request %s", request)
+
+                    # If a higher-priority request was deferred due to
+                    # resource constraints, don't process any request
+                    # with strictly lower priority.
+                    if resource_blocked_priority is not None:
+                        req_priority = (request.priority,
+                                        request.relative_priority,
+                                        request.request_time)
+                        if req_priority > resource_blocked_priority:
+                            log.debug(
+                                "Deferring request because a higher "
+                                "priority request is resource-blocked")
+                            continue
+
                     with self.createZKContext(None, log) as ctx:
                         if not request.acquireLock(ctx, blocking=False):
                             log.debug("Failed to lock matching request %s",
@@ -1335,14 +1358,23 @@ class Launcher:
                 if not self._cachesReadyForRequest(request):
                     self.log.debug("Caches are not up-to-date for %s", request)
                     continue
-                self._processNodesetRequest(request, unassigned_nodes, log)
+                quota_blocked = self._processNodesetRequest(
+                    request, unassigned_nodes, log)
+                if (quota_blocked
+                        and resource_blocked_priority is None):
+                    resource_blocked_priority = (
+                        request.priority,
+                        request.relative_priority,
+                        request.request_time)
             except Exception:
                 log.exception("Failed to process request %s", request)
 
     def _processNodesetRequest(self, request, unassigned_nodes, log):
+        quota_blocked = False
         try:
             if request.state == model.NodesetRequest.State.REQUESTED:
-                self._acceptRequest(request, log, unassigned_nodes)
+                quota_blocked = self._acceptRequest(
+                    request, log, unassigned_nodes)
             elif request.state == model.NodesetRequest.State.ACCEPTED:
                 self._checkRequest(request, log, unassigned_nodes)
         except NodesetRequestError as err:
@@ -1367,6 +1399,7 @@ class Launcher:
                 request.updateAttributes(
                     ctx, event_state=request.EventState.COMPLETE)
                 request.releaseLock(ctx)
+        return quota_blocked
 
     def _cachesReadyForRequest(self, request):
         # Make sure we have all associated provider nodes in the cache
@@ -1458,6 +1491,11 @@ class Launcher:
         return None
 
     def _acceptRequest(self, request, log, unassigned_nodes):
+        """Accept a nodeset request by selecting providers and creating nodes.
+
+        Returns True if the request could not be accepted due to
+        insufficient quota, False otherwise.
+        """
         messages = []
         request_unassigned_nodes = self._filterUnassignedNodes(
             unassigned_nodes, request)
@@ -1477,11 +1515,27 @@ class Launcher:
                 if node is None:
                     # We need to request a new node
                     if provider.driver.name == 'static':
-                        return
+                        return False
                     # If we have not assigned any nodes to this
                     # request we don't have to proceed if there is no
                     # quota.
                     if not bool(request.provider_node_data):
+                        try:
+                            has_tenant_quota = (
+                                self.doesTenantHaveQuotaForLabel(
+                                    request.tenant_name, label, messages))
+                        except Exception:
+                            self.log.exception(
+                                "Error checking tenant quota for "
+                                "label %s", label)
+                            raise NodesetRequestError(
+                                "Unable to determine tenant quota")
+                        if not has_tenant_quota:
+                            # Tenant quota is per-tenant: exhausting
+                            # one tenant's limit should not block
+                            # other tenants' requests. Return False
+                            # so resource_blocked_priority is NOT set.
+                            return False
                         try:
                             has_quota = self.doesProviderHaveQuotaForLabel(
                                 request.tenant_name, provider, label, messages)
@@ -1492,13 +1546,11 @@ class Launcher:
                             raise NodesetRequestError(
                                 "Unable to determine quota")
                         if not has_quota:
-                            # TODO: We may want to consider all the
-                            # labels at once so that if we can
-                            # fulfill any label immediately, we
-                            # accept the request; currently this will
-                            # happen only if we can fulfill the first
-                            # label immediately.
-                            return
+                            # Provider quota is a shared resource:
+                            # return True so resource_blocked_priority
+                            # is set and lower-priority requests are
+                            # deferred.
+                            return True
                     self._emitMessages(log, messages)
                     node = self._requestNode(
                         label, request, provider, log, ctx)
@@ -1508,6 +1560,7 @@ class Launcher:
                 self._emitMessages(log, messages)
                 log.debug("Accepting request %s", request)
                 request.state = model.NodesetRequest.State.ACCEPTED
+        return False
 
     def _shuffleProviders(self, providers):
         # This is to allow unit test control of this process.

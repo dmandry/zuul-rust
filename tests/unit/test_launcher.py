@@ -3306,6 +3306,112 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
         self.waitUntilSettled()
 
 
+class TestResourceBlockedPriority(LauncherBaseTestCase):
+    config_file = 'zuul.conf'
+    tenant_config_file = 'config/single-tenant/main-launcher.yaml'
+
+    @simple_layout('layouts/two-projects-integrated-launcher.yaml',
+                   enable_nodepool=True)
+    def test_provider_quota_defers_lower_priority(self):
+        """Test that when a higher-priority request is blocked on provider
+        quota, lower-priority requests are deferred."""
+        self.hold_nodeset_requests_in_queue = True
+
+        # Submit a gate change (priority 100) and a check change (priority 200)
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        A.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        reqs = self.launcher.api.getNodesetRequests()
+        self.assertEqual(len(reqs), 2)
+        self.assertEqual(reqs[0].priority, 100)  # gate
+        self.assertEqual(reqs[1].priority, 200)  # check
+
+        # Mock _acceptRequest to simulate provider quota exhaustion
+        # (return True = shared resource blocked).
+        # Track which requests it was called for.
+        accepted_priorities = []
+
+        def mock_accept(request, log, unassigned_nodes):
+            accepted_priorities.append(request.priority)
+            # Return True = quota blocked (shared resource)
+            return True
+
+        with mock.patch.object(
+            self.launcher, '_acceptRequest',
+            side_effect=mock_accept
+        ):
+            self.hold_nodeset_requests_in_queue = False
+            self.releaseNodesetRequests(*reqs)
+            self.launcher.wake_event.set()
+            time.sleep(2)
+
+            # _acceptRequest should have been called only once — for the
+            # gate request (priority 100).  The check request (priority
+            # 200) should have been skipped because
+            # resource_blocked_priority was set by the gate's True return.
+            self.assertEqual(len(accepted_priorities), 1)
+            self.assertEqual(accepted_priorities[0], 100)
+
+        # Clean up: allow requests to be fulfilled
+        self.releaseNodesetRequests(*self.launcher.api.getNodesetRequests())
+        self.waitUntilSettled()
+
+    @simple_layout('layouts/two-projects-integrated-launcher.yaml',
+                   enable_nodepool=True)
+    def test_tenant_quota_does_not_defer_other_requests(self):
+        """Test that when a request is blocked on tenant quota,
+        resource_blocked_priority is NOT set, so later requests
+        can still proceed."""
+        self.hold_nodeset_requests_in_queue = True
+
+        # Submit two check changes (same priority)
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        B = self.fake_gerrit.addFakeChange('org/project1', 'master', 'B')
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        reqs = self.launcher.api.getNodesetRequests()
+        self.assertEqual(len(reqs), 2)
+        self.assertEqual(reqs[0].priority, 200)
+        self.assertEqual(reqs[1].priority, 200)
+
+        # Mock _acceptRequest to simulate tenant quota exhaustion
+        # (return False = NOT a shared resource block).
+        accepted_priorities = []
+
+        def mock_accept(request, log, unassigned_nodes):
+            accepted_priorities.append(request.priority)
+            # Return False = tenant quota block (not shared)
+            return False
+
+        with mock.patch.object(
+            self.launcher, '_acceptRequest',
+            side_effect=mock_accept
+        ):
+            self.hold_nodeset_requests_in_queue = False
+            self.releaseNodesetRequests(*reqs)
+            self.launcher.wake_event.set()
+            time.sleep(2)
+
+            # _acceptRequest should have been called for BOTH requests
+            # because tenant quota blocking returns False, which does
+            # NOT set resource_blocked_priority.
+            self.assertEqual(len(accepted_priorities), 2)
+
+        # Clean up
+        self.releaseNodesetRequests(*self.launcher.api.getNodesetRequests())
+        self.waitUntilSettled()
+
+
 class TestExecutorZone(LauncherBaseTestCase):
     tenant_config_file = 'config/single-tenant/main.yaml'
 
