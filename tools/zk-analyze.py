@@ -189,13 +189,23 @@ class Tree:
     def getPipeline(self, tenant, pipeline):
         return self.getNode(f'/zuul/tenant/{tenant}/pipeline/{pipeline}')
 
-    def getItems(self, tenant, pipeline):
-        pdata = self.getPipeline(tenant, pipeline)
-        for queue in pdata.data.get('queues', []):
-            qdata = self.getNode(queue)
-            for item in qdata.data.get('queue', []):
-                idata = self.getNode(item)
-                yield idata
+    def getPipelineChangeList(self, pipeline):
+        return self.getShardedNode(f'{pipeline}/change_list')
+
+    def getPipelineStatus(self, pipeline):
+        return self.getShardedNode(f'{pipeline}/change_list')
+
+    def listQueues(self, pipeline):
+        return self.listChildren(f'{pipeline}/queue')
+
+    def getQueue(self, pipeline, queue_uuid):
+        return self.getNode(f'{pipeline}/queue/{queue_uuid}')
+
+    def listItems(self, pipeline):
+        return self.listChildren(f'{pipeline}/item')
+
+    def getItem(self, pipeline, item_uuid):
+        return self.getNode(f'{pipeline}/item/{item_uuid}')
 
     def listBuildsets(self, item):
         return self.listChildren(f'{item}/buildset')
@@ -203,17 +213,26 @@ class Tree:
     def getBuildset(self, item, buildset):
         return self.getNode(f'{item}/buildset/{buildset}')
 
+    def getFiles(self, buildset):
+        return self.getShardedNode(f'{buildset}/files')
+
     def listJobs(self, buildset):
         return self.listChildren(f'{buildset}/job')
 
     def getJob(self, buildset, job_name):
         return self.getNode(f'{buildset}/job/{job_name}')
 
-    def listBuilds(self, buildset, job_name):
-        return self.listChildren(f'{buildset}/job/{job_name}/build')
+    def listBuilds(self, job):
+        return self.listChildren(f'{job}/build')
 
-    def getBuild(self, buildset, job_name, build):
-        return self.getNode(f'{buildset}/job/{job_name}/build/{build}')
+    def getBuild(self, job, build_uuid):
+        return self.getNode(f'{job}/build/{build_uuid}')
+
+    def getJobDataAttribute(self, job, attribute):
+        return self.getShardedNode(f'{job}/{attribute}')
+
+    def getBuildData(self, build, data_name):
+        return self.getShardedNode(f'{build}/{data_name}')
 
 
 class FilesystemTree(Tree):
@@ -335,88 +354,120 @@ class Analyzer:
             self.limit = 0
         self.use_zk_size = args.zk_size
 
-    def summarizeItem(self, item):
-        # Start with an item
-        item_summary = SummaryLine('Item', item.path, item.size, item.zk_size)
-        buildsets = self.tree.listBuildsets(item.path)
-        for bs_i, bs_id in enumerate(buildsets):
-            # Add each buildset
-            buildset = self.tree.getBuildset(item.path, bs_id)
-            buildset_summary = SummaryLine(
-                'Buildset', buildset.path,
-                buildset.size, buildset.zk_size)
-            item_summary.add(buildset_summary)
+    def summarizeItems(self, pipeline):
+        for item_uuid in self.tree.listItems(pipeline.path):
+            item = self.tree.getItem(pipeline.path, item_uuid)
+            item_summary = SummaryLine(
+                'Item', item.path, item.size, item.zk_size)
 
-            # Some attributes are offloaded, gather them and include
-            # the size.
-            for x in ['merge_repo_state', 'extra_repo_state', 'files',
-                      'config_errors']:
-                if buildset.data.get(x):
-                    node = self.tree.getShardedNode(buildset.data.get(x))
-                    buildset_summary.attrs[x] = \
-                        self.use_zk_size and node.zk_size or node.size
-                    buildset_summary.size += node.size
-                    buildset_summary.zk_size += node.zk_size
+            known_children = {"buildset"}
+            children = set(self.tree.listChildren(item.path))
+            if unknown := children - known_children:
+                print(f"Unknown child node(s): {unknown} @{item.path}")
 
-            jobs = self.tree.listJobs(buildset.path)
-            for job_i, job_name in enumerate(jobs):
-                # Add each job
-                job = self.tree.getJob(buildset.path, job_name)
-                job_summary = SummaryLine('Job', job.path,
-                                          job.size, job.zk_size)
-                buildset_summary.add(job_summary)
+            buildsets = self.tree.listBuildsets(item.path)
+            for bs_i, bs_id in enumerate(buildsets):
+                # Add each buildset
+                buildset = self.tree.getBuildset(item.path, bs_id)
+                buildset_summary = SummaryLine(
+                    'Buildset', buildset.path,
+                    buildset.size, buildset.zk_size)
+                item_summary.add(buildset_summary)
 
-                # Handle offloaded job data
-                for job_attr in ('artifact_data',
-                                 'extra_variables',
-                                 'group_variables',
-                                 'host_variables',
-                                 'secret_parent_data',
-                                 'variables',
-                                 'parent_data',
-                                 'secrets'):
-                    job_data = job.data.get(job_attr, None)
-                    if job_data and job_data['storage'] == 'offload':
-                        node = self.tree.getShardedNode(job_data['path'])
-                        job_summary.attrs[job_attr] = \
-                            self.use_zk_size and node.zk_size or node.size
-                        job_summary.size += node.size
-                        job_summary.zk_size += node.zk_size
+                known_children = {"files", "job"}
+                children = set(self.tree.listChildren(buildset.path))
+                if unknown := children - known_children:
+                    print(f"Unknown child node(s): {unknown} @{buildset.path}")
 
-                builds = self.tree.listBuilds(buildset.path, job_name)
-                for build_i, build_id in enumerate(builds):
-                    # Add each build
-                    build = self.tree.getBuild(
-                        buildset.path, job_name, build_id)
-                    build_summary = SummaryLine(
-                        'Build', build.path, build.size, build.zk_size)
-                    job_summary.add(build_summary)
+                # Files
+                if "files" in children:
+                    files = self.tree.getFiles(buildset.path)
+                    files_summary = SummaryLine(
+                        'Files', files.path, files.size, files.zk_size)
+                    buildset_summary.add(files_summary)
 
-                    # Add the offloaded build attributes
-                    result_len = 0
-                    result_zk_len = 0
-                    if build.data.get('_result_data'):
-                        result_data = self.tree.getShardedNode(
-                            build.data['_result_data'])
-                        result_len += result_data.size
-                        result_zk_len += result_data.zk_size
-                    if build.data.get('_secret_result_data'):
-                        secret_result_data = self.tree.getShardedNode(
-                            build.data['_secret_result_data'])
-                        result_len += secret_result_data.size
-                        result_zk_len += secret_result_data.zk_size
-                    build_summary.attrs['results'] = \
-                        self.use_zk_size and result_zk_len or result_len
-                    build_summary.size += result_len
-                    build_summary.zk_size += result_zk_len
-        sys.stdout.write(item_summary.toStr(0, self.depth, self.conv,
-                                            self.limit, self.use_zk_size))
+                jobs = self.tree.listJobs(buildset.path)
+                for job_i, job_uuid in enumerate(jobs):
+                    # Add each job
+                    job = self.tree.getJob(buildset.path, job_uuid)
+                    job_summary = SummaryLine('Job', job.path,
+                                              job.size, job.zk_size)
+                    buildset_summary.add(job_summary)
+
+                    known_children = {"build"}
+                    children = set(self.tree.listChildren(job.path))
+                    job_data_attributes = children - known_children
+
+                    for attr_name in job_data_attributes:
+                        attr = self.tree.getJobDataAttribute(
+                            job.path, attr_name)
+                        attr_summary = SummaryLine(
+                            f'Attribute{attr_name.title()}', attr.path,
+                            attr.size, attr.zk_size)
+                        job_summary.add(attr_summary)
+
+                    builds = self.tree.listBuilds(job.path)
+                    for build_i, build_id in enumerate(builds):
+                        # Add each build
+                        build = self.tree.getBuild(job.path, build_id)
+                        build_summary = SummaryLine(
+                            'Build', build.path, build.size, build.zk_size)
+                        job_summary.add(build_summary)
+
+                        build_data_names = set(
+                            self.tree.listChildren(build.path))
+                        for data_name in build_data_names:
+                            data = self.tree.getBuildData(
+                                build.path, data_name)
+                            data_summary = SummaryLine(
+                                data_name.title().replace("_", ""),
+                                data.path, data.size, data.zk_size)
+                            build_summary.add(data_summary)
+
+            yield item_summary
 
     def summarizePipelines(self):
         for tenant_name in self.tree.listTenants():
             for pipeline_name in self.tree.listPipelines(tenant_name):
-                for item in self.tree.getItems(tenant_name, pipeline_name):
-                    self.summarizeItem(item)
+                pipeline = self.tree.getPipeline(tenant_name, pipeline_name)
+                pipeline_summary = SummaryLine(
+                    'Pipeline', pipeline.path, pipeline.size, pipeline.zk_size)
+
+                known_children = {
+                    "change_list", "status", "item", "queue", "dirty"
+                }
+                children = set(self.tree.listChildren(pipeline.path))
+                if unknown := children - known_children:
+                    print(f"Unknown child node(s): {unknown} @{pipeline.path}")
+
+                # Change List
+                change_list = self.tree.getPipelineChangeList(pipeline.path)
+                change_list_summary = SummaryLine(
+                    'ChangeList', change_list.path, change_list.size,
+                    change_list.zk_size)
+                pipeline_summary.add(change_list_summary)
+
+                # Status
+                status = self.tree.getPipelineStatus(pipeline.path)
+                status_summary = SummaryLine(
+                    'Status', status.path, status.size, status.zk_size)
+                pipeline_summary.add(status_summary)
+
+                # Queues
+                for queue_uuid in self.tree.listQueues(pipeline.path):
+                    queue = self.tree.getQueue(pipeline.path, queue_uuid)
+                    queue_summary = SummaryLine(
+                        'Queue', queue.path, queue.size, queue.zk_size)
+                    pipeline_summary.add(queue_summary)
+
+                # Items
+                for item_summary in self.summarizeItems(pipeline):
+                    pipeline_summary.add(item_summary)
+
+                sys.stdout.write(
+                    pipeline_summary.toStr(
+                        0, self.depth, self.conv, self.limit, self.use_zk_size
+                    ))
 
     def summarizeConnectionCache(self, connection_name):
         connection_summary = SummaryLine('Connection', connection_name, 0, 0)
