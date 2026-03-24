@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2041cdb3_1ebcd106",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-24T23:47:39Z",
+      "side": 1,
+      "message": "recheck I did note some probably minor things inline. I think this is probably fine as is, but if we end up making the other suggestions anyway then my suggestions should probably be considered as well.",
+      "revId": "29833b7364e76bb966d2b8cacbedae8a8b5e8d51",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d5f1e24e_d75512be",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 11771,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-24T23:47:39Z",
+      "side": 1,
+      "message": "I think this comment is hinting at something that is maybe missing from the test below. zuul.yaml is not an irrelevant file so this should match either way right?\n\nIt almost feels like we want a test case where relevant files for the job is set to src/.* making both zuul.yaml and the README + docs/ paths irrelevant. Then we should run the job anyway because it has a config update? I think the way the change is written this test may give us complete coverage though so I\u0027m not sure how critical this is. The update would be more to cover potential user behaviors and avoid future regressions?",
+      "revId": "29833b7364e76bb966d2b8cacbedae8a8b5e8d51",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "294ea68c_eab592cc",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 8503,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-24T23:47:39Z",
+      "side": 1,
+      "message": "Should we keep the previous comment here explaining why no files implies config files have updated:\n\n```\n# If self.files is None we don\u0027t know if this change updates the\n# config so assume it does as this is a safe default if we don\u0027t\n# know.\n```",
+      "revId": "29833b7364e76bb966d2b8cacbedae8a8b5e8d51",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
