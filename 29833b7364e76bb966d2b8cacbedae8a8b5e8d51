@@ -53,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "5781c2e4_8b33f25e",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 11771,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-25T17:27:36Z",
+      "side": 1,
+      "message": "I agree, I think this test is passing for the wrong reasons.  I\u0027ll push up a new PS that excludes zuul.yaml in the job config (so that we verify it\u0027s really the scheduler overriding it).",
+      "parentUuid": "a33953cc_9e03a689",
+      "revId": "29833b7364e76bb966d2b8cacbedae8a8b5e8d51",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "294ea68c_eab592cc",
@@ -84,6 +102,24 @@
       "side": 1,
       "message": "I\u0027ll defer to @jim@acmegating.com",
       "parentUuid": "294ea68c_eab592cc",
+      "revId": "29833b7364e76bb966d2b8cacbedae8a8b5e8d51",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "59d6b971_d57192e7",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 8503,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-25T17:27:36Z",
+      "side": 1,
+      "message": "Yes, I think that got chewed up in my refactor, sorry.  :)",
+      "parentUuid": "9c831828_427e8f15",
       "revId": "29833b7364e76bb966d2b8cacbedae8a8b5e8d51",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
