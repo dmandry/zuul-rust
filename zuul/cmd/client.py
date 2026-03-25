@@ -1012,6 +1012,12 @@ class Client(zuul.cmd.ZuulApp):
                 self.connections = connections
                 self.unparsed_config_cache = None
 
+        def _normalize_role_mappings(mappings):
+            new_mappings = {}
+            for k, v in mappings.items():
+                new_mappings[k] = as_list(v)
+            return new_mappings
+
         zuul_globals = SystemAttributes.fromConfig(self.config)
         sched = SchedulerConfig(self.config, self.connections)
         loader = configloader.ConfigLoader(
@@ -1030,6 +1036,16 @@ class Client(zuul.cmd.ZuulApp):
                     'semaphores', [])))
                 loader.tenant_parser.validateGlobalSemaphores(
                     abide, global_semaphores)
+                role_mappings = _normalize_role_mappings(conf_tenant.get(
+                    'role-mappings', {}))
+                loader.tenant_parser.validateRoleMappings(
+                    abide, role_mappings)
+            if unparsed_abide.api_roots:
+                api_root = unparsed_abide.api_roots[0]
+                role_mappings = _normalize_role_mappings(api_root.get(
+                    'role-mappings', {}))
+                loader.api_root_parser.validateRoleMappings(
+                    abide, role_mappings)
 
             print("Tenants config validated with success")
             err_code = 0
