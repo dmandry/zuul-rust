@@ -53,3 +53,5 @@ rackspaceauth
 openshift
 # For AWS driver
 boto3>=1.39.10
+# https://github.com/pypa/build/issues/1004
+build!=1.4.1
