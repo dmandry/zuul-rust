@@ -363,6 +363,7 @@
     vars:
       node_version: 22
       release_python: python3
+      ensure_pyproject_build_version: 1.4.0
     check:
       jobs:
         - zuul-build-image
