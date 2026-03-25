@@ -8273,13 +8273,17 @@ class QueueItem(zkobject.ZKObject):
         project_cn = change.project.canonical_name
 
         for iv in job.include_vars:
-            _, iv_project = layout.tenant.getProject(iv.project_name)
-            if iv_project is None:
-                raise ProjectNotFoundError(iv.project_name)
-            if iv_project.canonical_name in (project_cn, None):
-                # Either the include-vars explicitly matches this
-                # change's project, or we are instructed to look in
-                # the Zuul project, which is this change's project.
+            # Either the include-vars explicitly matches this
+            # change's project, or we are instructed to look in
+            # the Zuul project, which is this change's project.
+            if iv.project_name is not None:
+                _, iv_project = layout.tenant.getProject(iv.project_name)
+                if iv_project is None:
+                    raise ProjectNotFoundError(iv.project_name)
+                iv_project_cn = iv_project.canonical_name
+            else:
+                iv_project_cn = project_cn
+            if iv_project_cn == project_cn:
                 if iv.name in files:
                     log.debug("Include-vars %s is altered in this change",
                               iv.name)

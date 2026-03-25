@@ -12258,6 +12258,46 @@ class TestIncludeVars(ZuulTestCase):
             'missing-vars.yaml not found',
             A.messages[-1]))
 
+    def test_include_vars_config_update(self):
+        # Regression test to make sure we can deal with None values
+        # for include-vars from the current project when checking if
+        # the job updates config.
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: dynamic-job
+                include-vars:
+                  - name: foo.yaml
+                    required: true
+                    zuul-project: true
+                # Empty file matcher, so we are checking
+                # if the job updates config
+                files: []
+
+            - project:
+                check:
+                  jobs:
+                    - dynamic-job
+            """)
+
+        vars_file = textwrap.dedent(
+            """
+            foo: bar
+            """)
+
+        file_dict = {
+            'zuul.yaml': in_repo_conf,
+            'foo.yaml': vars_file,
+        }
+        A = self.fake_gerrit.addFakeChange('org/project2', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='dynamic-job', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
     def test_include_vars_config_error(self):
         # Test the mutual exclusion of project and zuul-project
         in_repo_conf = textwrap.dedent(
