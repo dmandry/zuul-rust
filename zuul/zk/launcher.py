@@ -348,9 +348,13 @@ class NodeCache(LockableZKObjectCache):
                 if not node:
                     self._handleLabelCount(key, node)
                     return
-                if exists:
-                    node.assignment._updateFromRaw(
-                        self._zk_context, data, stat, None)
+                if exists and data is not None:
+                    # If it exists but data is None, then it was
+                    # probably deleted immediately after the event
+                    # we're processing.
+                    if data is not None:
+                        node.assignment._updateFromRaw(
+                            self._zk_context, data, stat, None)
                 else:
                     node.assignment._clear()
                 self._handleLabelCount(key, node)
@@ -361,7 +365,10 @@ class NodeCache(LockableZKObjectCache):
                 node = self._cached_objects.get(key)
                 if not node:
                     return
-                if exists:
+                if exists and data is not None:
+                    # If it exists but data is None, then it was
+                    # probably deleted immediately after the event
+                    # we're processing.
                     node.lifecycle._updateFromRaw(
                         self._zk_context, data, stat, None)
                 else:
