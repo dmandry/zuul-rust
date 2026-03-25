@@ -200,7 +200,7 @@ class GithubRateLimitHandler:
         # on the x-ratelimit-reset header. After waiting we can retry the
         # original request and return it to the caller.
         reset = response.headers.get('x-ratelimit-reset')
-        wait_time = int(reset) - int(time.time()) + 1
+        wait_time = max(int(reset) - int(time.time()) + 1, 0)
         self.log.warning('API rate limit reached, need to wait for '
                          '%s seconds', wait_time)
         time.sleep(wait_time)
