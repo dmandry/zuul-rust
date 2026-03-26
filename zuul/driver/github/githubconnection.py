@@ -2213,6 +2213,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             resp = github.session.put(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
+            self.log.debug("Merge response: %s", data)
             if not data:
                 result = False
             else:
