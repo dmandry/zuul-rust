@@ -7160,7 +7160,11 @@ class QueueItem(zkobject.ZKObject):
         # Skip the initial merge for branch/ref items as we don't need it in
         # order to build a job graph. The merger items will be included as
         # part of the extra repo state if there are jobs to run.
-        should_merge = any(isinstance(o, (Change, Tag)) for o in obj.changes)
+        should_merge = False
+        if any(isinstance(o, Change) for o in obj.changes):
+            should_merge = obj.updatesConfig()
+        elif any(isinstance(o, Tag) for o in obj.changes):
+            should_merge = True
         merge_state = (BuildSet.NEW if should_merge else BuildSet.COMPLETE)
         should_files = any(o.files is None for o in obj.changes)
         files_state = (BuildSet.NEW if should_files else BuildSet.COMPLETE)
