@@ -575,8 +575,8 @@ class ZKChangeCacheMixin:
         def _update_attrs(c):
             for name, value in attrs.items():
                 setattr(c, name, value)
-        self._change_cache.updateChangeWithRetry(change.cache_stat.key,
-                                                 change, _update_attrs)
+        return self._change_cache.updateChangeWithRetry(
+           change.cache_stat.key, change, _update_attrs)
 
     def estimateCacheDataSize(self):
         return self._change_cache.estimateDataSize()

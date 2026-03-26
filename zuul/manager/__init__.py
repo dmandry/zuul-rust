@@ -272,7 +272,8 @@ class PipelineManager(metaclass=ABCMeta):
                         and self.useDependenciesByTopic(change.project))
                     if (update_commit_dependencies
                             or update_topic_dependencies):
-                        self.updateCommitDependencies(change, event=None)
+                        change = self.updateCommitDependencies(
+                            change, event=None)
                 self._change_cache[change.cache_key] = change
             resolved_changes.append(change)
         return resolved_changes
@@ -950,7 +951,7 @@ class PipelineManager(metaclass=ABCMeta):
         self.sched.query_cache.clearIfOlderThan(event)
         history.add(change)
         if update_deps:
-            self.updateCommitDependencies(change, event)
+            change = self.updateCommitDependencies(change, event)
         for needed_change in self.resolveChangeReferences(
                 change.getNeedsChanges(
                     self.useDependenciesByTopic(change.project))):
@@ -1191,7 +1192,8 @@ class PipelineManager(metaclass=ABCMeta):
             update_attrs['topic_query_ltime'] = cache_entry.ltime
 
         if update_attrs:
-            source.setChangeAttributes(change, **update_attrs)
+            change = source.setChangeAttributes(change, **update_attrs)
+        return change
 
     def provisionNodes(self, item):
         log = item.annotateLogger(self.log)

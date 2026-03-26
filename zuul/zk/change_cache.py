@@ -412,12 +412,16 @@ class AbstractChangeCache(ZooKeeperSimpleBase, Iterable, abc.ABC):
                         cache_data.encode("utf8"),
                         include_data=True)
                 else:
-                    # Sanity check that we only have a single change instance
-                    # for a key.
-                    if self._change_cache[key._hash] is not change:
-                        raise RuntimeError(
+                    # Check that we still have the same change instance
+                    # in the local cache. A concurrent cache watcher
+                    # callback (e.g. from another scheduler's ZK write
+                    # or cache pruning) may have replaced it. Treat
+                    # this the same as a ZK version conflict so the
+                    # caller can retry with the current object.
+                    if self._change_cache.get(key._hash) is not change:
+                        raise ConcurrentUpdateError(
                             "Conflicting change objects (existing "
-                            f"{self._change_cache[key._hash]} vs. "
+                            f"{self._change_cache.get(key._hash)} vs. "
                             f"new {change} "
                             f"for key '{key.reference}'")
                     self.log.debug(
