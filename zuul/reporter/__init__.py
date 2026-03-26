@@ -166,6 +166,7 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
         """Format a report from the given items. Usually to provide results to
         a reporter taking free-form text."""
         action = action or self._action
+        with_jobs = with_jobs and not item.didMergerFail()
         ret = self._getFormatter(action)(item, change, with_jobs, short)
 
         config_warnings = item.getConfigErrors(errors=False, warnings=True)
