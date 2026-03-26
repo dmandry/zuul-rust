@@ -263,3 +263,4 @@ class BaseSource(object, metaclass=abc.ABCMeta):
         # have been converted to use a Zookeeper backed changed cache.
         for name, value in attrs.items():
             setattr(change, name, value)
+        return change
