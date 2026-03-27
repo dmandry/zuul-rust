@@ -1524,6 +1524,7 @@ class ImageUpload(zkobject.LockableZKObject):
             uuid=None,  # A random UUID for the image upload
             canonical_name=None,
             artifact_uuid=None,  # The UUID of the ImageBuildArtifact
+            build_uuid=None,  # The UUID of the validate job
             endpoint_name=None,
             providers=None,
             config_hash=None,
@@ -1592,6 +1593,7 @@ class ImageUpload(zkobject.LockableZKObject):
             uuid=self.uuid,
             canonical_name=self.canonical_name,
             artifact_uuid=self.artifact_uuid,
+            build_uuid=self.build_uuid,
             endpoint_name=self.endpoint_name,
             providers=self.providers,
             config_hash=self.config_hash,

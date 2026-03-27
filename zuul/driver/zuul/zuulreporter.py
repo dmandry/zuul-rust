@@ -24,14 +24,14 @@ class ZuulReporter(BaseReporter):
         self.log = logging.getLogger('zuul.reporter')
         self.pipeline = pipeline
         self.image_built = config.get('image-built', False)
-        self.image_validated = config.get('image-validated', False)
+        self.image_validated = config.get('image-validated', None)
 
     def report(self, item, phase1=True, phase2=True):
         if not phase2:
             return
         if self.image_built:
             self.reportImageBuilt(item)
-        elif self.image_validated:
+        elif self.image_validated is not None:
             self.reportImageValidated(item)
 
     def reportImageBuilt(self, item):
@@ -66,6 +66,8 @@ class ZuulReporter(BaseReporter):
                 continue
             sched.validateImageUpload(
                 item.event.image_upload_uuid,
+                build,
+                self.image_validated,
             )
 
 

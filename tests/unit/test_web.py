@@ -1819,6 +1819,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         self.assertEqual(2, len(data[0]['build_artifacts'][0]['uploads']))
         upload = data[0]['build_artifacts'][0]['uploads'][0]
         self.assertFalse(upload['validated'])
+        self.assertIsNone(upload['build_uuid'])
 
         # Now retrigger validation
         url = f"api/tenant/tenant-one/image-upload/{upload['uuid']}/validate"
@@ -1850,6 +1851,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         else:
             raise Exception("Upload not found")
         self.assertTrue(new_upload['validated'])
+        self.assertIsNotNone(new_upload['build_uuid'])
 
     @simple_layout('layouts/nodepool-image.yaml',
                    enable_nodepool=True)

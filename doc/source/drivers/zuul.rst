@@ -118,3 +118,10 @@ Reporter Configuration
       to :value:`pipeline.trigger.zuul.event.image-validate` events,
       then it causes Zuul to mark those images as validated after that
       pipeline completes.
+
+      If this is set to `false`, then uploads will not be marked as
+      validated.
+
+      Whether this is set to `true` or `false`, the builds in the
+      buildset will be associated with the uploads so that users will
+      be able to find the validation builds for those uploads.

@@ -17,6 +17,9 @@
     success:
       zuul:
         image-validated: true
+    failure:
+      zuul:
+        image-validated: false
 
 - job:
     name: base

@@ -602,6 +602,7 @@ class TestLauncher(LauncherBaseTestCase):
             self.assertEqual(artifact.uuid, upload.artifact_uuid)
             self.assertIn(upload.external_id, upload_ids)
             self.assertTrue(upload.validated)
+            self.assertIsNotNone(upload.build_uuid)
 
     @simple_layout('layouts/nodepool-image-validate.yaml',
                    enable_nodepool=True)
@@ -659,6 +660,7 @@ class TestLauncher(LauncherBaseTestCase):
         for upload in uploads:
             self.assertEqual(artifact.uuid, upload.artifact_uuid)
             self.assertFalse(upload.validated)
+            self.assertIsNotNone(upload.build_uuid)
 
     @simple_layout('layouts/nodepool-image.yaml', enable_nodepool=True)
     @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run',
