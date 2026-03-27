@@ -66,6 +66,7 @@ class ZuulReporter(BaseReporter):
                 continue
             sched.validateImageUpload(
                 item.event.image_upload_uuid,
+                build,
             )
 
 

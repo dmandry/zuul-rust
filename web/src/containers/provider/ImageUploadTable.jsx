@@ -31,6 +31,7 @@ import {
   TableBody,
   TableVariant,
 } from '@patternfly/react-table'
+import { Link } from 'react-router-dom'
 import { fetchImages } from '../../actions/images'
 import { fetchProviders } from '../../actions/providers'
 import { addNotification, addApiError } from '../../actions/notifications'
@@ -98,6 +99,14 @@ function ImageUploadTable(props) {
   ]
 
   function createImageUploadRow(upload) {
+    // Only link to the build if it is in this tenant
+    const validatedState = upload.validated ? 'validated' : 'unvalidated'
+    const validatedText = (build.build_tenant && upload.build_uuid)?
+          <Link to={`${tenant.linkPrefix}/build/${upload.build_uuid}`}>
+            {validatedState}
+          </Link>
+          :
+          validatedState
     const state_style = STATE_STYLES[upload.state] || {}
     return {
       _uuid: upload.uuid,
@@ -107,7 +116,7 @@ function ImageUploadTable(props) {
           title: upload.uuid
         },
         {
-          title: upload.validated ? 'validated' : 'unvalidated'
+          title: validatedText
         },
         {
           title: <span style={state_style}>{upload.state}</span>
