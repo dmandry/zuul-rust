@@ -44,6 +44,7 @@
 - job:
     name: image-builder
     provides: images
+    pre-run: playbooks/pre.yaml
 
 - job:
     name: image-user
