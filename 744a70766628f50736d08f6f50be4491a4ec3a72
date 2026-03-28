@@ -1,0 +1,106 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "41e002aa_c6ff39d3",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-28T17:08:45Z",
+      "side": 1,
+      "message": "A few things inline that are minor and I think fine to address in followups if we prefer.\n\nThe other thing I tried to do was supply an invalid timestamp for end_time or start_time, but the way our preview site works you must navigate through react itself and cannot modify the url directly.\n\nIs it worth testing what happens with invalid parameter values via a local deployment just to be sure we handle that gracefully?",
+      "revId": "744a70766628f50736d08f6f50be4491a4ec3a72",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0f630ae0_b6a4be37",
+        "filename": "web/src/pages/Runtime.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 235,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-28T17:08:45Z",
+      "side": 1,
+      "message": "If currentPreset is set then that will take precedence over start and end time values. Should we prefer start and end time values as they are most likely to have been chosen by hand rather than the more default like presets?",
+      "revId": "744a70766628f50736d08f6f50be4491a4ec3a72",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "925e6ff6_80ec3135",
+        "filename": "web/src/pages/Runtime.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 241,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-28T17:08:45Z",
+      "side": 1,
+      "message": "Should this debug output be removed before merging?",
+      "revId": "744a70766628f50736d08f6f50be4491a4ec3a72",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c07f5c7a_9282f345",
+        "filename": "web/src/pages/Runtime.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 250,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-28T17:08:45Z",
+      "side": 1,
+      "message": "It looks like it is valid to set either start_time or end_time and not the other. When you only set start_time it seems to get results from that start time until the current time. When you only set end_time it seems to get the 5k results prior to the end time. I think that is fine for setting one for the other.\n\nHowever, when I set start time \u003e end_time (eg end_time is not \u003e\u003d start_time) I get a page with the time toolbar and no graph or message at all.\n\nI wonder if we should add a check here ensuring that end_time \u003e\u003d start_time if both are set and if not we can provide a warning to the user?",
+      "revId": "744a70766628f50736d08f6f50be4491a4ec3a72",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9e5abe55_bc6a9853",
+        "filename": "web/src/pages/Runtime.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 314,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-28T17:08:45Z",
+      "side": 1,
+      "message": "I think this conditional may also need flipping if we decide to treat the presets more like defaults that get overridden by explicit start and end times.",
+      "revId": "744a70766628f50736d08f6f50be4491a4ec3a72",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c083172d_a906f183",
+        "filename": "web/src/pages/Runtime.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 322,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-03-28T17:08:45Z",
+      "side": 1,
+      "message": "I think my comment about validating end_time \u003e\u003d start_time may apply here too.",
+      "revId": "744a70766628f50736d08f6f50be4491a4ec3a72",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
