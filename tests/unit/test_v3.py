@@ -11193,6 +11193,61 @@ class TestProvidesRequiresMysql(ZuulTestCase):
             1,
             B.messages[0])
 
+    @simple_layout('layouts/provides-requires.yaml')
+    def test_provides_requires_check_old_retry(self):
+        # Test that when builds retry we successfully find artifacts from
+        # subsequent successful builds.
+        self.executor_server.hold_jobs_in_build = True
+        A = self.fake_gerrit.addFakeChange('org/project4', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        for build in self.builds:
+            if (build.name == 'image-builder-retry'
+                and build.project == 'org/project4'):
+                break
+        else:
+            raise Exception("Unable to find image-builder-retry build")
+        build.should_retry = True
+
+        self.executor_server.release('image-builder-retry')
+        self.executor_server.release('library-builder')
+        self.executor_server.release('hold')
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='image-builder-retry', result=None, changes='1,1'),
+            dict(name='library-builder', result='SUCCESS', changes='1,1'),
+            dict(name='hold', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+        B = self.fake_gerrit.addFakeChange('org/project2', 'master', 'B')
+        B.data['commitMessage'] = '%s\n\nDepends-On: %s\n' % (
+            B.subject, A.data['id'])
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+
+        # Run only the job that requires the artifact from image-builder-retry
+        # This ensures that even if this job begins evaluation before
+        # image-builder-retry succeeds that we handle things properly.
+        self.waitUntilSettled()
+        self.executor_server.release('image-user')
+        self.waitUntilSettled()
+
+        # Now release all of the builds including the image-builder-retry build
+        # that will succeed.
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='image-builder-retry', result=None, changes='1,1'),
+            dict(name='image-builder-retry', result='SUCCESS', changes='1,1'),
+            dict(name='library-builder', result='SUCCESS', changes='1,1'),
+            dict(name='hold', result='SUCCESS', changes='1,1'),
+            dict(name='image-user', result='SUCCESS', changes='1,1 2,1'),
+            dict(name='library-user', result='SUCCESS', changes='1,1 2,1'),
+            dict(name='library-user2', result='SUCCESS', changes='1,1 2,1'),
+            dict(name='hold', result='SUCCESS', changes='1,1 2,1'),
+        ], ordered=False)
+
     @simple_layout('layouts/provides-requires-single-project.yaml')
     def test_provides_requires_check_old_failure_single_project(self):
         # Similar to above test, but has job dependencies which will

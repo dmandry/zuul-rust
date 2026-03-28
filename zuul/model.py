@@ -7565,7 +7565,8 @@ class QueueItem(zkobject.ZKObject):
                         change=change.number,
                         branch=change.branch,
                         patchset=change.patchset,
-                        provides=requirements_tuple)
+                        provides=requirements_tuple,
+                        final=True)
                     if builds:
                         break
             else:
@@ -7582,18 +7583,10 @@ class QueueItem(zkobject.ZKObject):
             self.log.debug("No artifacts matching requirements found in DB")
             return data
 
+        found = False
         for build in builds:
-            if build.result != 'SUCCESS':
-                provides = [x.name for x in build.provides]
-                requirement = list(requirements.intersection(set(provides)))
-                raise RequirementsError(
-                    'Job %s requires artifact(s) %s provided by build %s '
-                    '(triggered by change %s on project %s), but that build '
-                    'failed with result "%s"' % (
-                        job.name, ', '.join(requirement), build.uuid,
-                        build.ref.change, build.ref.project,
-                        build.result))
-            else:
+            if build.result == 'SUCCESS':
+                found = True
                 for a in build.artifacts:
                     artifact = {'name': a.name,
                                 'url': a.url,
@@ -7604,6 +7597,17 @@ class QueueItem(zkobject.ZKObject):
                     if a.meta:
                         artifact['metadata'] = json.loads(a.meta)
                     data.append(artifact)
+        if not found:
+            for build in builds:
+                provides = [x.name for x in build.provides]
+                requirement = list(requirements.intersection(set(provides)))
+                raise RequirementsError(
+                    'Job %s requires artifact(s) %s provided by build %s '
+                    '(triggered by change %s on project %s), but that build '
+                    'failed with result "%s"' % (
+                        job.name, ', '.join(requirement), build.uuid,
+                        build.ref.change, build.ref.project,
+                        build.result))
         self.log.debug("Found artifacts in DB: %s", repr(data))
         return data
 

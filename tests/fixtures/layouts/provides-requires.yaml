@@ -46,6 +46,11 @@
     provides: images
 
 - job:
+    name: image-builder-retry
+    provides: images
+    pre-run: playbooks/pre.yaml
+
+- job:
     name: image-user
     requires: images
 
@@ -100,4 +105,13 @@
     check:
       jobs:
         - both-user
+        - hold
+
+- project:
+    name: org/project4
+    queue: integrated
+    check:
+      jobs:
+        - image-builder-retry
+        - library-builder
         - hold
