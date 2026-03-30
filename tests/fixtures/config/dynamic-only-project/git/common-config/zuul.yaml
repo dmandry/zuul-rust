@@ -40,7 +40,6 @@
     trigger:
       gerrit:
         - event: ref-updated
-          ref: ^(?!refs/).*$
     precedence: low
 
 - job:
