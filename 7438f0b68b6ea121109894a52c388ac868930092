@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5c0b9724_155e362b",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 8278,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-30T17:26:11Z",
+      "side": 1,
+      "message": "I think this comment still belongs at the original location, which is now line 8287.  It\u0027s confusing here (since there\u0027s no \"or\" condition yet).  But it makes sense there because it will say that the equality check on 8286 represents that complex \"or\" condition (which is now handled by lines 8283-8285.",
+      "revId": "7438f0b68b6ea121109894a52c388ac868930092",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
