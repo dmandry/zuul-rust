@@ -42,6 +42,16 @@ Zuul implements the timer using `apscheduler`_, Please check the
       words, it is not guaranteed to vary from one run of the timer
       trigger to the next).
 
+   .. attr:: branch
+
+      Limits the trigger to the matching branches.  Example:
+      ``master``.  This field is treated as a regular expression, and
+      multiple branches may be listed.  If it is not set, the trigger
+      activates for every branch of every project in the pipeline.
+
+      Branches that do not match are skipped when the timer jobs are
+      scheduled, so no timer events are generated for them.
+
    .. attr:: dereference
       :default: false
 

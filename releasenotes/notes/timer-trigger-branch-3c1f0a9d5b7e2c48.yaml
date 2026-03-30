@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    The :attr:`pipeline.trigger.timer.branch` attribute has been added
+    to the timer trigger.  It accepts one or more regular expressions
+    and restricts the periodic events to matching project branches.
