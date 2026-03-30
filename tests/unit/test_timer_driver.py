@@ -102,3 +102,86 @@ class TestTimerAlwaysDynamicBranches(ZuulTestCase):
             self.assertEqual(job.result, 'SUCCESS')
             self.assertEqual(job.name, 'project-bitrot')
             self.assertIn(job.ref, ('refs/heads/stable', 'refs/heads/master'))
+
+
+class TestTimerBranchFilter(ZuulTestCase):
+    tenant_config_file = 'config/dynamic-only-project/dynamic.yaml'
+
+    def test_timer_branch_filter(self):
+        """Test that timer triggers can filter by branch patterns."""
+        # Create additional branches
+        self.create_branch('org/project', 'stable/train')
+        self.create_branch('org/project', 'stable/ussuri')
+        self.create_branch('org/project', 'feature/experimental')
+
+        # Notify scheduler about new branches
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'stable/train'))
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'stable/ussuri'))
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'feature/experimental'))
+        self.waitUntilSettled()
+
+        # Apply timer configuration with branch filters
+        self.executor_server.hold_jobs_in_build = True
+        self.commitConfigUpdate('common-config',
+                                'layouts/timer-branch-filter.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+
+        # Wait for timer events to trigger (pipeline triggers every second)
+        for _ in iterate_timeout(60, 'timer jobs started'):
+            if len(self.builds) >= 3:
+                break
+
+        # Verify jobs are running
+        self.assertTrue(len(self.builds) >= 3,
+                        f"Expected at least 3 builds, got {len(self.builds)}")
+
+        # Check which branches got timer events
+        master_jobs = []
+        stable_jobs = []
+        feature_jobs = []
+
+        for build in self.builds:
+            if 'master' in build.parameters['zuul']['branch']:
+                master_jobs.append(build)
+            elif 'stable' in build.parameters['zuul']['branch']:
+                stable_jobs.append(build)
+            elif 'feature' in build.parameters['zuul']['branch']:
+                feature_jobs.append(build)
+
+        # Verify master branch timer triggered
+        self.assertTrue(len(master_jobs) > 0,
+                        "Timer should trigger for master branch")
+
+        # Verify stable branches timer triggered
+        self.assertTrue(len(stable_jobs) > 0,
+                        "Timer should trigger for stable branches")
+
+        # Verify feature branch did NOT trigger
+        # (since our timer filters only match master and stable/*)
+        self.assertEqual(len(feature_jobs), 0,
+                         "Timer should NOT trigger for feature branches")
+
+        # Verify the correct jobs ran
+        for build in master_jobs:
+            self.assertEqual(build.name, 'project-master-periodic')
+
+        for build in stable_jobs:
+            self.assertEqual(build.name, 'project-stable-periodic')
+
+        # Clean up - stop timer first to prevent more jobs
+        self.commitConfigUpdate('common-config', 'layouts/no-timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        # Give APScheduler time to stop
+        time.sleep(3)
+        self.waitUntilSettled()
+
+        # Now release the held jobs
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
