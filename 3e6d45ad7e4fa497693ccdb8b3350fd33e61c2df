@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e1ba686f_fd7b19ca",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 327,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-03-30T09:54:22Z",
+      "side": 1,
+      "message": "I\u0027m wondering if we should rather fix this at the `_handlePlayback()` level by e.g. moving https://opendev.org/zuul/zuul/src/branch/master/zuul/zk/cache.py#L326-L332 further down after we\u0027ve initialized the `exists` flag based on the event.",
+      "revId": "3e6d45ad7e4fa497693ccdb8b3350fd33e61c2df",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
