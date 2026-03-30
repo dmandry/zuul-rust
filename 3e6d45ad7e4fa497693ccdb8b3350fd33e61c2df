@@ -16,6 +16,24 @@
       "message": "I\u0027m wondering if we should rather fix this at the `_handlePlayback()` level by e.g. moving https://opendev.org/zuul/zuul/src/branch/master/zuul/zk/cache.py#L326-L332 further down after we\u0027ve initialized the `exists` flag based on the event.",
       "revId": "3e6d45ad7e4fa497693ccdb8b3350fd33e61c2df",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "eaa225a1_4c2cc566",
+        "filename": "zuul/zk/launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 327,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-03-30T17:07:43Z",
+      "side": 1,
+      "message": "That may be an improvement.  I\u0027ve implemented that in the next PS.\n\nNote that even with that change, this change still isn\u0027t wrong.  We can omit the extra checks in this change, but only because once we make the change you suggest, we will be relying on the behavior that this particular ProviderNode cache does always request the content of its subnodes (ie, the lifecycle subnode used for assignment), so we can expect that if exists is True then data is not None.\n\nI\u0027m just highlighting that there is still the need for agreement between the preCacheHook method and the parsePath method (which decides what is fetched) for this assumption to hold.",
+      "parentUuid": "e1ba686f_fd7b19ca",
+      "revId": "3e6d45ad7e4fa497693ccdb8b3350fd33e61c2df",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
