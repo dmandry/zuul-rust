@@ -323,25 +323,8 @@ class ZuulTreeCache(abc.ABC):
         data, stat = None, None
         zxid = WatchedEvent.NO_ZXID
 
-        if future:
-            try:
-                data, stat = future.get()
-                zxid = stat.mzxid
-                exists = True
-            except kze.NoNodeError:
-                exists = False
-
-        # We set "exists" above in case of cache re-initialization,
-        # which happens out of sequence with the normal watch events.
-        # and we can't be sure whether the node still exists or not by
-        # the time we process it.  Later cache watch events may
-        # supercede this (for example, we may process a NONE event
-        # here which we interpret as a delete which may be followed by
-        # a normal delete event.  That case, and any other variations
-        # should be anticipated.
-
-        # If the event tells us whether the node exists, prefer that
-        # value, otherwise fallback to what we determined above.
+        # If the event tells us whether the node exists, start with
+        # that assumption.
         if (event.type in (EventType.CREATED, EventType.CHANGED)):
             # Update our max_zxid only for created or changed events.
             # We receive zxids for deleted events, but we won't see
@@ -354,6 +337,25 @@ class ZuulTreeCache(abc.ABC):
             exists = True
         elif (event.type == EventType.DELETED):
             exists = False
+
+        # But if we have more current information, let's use that;
+        # this will avoid a situation where data is None but exists is
+        # True (due to a node being deleted before our fetch call).
+        # In the case of cache re-initialization, we have no event and
+        # rely entirely on this.  It is possible to have multiple
+        # events which add or remove items from the cache; for
+        # example, an event from re-initialization may cause us to
+        # delete an entry and it may be followed by a normal DELETED
+        # event.
+
+        if future:
+            try:
+                data, stat = future.get()
+                if zxid == WatchedEvent.NO_ZXID:
+                    zxid = stat.mzxid
+                exists = True
+            except kze.NoNodeError:
+                exists = False
 
         # Keep the cached paths up to date
         if exists:
