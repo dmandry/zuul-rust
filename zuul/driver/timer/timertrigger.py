@@ -18,34 +18,38 @@ import voluptuous as v
 
 from zuul.trigger import BaseTrigger
 from zuul.driver.timer.timermodel import TimerEventFilter
-from zuul.driver.util import to_list, make_regex
+from zuul.driver.util import scalar_or_list, to_list, make_regex, ZUUL_REGEX
 
 
 class TimerTrigger(BaseTrigger):
     name = 'timer'
 
-    def getEventFilters(self, connection_name, trigger_conf,
-                        parse_context):
+    def getEventFilters(self, connection_name, trigger_conf, parse_context):
         efilters = []
+
         for trigger in to_list(trigger_conf):
+            with parse_context.confAttr(trigger, 'branch') as attr:
+                branches = [make_regex(x, parse_context)
+                            for x in to_list(attr)]
+
             types = [make_regex('timer')]
             f = TimerEventFilter(
                 connection_name=connection_name,
                 trigger=self,
                 types=types,
                 timespecs=to_list(trigger['time']),
+                branches=branches,
                 dereference=trigger.get('dereference', False),
                 debug=trigger.get('debug'),
             )
-
             efilters.append(f)
-
         return efilters
 
 
 def getSchema():
     timer_trigger = {
         v.Required('time'): str,
+        'branch': scalar_or_list(v.Any(ZUUL_REGEX, str)),
         'dereference': bool,
         'debug': bool,
     }
