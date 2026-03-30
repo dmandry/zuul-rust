@@ -166,12 +166,12 @@ class TimerDriver(Driver, TriggerInterface):
 
                     self._addJobsInner(tenant, pipeline,
                                        cron_args, jitter, timespec,
-                                       ef.dereference, jobs)
+                                       ef.dereference, ef.branches, jobs)
         self._removeJobs(tenant, jobs)
         self.tenant_jobs[tenant.name] = jobs
 
     def _addJobsInner(self, tenant, pipeline, cron_args, jitter,
-                      timespec, dereference, jobs):
+                      timespec, dereference, branches, jobs):
         # jobs is a dict of args->job that we mutate
         existing_jobs = self.tenant_jobs.get(tenant.name, {})
         start_job_count = len(jobs)
@@ -186,6 +186,11 @@ class TimerDriver(Driver, TriggerInterface):
 
             try:
                 for branch in tenant.getProjectBranches(project_name):
+                    # If the trigger specifies branch filters, only
+                    # create timer jobs for matching branches.
+                    if branches and not any(
+                            b.match(branch) for b in branches):
+                        continue
                     args = (tenant.name, pipeline.name, project_name,
                             branch, dereference, timespec,)
                     existing_job = existing_jobs.get(args)
