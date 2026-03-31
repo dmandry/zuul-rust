@@ -109,13 +109,13 @@ class LockableZKObjectCache(ZuulTreeCache):
 
         object_type, request_uuid, contender, *_ = parts
         if object_type != self.locks_path:
-            return
+            return self.STOP_OBJECT_UPDATE
 
         key = (request_uuid,)
         request = self._cached_objects.get(key)
 
         if not request:
-            return
+            return self.STOP_OBJECT_UPDATE
 
         if exists:
             request._lock_contenders[contender] = data
@@ -144,6 +144,7 @@ class LockableZKObjectCache(ZuulTreeCache):
             request._set(**update_args)
             if self.updated_event:
                 self.updated_event()
+        return self.STOP_OBJECT_UPDATE
 
     def postCacheHook(self, event, data, stat, key, obj):
         if self.updated_event:
@@ -211,14 +212,14 @@ class RequestCache(LockableZKObjectCache):
         request = self._cached_objects.get(key)
 
         if not request:
-            return
+            return self.STOP_OBJECT_UPDATE
 
         if object_type == self.locks_path:
             request._set(is_locked=exists)
         elif data is not None:
             request._revision._updateFromRaw(
                 self._zk_context, data, stat, None)
-            return self.STOP_OBJECT_UPDATE
+        return self.STOP_OBJECT_UPDATE
 
 
 class NodeCache(LockableZKObjectCache):
@@ -347,7 +348,7 @@ class NodeCache(LockableZKObjectCache):
                 node = self._cached_objects.get(key)
                 if not node:
                     self._handleLabelCount(key, node)
-                    return
+                    return self.STOP_OBJECT_UPDATE
                 if exists:
                     node.assignment._updateFromRaw(
                         self._zk_context, data, stat, None)
@@ -360,7 +361,7 @@ class NodeCache(LockableZKObjectCache):
                 key = (parts[1],)
                 node = self._cached_objects.get(key)
                 if not node:
-                    return
+                    return self.STOP_OBJECT_UPDATE
                 if exists:
                     node.lifecycle._updateFromRaw(
                         self._zk_context, data, stat, None)
