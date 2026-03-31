@@ -39,7 +39,13 @@ export default (state = {
     setDarkMode(darkMode)
     return { ...newstate, darkMode: darkMode }
   }
-  let darkMode = resolveDarkMode(state.theme)
-  setDarkMode(darkMode)
-  return { ...state, darkMode: darkMode }
+  // TODO: this runs on every action (not just preferences actions);
+  // we should find a better place for it, but for now, we minimize
+  // the impact by attempting only to run it once on startup.
+  if (state.darkMode === undefined) {
+    let darkMode = resolveDarkMode(state.theme)
+    setDarkMode(darkMode)
+    return { ...state, darkMode: darkMode }
+  }
+  return state
 }

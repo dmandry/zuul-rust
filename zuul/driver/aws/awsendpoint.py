@@ -260,7 +260,10 @@ class AwsCreateStateMachine(statemachine.StateMachine):
             self.node.aws_instance_id = instance['InstanceId']
             self.state = self.INSTANCE_CREATING
 
-        if self.state == self.INSTANCE_CREATING:
+        if self.state in (self.INSTANCE_CREATING, self.COMPLETE):
+            # Run this state again even if complete, so that in case
+            # we are recovering from another launcher, the instance
+            # state is ready for the complete state.
             self.instance = self.endpoint._refresh(self.instance)
 
             if self.instance['State']['Name'].lower() == "running":
