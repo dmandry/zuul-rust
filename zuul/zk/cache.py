@@ -50,10 +50,6 @@ class ZuulTreeCache(abc.ABC):
     event_log = logging.getLogger("zuul.zk.cache.event")
     qsize_warning_threshold = 1024
 
-    # Sentinel object that can be returned from preCacheHook to not
-    # update the current object.
-    STOP_OBJECT_UPDATE = object()
-
     def __init__(self, zk_client, root, async_worker=True):
         """Use watchers to keep a cache of local objects up to date.
 
@@ -362,10 +358,7 @@ class ZuulTreeCache(abc.ABC):
             self._cached_paths.discard(event.path)
 
         # Some caches have special handling for certain sub-objects
-        if (self.preCacheHook(event, exists, data, stat)
-                == self.STOP_OBJECT_UPDATE):
-            self._max_zxid = max(zxid, self._max_zxid)
-            return
+        self.preCacheHook(event, exists, data, stat)
 
         # If we don't actually cache this kind of object, return now
         if key is None:
@@ -444,9 +437,6 @@ class ZuulTreeCache(abc.ABC):
         seen the node in ZK immediately before calling this method.
         Otherwise, it indicates whether or not the EventType would
         cause the node to exist in ZK.
-
-        Return sentinel STOP_OBJECT_UPDATE to skip the object update
-        step.
 
         :param EventType event: The event.
         :param bool exists: Whether the object exists in ZK.

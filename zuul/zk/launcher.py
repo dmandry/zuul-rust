@@ -220,7 +220,7 @@ class RequestCache(LockableZKObjectCache):
         elif data is not None:
             request._revision._updateFromRaw(
                 self._zk_context, data, stat, None)
-            return self.STOP_OBJECT_UPDATE
+            return
 
 
 class NodeCache(LockableZKObjectCache):
@@ -342,7 +342,7 @@ class NodeCache(LockableZKObjectCache):
             if (parts[0] == ProviderNode.NODES_PATH and
                 parts[2] in (ProviderNodeSnapshot.SNAPSHOT_PATH,
                              ProviderNodeSnapshot.SNAPSHOT_LOCK_PATH)):
-                return self.STOP_OBJECT_UPDATE
+                return
             if (parts[0] == ProviderNode.NODES_PATH and
                 parts[2] == ProviderNodeAssignment.ASSIGNMENT_PATH):
                 key = (parts[1],)
@@ -356,7 +356,7 @@ class NodeCache(LockableZKObjectCache):
                 else:
                     node.assignment._clear()
                 self._handleLabelCount(key, node)
-                return self.STOP_OBJECT_UPDATE
+                return
             if (parts[0] == ProviderNode.NODES_PATH and
                 parts[2] == ProviderNodeLifecycle.LIFECYCLE_PATH):
                 key = (parts[1],)
@@ -370,7 +370,7 @@ class NodeCache(LockableZKObjectCache):
                     node.lifecycle._clear()
                 if self.updated_event:
                     self.updated_event()
-                return self.STOP_OBJECT_UPDATE
+                return
         return super().preCacheHook(event, exists, data, stat)
 
     def postCacheHook(self, event, data, stat, key, obj):

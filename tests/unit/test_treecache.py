@@ -67,7 +67,6 @@ class SimpleSubnodeTreeCache(SimpleTreeCache):
                 self._cached_objects[cache_key].children[parts] = data
             else:
                 self._cached_objects[cache_key].children.pop(parts)
-            return self.STOP_OBJECT_UPDATE
 
 
 class TestTreeCache(BaseTestCase):
