@@ -13,14 +13,17 @@
 # under the License.
 
 import contextlib
+import logging
 import os
 import time
+import unittest
 from unittest import mock
 
 import fixtures
 
 from zuul.driver.openstack import OpenstackDriver
 from zuul.driver.openstack.openstackmodel import OpenstackProviderNode
+from zuul.driver.openstack.openstackprovider import OpenstackProvider
 
 from tests.fake_openstack import (
     FakeOpenstackCloud,
@@ -255,3 +258,58 @@ class TestOpenstackDriverAutoAttachFloatingIp(BaseOpenstackDriverTest,
         future_names = ['delete_future', 'create_future']
         self._test_state_machines(label_name, provider_name,
                                   node_class, future_names)
+
+
+class TestOpenstackProviderHostname(unittest.TestCase):
+    """Unit tests for OpenstackProvider.getCreateStateMachine hostname."""
+
+    def _provider_for_label(self, label_based_hostname):
+        p = OpenstackProvider()
+        lbl = mock.Mock(
+            flavor='flv', image='img',
+            label_based_hostname=label_based_hostname)
+        p._set(
+            labels={'debian-normal': lbl},
+            flavors={'flv': mock.Mock()},
+            images={'img': mock.Mock()},
+            _endpoint=mock.Mock(),
+        )
+        return p
+
+    def test_hostname_legacy_when_unset(self):
+        p = self._provider_for_label(None)
+        node = mock.Mock(
+            label='debian-normal',
+            uuid='abcdef0123456789abcdef01234567')
+        log = logging.getLogger('zuul.test')
+        with mock.patch(
+                'zuul.driver.openstack.openstackprovider.'
+                'OpenstackCreateStateMachine') as ctor:
+            p.getCreateStateMachine(node, None, log)
+        ctor.assert_called_once()
+        args = ctor.call_args[0]
+        self.assertEqual(args[2], 'npabcdef0123456')
+
+    def test_hostname_legacy_when_false(self):
+        p = self._provider_for_label(False)
+        node = mock.Mock(
+            label='debian-normal',
+            uuid='abcdef0123456789abcdef01234567')
+        log = logging.getLogger('zuul.test')
+        with mock.patch(
+                'zuul.driver.openstack.openstackprovider.'
+                'OpenstackCreateStateMachine') as ctor:
+            p.getCreateStateMachine(node, None, log)
+        self.assertEqual(ctor.call_args[0][2], 'npabcdef0123456')
+
+    def test_hostname_label_based_when_true(self):
+        p = self._provider_for_label(True)
+        node = mock.Mock(
+            label='debian-normal',
+            uuid='abcdef0123456789abcdef01234567')
+        log = logging.getLogger('zuul.test')
+        with mock.patch(
+                'zuul.driver.openstack.openstackprovider.'
+                'OpenstackCreateStateMachine') as ctor:
+            p.getCreateStateMachine(node, None, log)
+        self.assertEqual(ctor.call_args[0][2], 'debian-normal-abcdef01')

@@ -368,12 +368,15 @@ class OpenstackProvider(BaseProvider, subclass_id='openstack'):
         return self.driver.getEndpoint(self)
 
     def getCreateStateMachine(self, node, image_external_id, log):
-        # TODO: decide on a method of producing a hostname
-        # that is max 15 chars.
-        hostname = f"np{node.uuid[:13]}"
         label = self.labels[node.label]
         flavor = self.flavors[label.flavor]
         image = self.images[label.image]
+        if label.label_based_hostname:
+            hostname = f"{node.label}-{node.uuid[:8]}"
+        else:
+            # TODO: decide on a method of producing a hostname
+            # that is max 15 chars.
+            hostname = f"np{node.uuid[:13]}"
         return OpenstackCreateStateMachine(
             self.endpoint,
             node,

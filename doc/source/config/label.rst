@@ -127,3 +127,20 @@ The attributes available to top-level label objects are:
       instance is retained for at least the minimum billing interval.
 
       This setting takes precedence over `max-[ready-]age`.
+
+   .. attr:: label-based-hostname
+      :type: bool
+
+      If ``true``, the :doc:`OpenStack driver </drivers/openstack>` sets the
+      name of a newly created instance to
+      ``<label-name>-<first-8-hex-digits-of-node-uuid>`` so that
+      running VMs are easier to recognize in the cloud.  If ``false`` or
+      unset, a shorter default of ``np`` plus 13 characters of the node
+      UUID is used instead (a legacy scheme aimed at very short
+      hostnames).  This attribute is reserved for the OpenStack driver;
+      other connection drivers may ignore it.
+
+      When enabling this option, keep label names short enough to satisfy
+      any limits your cloud or guest OS enforces on instance or hostname
+      length, since the full name includes the label, a hyphen, and
+      eight UUID characters.

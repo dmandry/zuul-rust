@@ -1748,7 +1748,8 @@ class Label(ConfigObject):
     """
 
     def __init__(self, name, image, flavor, description, min_ready,
-                 max_ready_age, max_age, max_nodes, min_retention_time):
+                 max_ready_age, max_age, max_nodes,
+                 min_retention_time, label_based_hostname):
         super().__init__()
         self.name = name
         self.image = image
@@ -1759,6 +1760,7 @@ class Label(ConfigObject):
         self.max_age = max_age
         self.max_nodes = max_nodes
         self.min_retention_time = min_retention_time
+        self.label_based_hostname = label_based_hostname
 
     @property
     def project_canonical_name(self):
@@ -1788,7 +1790,8 @@ class Label(ConfigObject):
                 self.max_ready_age == other.max_ready_age and
                 self.max_age == other.max_age and
                 self.max_nodes == other.max_nodes and
-                self.min_retention_time == other.min_retention_time)
+                self.min_retention_time == other.min_retention_time and
+                self.label_based_hostname == other.label_based_hostname)
 
     def toDict(self):
         return {
@@ -1802,6 +1805,7 @@ class Label(ConfigObject):
             'max_age': self.max_age,
             'max_nodes': self.max_nodes,
             'min_retention_time': self.min_retention_time,
+            'label_based_hostname': self.label_based_hostname
         }
 
     def toConfig(self):
@@ -1815,6 +1819,7 @@ class Label(ConfigObject):
             'max-age': self.max_age,
             # max-nodes is only permitted at the top level
             'min-retention-time': self.min_retention_time,
+            # label-based-hostname is only permitted at the top level
         }
 
     def validateReferences(self, layout):
@@ -2144,6 +2149,7 @@ class ProviderConfig(ConfigObject):
                 label_object.project_canonical_name
             label['min-ready'] = label_object.min_ready
             label['max-nodes'] = label_object.max_nodes
+            label['label-based-hostname'] = label_object.label_based_hostname
 
     def _getLabelConfigHash(self, label, image_hashes, flavor_hashes):
         label_hash = hashlib.sha256(

@@ -146,6 +146,7 @@ internal_base_label = vs.Schema({
     Required('config_hash'): vs.Any(None, str),
     Optional('min-ready', default=None): vs.Any(None, int),
     Optional('max-nodes', default=None): vs.Any(None, int),
+    Optional('label-based-hostname', default=None): vs.Any(None, bool),
 })
 
 # Azure doesn't take a key-name, so this is separate.
