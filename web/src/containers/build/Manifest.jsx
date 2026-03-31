@@ -25,18 +25,19 @@ import { renderTree } from '../../actions/build'
 class Manifest extends React.Component {
   static propTypes = {
     tenant: PropTypes.object.isRequired,
-    build: PropTypes.object.isRequired
+    build: PropTypes.object.isRequired,
+    manifest: PropTypes.object.isRequired
   }
 
   render() {
-    const { tenant, build } = this.props
+    const { tenant, build, manifest } = this.props
 
     const raw_suffix = (obj) => {
       return (obj.mimetype === 'application/directory' &&
-              build.manifest.index_links) ? 'index.html' : ''
+              manifest.index_links) ? 'index.html' : ''
     }
 
-    const nodes = build.manifest.tree.map(
+    const nodes = manifest.tree.map(
       n => renderTree(
         tenant, build, '/', n,
         (tenant, build, path, name, log_url, obj) => (

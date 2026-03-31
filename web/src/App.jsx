@@ -171,7 +171,11 @@ class AppComponent extends React.Component {
               item.globalRoute ? item.to :
                 item.noTenantPrefix ? item.to : tenant.routePrefix + item.to}
             render={routerProps => (
-              <item.component {...item.props} {...routerProps} />
+              <item.component
+                {...item.props}
+                // TODO: remove routerProps argument after all pages use hooks.
+                {...routerProps}
+              />
             )}
             exact
           />

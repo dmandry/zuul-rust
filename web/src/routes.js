@@ -125,29 +125,8 @@ const routes = (info) => {
       component: JobPage
     },
     {
-      to: '/build/:buildId',
+      to: '/build/:buildId/:activeTab?/:file*',
       component: BuildPage,
-      props: { 'activeTab': 'results' },
-    },
-    {
-      to: '/build/:buildId/artifacts',
-      component: BuildPage,
-      props: { 'activeTab': 'artifacts' },
-    },
-    {
-      to: '/build/:buildId/logs',
-      component: BuildPage,
-      props: { 'activeTab': 'logs' },
-    },
-    {
-      to: '/build/:buildId/console',
-      component: BuildPage,
-      props: { 'activeTab': 'console' },
-    },
-    {
-      to: '/build/:buildId/log/:file*',
-      component: BuildPage,
-      props: { 'activeTab': 'logs', 'logfile': true },
     },
     {
       to: '/buildset/:buildsetId',

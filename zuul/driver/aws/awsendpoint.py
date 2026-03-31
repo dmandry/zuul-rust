@@ -260,7 +260,7 @@ class AwsCreateStateMachine(statemachine.StateMachine):
             self.node.aws_instance_id = instance['InstanceId']
             self.state = self.INSTANCE_CREATING
 
-        if self.state == self.INSTANCE_CREATING:
+        if self.state in self.INSTANCE_CREATING:
             self.instance = self.endpoint._refresh(self.instance)
 
             if self.instance['State']['Name'].lower() == "running":
