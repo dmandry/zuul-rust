@@ -38,6 +38,24 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "2709ed50_101fc700",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 3
+      },
+      "lineNbr": 29,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-02T17:19:50Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "ef304f31_2c91a42b",
+      "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "9c2e501e_4e324fd3",
         "filename": "/PATCHSET_LEVEL",
         "patchSetId": 3
@@ -88,6 +106,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "fbb76bbd_ab71544d",
+        "filename": "web/src/pages/Build.jsx",
+        "patchSetId": 3
+      },
+      "lineNbr": 95,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-02T17:19:50Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "3f40299f_f1a86387",
+      "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "de445b1e_30251180",
@@ -119,6 +155,24 @@
       "side": 1,
       "message": "This was previously broken; I suspect something in patternfly changed.  It should probably be fixed, but I don\u0027t know that we need to hold this change responsible.",
       "parentUuid": "de445b1e_30251180",
+      "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4edea41b_284a4614",
+        "filename": "web/src/pages/Build.jsx",
+        "patchSetId": 3
+      },
+      "lineNbr": 126,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-02T17:19:50Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "92177ac4_557a6add",
       "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
