@@ -38,4 +38,4 @@ class OpenstackConnection(BaseConnection):
         self.cloud_name = self.connection_config.get('cloud')
 
         # Rate limit: requests/second
-        self.rate = self.connection_config.get('rate', 2)
+        self.rate = float(self.connection_config.get('rate', 2))

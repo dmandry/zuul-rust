@@ -43,7 +43,7 @@ class AwsConnection(BaseConnection):
 
         self.profile = self.connection_config.get('profile')
         # Rate limit: requests/second
-        self.rate = self.connection_config.get('rate', 2)
+        self.rate = float(self.connection_config.get('rate', 2))
 
         if self.shared_credentials_file:
             path = os.path.expanduser(self.shared_credentials_file)
