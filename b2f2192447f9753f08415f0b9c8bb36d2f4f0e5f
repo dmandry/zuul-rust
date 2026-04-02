@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "ef304f31_2c91a42b",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 3
+      },
+      "lineNbr": 29,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-02T14:49:53Z",
+      "side": 1,
+      "message": "While the state is now better preserved because this change isn\u0027t re-mounting components, the memory behavior is the same: the app has always stored all of the build outputs and all of the files in the redux store as long as the tab survives.  That can use a lot of memory, and I agree, we might not want to do it, and I\u0027m not sure I\u0027d implement it that way today.  But it\u0027s not a change.\n\nTo put it another way: there is a lot of memory use, but because of how we structured the redux store, not because of the react component states (which is what this change is focused on).\n\n* (I\u0027m not positive off the top of my head, but I think changing tenants may clear out the data structure we use.)",
+      "parentUuid": "a9ff54e8_b8014c19",
+      "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "9c2e501e_4e324fd3",
@@ -54,6 +72,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "3f40299f_f1a86387",
+        "filename": "web/src/pages/Build.jsx",
+        "patchSetId": 3
+      },
+      "lineNbr": 95,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-02T14:49:53Z",
+      "side": 1,
+      "message": "Yes.  I thought about changing it but it would break links and this seems fine.",
+      "parentUuid": "1ce76853_5a9edb43",
+      "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "de445b1e_30251180",
         "filename": "web/src/pages/Build.jsx",
         "patchSetId": 3
@@ -65,6 +101,24 @@
       "writtenOn": "2026-04-01T23:43:04Z",
       "side": 1,
       "message": "This doesn\u0027t seem to be working. In the site preview I do not get a button to jump to the top of the screen when I scroll downward in a log file or he console tab. However, I don\u0027t seem to get one in the OpenDev web ui either. So this may not be a direct regression for this change.\n\nReading the set function docs the value is only updated for the next render so maybe we aren\u0027t rerendering as part of scrolling?",
+      "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "92177ac4_557a6add",
+        "filename": "web/src/pages/Build.jsx",
+        "patchSetId": 3
+      },
+      "lineNbr": 126,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-02T14:49:53Z",
+      "side": 1,
+      "message": "This was previously broken; I suspect something in patternfly changed.  It should probably be fixed, but I don\u0027t know that we need to hold this change responsible.",
+      "parentUuid": "de445b1e_30251180",
       "revId": "b2f2192447f9753f08415f0b9c8bb36d2f4f0e5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
