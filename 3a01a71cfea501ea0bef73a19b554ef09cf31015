@@ -34,6 +34,24 @@
       "parentUuid": "91058741_a8cd5a13",
       "revId": "3a01a71cfea501ea0bef73a19b554ef09cf31015",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "dfbf6861_b7f835d4",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 26,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-02T14:54:17Z",
+      "side": 1,
+      "message": "Yeah, I don\u0027t think the idea of multiple builds providing the same artifact is well defined.  This option seems as good as the other.",
+      "parentUuid": "91058741_a8cd5a13",
+      "revId": "3a01a71cfea501ea0bef73a19b554ef09cf31015",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
