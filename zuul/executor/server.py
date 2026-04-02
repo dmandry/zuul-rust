@@ -3720,7 +3720,7 @@ class AnsibleJob(object):
                                  "cname for OIDC secret")
                 canonical_project_name = \
                     self.arguments['zuul']['project']['canonical_name']
-            sub = f'secret:{tenant}/{canonical_project_name}/{secret_name}'
+            sub = f'secret:{canonical_project_name}/{secret_name}'
             iss = oidc_config.get('iss', self.arguments["zuul_root_url"])
 
             payload = {

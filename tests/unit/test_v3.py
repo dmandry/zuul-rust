@@ -8555,7 +8555,7 @@ class TestSecrets(ZuulTestCase):
                 secret_name.replace('_', '-'),
                 secret_content.value, self.history[0].uuid,
                 # The sub should be for the config project
-                expected_sub=('secret:tenant-one/review.example.com/'
+                expected_sub=('secret:review.example.com/'
                               'common-config/base-oidc-secret'),
                 expected_playbook=('review.example.com/common-config/'
                                    'playbooks/secret.yaml'),
@@ -8715,7 +8715,7 @@ class TestSecrets(ZuulTestCase):
     ):
 
         if expected_sub is None:
-            expected_sub = ('secret:tenant-one/review.example.com'
+            expected_sub = ('secret:review.example.com'
                             f'/org/project2/{oidc_name}')
 
         # Check header

@@ -46,7 +46,7 @@ following Zuul claims by default:
    acts as a fully-qualified name to uniquely identify the Zuul
    secret used.  It takes the form:
 
-     ``secret:{zuul tenant}/{canonical project name}/{secret name}``
+     ``secret:{canonical project name}/{secret name}``
 
    The `canonical project name` in the sub is the location of the
    definition of the secret (not the location of the job where it is
