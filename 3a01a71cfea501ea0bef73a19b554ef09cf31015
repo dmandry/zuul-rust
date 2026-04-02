@@ -16,6 +16,24 @@
       "message": "We only call this method if there isn\u0027t a matching queue item, so there should be no more builds.\n\nI like the idea of checking only the last build, but I don\u0027t think builds[-1] is what we want, since we\u0027re getting a list of all the builds in the buildset.  We haven\u0027t bucketed them by job.\n\nWe could do that, but even that is a little complex now with us being able to run the same job multiple times (for different changes) in the same buildset.\n\nBut there\u0027s a flag that tells us if a build is a \"final\" build (ie, it will not be retried).  I think if we take our list of builds in the buildset and further filter it for final\u003d\u003dTrue, then we will not have any builds we should ignore (the original problem) and we won\u0027t be checking any extra builds or stacking up extra artifacts (so we maintain the efficiency).  I think with that extra step, even the original logic would work (but I\u0027m not married to it).",
       "revId": "3a01a71cfea501ea0bef73a19b554ef09cf31015",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0ae784c8_69947415",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 26,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-02T00:37:08Z",
+      "side": 1,
+      "message": "I\u0027ve updated the sql query to look for final builds only. I didn\u0027t keep the old logic because it appears we process builds in an oldest to newest fashion and if build A provides foo and fails but build B also provides foo and succeeds then it seems like we should try to use the build B artifact instead?",
+      "parentUuid": "91058741_a8cd5a13",
+      "revId": "3a01a71cfea501ea0bef73a19b554ef09cf31015",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
