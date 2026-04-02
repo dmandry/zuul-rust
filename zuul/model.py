@@ -3295,6 +3295,8 @@ class Secret(ConfigObject):
             # The original name needs to be passed for generating
             # the value of the 'sub' claim
             secret_oidc['name'] = self.name
+            secret_oidc['_source_project_canonical_name'] =\
+                self.source_context.project_canonical_name
         else:
             secret_oidc = {}
 

@@ -8544,6 +8544,25 @@ class TestSecrets(ZuulTestCase):
             dict(name='project2-oidc-secret', result='SUCCESS', changes='1,1')
         ])
 
+        pre_secrets = self._getSecrets(
+            'project2-oidc-secret', 'pre_playbooks'
+        )[0]
+        self.assertEqual(len(pre_secrets), 1)
+        for secret_name, secret_content in pre_secrets.items():
+            self._validate_oidc_token(
+                # The var name is with '_' while the secret.name is with '-'
+                # which should be used in the value of the 'sub' claim
+                secret_name.replace('_', '-'),
+                secret_content.value, self.history[0].uuid,
+                # The sub should be for the config project
+                expected_sub=('secret:tenant-one/review.example.com/'
+                              'common-config/base-oidc-secret'),
+                expected_playbook=('review.example.com/common-config/'
+                                   'playbooks/secret.yaml'),
+                expected_claim='base_secret',
+                expected_ttl=3600,
+            )
+
         secrets = self._getSecrets(
             'project2-oidc-secret', 'playbooks'
         )[0]
@@ -8599,8 +8618,8 @@ class TestSecrets(ZuulTestCase):
         parent_pre_secrets = self._getSecrets(
             'project2-oidc-secret', 'pre_playbooks'
         )[0]
-        for secret_name, secret_content in parent_pre_secrets.items():
 
+        for secret_name, secret_content in parent_pre_secrets.items():
             self._validate_oidc_token(
                 # var: "login_secretx" -> secret: "project2-oidc-secretx"
                 'project2-oidc-secret' + secret_name[-1],
@@ -8685,16 +8704,26 @@ class TestSecrets(ZuulTestCase):
                 secret_content.value, self.history[0].uuid,
                 expected_iss=expected_isses[secret_name])
 
-    def _validate_oidc_token(self, oidc_name, oidc_token, build_uuid,
-                             playbook="secret.yaml",
-                             expected_iss="https://zuul.example.com"):
+    def _validate_oidc_token(
+            self, oidc_name, oidc_token, build_uuid,
+            playbook="secret.yaml",
+            expected_sub=None,
+            expected_playbook=None,
+            expected_iss="https://zuul.example.com",
+            expected_claim='my_claim_value',
+            expected_ttl=300,
+    ):
+
+        if expected_sub is None:
+            expected_sub = ('secret:tenant-one/review.example.com'
+                            f'/org/project2/{oidc_name}')
 
         # Check header
         header_base64 = oidc_token.split('.')[0]
         header = json.loads(base64.b64decode(header_base64 + '==').decode())
-        self.assertEqual(header['alg'], 'RS256')
-        self.assertEqual(header['kid'], 'RS256-0')
-        self.assertEqual(header['typ'], 'JWT')
+        self.assertEqual('RS256', header['alg'])
+        self.assertEqual('RS256-0', header['kid'])
+        self.assertEqual('JWT', header['typ'])
 
         # Decode and check payload
         keystore = self.scheds.first.sched.keystore
@@ -8703,23 +8732,19 @@ class TestSecrets(ZuulTestCase):
         payload = jwt.decode(
             oidc_token, pem_public_key, algorithms=["RS256"],
             audience="sts.amazonaws.com")
-        self.assertEqual(payload['iss'], expected_iss)
-        self.assertEqual(
-            payload['sub'],
-            'secret:tenant-one/review.example.com'
-            f'/org/project2/{oidc_name}'
-        )
-        self.assertEqual(payload['build-uuid'], build_uuid)
-        self.assertEqual(payload['job-name'], 'project2-oidc-secret')
-        self.assertEqual(
-            payload['playbook'],
-            f'review.example.com/org/project2/playbooks/{playbook}'
-        )
-        self.assertEqual(payload['pipeline'], 'check')
-        self.assertEqual(payload['tenant'], 'tenant-one')
-        self.assertEqual(payload['aud'], 'sts.amazonaws.com')
-        self.assertEqual(payload['my_claim'], 'my_claim_value')
-        self.assertEqual(payload['exp'] - payload['iat'], 300)
+        if expected_playbook is None:
+            expected_playbook = (
+                f'review.example.com/org/project2/playbooks/{playbook}')
+        self.assertEqual(expected_iss, payload['iss'])
+        self.assertEqual(expected_sub, payload['sub'])
+        self.assertEqual(build_uuid, payload['build-uuid'])
+        self.assertEqual('project2-oidc-secret', payload['job-name'])
+        self.assertEqual(expected_playbook, payload['playbook'])
+        self.assertEqual('check', payload['pipeline'])
+        self.assertEqual('tenant-one', payload['tenant'])
+        self.assertEqual('sts.amazonaws.com', payload['aud'])
+        self.assertEqual(expected_claim, payload['my_claim'])
+        self.assertEqual(expected_ttl, payload['exp'] - payload['iat'])
 
 
 class TestSecretInheritance(ZuulTestCase):
