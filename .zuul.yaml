@@ -72,6 +72,7 @@
         CI: "1"
       test_setup_environment:
         ZUUL_TEST_ROOT: /tmp/zuul-test
+        ZUUL_TEST_CGROUPS: 1
         YARN_REGISTRY: "https://{{ zuul_site_mirror_fqdn }}:4443/registry.npmjs"
       nox_force_python: "3.11"
       python_version: "3.11"

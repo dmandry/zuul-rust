@@ -213,9 +213,8 @@ class ZuulApp(object):
 
     def configure_connections(self, database=False, sources=False,
                               triggers=False, reporters=False,
-                              providers=False, check_bwrap=False):
-        self.connections = zuul.lib.connections.ConnectionRegistry(
-            check_bwrap=check_bwrap)
+                              providers=False):
+        self.connections = zuul.lib.connections.ConnectionRegistry()
         self.connections.configure(self.config, database=database,
                                    sources=sources, triggers=triggers,
                                    reporters=reporters, providers=providers)
