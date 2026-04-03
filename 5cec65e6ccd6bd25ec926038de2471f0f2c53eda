@@ -124,6 +124,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "77d110e9_6c8eb9c8",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 54,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-03T21:19:07Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "980df645_d8a367b5",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "213a1b3b_cbe3095e",
