@@ -39,10 +39,110 @@ from zuul.execution_context import BaseExecutionContext
 OOM_SCORE_ADJ = 200
 
 
+class CgroupFile:
+    def __init__(self, path):
+        self.path = path
+        self.fd = None
+
+    def __enter__(self):
+        self.fd = os.open(self.path, os.O_WRONLY)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        os.close(self.fd)
+        self.fd = None
+
+    def write(self, s):
+        os.write(self.fd, s.encode('ascii'))
+
+
+class CgroupManager:
+    log = logging.getLogger("zuul.CgroupManager")
+
+    def __init__(self, user, memory_limit):
+        # This is called before logging is configured, so we print to
+        # stdout.
+        self.enabled = bool(memory_limit)
+        self.user = user
+        self.memory_limit = memory_limit
+        if self.enabled:
+            self.setup()
+        else:
+            print("cgroup management disabled")
+
+    def setup(self):
+        print("Setting up cgroups")
+        if self.user:
+            pw = pwd.getpwnam(self.user)
+        else:
+            pw = None
+        with open('/proc/self/cgroup') as f:
+            cgroup = f.read().strip()
+        if cgroup[:3] != "0::":
+            raise Exception("cgroup v2 required")
+        orig_group = f'/sys/fs/cgroup{cgroup[3:]}'
+        parts = orig_group.split('/')
+        if (len(parts) >= 2 and
+            parts[-1] == 'zuul-main' and
+            parts[-2] == 'zuul-executor'):
+            # We appear to be re-running the initialization, perhaps
+            # because we were restarted within our own context.
+            orig_group = '/'.join(parts[:-2])
+        parent_group = f'{orig_group}/zuul-executor'
+        main_group = f'{parent_group}/zuul-main'
+        build_group = f'{parent_group}/zuul-build'
+        print(f"Using cgroup {parent_group}")
+        # Hierarchy:
+        # root/
+        #  zuul-executor/
+        #    zuul-main/   (zuul-executor daemon in this group)
+        #    zuul-build/  (bwrap subprocs in this group)
+        # In order to migrate from main to build, we need to be able
+        # to write to the common parent's procs file; in order to have
+        # the least impact on the root cgroup, we create our own
+        # intermediate parent.
+        if not os.path.exists(parent_group):
+            os.mkdir(parent_group)
+            os.chmod(parent_group, 0o755)
+            if pw:
+                os.chown(f'{parent_group}/cgroup.procs', pw.pw_uid, pw.pw_gid)
+        if not os.path.exists(main_group):
+            os.mkdir(main_group)
+            os.chmod(main_group, 0o755)
+        if not os.path.exists(build_group):
+            os.mkdir(build_group)
+            os.chmod(build_group, 0o755)
+            if pw:
+                os.chown(f'{build_group}/cgroup.procs', pw.pw_uid, pw.pw_gid)
+        # Migrate any proceses in the original group to our new main
+        # group
+        with open(f'{orig_group}/cgroup.procs') as orig:
+            pids = [l.strip() for l in orig]
+        with CgroupFile(f'{main_group}/cgroup.procs') as main:
+            for pid in pids:
+                main.write(pid + '\n')
+        # Now we can set the controllers
+        with CgroupFile(f'{orig_group}/cgroup.subtree_control') as orig:
+            orig.write('+memory\n')
+        with CgroupFile(f'{parent_group}/cgroup.subtree_control') as parent:
+            parent.write('+memory\n')
+        with CgroupFile(f'{build_group}/memory.max') as mem:
+            mem.write(f'{self.memory_limit}\n')
+        self.build_group = build_group
+
+    def moveToBuildGroup(self, pid):
+        if not self.enabled:
+            return
+        self.log.debug("Moving PID %s to cgroup %s", pid, self.build_group)
+        with CgroupFile(f'{self.build_group}/cgroup.procs') as build:
+            build.write(str(pid) + '\n')
+
+
 class WrappedPopen(object):
-    def __init__(self, command, fds):
+    def __init__(self, command, fds, cgroup_manager):
         self.command = command
         self.fds = fds
+        self.cgroup_manager = cgroup_manager
 
     def __call__(self, args, *sub_args, **kwargs):
         try:
@@ -52,10 +152,18 @@ class WrappedPopen(object):
                 if fd not in pass_fds:
                     pass_fds.append(fd)
             kwargs['pass_fds'] = pass_fds
-            proc = psutil.Popen(args, *sub_args, **kwargs)
+            proc = psutil.Popen(args, *sub_args, **kwargs,
+                                preexec_fn=self._bwrap_pre_exec)
         finally:
             self.__del__()
         return proc
+
+    def _bwrap_pre_exec(self):
+        if self.cgroup_manager:
+            # We are the child now
+            pid = os.getpid()
+            # Move process into build cgroup
+            self.cgroup_manager.moveToBuildGroup(pid)
 
     def __del__(self):
         for fd in self.fds:
@@ -69,10 +177,12 @@ class WrappedPopen(object):
 class BubblewrapExecutionContext(BaseExecutionContext):
     log = logging.getLogger("zuul.BubblewrapExecutionContext")
 
-    def __init__(self, bwrap_command, ro_paths, rw_paths, secrets):
+    def __init__(self, bwrap_command, ro_paths, rw_paths, secrets,
+                 cgroup_manager):
         self.bwrap_command = bwrap_command
         self.mounts_map = {'ro': ro_paths, 'rw': rw_paths}
         self.secrets = secrets
+        self.cgroup_manager = cgroup_manager
 
     def getNamespacePids(self, proc):
         # Given a Popen object (proc), return the namespace and a list
@@ -184,7 +294,7 @@ class BubblewrapExecutionContext(BaseExecutionContext):
         self.log.debug("Bubblewrap command: %s",
                        " ".join(shlex.quote(c) for c in command))
 
-        wrapped_popen = WrappedPopen(command, read_fds)
+        wrapped_popen = WrappedPopen(command, read_fds, self.cgroup_manager)
 
         return wrapped_popen
 
@@ -196,7 +306,8 @@ class BubblewrapDriver(Driver, WrapperInterface):
     release_file_re = re.compile(r'^\W+-release$')
     bwrap_version_re = re.compile(r'^(\d+\.\d+\.\d+).*')
 
-    def __init__(self, check_bwrap):
+    def __init__(self):
+        self.cgroup_manager = None
         pid = os.getpid()
         with open(f"/proc/{pid}/oom_score_adj") as f:
             starting_score_adj = int(f.read().strip())
@@ -208,22 +319,26 @@ class BubblewrapDriver(Driver, WrapperInterface):
         self.userns_enabled = self._is_userns_enabled()
         self.bwrap_version = self._parse_bwrap_version()
         self.bwrap_command = self._bwrap_command()
-        if check_bwrap:
-            # Validate basic bwrap functionality before we attempt to run
-            # workloads under bwrap.
-            context = self.getExecutionContext()
-            popen = context.getPopen(work_dir='/tmp',
-                                     ssh_auth_sock='/dev/null')
-            p = popen(['id'],
-                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            p.communicate()
-            if p.returncode != 0:
-                self.log.error("Non zero return code executing: %s",
-                               " ".join(shlex.quote(c)
-                                        for c in popen.command + ['id']))
-                raise Exception('bwrap execution validation failed. You can '
-                                'use `zuul-bwrap /tmp id` to investigate '
-                                'manually.')
+
+    def check(self):
+        # Validate basic bwrap functionality before we attempt to run
+        # workloads under bwrap.
+        context = self.getExecutionContext()
+        popen = context.getPopen(work_dir='/tmp',
+                                 ssh_auth_sock='/dev/null')
+        p = popen(['id'],
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.communicate()
+        if p.returncode != 0:
+            self.log.error("Non zero return code executing: %s",
+                           " ".join(shlex.quote(c)
+                                    for c in popen.command + ['id']))
+            raise Exception('bwrap execution validation failed. You can '
+                            'use `zuul-bwrap /tmp id` to investigate '
+                            'manually.')
+
+    def setCgroupManager(self, cgroup_manager):
+        self.cgroup_manager = cgroup_manager
 
     def _is_userns_enabled(self):
         # This is based on the bwrap checks found here:
@@ -344,13 +459,14 @@ class BubblewrapDriver(Driver, WrapperInterface):
         return BubblewrapExecutionContext(
             self.bwrap_command,
             ro_paths, rw_paths,
-            secrets)
+            secrets, self.cgroup_manager)
 
 
 def main(args=None):
     logging.basicConfig(level=logging.DEBUG)
 
-    driver = BubblewrapDriver(check_bwrap=True)
+    driver = BubblewrapDriver()
+    driver.check()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--ro-paths', nargs='+')
