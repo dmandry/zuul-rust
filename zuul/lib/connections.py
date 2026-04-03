@@ -56,7 +56,7 @@ class ConnectionRegistry(object):
 
     log = logging.getLogger("zuul.ConnectionRegistry")
 
-    def __init__(self, check_bwrap=False):
+    def __init__(self):
         self.connections = OrderedDict()
         self.drivers = {}
 
@@ -67,8 +67,7 @@ class ConnectionRegistry(object):
         self.registerDriver(zuul.driver.smtp.SMTPDriver())
         self.registerDriver(zuul.driver.timer.TimerDriver())
         self.registerDriver(zuul.driver.sql.SQLDriver())
-        self.registerDriver(
-            zuul.driver.bubblewrap.BubblewrapDriver(check_bwrap))
+        self.registerDriver(zuul.driver.bubblewrap.BubblewrapDriver())
         self.registerDriver(zuul.driver.nullwrap.NullwrapDriver())
         self.registerDriver(zuul.driver.mqtt.MQTTDriver())
         self.registerDriver(zuul.driver.pagure.PagureDriver())

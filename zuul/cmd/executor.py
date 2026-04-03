@@ -16,12 +16,13 @@
 
 import logging
 import os
+import pwd
 import sys
 import signal
 
 import zuul.cmd
 import zuul.executor.server
-
+from zuul.driver.bubblewrap import CgroupManager
 from zuul.lib.config import get_default
 
 
@@ -79,13 +80,45 @@ class Executor(zuul.cmd.ZuulDaemonApp):
             self.log_streamer_pipe = pipe_write
             self.log_streamer_pid = child_pid
 
+    def dropPrivs(self, user):
+        if os.getuid() != 0:
+            return
+
+        self.log.info("Changing to user %s", user)
+        pw = pwd.getpwnam(user)
+
+        # Change owner on our pid file so it can be removed by us after
+        # dropping privileges. May not exist if not a daemon.
+        pid_file = self.getPidFile()
+        if pid_file and os.path.exists(pid_file):
+            os.chown(pid_file, pw.pw_uid, pw.pw_gid)
+
+        os.setgroups([])
+        os.setgid(pw.pw_gid)
+        os.setuid(pw.pw_uid)
+        os.umask(0o022)
+
     def run(self):
         self.handleCommands()
+
+        # Cgroup configuration requires root; do it here and then drop
+        # privileges, before we initialize anything else.
+        user = get_default(self.config, 'executor', 'user')
+        memory_limit = get_default(
+            self.config, 'executor', 'cgroup_memory_limit')
+        cgroup_manager = CgroupManager(user, memory_limit)
+        if user:
+            self.dropPrivs(user)
 
         self.setup_logging('executor', 'log_config')
         self.log = logging.getLogger("zuul.Executor")
 
-        self.configure_connections(sources=True, check_bwrap=True)
+        self.configure_connections(sources=True)
+
+        # Check bwrap after dropping privileges
+        self.connections.drivers['bubblewrap'].setCgroupManager(
+            cgroup_manager)
+        self.connections.drivers['bubblewrap'].check()
 
         if self.config.has_option('executor', 'job_dir'):
             self.job_dir = os.path.expanduser(

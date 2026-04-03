@@ -878,6 +878,35 @@ The following sections of ``zuul.conf`` are used by the executor:
       The IPv4 addr to listen for prometheus metrics poll.
       To use IPv6, python>3.8 is required `issue24209 <https://bugs.python.org/issue24209>`_.
 
+   The following attributes are available for experimental control of
+   cgroups.  This feature may change or be removed at any time.
+
+   .. attr:: user
+
+      User ID for the executor process.  In order to configure cgroup
+      control, the executor must perform some actions as root when
+      starting.  If this option is set, it will drop privileges to
+      this user during startup.  It is recommended to set this option
+      to an unprivileged user.
+
+      .. note:: This option is experimental and may change or be
+                removed at any time.
+
+   .. attr:: cgroup_memory_limit
+
+      If this option is set, the executor will configure cgroups to
+      limit the total memory collectively available to all builds that
+      it runs.  This should be set to a portion of the available
+      memory.  For example, if the system has 10GiB of RAM available,
+      this might be set to 8589934592 (8GiB) to allow all currently
+      running builds to use up to that value, reserving 2GiB for the
+      executor itself and any ancillary processes.  If any one job
+      exceeds the limit, the kernel OOM killer will kill build
+      processes rather than the executor.
+
+      .. note:: This option is experimental and may change or be
+                removed at any time.
+
 
 .. attr:: keystore
 
