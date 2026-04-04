@@ -35,6 +35,13 @@ class WebServer(zuul.cmd.ZuulDaemonApp):
         return parser
 
     def exit_handler(self, signum, frame):
+        if signum == signal.SIGUSR1:
+            str_sig = 'SIGUSR1'
+        elif signum == signal.SIGTERM:
+            str_sig = 'SIGTERM'
+        else:
+            str_sig = 'Signal: %s' % str(signum)
+        self.log.debug('%s received running stop handler', str_sig)
         self.web.stop()
 
     def _run(self):
