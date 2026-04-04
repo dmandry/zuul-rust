@@ -45,13 +45,18 @@ class Executor(zuul.cmd.ZuulDaemonApp):
             graceful = self.config.get('executor', 'sigterm_method')
         else:
             graceful = 'graceful'
-        if graceful.lower() == 'graceful':
-            self.executor.graceful()
-        elif graceful.lower() == 'stop':
-            self.executor.stop()
+        l_graceful = graceful.lower()
+        if l_graceful in ['graceful', 'stop']:
+            self.log.debug('SIGTERM received running %s handler', l_graceful)
+            if l_graceful == 'graceful':
+                self.executor.graceful()
+            elif l_graceful == 'stop':
+                self.executor.stop()
         else:
-            self.log.error("Unknown value for executor.sigterm_method:"
-                           f"'{graceful}'. Expected 'graceful' or 'stop'")
+            self.log.error(f"SIGTERM received. Unknown value for "
+                           f"executor.sigterm_method: '{graceful}'. "
+                           f"Expected 'graceful' or 'stop'. "
+                           f"Proceeding with graceful stop")
             self.executor.graceful()
 
     def start_log_streamer(self):

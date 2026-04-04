@@ -4332,24 +4332,30 @@ class ExecutorServer(BaseMergeServer):
         return self._running
 
     def verboseOn(self):
+        self.log.debug('Turning verbose mode on')
         self.verbose = True
 
     def verboseOff(self):
+        self.log.debug('Turning verbose mode off')
         self.verbose = False
 
     def keep(self):
+        self.log.debug('Start keeping job dirs')
         self.keep_jobdir = True
 
     def nokeep(self):
+        self.log.debug('Stop keeping job dirs')
         self.keep_jobdir = False
 
     def startRepl(self):
+        self.log.debug('Start repl server')
         if self.repl:
             return
         self.repl = zuul.lib.repl.REPLServer(self)
         self.repl.start()
 
     def stopRepl(self):
+        self.log.debug('Stop repl server')
         if not self.repl:
             # not running
             return
