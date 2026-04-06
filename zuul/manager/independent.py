@@ -40,6 +40,50 @@ class IndependentPipelineManager(PipelineManager):
         return DynamicChangeQueueContextManager(
             change_queue, allow_delete=True)
 
+    def getQueueWithLiveChange(self, change):
+        for queue in self.state.queues:
+            for queued_change in queue.queue[-1].changes:
+                if queued_change.equals(change):
+                    return queue
+        return None
+
+    def addChange(self, *args, **kw):
+        change = args[0]
+        event = args[1]
+        live = kw.get('live', True)
+        dequeue_existing_change = self.pipeline.dequeue_existing_change
+        enqueue_duplicate_change = self.pipeline.enqueue_duplicate_change
+        duplicate_change_behavior = self.pipeline.duplicate_change_behavior
+        log = get_annotated_logger(self.log, event)
+
+        if (live and enqueue_duplicate_change != "none" and
+                self.isChangeAlreadyInPipeline(change, event)):
+            kw['skip_presence_check'] = True
+            queue = self.getQueueWithLiveChange(change)
+            if queue:
+                log.debug("Found existing queue %s for change %s", queue, change)
+                live_items = [ item for item in queue.queue if item.live ]
+                if (enqueue_duplicate_change == "latest" and
+                        len(live_items) >= 2):
+                    log.debug("Change %s already has a next item queued, ignoring",
+                            change)
+                    return True
+                if dequeue_existing_change:
+                    self.removeItem(queue.queue[-1])
+                elif duplicate_change_behavior == "serial":
+                    active_window = len(queue.queue) - len(live_items) + 1
+                    queue.updateAttributes(
+                        self.current_context,
+                        window=active_window,
+                        window_floor=active_window,
+                        window_ceiling=active_window,
+                        window_increase_type='none',
+                        window_decrease_type='none',
+                    )
+                kw['change_queue'] = queue
+
+        return super(IndependentPipelineManager, self).addChange(*args, **kw)
+
     def enqueueChangesAhead(self, changes, event, quiet, ignore_requirements,
                             change_queue, history=None, dependency_graph=None,
                             warnings=None, debug=False):
