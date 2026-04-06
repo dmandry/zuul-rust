@@ -583,6 +583,9 @@ class Pipeline(object):
         self.post_review = False
         self.dequeue_on_new_patchset = True
         self.ignore_dependencies = False
+        self.dequeue_existing_change = False
+        self.enqueue_duplicate_change = "none"
+        self.duplicate_change_behavior = "serial"
         self.manager_name = None
         self.precedence = PRECEDENCE_NORMAL
         self.supercedes = []

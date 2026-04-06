@@ -219,7 +219,12 @@ class PipelineManager(metaclass=ABCMeta):
             if match_result:
                 log.debug("Event %s for change %s matched %s "
                           "in pipeline %s" % (event, change, ef, self))
-                return EventMatchInfo(debug=ef.debug)
+                return EventMatchInfo(
+                    dequeue_existing_change=ef.dequeue_existing_change,
+                    enqueue_duplicate_change=ef.enqueue_duplicate_change,
+                    duplicate_change_behavior=ef.duplicate_change_behavior,
+                    debug=ef.debug,
+                )
             else:
                 log.debug("Event %s for change %s does not match %s "
                           "in pipeline %s because %s" % (
@@ -679,7 +684,7 @@ class PipelineManager(metaclass=ABCMeta):
                   ignore_requirements=False, live=True,
                   change_queue=None, history=None, dependency_graph=None,
                   skip_presence_check=False, warnings=None,
-                  debug=False):
+                  debug=False, match_info=None):
         log = get_annotated_logger(self.log, event)
         log.debug("Considering adding change %s" % change)
 
