@@ -1549,6 +1549,10 @@ class PipelineParser(object):
                     'dequeue-message': str,
                     'dequeue-on-new-patchset': bool,
                     'ignore-dependencies': bool,
+                    'dequeue-existing-change': bool,
+                    'enqueue-duplicate-change': vs.Any('none', 'latest', 'all'),
+                    'duplicate-change-behavior': vs.Any('serial', 'parallel'),
+                    'ignore-ref-filters-on-parents': bool,
                     'post-review': bool,
                     'disable-after-consecutive-failures':
                         vs.All(int, vs.Range(min=1)),
@@ -1606,6 +1610,15 @@ class PipelineParser(object):
             'dequeue-on-new-patchset', True)
         pipeline.ignore_dependencies = conf.get(
             'ignore-dependencies', False)
+        pipeline.dequeue_existing_change = conf.get(
+            'dequeue-existing-change', False)
+        pipeline.enqueue_duplicate_change = conf.get(
+            'enqueue-duplicate-change', "none")
+        pipeline.duplicate_change_behavior = conf.get(
+            'duplicate-change-behavior', "serial")
+        pipeline.ignore_ref_filters_on_parents = conf.get(
+            'ignore-ref-filters-on-parents', True,
+        )
         pipeline.post_review = conf.get(
             'post-review', False)
 

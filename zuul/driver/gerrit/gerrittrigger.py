@@ -117,6 +117,9 @@ class GerritTrigger(BaseTrigger):
                 ignore_deletes=ignore_deletes,
                 require=trigger.get('require'),
                 reject=trigger.get('reject'),
+                dequeue_existing_change=trigger.get('dequeue-existing-change'),
+                enqueue_duplicate_change=trigger.get('enqueue-duplicate-change'),
+                duplicate_change_behavior=trigger.get('duplicate-change-behavior'),
                 debug=trigger.get('debug'),
                 parse_context=parse_context,
             )
@@ -166,6 +169,9 @@ def getSchema():
         'removed': scalar_or_list(v.Any(ZUUL_REGEX, str)),
         'require': gerritsource.getRequireSchema(),
         'reject': gerritsource.getRejectSchema(),
+        'dequeue-existing-change': bool,
+        'enqueue-duplicate-change': v.Any('none', 'latest', 'all'),
+        'duplicate-change-behavior': v.Any('serial', 'parallel'),
         'debug': bool,
     }
 

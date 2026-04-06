@@ -583,6 +583,9 @@ class Pipeline(object):
         self.post_review = False
         self.dequeue_on_new_patchset = True
         self.ignore_dependencies = False
+        self.dequeue_existing_change = False
+        self.enqueue_duplicate_change = "none"
+        self.duplicate_change_behavior = "serial"
         self.manager_name = None
         self.precedence = PRECEDENCE_NORMAL
         self.supercedes = []
@@ -9361,10 +9364,17 @@ class BaseFilter(ConfigObject):
 
 class EventFilter(BaseFilter):
     """Allows a Pipeline to only respond to certain events."""
-    def __init__(self, connection_name, trigger, debug=None):
+    def __init__(
+            self, connection_name, trigger, dequeue_existing_change=None,
+            enqueue_duplicate_change=None, duplicate_change_behavior=None,
+            debug=None
+    ):
         super(EventFilter, self).__init__()
         self.connection_name = connection_name
         self.trigger = trigger
+        self.dequeue_existing_change = dequeue_existing_change
+        self.enqueue_duplicate_change = enqueue_duplicate_change
+        self.duplicate_change_behavior = duplicate_change_behavior
         self.debug = bool(debug)
 
     def matches(self, event, ref):
