@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ef421dee_f39bfb75",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 2
+      },
+      "writtenOn": "2026-04-07T21:38:21Z",
+      "side": 1,
+      "message": "I think there are enough good use cases for this that it\u0027s worthwhile, and the overall shape of this seems completely reasonable.",
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e33ab05c_ae798814",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 65,
+      "author": {
+        "id": 2
+      },
+      "writtenOn": "2026-04-07T21:38:21Z",
+      "side": 1,
+      "message": "Given the web ui is a js layer on the rest api, presumably this implies that someone should be able to do a param trigger from the api too?",
+      "range": {
+        "startLine": 65,
+        "startChar": 2,
+        "endLine": 65,
+        "endChar": 35
+      },
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
