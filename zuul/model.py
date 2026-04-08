@@ -9364,10 +9364,17 @@ class BaseFilter(ConfigObject):
 
 class EventFilter(BaseFilter):
     """Allows a Pipeline to only respond to certain events."""
-    def __init__(self, connection_name, trigger, debug=None):
+    def __init__(
+            self, connection_name, trigger, dequeue_existing_change=None,
+            enqueue_duplicate_change=None, duplicate_change_behavior=None,
+            debug=None
+    ):
         super(EventFilter, self).__init__()
         self.connection_name = connection_name
         self.trigger = trigger
+        self.dequeue_existing_change = dequeue_existing_change
+        self.enqueue_duplicate_change = enqueue_duplicate_change
+        self.duplicate_change_behavior = duplicate_change_behavior
         self.debug = bool(debug)
 
     def matches(self, event, ref):

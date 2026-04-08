@@ -2770,7 +2770,8 @@ class Scheduler(threading.Thread):
             manager.refreshDeps(change, event)
 
         if match_info := manager.eventMatches(event, change):
-            manager.addChange(change, event, debug=match_info.debug)
+            manager.addChange(
+                change, event, debug=match_info.debug, match_info=match_info)
 
     def process_tenant_management_queue(self, tenant):
         try:

@@ -51,9 +51,16 @@ class IndependentPipelineManager(PipelineManager):
         change = args[0]
         event = args[1]
         live = kw.get('live', True)
+        match_info = kw.get('match_info', None)
         dequeue_existing_change = self.pipeline.dequeue_existing_change
         enqueue_duplicate_change = self.pipeline.enqueue_duplicate_change
         duplicate_change_behavior = self.pipeline.duplicate_change_behavior
+        if match_info and match_info.dequeue_existing_change is not None:
+            dequeue_existing_change = match_info.dequeue_existing_change
+        if match_info and match_info.enqueue_duplicate_change is not None:
+            enqueue_duplicate_change = match_info.enqueue_duplicate_change
+        if match_info and match_info.duplicate_change_behavior is not None:
+            duplicate_change_behavior = match_info.duplicate_change_behavior
         log = get_annotated_logger(self.log, event)
 
         if (live and enqueue_duplicate_change != "none" and
