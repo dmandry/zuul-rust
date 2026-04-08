@@ -1749,7 +1749,8 @@ class Label(ConfigObject):
 
     def __init__(self, name, image, flavor, description, min_ready,
                  max_ready_age, max_age, max_nodes,
-                 min_retention_time, label_based_hostname):
+                 min_retention_time, label_based_hostname,
+                 free_disk_threshold):
         super().__init__()
         self.name = name
         self.image = image
@@ -1761,6 +1762,7 @@ class Label(ConfigObject):
         self.max_nodes = max_nodes
         self.min_retention_time = min_retention_time
         self.label_based_hostname = label_based_hostname
+        self.free_disk_threshold = free_disk_threshold
 
     @property
     def project_canonical_name(self):
@@ -1791,7 +1793,8 @@ class Label(ConfigObject):
                 self.max_age == other.max_age and
                 self.max_nodes == other.max_nodes and
                 self.min_retention_time == other.min_retention_time and
-                self.label_based_hostname == other.label_based_hostname)
+                self.label_based_hostname == other.label_based_hostname and
+                self.free_disk_threshold == other.free_disk_threshold)
 
     def toDict(self):
         return {
@@ -1805,7 +1808,8 @@ class Label(ConfigObject):
             'max_age': self.max_age,
             'max_nodes': self.max_nodes,
             'min_retention_time': self.min_retention_time,
-            'label_based_hostname': self.label_based_hostname
+            'label_based_hostname': self.label_based_hostname,
+            'free_disk_threshold': self.free_disk_threshold,
         }
 
     def toConfig(self):
@@ -1820,6 +1824,7 @@ class Label(ConfigObject):
             # max-nodes is only permitted at the top level
             'min-retention-time': self.min_retention_time,
             # label-based-hostname is only permitted at the top level
+            'free-disk-threshold': self.free_disk_threshold,
         }
 
     def validateReferences(self, layout):
@@ -2959,6 +2964,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             kubernetes_connection={},
             username=None,
             ssh_private_key=None,
+            free_disk_threshold=None,
             python_path=None,
             shell_type=None,
             slot=None,
@@ -3185,6 +3191,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             kubernetes_connection=self.kubernetes_connection,
             username=self.username,
             ssh_private_key=self.ssh_private_key,
+            free_disk_threshold=self.free_disk_threshold,
             python_path=self.python_path,
             shell_type=self.shell_type,
             hold_expiration=self.hold_expiration,

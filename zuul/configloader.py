@@ -447,6 +447,7 @@ class LabelParser(object):
         'min-retention-time': int,
         'max-nodes': int,
         'label-based-hostname': bool,
+        'free-disk-threshold': int,
     }
     schema = vs.Schema(label)
 
@@ -462,7 +463,8 @@ class LabelParser(object):
                             conf.get('max-ready-age'), conf.get('max-age'),
                             conf.get('max-nodes'),
                             conf.get('min-retention-time'),
-                            conf.get('label-based-hostname'))
+                            conf.get('label-based-hostname'),
+                            conf.get('free-disk-threshold'))
         label.source_context = conf.get('_source_context')
         label.start_mark = conf.get('_start_mark')
         return label

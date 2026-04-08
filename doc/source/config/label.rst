@@ -144,3 +144,26 @@ The attributes available to top-level label objects are:
       any limits your cloud or guest OS enforces on instance or hostname
       length, since the full name includes the label, a hyphen, and
       eight UUID characters.
+
+   .. attr:: free-disk-threshold
+      :type: int
+      :default: -1
+
+      Minimum free space (in megabytes) on the root filesystem (``/``) that
+      a node must report before Zuul accepts it for jobs. As part of the
+      existing node scan (after SSH transport and host-key negotiation), the
+      launcher may connect again with Paramiko using the ``ssh-private-key``
+      path from the provider image configuration (see driver-specific image
+      attributes) and run ``df -m --output=avail /`` to read available space.
+      The guest should provide a ``df`` that accepts GNU-style ``--output``
+      (for example GNU coreutils). If free space is below this value, the node
+      scan fails and the node is not used.
+
+      The default ``-1`` disables the check, as does any negative value or
+      zero. The check does not run unless the image defines ``ssh-private-key``
+      and that key file exists on the launcher host.
+
+      The check runs when a node first becomes ready after build, and again
+      when a node is prepared for reuse after the ``used`` state if the
+      provider label allows reuse. It is not run again when an already-ready
+      node is assigned to a job.
