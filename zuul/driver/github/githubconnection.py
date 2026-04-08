@@ -1621,7 +1621,9 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         # after a successful merge.
         if not change.is_merged:
             change.is_merged = change.pr.get('merged')
-        if change.is_merged:
+        # Similarly, never overwrite merge_commit_sha which is set by
+        # mergePull.
+        if change.is_merged and not change.merge_commit_sha:
             change.merge_commit_sha = change.pr.get('merge_commit_sha')
 
         change.reviews = self.getPullReviews(
