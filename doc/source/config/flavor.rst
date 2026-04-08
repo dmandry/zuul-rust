@@ -105,3 +105,7 @@ keys that zuul-executor uses for Ansible. Drivers document this attribute
 alongside other image settings (for example OpenStack lists it under
 :attr:`provider[openstack]` image stanzas). Soft reboot of an instance when
 that check stalls is implemented for OpenStack only.
+
+If you need the launcher to reject nodes whose root filesystem is nearly
+full, set ``free-disk-threshold`` on the :ref:`label` (in megabytes; see
+that section for prerequisites).

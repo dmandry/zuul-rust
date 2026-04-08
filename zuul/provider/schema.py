@@ -111,6 +111,15 @@ common_label = vs.Schema({
                      The label may not be updated by label-defaults
                      but may be explicitly overidden by redefining
                      it in a new 'label' entry.""")),
+    Optional(
+        'free-disk-threshold', default=-1,
+        doc="""\
+        The minimum free root disk size (in megabytes) a requested node
+        should have to be allocated to job.
+        Absence of ssh-private-key in image or any negative value
+        in this parameter disables check for free root disk size.
+        """
+    ): int,
 })
 
 # The label attributes that can appear in a section/provider label or

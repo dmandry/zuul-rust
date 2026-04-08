@@ -310,9 +310,115 @@ class TestNodescanWorker(BaseTestCase):
             interface_ip='10.0.0.2',
             username='cloud-user',
             ssh_private_key='/var/lib/zuul/executor_rsa',
+            free_disk_threshold=4096,
             provider='openstack/main',
             region='region-one',
         )
         d = ProviderNodeConverter.toDict(node)
         self.assertEqual(
             d['ssh_private_key'], '/var/lib/zuul/executor_rsa')
+        self.assertEqual(d['free_disk_threshold'], 4096)
+
+    @patch('zuul.launcher.server.paramiko.SSHClient')
+    @patch('zuul.launcher.server.Path.exists', return_value=True)
+    @patch('paramiko.PKey.from_path')
+    def test_nodescan_free_disk_threshold_passes(
+            self, mock_from_path, mock_exists, mock_ssh_class):
+        """df reports enough free space vs label free-disk-threshold (MB)."""
+        self.useFixture(NodescanFixture())
+        mock_from_path.return_value = object()
+        client = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b'Avail\n50000\n'
+        client.exec_command.return_value = (None, mock_stdout, None)
+        mock_ssh_class.return_value = client
+
+        worker = NodescanWorker()
+        node = DummyProviderNode()
+        node._set(
+            interface_ip='198.51.100.1',
+            connection_port=22,
+            connection_type='ssh',
+            host_key_checking=True,
+            boot_timeout=300,
+            ssh_private_key='/fake/zuul-launcher-key',
+            username='zuul',
+            free_disk_threshold=100,
+        )
+        worker.start()
+        request = NodescanRequest(node, self.log)
+        worker.addRequest(request)
+        for _ in iterate_timeout(30, 'waiting for nodescan'):
+            if request.complete:
+                break
+        self.assertEqual(request.result(), ['fake key fake base64'])
+        mock_ssh_class.assert_called()
+        client.connect.assert_called()
+        client.exec_command.assert_called_with('df -m --output=avail /')
+        client.close.assert_called()
+        worker.stop()
+        worker.join()
+
+    @patch('zuul.launcher.server.paramiko.SSHClient')
+    @patch('zuul.launcher.server.Path.exists', return_value=True)
+    @patch('paramiko.PKey.from_path')
+    def test_nodescan_free_disk_threshold_fails_low_disk(
+            self, mock_from_path, mock_exists, mock_ssh_class):
+        self.useFixture(NodescanFixture())
+        mock_from_path.return_value = object()
+        client = MagicMock()
+        mock_stdout = MagicMock()
+        mock_stdout.read.return_value = b'Avail\n50\n'
+        client.exec_command.return_value = (None, mock_stdout, None)
+        mock_ssh_class.return_value = client
+
+        worker = NodescanWorker()
+        node = DummyProviderNode()
+        node._set(
+            interface_ip='198.51.100.1',
+            connection_port=22,
+            connection_type='ssh',
+            host_key_checking=True,
+            boot_timeout=300,
+            ssh_private_key='/fake/zuul-launcher-key',
+            username='zuul',
+            free_disk_threshold=1000,
+        )
+        worker.start()
+        request = NodescanRequest(node, self.log)
+        worker.addRequest(request)
+        for _ in iterate_timeout(30, 'waiting for nodescan failure'):
+            if request.complete:
+                break
+        exc = self.assertRaises(Exception, request.result)
+        self.assertIn('Free disk space is too low', str(exc))
+        self.assertIn('50 < 1000', str(exc))
+        worker.stop()
+        worker.join()
+
+    @patch('zuul.launcher.server.paramiko.SSHClient')
+    def test_nodescan_free_disk_threshold_skipped_without_key_on_disk(
+            self, mock_ssh_class):
+        self.useFixture(NodescanFixture())
+        worker = NodescanWorker()
+        node = DummyProviderNode()
+        node._set(
+            interface_ip='198.51.100.1',
+            connection_port=22,
+            connection_type='ssh',
+            host_key_checking=True,
+            boot_timeout=300,
+            ssh_private_key='/no/such/zuul-ssh-key',
+            username='zuul',
+            free_disk_threshold=50000,
+        )
+        worker.start()
+        request = NodescanRequest(node, self.log)
+        worker.addRequest(request)
+        for _ in iterate_timeout(30, 'waiting for nodescan'):
+            if request.complete:
+                break
+        self.assertEqual(request.result(), ['fake key fake base64'])
+        mock_ssh_class.assert_not_called()
+        worker.stop()
+        worker.join()

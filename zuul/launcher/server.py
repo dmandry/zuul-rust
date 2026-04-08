@@ -765,6 +765,29 @@ class NodescanRequest:
                         f"on port {self.port}")
                     self.key_negotiation_failures += 1
                 self._nextKey()
+            # Need to check free disk size if threshold is specified
+            if (self.node.free_disk_threshold and
+                self.node.free_disk_threshold >= 0 and
+                self.node.ssh_private_key and
+                Path(self.node.ssh_private_key).exists()):
+                try:
+                    ssh_client = paramiko.SSHClient()
+                    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    pkey = paramiko.PKey.from_path(self.node.ssh_private_key)
+                    ssh_client.connect(self.ip, username=self.node.username, pkey=pkey)
+                    _, stdout, _ = ssh_client.exec_command('df -m --output=avail /')
+                    out = stdout.read().decode()
+                    ssh_client.close()
+                    free_disk = None
+                    for line in out.splitlines():
+                        if 'Avail' not in line:
+                            free_disk = int(line.split()[0])
+                    if not free_disk:
+                        raise Exception(f"Can't get disk usage output on node with IP {self.ip}")
+                except Exception:
+                    raise Exception(f"Can't get disk usage command on node with IP {self.ip}")
+                if free_disk < self.node.free_disk_threshold:
+                    raise Exception(f"Free disk space is too low to start node with IP {self.ip}: {free_disk} < {self.node.free_disk_threshold}")
 
         # Check if we're still in the same state
         if self.state == self.NEGOTIATING_KEY:
@@ -1776,6 +1799,7 @@ class Launcher:
             connection_type=image.connection_type,
             username=image.username,
             ssh_private_key=image.ssh_private_key,
+            free_disk_threshold=label.free_disk_threshold,
             python_path=image.python_path,
             shell_type=image.shell_type,
             quota=label_quota,
