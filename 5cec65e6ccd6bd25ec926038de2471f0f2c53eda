@@ -236,6 +236,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d684b71f_667a2b77",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 150,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-08T23:22:47Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1ec06508_e36800ae",
+      "range": {
+        "startLine": 150,
+        "startChar": 51,
+        "endLine": 150,
+        "endChar": 63
+      },
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "00140040_38f0f82c",
@@ -267,6 +291,24 @@
       "side": 1,
       "message": "Yes -- I think it\u0027s important for tenant admins to be able to selectively enable this so that users don\u0027t evade their workflow definitions.",
       "parentUuid": "00140040_38f0f82c",
+      "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a45d2723_7c8a4eaa",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 187,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-08T23:22:47Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "d981ac07_a73ac0a1",
       "revId": "5cec65e6ccd6bd25ec926038de2471f0f2c53eda",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },

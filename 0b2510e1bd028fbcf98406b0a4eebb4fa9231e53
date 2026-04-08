@@ -18,6 +18,23 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "8f5d559b_265205ab",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-08T23:22:47Z",
+      "side": 1,
+      "message": "I think this latest patchset addresses my primary concern with unexpected behaviors in check/gate. Given that it is a +2 from me.",
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e33ab05c_ae798814",
