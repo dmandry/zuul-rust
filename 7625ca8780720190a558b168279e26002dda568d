@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d42cdb42_19b4e1a6",
+        "filename": "zuul/cmd/merger.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:49:54Z",
+      "side": 1,
+      "message": "Need to import logging when we set self.log (see comment below).",
+      "revId": "7625ca8780720190a558b168279e26002dda568d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1c50f844_883a82e5",
+        "filename": "zuul/cmd/merger.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 34,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:49:54Z",
+      "side": 1,
+      "message": "We need to set self.log after self.setup_logging() is called on line 43. This is to match the other services. Without that this is an undefined name.",
+      "revId": "7625ca8780720190a558b168279e26002dda568d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c27168b4_b7a6d0a8",
+        "filename": "zuul/cmd/web.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 40,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:49:54Z",
+      "side": 1,
+      "message": "This should be signal.SIGTERM",
+      "revId": "7625ca8780720190a558b168279e26002dda568d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
