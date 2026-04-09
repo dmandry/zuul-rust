@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "79379aae_b820dc88",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 33134
+      },
+      "writtenOn": "2026-04-09T07:19:24Z",
+      "side": 1,
+      "message": "I may not fully understand the problem you mean, but from what I read the doc you referenced, it is also able to match multiple claims.There is an example like below:\n```\n{\n  \"audiences\": [\n    \"api://AzureADTokenExchange\"\n  ],\n  \"name\": \"MyGitHubFlexibleFIC\",\n  \"issuer\": \"https://token.actions.githubusercontent.com\",\n  \"claimsMatchingExpression\": {\n    \"value\": \"claims[\u0027sub\u0027] matches \u0027repo:contoso/contoso-repo:ref:refs/heads/*\u0027 and claims[\u0027job_workflow_ref\u0027] matches \u0027contoso/contoso-prod/.github/workflows/*.yml@refs/heads/main\u0027\",\n    \"languageVersion\": 1\n  }\n}\n```\nSo in the Zuul OIDC Token we can replace `job_workflow_ref` with `tenant`.",
+      "revId": "df562cabcebcb28e1b12978d712194a4db06e0e9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
