@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9d073109_03ca572c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:53:24Z",
+      "side": 1,
+      "message": "I ended up manually testing this using Zuul quickstart to manage the processes. That actually worked quite well with the exception of sometimes slow image rebuilds. But it was useful for keeping everything straight.\n\nThis manual testing first involved running zuul-foo commands like repl and norepl to confirm those log messages show up as expected (they all did). Then I would run docker kill -s TERM against the various containers to check the signal handling. The result is this second patchset which caught problems with the merger and web handlers as originally proposed.\n\nI also checked SIGUSR1 against web and sigterm_method values \u0027stop\u0027, \u0027graceful\u0027, and \u0027bogus\u0027 with the executor. All seems to work now with this second patchset.\n\nThe only other thought I\u0027ve got is if these log messages should be info level or if debug is sufficient?",
+      "revId": "0144fc9f64b04215b0389c3e1928a53f5fd70b78",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

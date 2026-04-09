@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "e2480a2a_6e8d1f81",
+        "filename": "zuul/cmd/merger.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 18,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:53:24Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "d42cdb42_19b4e1a6",
+      "revId": "7625ca8780720190a558b168279e26002dda568d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1c50f844_883a82e5",
@@ -35,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "c205b6ba_4831fdd7",
+        "filename": "zuul/cmd/merger.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 34,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:53:24Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1c50f844_883a82e5",
+      "revId": "7625ca8780720190a558b168279e26002dda568d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c27168b4_b7a6d0a8",
@@ -48,6 +84,24 @@
       "writtenOn": "2026-04-09T00:49:54Z",
       "side": 1,
       "message": "This should be signal.SIGTERM",
+      "revId": "7625ca8780720190a558b168279e26002dda568d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "770d89b3_6ce25a93",
+        "filename": "zuul/cmd/web.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 40,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-04-09T00:53:24Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "c27168b4_b7a6d0a8",
       "revId": "7625ca8780720190a558b168279e26002dda568d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
