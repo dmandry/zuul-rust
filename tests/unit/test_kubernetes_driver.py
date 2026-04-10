@@ -18,10 +18,11 @@ import time
 from unittest import mock
 import yaml
 
-import zuul.executor
+import kubernetes
 
+import zuul.executor
 from zuul.driver.kubernetes.kubernetesendpoint import (
-    KubernetesProviderEndpoint,
+    _getClient,
 )
 
 from tests.fake_kubernetes import (
@@ -30,13 +31,58 @@ from tests.fake_kubernetes import (
     FakeDynamicClient,
 )
 from tests.base import (
+    BaseTestCase,
     FIXTURE_DIR,
+    ZuulTestCase,
     iterate_timeout,
     okay_tracebacks,
     simple_layout,
-    ZuulTestCase,
 )
 from tests.unit.test_cloud_driver import BaseCloudDriverTest
+
+
+class TestKubernetesConfig(BaseTestCase):
+
+    def test_kubernetes_in_cluster_config(self):
+        # Test that we instantiate api client objects from a fake
+        # in-cluster config.
+        token_file = os.path.join(FIXTURE_DIR, 'k8s/token')
+        ca_file = os.path.join(FIXTURE_DIR, 'k8s/ca.crt')
+
+        os.environ['KUBERNETES_SERVICE_HOST'] = '198.51.100.1'
+        os.environ['KUBERNETES_SERVICE_PORT'] = '443'
+
+        self.patch(kubernetes.config.incluster_config,
+                   'SERVICE_TOKEN_FILENAME',
+                   token_file)
+        self.patch(kubernetes.config.incluster_config,
+                   'SERVICE_CERT_FILENAME',
+                   ca_file)
+
+        # The dynamic client really tries to call the cluster api so
+        # we need to mock it out.
+        class AssertDynamicClient:
+            def __init__(this, api_client):
+                self.assertIsInstance(
+                    api_client, kubernetes.client.api_client.ApiClient)
+
+        self.patch(kubernetes.dynamic, 'DynamicClient', AssertDynamicClient)
+
+        _getClient(None, None, self.log)
+
+    def test_kubernetes_config_file(self):
+        # Test that we instantiate api client objects from a fake
+        # config file.
+        config_file = os.path.join(FIXTURE_DIR, 'k8s/config')
+
+        class AssertDynamicClient:
+            def __init__(this, api_client):
+                self.assertIsInstance(
+                    api_client, kubernetes.client.api_client.ApiClient)
+
+        self.patch(kubernetes.dynamic, 'DynamicClient', AssertDynamicClient)
+
+        _getClient(config_file, 'test', self.log)
 
 
 class BaseKubernetesDriverTest(ZuulTestCase):
@@ -45,6 +91,13 @@ class BaseKubernetesDriverTest(ZuulTestCase):
     cloud_test_min_instances = 1
     is_openshift = False
 
+    def setup_config(self, config_file):
+        config = super().setup_config(config_file)
+        kubeconfig = os.path.join(FIXTURE_DIR, 'k8s/config')
+        config.set('connection kube', 'kubeconfig_file', kubeconfig)
+        config.set('connection openshift', 'kubeconfig_file', kubeconfig)
+        return config
+
     def setUp(self):
         self.initTestConfig()
         self.fake_core_client = FakeCoreClient()
@@ -52,12 +105,19 @@ class BaseKubernetesDriverTest(ZuulTestCase):
         self.fake_dynamic_client = FakeDynamicClient(self.fake_core_client,
                                                      self.is_openshift)
 
-        def _getClient(this):
-            return (self.fake_core_client, self.fake_rbac_client,
-                    self.fake_dynamic_client)
+        def coreClientFactory(api_client):
+            return self.fake_core_client
 
-        self.patch(KubernetesProviderEndpoint, '_getClient',
-                   _getClient)
+        def rbacClientFactory(api_client):
+            return self.fake_rbac_client
+
+        def dynamicClientFactory(api_client):
+            return self.fake_dynamic_client
+
+        self.patch(kubernetes.client, 'CoreV1Api', coreClientFactory)
+        self.patch(kubernetes.client, 'RbacAuthorizationV1Api',
+                   rbacClientFactory)
+        self.patch(kubernetes.dynamic, 'DynamicClient', dynamicClientFactory)
 
         super().setUp()
 
