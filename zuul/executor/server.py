@@ -2275,12 +2275,20 @@ class AnsibleJob(object):
             # results in the wrong thing being in interface_ip
             # TODO(jeblair): Move this notice to the docs.
             for name in node.name:
+                connection_type = node.connection_type
                 ip = node.interface_ip
+                ansible_host = ip
+                if connection_type == "kubectl":
+                    # Nodepool overloaded interface_ip, zuul-launcher
+                    # will set this value
+                    kubecon = getattr(node, 'kubernetes_connection', None)
+                    if kubecon:
+                        ansible_host = kubecon['pod']
                 port = node.connection_port
                 host_vars = self.job.host_variables.get(name, {}).copy()
                 check_varnames(host_vars)
                 host_vars.update(dict(
-                    ansible_host=ip,
+                    ansible_host=ansible_host,
                     ansible_user=self.executor_server.default_username,
                     ansible_port=port,
                     nodepool=dict(
@@ -2340,7 +2348,6 @@ class AnsibleJob(object):
                 if username:
                     host_vars['ansible_user'] = username
 
-                connection_type = node.connection_type
                 if connection_type:
                     host_vars['ansible_connection'] = connection_type
                     if connection_type == "winrm":
