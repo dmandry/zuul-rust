@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2dfba716_d5bd151d",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2281,
+      "author": {
+        "id": 37264
+      },
+      "writtenOn": "2026-04-10T19:25:25Z",
+      "side": 1,
+      "message": "Hi, for a node provisioned using kubernetes provider, if we set the connection_type to ssh, the code here will still fall back to using `node.interface_ip` for `ansible_host` but that field is not set in KubernetesInstance.\nShould we set `interface_ip` field of `KubernetesInstance` to pod ip?",
+      "range": {
+        "startLine": 2281,
+        "startChar": 19,
+        "endLine": 2281,
+        "endChar": 47
+      },
+      "revId": "20768eb7cdadaba5634c32f1f43a79a711846f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
