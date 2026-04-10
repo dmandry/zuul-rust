@@ -215,29 +215,30 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
             resources['pods'] = 1
         return QuotaInformation(**resources)
 
-    def _getConfig(self, config_file, context):
+    def _getApiClient(self, config_file, context):
         try:
             return kubernetes.config.new_client_from_config(
                 config_file=config_file, context=context)
         except FileNotFoundError:
             self.log.debug("Kubernetes config file not found, attempting "
                            "to load in-cluster configs")
-            return kubernetes.config.load_incluster_config()
+            kubernetes.config.load_incluster_config()
+            return kubernetes.client.CoreV1Api()
         except kubernetes.config.config_exception.ConfigException as e:
             if 'Invalid kube-config file. No configuration found.' in str(e):
                 self.log.debug("Kubernetes config file not found, attempting "
                                "to load in-cluster configs")
-                return kubernetes.config.load_incluster_config()
+                kubernetes.config.load_incluster_config()
+                return kubernetes.client.CoreV1Api()
             else:
                 raise
 
     def _getClient(self):
         config_file = self.connection.config_file
         context = self.connection.context
-        conf = self._getConfig(config_file, context)
-        core_client = kubernetes.client.CoreV1Api(conf)
-        rbac_client = kubernetes.client.RbacAuthorizationV1Api(conf)
-        api_client = kubernetes.client.api_client.ApiClient(conf)
+        api_client = self._getApiClient(config_file, context)
+        core_client = kubernetes.client.CoreV1Api(api_client)
+        rbac_client = kubernetes.client.RbacAuthorizationV1Api(api_client)
         dynamic_client = kubernetes.dynamic.DynamicClient(api_client)
         return (core_client, rbac_client, dynamic_client)
 
