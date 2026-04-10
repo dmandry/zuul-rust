@@ -29,6 +29,32 @@ from zuul.provider import (
 )
 
 
+def _getConfig(config_file, context, log):
+    config = kubernetes.client.Configuration()
+    try:
+        kubernetes.config.load_kube_config(
+            config_file=config_file, context=context,
+            client_configuration=config)
+    except kubernetes.config.config_exception.ConfigException as e:
+        if 'Invalid kube-config file. No configuration found.' in str(e):
+            log.debug("Kubernetes config file not found, attempting "
+                      "to load in-cluster configs")
+            kubernetes.config.load_incluster_config(
+                client_configuration=config)
+        else:
+            raise
+    return config
+
+
+def _getClient(config_file, context, log):
+    conf = _getConfig(config_file, context, log)
+    api_client = kubernetes.client.api_client.ApiClient(conf)
+    core_client = kubernetes.client.CoreV1Api(api_client)
+    rbac_client = kubernetes.client.RbacAuthorizationV1Api(api_client)
+    dynamic_client = kubernetes.dynamic.DynamicClient(api_client)
+    return (core_client, rbac_client, dynamic_client)
+
+
 class KubernetesDeleteStateMachine(statemachine.StateMachine):
     NAMESPACE_DELETING = 'deleting namespace'
 
@@ -215,31 +241,10 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
             resources['pods'] = 1
         return QuotaInformation(**resources)
 
-    def _getConfig(self, config_file, context):
-        try:
-            return kubernetes.config.new_client_from_config(
-                config_file=config_file, context=context)
-        except FileNotFoundError:
-            self.log.debug("Kubernetes config file not found, attempting "
-                           "to load in-cluster configs")
-            return kubernetes.config.load_incluster_config()
-        except kubernetes.config.config_exception.ConfigException as e:
-            if 'Invalid kube-config file. No configuration found.' in str(e):
-                self.log.debug("Kubernetes config file not found, attempting "
-                               "to load in-cluster configs")
-                return kubernetes.config.load_incluster_config()
-            else:
-                raise
-
     def _getClient(self):
-        config_file = self.connection.config_file
-        context = self.connection.context
-        conf = self._getConfig(config_file, context)
-        core_client = kubernetes.client.CoreV1Api(conf)
-        rbac_client = kubernetes.client.RbacAuthorizationV1Api(conf)
-        api_client = kubernetes.client.api_client.ApiClient(conf)
-        dynamic_client = kubernetes.dynamic.DynamicClient(api_client)
-        return (core_client, rbac_client, dynamic_client)
+        return _getClient(self.connection.config_file,
+                          self.connection.context,
+                          self.log)
 
     def _createNamespace(self, namespace, labels):
         self.log.debug("Creating namespace %s", namespace)
