@@ -22,6 +22,24 @@
       },
       "revId": "20768eb7cdadaba5634c32f1f43a79a711846f0d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "224ecc68_4a6f3128",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2281,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-11T00:59:55Z",
+      "side": 1,
+      "message": "I don\u0027t think we have ever supported that.",
+      "parentUuid": "2dfba716_d5bd151d",
+      "revId": "20768eb7cdadaba5634c32f1f43a79a711846f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
