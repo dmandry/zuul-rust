@@ -80,6 +80,29 @@
       },
       "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "abbd794b_954d7db7",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 191,
+      "author": {
+        "id": 7186
+      },
+      "writtenOn": "2026-04-12T18:50:34Z",
+      "side": 1,
+      "message": "Down the line it would be desirable to be able to filter builds on these parameters with the builds REST endpoint; for example, find all builds on the on-demand pipeline that set target_cluster to production. Storing the parameters as a JSON string in the database might make this difficult.",
+      "range": {
+        "startLine": 188,
+        "startChar": 1,
+        "endLine": 191,
+        "endChar": 61
+      },
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
