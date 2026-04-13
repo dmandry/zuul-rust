@@ -313,7 +313,10 @@ class TestAwsDriver(AwsBaseTest):
         expected = base64.b64encode(b'testuserdata').decode('utf8')
         self.assertEqual(expected, instance['UserData']['Value'])
 
-    @simple_layout('layouts/aws/fleet.yaml', enable_nodepool=True)
+    @simple_layout('layouts/aws/fleet.yaml', enable_nodepool=True,
+                   replace=lambda test: {
+                       'iam_profile_name': test.profile.name,
+                   })
     @okay_tracebacks('MissingParameter')
     @driver_config('aws', node_checks=check_fleet_node_attrs)
     def test_aws_node_lifecycle_fleet(self):
@@ -325,9 +328,19 @@ class TestAwsDriver(AwsBaseTest):
 
         # Verify that we clean up unused launch templates.  Start by
         # checking that we have one from the current config.
-        launch_tempaltes = self.ec2_client.\
+        launch_templates = self.ec2_client.\
             describe_launch_templates()['LaunchTemplates']
-        self.assertEqual(len(launch_tempaltes), 1)
+        self.assertEqual(len(launch_templates), 1)
+
+        # Verify launch template contents
+        for lt in launch_templates:
+            versions = self.ec2_client.\
+                describe_launch_template_versions(
+                    LaunchTemplateId=lt['LaunchTemplateId'],
+                )['LaunchTemplateVersions']
+            self.assertEqual(len(versions), 1)
+            ltdata = versions[0]['LaunchTemplateData']
+            self.assertIn('IamInstanceProfile', ltdata)
 
         # Switch to a config that has no fleet usage (spot is
         # arbitrary).

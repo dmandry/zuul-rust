@@ -54,6 +54,8 @@
       host-key-checking: false
       boot-timeout: 300
       key-name: zuul
+      iam-instance-profile:
+        name: {iam_profile_name}
     flavors:
       - name: normal
         fleet:

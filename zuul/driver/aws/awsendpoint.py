@@ -1993,6 +1993,16 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 },
             }
 
+            if label.iam_instance_profile:
+                if 'name' in label.iam_instance_profile:
+                    template_data['IamInstanceProfile'] = {
+                        'Name': label.iam_instance_profile['name']
+                    }
+                elif 'arn' in label.iam_instance_profile:
+                    template_data['IamInstanceProfile'] = {
+                        'Arn': label.iam_instance_profile['arn']
+                    }
+
             if label.security_group_ids:
                 template_data['SecurityGroupIds'] = label.security_group_ids
 
