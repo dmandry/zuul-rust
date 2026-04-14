@@ -53,8 +53,10 @@ class DependentPipelineManager(SharedQueuePipelineManager):
         log = get_annotated_logger(self.log, event)
         for change in changes:
             source = change.project.source
-            can_merge = source.canMerge(change, self.getSubmitAllowNeeds(),
-                                        event=event)
+            can_merge = source.canMerge(
+                change,
+                self.getSubmitAllowNeeds(change),
+                event=event)
             if not can_merge:
                 msg = (
                     f"Change {change._id()} "
@@ -77,7 +79,7 @@ class DependentPipelineManager(SharedQueuePipelineManager):
             source = change.project.source
             if not source.canMerge(
                 change,
-                self.getSubmitAllowNeeds(),
+                self.getSubmitAllowNeeds(change),
                 event=item.event,
                 allow_refresh=True,
             ):
@@ -141,8 +143,10 @@ class DependentPipelineManager(SharedQueuePipelineManager):
                                change_queue))
                     continue
             source = other_change.project.source
-            if source.canMerge(other_change, self.getSubmitAllowNeeds(),
-                               event=event):
+            if source.canMerge(
+                    other_change,
+                    self.getSubmitAllowNeeds(other_change),
+                    event=event):
                 log.debug("  Change %s needs %s and is ready to merge",
                           other_change, change)
                 to_enqueue.append(other_change)
@@ -256,7 +260,8 @@ class DependentPipelineManager(SharedQueuePipelineManager):
                                   "ahead in the queue")
                         continue
                     can_merge = needed_change.project.source.canMerge(
-                        needed_change, self.getSubmitAllowNeeds(),
+                        needed_change,
+                        self.getSubmitAllowNeeds(needed_change),
                         event=event)
                     if can_merge:
                         msg = (

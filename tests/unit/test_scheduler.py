@@ -1596,22 +1596,22 @@ class TestScheduler(ZuulTestCase):
 
         a = source.getChange(source.getChangeKey(event), event=event)
         mgr = tenant.layout.pipeline_managers['gate']
-        self.assertFalse(source.canMerge(a, mgr.getSubmitAllowNeeds()))
+        self.assertFalse(source.canMerge(a, mgr.getSubmitAllowNeeds(a)))
 
         A.addApproval('Code-Review', 2)
         a = source.getChange(source.getChangeKey(event),
                              refresh=True, event=event)
-        self.assertFalse(source.canMerge(a, mgr.getSubmitAllowNeeds()))
+        self.assertFalse(source.canMerge(a, mgr.getSubmitAllowNeeds(a)))
 
         A.addApproval('Approved', 1)
         a = source.getChange(source.getChangeKey(event),
                              refresh=True, event=event)
-        self.assertTrue(source.canMerge(a, mgr.getSubmitAllowNeeds()))
+        self.assertTrue(source.canMerge(a, mgr.getSubmitAllowNeeds(a)))
 
         A.setWorkInProgress(True)
         a = source.getChange(source.getChangeKey(event),
                              refresh=True, event=event)
-        self.assertFalse(source.canMerge(a, mgr.getSubmitAllowNeeds()))
+        self.assertFalse(source.canMerge(a, mgr.getSubmitAllowNeeds(a)))
 
     def test_project_merge_conflict(self):
         "Test that gate merge conflicts are handled properly"

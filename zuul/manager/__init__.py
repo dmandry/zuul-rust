@@ -191,14 +191,16 @@ class PipelineManager(metaclass=ABCMeta):
                 return queue
         return [project]
 
-    def getSubmitAllowNeeds(self):
+    def getSubmitAllowNeeds(self, change):
         # Get a list of code review labels that are allowed to be
         # "needed" in the submit records for a change, with respect
         # to this queue.  In other words, the list of review labels
         # this queue itself is likely to set before submitting.
         allow_needs = set()
         for action_reporter in self.pipeline.success_actions:
-            allow_needs.update(action_reporter.getSubmitAllowNeeds(self))
+            if action_reporter.connection.connection_name == \
+               change.project.connection_name:
+                allow_needs.update(action_reporter.getSubmitAllowNeeds(self))
         return allow_needs
 
     def eventMatches(self, event, change):
