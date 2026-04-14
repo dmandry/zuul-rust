@@ -22,6 +22,30 @@
       },
       "revId": "f296fbdb0d1a14df083bb0b412dea4235c9c5a92",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "70837fff_34c401d8",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 261,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-04-14T07:24:34Z",
+      "side": 1,
+      "message": "That makes sense. I\u0027ve updated the change accordingly.",
+      "parentUuid": "37b8277f_d906e4f3",
+      "range": {
+        "startLine": 261,
+        "startChar": 39,
+        "endLine": 261,
+        "endChar": 50
+      },
+      "revId": "f296fbdb0d1a14df083bb0b412dea4235c9c5a92",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
