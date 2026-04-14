@@ -657,14 +657,40 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             self.aws = self._getSessionFromWebIdentity()
         else:
             self.aws = self._getSessionFromCredentials()
-        self.ec2_client = self.aws.client("ec2", region_name=self.region)
-        self.s3 = self.aws.resource('s3', region_name=self.region)
-        self.s3_client = self.aws.client('s3', region_name=self.region)
-        self.s3_global_client = self.aws.client('s3')
-        self.aws_quotas = self.aws.client("service-quotas",
-                                          region_name=self.region)
-        self.ebs_client = self.aws.client('ebs', region_name=self.region)
-        self.sts_client = self.aws.client('sts', region_name=self.region)
+        self.ec2_client = self.aws.client(
+            "ec2",
+            region_name=self.region,
+            endpoint_url=self.connection.endpoint_url,
+        )
+        self.s3 = self.aws.resource(
+            's3',
+            region_name=self.region,
+            endpoint_url=self.connection.endpoint_url,
+        )
+        self.s3_client = self.aws.client(
+            's3',
+            region_name=self.region,
+            endpoint_url=self.connection.endpoint_url,
+        )
+        self.s3_global_client = self.aws.client(
+            's3',
+            endpoint_url=self.connection.endpoint_url,
+        )
+        self.aws_quotas = self.aws.client(
+            'service-quotas',
+            region_name=self.region,
+            endpoint_url=self.connection.endpoint_url,
+        )
+        self.ebs_client = self.aws.client(
+            'ebs',
+            region_name=self.region,
+            endpoint_url=self.connection.endpoint_url,
+        )
+        self.sts_client = self.aws.client(
+            'sts',
+            region_name=self.region,
+            endpoint_url=self.connection.endpoint_url,
+        )
 
     def startEndpoint(self):
         self._running = True
