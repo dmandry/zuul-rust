@@ -1039,6 +1039,7 @@ class TestWrongConnection(ZuulTestCase):
         # report (and merge) via "another_gerrit".
         A = self.fake_review_gerrit.addFakeChange('org/project', 'master', 'A')
         A.addApproval('Code-Review', 2)
+        A.addApproval('Verified', 2)
         self.fake_review_gerrit.addEvent(A.addApproval('Approved', 1))
 
         self.waitUntilSettled()
@@ -1047,6 +1048,7 @@ class TestWrongConnection(ZuulTestCase):
         # Let's try this as if the change was merged (say, via another tenant).
         B.setMerged()
         B.addApproval('Code-Review', 2)
+        B.addApproval('Verified', 2)
         self.fake_review_gerrit.addEvent(B.addApproval('Approved', 1))
 
         self.waitUntilSettled()
@@ -1056,6 +1058,62 @@ class TestWrongConnection(ZuulTestCase):
         self.assertHistory([
             dict(name='test-job', result='SUCCESS', changes='1,1'),
             dict(name='test-job', result='SUCCESS', changes='2,1'),
+        ], ordered=False)
+
+
+class TestMultiGerritAllowNeeds(ZuulTestCase):
+    config_file = 'zuul-connections-multiple-gerrits.conf'
+    tenant_config_file = 'config/multi-gerrit-allow-needs/main.yaml'
+
+    def test_allow_needs(self):
+        # Test that we don't apply the allow_needs from one gerrit to
+        # another.  We report "ReviewVerified" to the gerrit for the
+        # change we're testing, and there's another gerrit where we
+        # report "Verified".  Our gerrit also uses the Verified label,
+        # but it's for human review and it's a submit requirement.
+
+        # Make sure the use of Verified for zuul in the other gerrit
+        # doesn't mess up our Verified submit requirement.
+        A = self.fake_review_gerrit.addFakeChange('org/project', 'master', 'A')
+        A.addApproval('Code-Review', 2)
+        A.categories = {
+            'Approved': ('Approved', -1, 1),
+            'Code-Review': ('Code-Review', -2, 2),
+            'ReviewVerified': ('ReviewVerified', -2, 2),
+        }
+        A.setSubmitRequirements([
+            {
+                "name": "Verified",
+                "status": "UNSATISFIED",
+                "is_legacy": True,
+                "submittability_expression_result": {
+                    "expression": "label:Verified=MAX -label:Verified=MIN",
+                    "fulfilled": False,
+                    "passing_atoms": [],
+                    "failing_atoms": [
+                        "label:Verified=MAX",
+                        "-label:Verified=MIN"
+                    ]
+                }
+            },
+        ])
+
+        # First, test it while missing the Verified approval
+        self.fake_review_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        self.assertEqual(A.reported, 0)
+        self.assertHistory([])
+
+        # Add the verified approval (well, really remove the submit
+        # requirement for it) and test again:
+        A.setSubmitRequirements([])
+        self.fake_review_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        self.assertEqual(A.reported, 1)
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS', changes='1,1'),
         ], ordered=False)
 
 

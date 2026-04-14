@@ -1,0 +1,36 @@
+- pipeline:
+    name: gate
+    manager: dependent
+    success-message: Build succeeded (gate).
+    trigger:
+      review_gerrit:
+        - event: comment-added
+          approval:
+            - Approved: 1
+    success:
+      review_gerrit:
+        ReviewVerified: 2
+        submit: true
+      another_gerrit:
+        Verified: 2
+        submit: true
+    failure:
+      review_gerrit:
+        ReviewVerified: -2
+      another_gerrit:
+        Verified: -2
+    precedence: high
+
+- job:
+    name: base
+    parent: null
+
+- job:
+    name: test-job
+    run: playbooks/test-job.yaml
+
+- project:
+    name: review.example.com/org/project
+    gate:
+      jobs:
+        - test-job
