@@ -107,6 +107,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "4078c212_29822200",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 155,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-14T18:11:54Z",
+      "side": 1,
+      "message": "I originally thought that would be better served by having job or role default values.  But I don\u0027t see a reason why we can\u0027t add them here if they would be useful.  It might make sense for visibility to have it all set in the same place.",
+      "parentUuid": "1668cfd9_7a1e3672",
+      "range": {
+        "startLine": 154,
+        "startChar": 41,
+        "endLine": 155,
+        "endChar": 59
+      },
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "abbd794b_954d7db7",
         "filename": "doc/source/developer/specs/parameterized-builds.rst",
         "patchSetId": 3
@@ -118,6 +142,30 @@
       "writtenOn": "2026-04-12T18:50:34Z",
       "side": 1,
       "message": "Down the line it would be desirable to be able to filter builds on these parameters with the builds REST endpoint; for example, find all builds on the on-demand pipeline that set target_cluster to production. Storing the parameters as a JSON string in the database might make this difficult.",
+      "range": {
+        "startLine": 188,
+        "startChar": 1,
+        "endLine": 191,
+        "endChar": 61
+      },
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4c5a6336_949cf20c",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 191,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-14T18:11:54Z",
+      "side": 1,
+      "message": "I believe all of our databases support JSON types; we could use that instead of BLOB.  That would let us use the DB-native JSON tools in where clauses in the future.  How does that sound?",
+      "parentUuid": "abbd794b_954d7db7",
       "range": {
         "startLine": 188,
         "startChar": 1,
