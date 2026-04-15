@@ -174,6 +174,30 @@
       },
       "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "bacdde6d_268dfef0",
+        "filename": "doc/source/developer/specs/parameterized-builds.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 191,
+      "author": {
+        "id": 7186
+      },
+      "writtenOn": "2026-04-15T07:03:37Z",
+      "side": 1,
+      "message": "sounds good, thanks!",
+      "parentUuid": "4c5a6336_949cf20c",
+      "range": {
+        "startLine": 188,
+        "startChar": 1,
+        "endLine": 191,
+        "endChar": 61
+      },
+      "revId": "0b2510e1bd028fbcf98406b0a4eebb4fa9231e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
