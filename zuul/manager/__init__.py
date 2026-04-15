@@ -1789,24 +1789,26 @@ class PipelineManager(metaclass=ABCMeta):
         # build a layout.
         if build_set.merge_state == build_set.NEW:
             if item.live or item.updatesConfig():
-                # Collect extra config files and dirs of required changes.
-                extra_config_files = set()
-                extra_config_dirs = set()
-                for merger_item in item.current_build_set.merger_items:
-                    source = self.sched.connections.getSource(
-                        merger_item["connection"])
-                    project = source.getProject(merger_item["project"])
-                    tpc = tenant.project_configs.get(project.canonical_name)
-                    if tpc:
-                        extra_config_files.update(tpc.extra_config_files)
-                        extra_config_dirs.update(tpc.extra_config_dirs)
+                files, dirs = None, None
+                # We only need to request config/dirs files if any of
+                # the changes updates the config.
+                if item.updatesConfig():
+                    # Collect extra config files and dirs of required changes.
+                    extra_config_files = set()
+                    extra_config_dirs = set()
+                    for merger_item in item.current_build_set.merger_items:
+                        source = self.sched.connections.getSource(
+                            merger_item["connection"])
+                        project = source.getProject(merger_item["project"])
+                        tpc = tenant.project_configs.get(
+                            project.canonical_name)
+                        if tpc:
+                            extra_config_files.update(tpc.extra_config_files)
+                            extra_config_dirs.update(tpc.extra_config_dirs)
 
-                ready = self.scheduleMerge(
-                    item,
-                    files=(['zuul.yaml', '.zuul.yaml'] +
-                           list(extra_config_files)),
-                    dirs=(['zuul.d', '.zuul.d'] +
-                          list(extra_config_dirs)))
+                    files = ['zuul.yaml', '.zuul.yaml', *extra_config_files]
+                    dirs = ['zuul.d', '.zuul.d', *extra_config_dirs]
+                ready = self.scheduleMerge(item, files=files, dirs=dirs)
         if build_set.merge_state == build_set.PENDING:
             ready = False
 
@@ -2357,7 +2359,7 @@ class PipelineManager(metaclass=ABCMeta):
         with build_set.activeContext(self.current_context):
             build_set.setMergeRepoState(event.repo_state)
             build_set.merge_state = build_set.COMPLETE
-            if event.merged:
+            if event.merged and event.files:
                 build_set.setFiles(event.files)
         if not (event.merged or event.updated):
             log.info("Unable to merge %s" % item)
