@@ -24,6 +24,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "1a9bde66_bc0ef50b",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2280,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-15T17:45:25Z",
+      "side": 1,
+      "message": "Good point, this was annoying to search for.",
+      "parentUuid": "f91a2de1_ef763ce9",
+      "range": {
+        "startLine": 2279,
+        "startChar": 0,
+        "endLine": 2280,
+        "endChar": 33
+      },
+      "revId": "20768eb7cdadaba5634c32f1f43a79a711846f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "2dfba716_d5bd151d",
@@ -61,6 +85,30 @@
       "side": 1,
       "message": "I don\u0027t think we have ever supported that.",
       "parentUuid": "2dfba716_d5bd151d",
+      "revId": "20768eb7cdadaba5634c32f1f43a79a711846f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3ba0faf0_e9cff63e",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2281,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-15T17:45:25Z",
+      "side": 1,
+      "message": "I don\u0027t think we have ever supported that.",
+      "parentUuid": "2dfba716_d5bd151d",
+      "range": {
+        "startLine": 2281,
+        "startChar": 19,
+        "endLine": 2281,
+        "endChar": 47
+      },
       "revId": "20768eb7cdadaba5634c32f1f43a79a711846f0d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
