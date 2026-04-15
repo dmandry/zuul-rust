@@ -16,6 +16,24 @@
       "message": "I may not fully understand the problem you mean, but from what I read the doc you referenced, it is also able to match multiple claims.There is an example like below:\n```\n{\n  \"audiences\": [\n    \"api://AzureADTokenExchange\"\n  ],\n  \"name\": \"MyGitHubFlexibleFIC\",\n  \"issuer\": \"https://token.actions.githubusercontent.com\",\n  \"claimsMatchingExpression\": {\n    \"value\": \"claims[\u0027sub\u0027] matches \u0027repo:contoso/contoso-repo:ref:refs/heads/*\u0027 and claims[\u0027job_workflow_ref\u0027] matches \u0027contoso/contoso-prod/.github/workflows/*.yml@refs/heads/main\u0027\",\n    \"languageVersion\": 1\n  }\n}\n```\nSo in the Zuul OIDC Token we can replace `job_workflow_ref` with `tenant`.",
       "revId": "df562cabcebcb28e1b12978d712194a4db06e0e9",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c597cca0_d86ae572",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-15T20:39:21Z",
+      "side": 1,
+      "message": "The main problem is that, for some inexplicable reason, Microsoft supports that literally only for those issuers, and we aren\u0027t github.\n\nTechnically, someone could set up a proxy at \"gitlab.example.com\" and configure a zuul issuer to match.  But that only works for people with a \".com\" domain name.  .org folks are out of luck.\n\nAnyway, I still think it\u0027s probably okay for folks in that position to set up multiple secrets (one per tenant).  And if we end up being wrong about that, we can add the flag later.  So I still think this change is for the best.",
+      "parentUuid": "79379aae_b820dc88",
+      "revId": "df562cabcebcb28e1b12978d712194a4db06e0e9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
