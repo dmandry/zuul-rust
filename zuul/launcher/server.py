@@ -2596,6 +2596,11 @@ class Launcher:
         node.az = instance.az
         node.driver_data = instance.driver_data
 
+        # Look up the reuse flag from the label
+        provider = self._getProviderForNode(node)
+        label = provider.labels.get(node.label)
+        node.reusable = label.reuse
+
         # If we did not know the resource information before
         # launching, update it now.
         node.quota = instance.getQuotaInformation()
