@@ -11563,6 +11563,20 @@ class TestConnectionVars(AnsibleZuulTestCase):
         # self.assertNotIn("/bin/du", job_output)
 
 
+class TestSymlinkEscape(AnsibleZuulTestCase):
+    tenant_config_file = 'config/symlink-escape/main.yaml'
+
+    @okay_tracebacks('ValueError: Symlink detected')
+    def test_symlink_escape(self):
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([])
+        self.assertEqual(A.reported, 1)
+        self.assertIn("ERROR", A.messages[0])
+        self.assertIn("Symlink detected", A.messages[0])
+
+
 class IncludeBranchesTestCase(ZuulTestCase):
     def _test_include_branches(self, history1, history2, history3, history4):
         self.create_branch('org/project', 'stable')
