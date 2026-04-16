@@ -4350,18 +4350,19 @@ class FunctionalAnsibleMixIn(object):
         build_timeout = self.getJobFromHistory('timeout', result='TIMED_OUT')
         with self.jobLog(build_timeout):
             post_flag_path = os.path.join(
-                self.jobdir_root, build_timeout.uuid + '.post.flag')
+                self.jobdir_root, build_timeout.uuid, 'work', 'post_flag')
             self.assertTrue(os.path.exists(post_flag_path))
         build_multiple_run_timeout = self.getJobFromHistory(
             'multiple-run-timeout', result='TIMED_OUT')
         with self.jobLog(build_multiple_run_timeout):
             post_flag_path = os.path.join(
                 self.jobdir_root,
-                build_multiple_run_timeout.uuid + '.post.flag')
+                build_multiple_run_timeout.uuid, 'work', 'post_flag')
             self.assertTrue(os.path.exists(post_flag_path))
             post_zuul_success_flag_path = os.path.join(
                 self.jobdir_root,
-                build_multiple_run_timeout.uuid + '.post-zuul-success.flag')
+                build_multiple_run_timeout.uuid,
+                'work', 'post_zuul_success_flag')
             self.assertFalse(os.path.exists(post_zuul_success_flag_path))
         build_pre_timeout = self.getJobFromHistory('pre-timeout')
         with self.jobLog(build_pre_timeout):
@@ -4369,7 +4370,7 @@ class FunctionalAnsibleMixIn(object):
             # if they should be retried from there.
             self.assertEqual(build_pre_timeout.result, None)
             post_flag_path = os.path.join(
-                self.jobdir_root, build_pre_timeout.uuid + '.post.flag')
+                self.jobdir_root, build_pre_timeout.uuid, 'work', 'post_flag')
             self.assertTrue(os.path.exists(post_flag_path))
         build_post_timeout = self.getJobFromHistory('post-timeout')
         with self.jobLog(build_post_timeout):
@@ -4413,26 +4414,26 @@ class FunctionalAnsibleMixIn(object):
         with self.jobLog(build_python27):
             self.assertEqual(build_python27.result, 'SUCCESS')
             flag_path = os.path.join(self.jobdir_root,
-                                     build_python27.uuid + '.flag')
+                                     build_python27.uuid, 'work', 'flag')
             self.assertTrue(os.path.exists(flag_path))
-            copied_path = os.path.join(self.jobdir_root, build_python27.uuid +
-                                       '.copied')
+            copied_path = os.path.join(self.jobdir_root, build_python27.uuid,
+                                       'work', 'copied')
             self.assertTrue(os.path.exists(copied_path))
-            failed_path = os.path.join(self.jobdir_root, build_python27.uuid +
-                                       '.failed')
+            failed_path = os.path.join(self.jobdir_root, build_python27.uuid,
+                                       'work', 'failed')
             self.assertFalse(os.path.exists(failed_path))
             pre_flag_path = os.path.join(
-                self.jobdir_root, build_python27.uuid + '.pre.flag')
+                self.jobdir_root, build_python27.uuid, 'work', 'pre_flag')
             self.assertTrue(os.path.exists(pre_flag_path))
             post_flag_path = os.path.join(
-                self.jobdir_root, build_python27.uuid + '.post.flag')
+                self.jobdir_root, build_python27.uuid, 'work', 'post_flag')
             self.assertTrue(os.path.exists(post_flag_path))
             bare_role_flag_path = os.path.join(self.jobdir_root,
-                                               build_python27.uuid +
-                                               '.bare-role.flag')
+                                               build_python27.uuid,
+                                               'work', 'bare_role_flag')
             self.assertTrue(os.path.exists(bare_role_flag_path))
             secrets_path = os.path.join(self.jobdir_root,
-                                        build_python27.uuid + '.secrets')
+                                        build_python27.uuid, 'work', 'secrets')
             with open(secrets_path) as f:
                 self.assertEqual(f.read(), "test-username test-password")
         build_bubblewrap = self.getJobFromHistory('bubblewrap')
@@ -4475,20 +4476,21 @@ class TestPrePlaybooks(AnsibleZuulTestCase):
     def test_pre_playbook_fail(self):
         # Test that we run the post playbooks (but not the actual
         # playbook) when a pre-playbook fails.
+        self.executor_server.keep_jobdir = True
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
         build = self.getJobFromHistory('python27')
         self.assertIsNone(build.result)
         self.assertIn('RETRY_LIMIT', A.messages[0])
-        flag_path = os.path.join(self.test_root, build.uuid +
-                                 '.main.flag')
+        flag_path = os.path.join(self.test_root, build.uuid, 'work',
+                                 'main_flag')
         self.assertFalse(os.path.exists(flag_path))
-        pre_flag_path = os.path.join(self.test_root, build.uuid +
-                                     '.pre.flag')
+        pre_flag_path = os.path.join(self.test_root, build.uuid, 'work',
+                                     'pre_flag')
         self.assertFalse(os.path.exists(pre_flag_path))
         post_flag_path = os.path.join(
-            self.jobdir_root, build.uuid + '.post.flag')
+            self.jobdir_root, build.uuid, 'work', 'post_flag')
         self.assertTrue(os.path.exists(post_flag_path),
                         "The file %s should exist" % post_flag_path)
 
@@ -4553,6 +4555,7 @@ class TestPostPlaybooks(AnsibleZuulTestCase):
         # Test that when we abort a job in the post playbook, that we
         # don't send back POST_FAILURE.
         self.executor_server.verbose = True
+        self.executor_server.keep_jobdir = True
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
 
@@ -4561,8 +4564,8 @@ class TestPostPlaybooks(AnsibleZuulTestCase):
                 break
         build = self.builds[0]
 
-        post_start = os.path.join(self.jobdir_root, build.uuid +
-                                  '.post_start.flag')
+        post_start = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                  'post_start_flag')
         for _ in iterate_timeout(60, 'job post running'):
             if os.path.exists(post_start):
                 break
@@ -4573,8 +4576,8 @@ class TestPostPlaybooks(AnsibleZuulTestCase):
         build = self.getJobFromHistory('python27')
         self.assertEqual('ABORTED', build.result)
 
-        post_end = os.path.join(self.jobdir_root, build.uuid +
-                                '.post_end.flag')
+        post_end = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                'post_end_flag')
         self.assertTrue(os.path.exists(post_start))
         self.assertFalse(os.path.exists(post_end))
 
@@ -4585,6 +4588,7 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
     def test_cleanup_playbook_success(self):
         # Test that the cleanup run is performed
         self.executor_server.verbose = True
+        self.executor_server.keep_jobdir = True
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
 
@@ -4593,26 +4597,28 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
                 break
         build = self.builds[0]
 
-        post_start = os.path.join(self.jobdir_root, build.uuid +
-                                  '.post_start.flag')
+        post_start = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                  'post_start_flag')
         for _ in iterate_timeout(60, 'job post running'):
             if os.path.exists(post_start):
                 break
-        with open(os.path.join(self.jobdir_root, build.uuid, 'test_wait'),
+        with open(os.path.join(self.jobdir_root, build.uuid,
+                               'work', 'test_wait'),
                   "w") as of:
             of.write("continue")
         self.waitUntilSettled()
 
         build = self.getJobFromHistory('python27')
         self.assertEqual('SUCCESS', build.result)
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         with open(cleanup_flag) as f:
             self.assertEqual('True', f.readline())
 
     def test_cleanup_playbook_failure(self):
         # Test that the cleanup run is performed
+        self.executor_server.keep_jobdir = True
         self.executor_server.verbose = True
 
         in_repo_conf = textwrap.dedent(
@@ -4632,14 +4638,15 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
 
         build = self.getJobFromHistory('python27-failure')
         self.assertEqual('FAILURE', build.result)
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         with open(cleanup_flag) as f:
             self.assertEqual('False', f.readline())
 
     def test_cleanup_playbook_abort(self):
         # Test that when we abort a job the cleanup run is performed
+        self.executor_server.keep_jobdir = True
         self.executor_server.verbose = True
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
@@ -4649,8 +4656,8 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
                 break
         build = self.builds[0]
 
-        post_start = os.path.join(self.jobdir_root, build.uuid +
-                                  '.post_start.flag')
+        post_start = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                  'post_start_flag')
         for _ in iterate_timeout(60, 'job post running'):
             if os.path.exists(post_start):
                 break
@@ -4661,10 +4668,10 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
         build = self.getJobFromHistory('python27')
         self.assertEqual('ABORTED', build.result)
 
-        post_end = os.path.join(self.jobdir_root, build.uuid +
-                                '.post_end.flag')
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        post_end = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                'post_end_flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         self.assertTrue(os.path.exists(post_start))
         self.assertFalse(os.path.exists(post_end))
@@ -4693,6 +4700,7 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
 
     def test_cleanup_playbook_inheritance(self):
         # Test nested level aborting
+        self.executor_server.keep_jobdir = True
         self.executor_server.verbose = True
 
         in_repo_conf = textwrap.dedent(
@@ -4712,8 +4720,8 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
 
         build = self.getJobFromHistory('child-cleanup-failure')
         self.assertEqual('FAILURE', build.result)
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         with open(cleanup_flag) as f:
             self.assertEqual('False', f.readline())
@@ -4754,6 +4762,7 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
 
     def test_cleanup_playbook_inheritance_old_syntax(self):
         # Test nested level aborting with the old cleanup-run syntax
+        self.executor_server.keep_jobdir = True
         self.executor_server.verbose = True
 
         in_repo_conf = textwrap.dedent(
@@ -4773,8 +4782,8 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
 
         build = self.getJobFromHistory('child-cleanup-failure-old-syntax')
         self.assertEqual('FAILURE', build.result)
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         with open(cleanup_flag) as f:
             self.assertEqual('False', f.readline())
@@ -4855,6 +4864,7 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
     def test_cleanup_playbook_unreachable(self):
         # Test that an unreachable cleanup-run playbook produces a
         # POST_FAILURE
+        self.executor_server.keep_jobdir = True
         self.executor_server.verbose = True
 
         in_repo_conf = textwrap.dedent(
@@ -4874,8 +4884,8 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
 
         build = self.getJobFromHistory('child-cleanup-failure-unreachable')
         self.assertEqual('POST_FAILURE', build.result)
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         with open(cleanup_flag) as f:
             self.assertEqual('False', f.readline())
@@ -4883,6 +4893,7 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
     def test_cleanup_playbook_unreachable_old_syntax(self):
         # Test that an unreachable cleanup-run playbook produces a
         # does not override the normal FAILURE using the old syntax
+        self.executor_server.keep_jobdir = True
         self.executor_server.verbose = True
 
         in_repo_conf = textwrap.dedent(
@@ -4903,8 +4914,8 @@ class TestCleanupPlaybooks(AnsibleZuulTestCase):
         build = self.getJobFromHistory(
             'child-cleanup-failure-unreachable-old-syntax')
         self.assertEqual('FAILURE', build.result)
-        cleanup_flag = os.path.join(self.jobdir_root, build.uuid +
-                                    '.cleanup.flag')
+        cleanup_flag = os.path.join(self.jobdir_root, build.uuid, 'work',
+                                    'cleanup_flag')
         self.assertTrue(os.path.exists(cleanup_flag))
         with open(cleanup_flag) as f:
             self.assertEqual('False', f.readline())
@@ -4924,8 +4935,8 @@ class TestPlaybookSemaphore(AnsibleZuulTestCase):
         build1 = self.builds[0]
 
         # Wait for the first job to be running the mutexed playbook
-        run1_start = os.path.join(self.jobdir_root, build1.uuid +
-                                  '.run_start.flag')
+        run1_start = os.path.join(self.jobdir_root, build1.uuid, 'work',
+                                  'run_start_flag')
         for _ in iterate_timeout(60, 'job1 running'):
             if os.path.exists(run1_start):
                 break
@@ -4947,19 +4958,21 @@ class TestPlaybookSemaphore(AnsibleZuulTestCase):
                 break
 
         # Wait for build1 to finish
-        with open(os.path.join(self.jobdir_root, build1.uuid, 'test_wait'),
+        with open(os.path.join(self.jobdir_root, build1.uuid,
+                               'work', 'test_wait'),
                   "w") as of:
             of.write("continue")
 
         # Wait for the second job to be running the mutexed playbook
-        run2_start = os.path.join(self.jobdir_root, build2.uuid +
-                                  '.run_start.flag')
+        run2_start = os.path.join(self.jobdir_root, build2.uuid, 'work',
+                                  'run_start_flag')
         for _ in iterate_timeout(60, 'job2 running'):
             if os.path.exists(run2_start):
                 break
 
         # Release build2 and wait to finish
-        with open(os.path.join(self.jobdir_root, build2.uuid, 'test_wait'),
+        with open(os.path.join(self.jobdir_root, build2.uuid,
+                               'work', 'test_wait'),
                   "w") as of:
             of.write("continue")
         self.waitUntilSettled()
@@ -5037,8 +5050,8 @@ class TestPlaybookSemaphore(AnsibleZuulTestCase):
         build1 = self.builds[0]
 
         # Wait for the first job to be running the mutexed playbook
-        run1_start = os.path.join(self.jobdir_root, build1.uuid +
-                                  '.run_start.flag')
+        run1_start = os.path.join(self.jobdir_root, build1.uuid, 'work',
+                                  'run_start_flag')
         for _ in iterate_timeout(60, 'job1 running'):
             if os.path.exists(run1_start):
                 break
@@ -5076,7 +5089,8 @@ class TestPlaybookSemaphore(AnsibleZuulTestCase):
                 break
 
         # Wait for build1 to finish
-        with open(os.path.join(self.jobdir_root, build1.uuid, 'test_wait'),
+        with open(os.path.join(self.jobdir_root, build1.uuid,
+                               'work', 'test_wait'),
                   "w") as of:
             of.write("continue")
 
@@ -5099,8 +5113,8 @@ class TestPlaybookSemaphore(AnsibleZuulTestCase):
         build1 = self.builds[0]
 
         # Wait for the first job to be running the mutexed playbook
-        run1_start = os.path.join(self.jobdir_root, build1.uuid +
-                                  '.run_start.flag')
+        run1_start = os.path.join(self.jobdir_root, build1.uuid, 'work',
+                                  'run_start_flag')
         for _ in iterate_timeout(60, 'job1 running'):
             if os.path.exists(run1_start):
                 break
@@ -5137,7 +5151,8 @@ class TestPlaybookSemaphore(AnsibleZuulTestCase):
                 break
 
         # Wait for build1 to finish
-        with open(os.path.join(self.jobdir_root, build1.uuid, 'test_wait'),
+        with open(os.path.join(self.jobdir_root, build1.uuid,
+                               'work', 'test_wait'),
                   "w") as of:
             of.write("continue")
 
@@ -7311,8 +7326,8 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 1:
                 break
         A_build = self.builds[0]
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.failure_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'failure_start_flag')
         for _ in iterate_timeout(30, 'job A running'):
             if os.path.exists(start):
                 break
@@ -7327,14 +7342,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 2:
                 break
         B_build = self.builds[1]
-        start = os.path.join(self.jobdir_root, B_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Continue the first job which will fail early")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'failure_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7349,14 +7364,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                     break
 
         self.log.debug("Wait for the first job to be in its post-run playbook")
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job A post running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Allow the first job to finish")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7368,7 +7383,7 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                 break
 
         self.log.debug("Allow the restarted second job to finish")
-        flag_path = os.path.join(self.jobdir_root, B_build2.uuid,
+        flag_path = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7396,8 +7411,8 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 1:
                 break
         A_build = self.builds[0]
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.failure_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'failure_start_flag')
         for _ in iterate_timeout(30, 'job A running'):
             if os.path.exists(start):
                 break
@@ -7412,14 +7427,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 2:
                 break
         B_build = self.builds[1]
-        start = os.path.join(self.jobdir_root, B_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Continue the first job which will fail early")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'failure_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7435,8 +7450,9 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             for b in self.builds[:]:
                 if b.name == 'pre-failure':
                     try:
-                        flag_path = os.path.join(self.jobdir_root, b.uuid,
-                                                 'failure_continue_flag')
+                        flag_path = os.path.join(
+                            self.jobdir_root, b.uuid,
+                            'work', 'failure_continue_flag')
                         with open(flag_path, "w") as of:
                             of.write("continue")
                     except Exception:
@@ -7453,14 +7469,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                     break
 
         self.log.debug("Wait for the second change to start its job")
-        start = os.path.join(self.jobdir_root, B_build2.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Allow the restarted second job to finish")
-        flag_path = os.path.join(self.jobdir_root, B_build2.uuid,
+        flag_path = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7492,8 +7508,8 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 1:
                 break
         A_build = self.builds[0]
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.failure_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'failure_start_flag')
         for _ in iterate_timeout(30, 'job A running'):
             if os.path.exists(start):
                 break
@@ -7508,14 +7524,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 2:
                 break
         B_build = self.builds[1]
-        start = os.path.join(self.jobdir_root, B_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Continue the first job which will fail early")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'failure_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7531,8 +7547,9 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             for b in self.builds[:]:
                 if b.name == 'pre-post-failure':
                     try:
-                        flag_path = os.path.join(self.jobdir_root, b.uuid,
-                                                 'failure_continue_flag')
+                        flag_path = os.path.join(
+                            self.jobdir_root, b.uuid, 'work',
+                            'failure_continue_flag')
                         with open(flag_path, "w") as of:
                             of.write("continue")
                     except Exception:
@@ -7549,14 +7566,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                     break
 
         self.log.debug("Wait for the second change to start its job")
-        start = os.path.join(self.jobdir_root, B_build2.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Allow the restarted second job to finish")
-        flag_path = os.path.join(self.jobdir_root, B_build2.uuid,
+        flag_path = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7583,8 +7600,8 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 1:
                 break
         A_build = self.builds[0]
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.failure_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'failure_start_flag')
         for _ in iterate_timeout(30, 'job A running'):
             if os.path.exists(start):
                 break
@@ -7599,14 +7616,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 3:
                 break
         B_build = self.builds[2]
-        start = os.path.join(self.jobdir_root, B_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Continue the first job which will fail early")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'failure_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7621,14 +7638,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                     break
 
         self.log.debug("Wait for the first job to be in its post-run playbook")
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job A post running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Allow the first job to finish")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7640,14 +7657,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                 break
 
         self.log.debug("Wait for the second change to start its job")
-        start = os.path.join(self.jobdir_root, B_build2.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Allow the restarted second job to finish")
-        flag_path = os.path.join(self.jobdir_root, B_build2.uuid,
+        flag_path = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7674,8 +7691,8 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 1:
                 break
         A_build = self.builds[0]
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.output_failure_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'output_failure_start_flag')
         for _ in iterate_timeout(30, 'job A running'):
             if os.path.exists(start):
                 break
@@ -7690,14 +7707,14 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             if len(self.builds) == 2:
                 break
         B_build = self.builds[1]
-        start = os.path.join(self.jobdir_root, B_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, B_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job B running'):
             if os.path.exists(start):
                 break
 
         self.log.debug("Continue the first job which will output failure text")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'output_failure_continue1_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7712,15 +7729,15 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                     break
 
         self.log.debug("Continue the first job on to actual failure")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'output_failure_continue2_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
             of.write("continue")
 
         self.log.debug("Wait for the first job to be in its post-run playbook")
-        start = os.path.join(self.jobdir_root, A_build.uuid +
-                             '.wait_start.flag')
+        start = os.path.join(self.jobdir_root, A_build.uuid, 'work',
+                             'wait_start_flag')
         for _ in iterate_timeout(30, 'job A post running'):
             if os.path.exists(start):
                 break
@@ -7734,7 +7751,7 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                             '"^.*output indicates failure.*$"' in output)
 
         self.log.debug("Allow the first job to finish")
-        flag_path = os.path.join(self.jobdir_root, A_build.uuid,
+        flag_path = os.path.join(self.jobdir_root, A_build.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -7746,7 +7763,7 @@ class TestEarlyFailure(AnsibleZuulTestCase):
                 break
 
         self.log.debug("Allow the restarted second job to finish")
-        flag_path = os.path.join(self.jobdir_root, B_build2.uuid,
+        flag_path = os.path.join(self.jobdir_root, B_build2.uuid, 'work',
                                  'wait_continue_flag')
         self.log.debug("Writing %s", flag_path)
         with open(flag_path, "w") as of:
@@ -9947,7 +9964,7 @@ class TestUnreachable(AnsibleZuulTestCase):
         retried_builds = set()
         for build in self.history:
             will_retry_flag = os.path.join(
-                self.jobdir_root, f'{build.uuid}.will-retry.flag')
+                self.jobdir_root, build.uuid, 'work', 'will_retry_flag')
             self.assertTrue(os.path.exists(will_retry_flag))
             with open(will_retry_flag) as f:
                 will_retry = f.readline()

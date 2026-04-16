@@ -1,6 +1,6 @@
 - hosts: all
   tasks:
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.post-zuul-success.flag"
+        path: "{{zuul.executor.work_root}}/post_zuul_success_flag"
         state: touch
       when: zuul_success | bool

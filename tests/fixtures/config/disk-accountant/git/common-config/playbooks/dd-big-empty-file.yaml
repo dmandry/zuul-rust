@@ -1,6 +1,6 @@
 - hosts: localhost
   tasks:
-    - command: dd if=/dev/zero of=toobig bs=1M count=2
+    - command: dd if=/dev/zero of={{zuul.executor.work_root}}/toobig bs=1M count=2
     - command: sync
     - wait_for:
         delay: 10

@@ -17,4 +17,4 @@
   tasks:
     - copy:
         content: "{{ zuul_will_retry }}"
-        dest: "{{ zuul._test.test_root }}/builds/{{ zuul.build }}.will-retry.flag"
+        dest: "{{ zuul.executor.work_root }}/will_retry_flag"

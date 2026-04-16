@@ -1,17 +1,17 @@
 - hosts: localhost
   tasks:
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.output_failure_start.flag"
+        path: "{{zuul.executor.work_root}}/output_failure_start_flag"
         state: touch
     - debug:
-        msg: "Waiting for {{zuul._test.test_root}}/builds/{{zuul.build}}/output_failure_continue1_flag"
+        msg: "Waiting for {{zuul.executor.work_root}}/output_failure_continue1_flag"
     - wait_for:
         state: present
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}/output_failure_continue1_flag"
+        path: "{{zuul.executor.work_root}}/output_failure_continue1_flag"
     - shell: "echo This output indicates failure"
     - debug:
-        msg: "Waiting for {{zuul._test.test_root}}/builds/{{zuul.build}}/output_failure_continue2_flag"
+        msg: "Waiting for {{zuul.executor.work_root}}/output_failure_continue2_flag"
     - wait_for:
         state: present
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}/output_failure_continue2_flag"
+        path: "{{zuul.executor.work_root}}/output_failure_continue2_flag"
 # Do not fail; this test also verifies that an early failure is sticky.

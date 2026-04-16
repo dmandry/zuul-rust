@@ -1,5 +1,5 @@
 - hosts: all
   tasks:
     - invalid-task:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.post.flag"
+        path: "{{zuul.executor.work_root}}/post_flag"
         state: touch

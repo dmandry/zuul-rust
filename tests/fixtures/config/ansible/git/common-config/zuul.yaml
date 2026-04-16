@@ -85,7 +85,7 @@
     pre-run: playbooks/pre.yaml
     post-run: playbooks/post.yaml
     vars:
-      flagpath: '{{zuul._test.test_root}}/builds/{{zuul.build}}.flag'
+      flagpath: '{{zuul.executor.work_root}}/flag'
     roles:
       - zuul: bare-role
     secrets:

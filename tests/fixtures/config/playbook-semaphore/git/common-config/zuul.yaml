@@ -26,7 +26,7 @@
 - job:
     name: test-job
     vars:
-      waitpath: '{{zuul._test.test_root}}/builds/{{zuul.build}}/test_wait'
+      waitpath: '{{zuul.executor.work_root}}/test_wait'
     run:
       - name: playbooks/run.yaml
         semaphores: test-semaphore
