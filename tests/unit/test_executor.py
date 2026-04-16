@@ -1435,8 +1435,7 @@ class AnsibleCallbackConfigsMixin:
                          c['callback_test_callback']['file_name'])
         callback_result_file = os.path.join(
             self.getJobFromHistory('callback-test').jobdir.root,
-            'trusted/project_0/review.example.com/',
-            'common-config/playbooks/callback_plugins/',
+            'work',
             c['callback_test_callback']['file_name'])
         self.assertTrue(os.path.isfile(callback_result_file))
         build = self.getJobFromHistory('callback-test', result='SUCCESS')
@@ -1805,3 +1804,33 @@ class TestExecutorOriginRemote(ZuulTestCase):
         self.executor_server.hold_jobs_in_build = False
         self.executor_server.release()
         self.waitUntilSettled()
+
+
+class TestExecutorHomedir(AnsibleZuulTestCase):
+    tenant_config_file = 'config/homedir/main.yaml'
+
+    def test_path_blocklist(self):
+        # Test that the files in the path blocklist are deleted
+        # between runs.
+        files = {'test': 'run'}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=files)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='testjob', result='SUCCESS'),
+        ], ordered=False)
+
+    def test_path_blocklist_symlink(self):
+        # Test that we detect symlinks when unlinking.
+        files = {'link': 'run'}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=files)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([])
+        self.assertEqual(A.reported, 1)
+        self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
+        self.assertIn('Symlink detected', A.messages[0])

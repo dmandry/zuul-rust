@@ -32,7 +32,7 @@ class CallbackModule(CallbackBase):
         self.file_name = self.get_option('file_name')
 
     def v2_on_any(self, *args, **kwargs):
-        path = os.path.join(os.path.dirname(__file__), self.file_name)
+        path = os.path.join(os.environ['ZUUL_JOBDIR'], 'work', self.file_name)
         self._display.display("Touching file: {}".format(path))
         with open(path, 'w'):
             pass

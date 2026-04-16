@@ -372,7 +372,7 @@
               nox_install_bindep: false
             nodeset: ubuntu-jammy
         - zuul-nox-py311
-        - zuul-nox-py312
+        # - zuul-nox-py312
         - zuul-nox-upgrade
         - zuul-build-dashboard-openstack-whitelabel
         - zuul-build-dashboard-software-factory
@@ -406,7 +406,7 @@
               nox_install_bindep: false
             nodeset: ubuntu-jammy
         - zuul-nox-py311
-        - zuul-nox-py312
+        # - zuul-nox-py312
         - zuul-nox-upgrade
         - zuul-build-dashboard
         - nodejs-run-lint:

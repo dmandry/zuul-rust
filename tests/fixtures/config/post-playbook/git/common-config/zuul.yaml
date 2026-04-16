@@ -25,5 +25,5 @@
     pre-run: playbooks/pre.yaml
     post-run: playbooks/post.yaml
     vars:
-      waitpath: '{{zuul._test.test_root}}/builds/{{zuul.build}}/test_wait'
+      waitpath: '{{zuul.executor.work_root}}/test_wait'
     run: playbooks/python27.yaml

@@ -1,0 +1,9 @@
+---
+security:
+  - |
+    Some files in the home directory of the user that is used to run
+    playbooks in builds will be removed at the end of each playbook.
+
+    This is currently limited to the .ssh/config and .kube/config
+    files, but in the future, Zuul may further limit the files in the
+    home directory that may be shared between playbooks.

@@ -69,50 +69,6 @@ class SparsePaths(enum.Enum):
     FULL = 1   # Checkout everything (disable)
 
 
-class LineMapper:
-    hunk_re = re.compile(r'^@@ -\d+,\d+ \+(\d+),(\d+) @@$')
-
-    def __init__(self, diff_output):
-        hunk_start = None
-        hunk_range = None
-        hunk_line = None
-        offsets = []
-        last_offset = None
-        for l in diff_output.split('\n'):
-            m = self.hunk_re.match(l)
-            if m:
-                hunk_start = int(m.group(1))
-                hunk_range = int(m.group(2))
-                hunk_line = 0
-                continue
-            if not hunk_start:
-                continue
-            if hunk_line > hunk_range:
-                # We have somehow run off the end of the hunk;
-                # shouldn't happen.
-                hunk_start = None
-                continue
-            if l[0] == ' ':
-                last_offset = None
-                hunk_line += 1
-                continue
-            if not last_offset:
-                last_offset = [(hunk_start + hunk_line), 0]
-                offsets.append(last_offset)
-            if l[0] == '+':
-                last_offset[1] -= 1
-            elif l[0] == '-':
-                last_offset[1] += 1
-        self.offsets = offsets
-
-    def mapLine(self, lineno):
-        new_lineno = lineno
-        for (start, offset) in self.offsets:
-            if lineno > start:
-                new_lineno += offset
-        return new_lineno
-
-
 class Repo(object):
     retry_attempts = 3
     retry_interval = 30
@@ -1050,12 +1006,6 @@ class Repo(object):
             # the Git config as part of the URL.
             self.remote_url = None
             raise
-
-    def getLineMapper(self, commit, head, filename, zuul_event_id=None):
-        with self.createRepoObject(zuul_event_id) as repo:
-            diff_output = repo.git.diff(
-                f"{commit}..{head}", filename, no_color=True)
-            return LineMapper(diff_output)
 
     def contains(self, hexsha, zuul_event_id=None):
         with self.createRepoObject(zuul_event_id) as repo:

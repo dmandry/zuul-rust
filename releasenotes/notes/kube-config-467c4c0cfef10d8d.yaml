@@ -1,0 +1,11 @@
+---
+security:
+  - |
+    The location of the kubeconfig file that Zuul creates for jobs
+    that use a Kubernetes namespace or pod as a build node has been
+    moved.  It is now outside of the ``work/`` directory and mounted
+    read-only in the build's execution environment, and a KUBECONFIG
+    environment variable is set to point to it.  Any jobs which may
+    have modified or created their own kubeconfig will need to
+    explicitly write to the home directory or the ``work/`` directory,
+    and adjust the KUBECONFIG environment variable.

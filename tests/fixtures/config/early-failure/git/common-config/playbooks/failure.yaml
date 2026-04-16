@@ -1,13 +1,13 @@
 - hosts: localhost
   tasks:
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.failure_start.flag"
+        path: "{{zuul.executor.work_root}}/failure_start_flag"
         state: touch
     # Do not finish until test creates the flag file
     - debug:
-        msg: "Waiting for {{zuul._test.test_root}}/builds/{{zuul.build}}/failure_continue_flag"
+        msg: "Waiting for {{zuul.executor.work_root}}/failure_continue_flag"
     - wait_for:
         state: present
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}/failure_continue_flag"
+        path: "{{zuul.executor.work_root}}/failure_continue_flag"
     - fail:
         msg: FAIL!

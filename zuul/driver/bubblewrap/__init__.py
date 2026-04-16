@@ -179,6 +179,13 @@ class BubblewrapExecutionContext(BaseExecutionContext):
         kwargs['gid'] = gid
         kwargs['uid_fd'] = passwd_r
         kwargs['gid_fd'] = group_r
+        if kwargs.get('share_net', True):
+            bwrap_command.append('--share-net')
+        if ssh_sock := kwargs.get('ssh_auth_sock', None):
+            bwrap_command.extend([
+                '--ro-bind', ssh_sock, ssh_sock,
+            ])
+
         command = [x.format(**kwargs) for x in bwrap_command]
 
         self.log.debug("Bubblewrap command: %s",
@@ -212,8 +219,7 @@ class BubblewrapDriver(Driver, WrapperInterface):
             # Validate basic bwrap functionality before we attempt to run
             # workloads under bwrap.
             context = self.getExecutionContext()
-            popen = context.getPopen(work_dir='/tmp',
-                                     ssh_auth_sock='/dev/null')
+            popen = context.getPopen(work_dir='/tmp')
             p = popen(['id'],
                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             p.communicate()
@@ -289,7 +295,6 @@ class BubblewrapDriver(Driver, WrapperInterface):
             '-n', str(self.oom_score_adj),
             '--',
             'bwrap',
-            '--dir', '/tmp',
             '--tmpfs', '/tmp',
             '--dir', '/var',
             '--dir', '/var/tmp',
@@ -302,14 +307,12 @@ class BubblewrapDriver(Driver, WrapperInterface):
             '--ro-bind', '/etc/resolv.conf', '/etc/resolv.conf',
             '--ro-bind', '/etc/hosts', '/etc/hosts',
             '--ro-bind', '/etc/localtime', '/etc/localtime',
-            '--ro-bind', '{ssh_auth_sock}', '{ssh_auth_sock}',
             '--bind', '{work_dir}', '{work_dir}',
             '--tmpfs', '{work_dir}/tmp',
             '--proc', '/proc',
             '--dev', '/dev',
             '--chdir', '{work_dir}',
             '--unshare-all',
-            '--share-net',
             '--die-with-parent',
             '--uid', '{uid}',
             '--gid', '{gid}',
@@ -362,7 +365,7 @@ def main(args=None):
 
     # The zuul-bwrap command is often run for debugging purposes. An SSH
     # agent may not be necessary or present in that situation.
-    ssh_auth_sock = os.environ.get('SSH_AUTH_SOCK', '/dev/null')
+    ssh_auth_sock = os.environ.get('SSH_AUTH_SOCK', None)
 
     secrets = {}
     if cli_args.secret:

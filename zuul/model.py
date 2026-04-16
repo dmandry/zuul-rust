@@ -10348,6 +10348,7 @@ class Layout(object):
         noop.parent = noop.BASE_JOB_MARKER
         noop.deduplicate = True
         noop.run = (PlaybookContext(None, 'noop.yaml', [], [], []),)
+        noop.final = True
         self.jobs = {'noop': [noop]}
         self.nodesets = {}
         self.secrets = {}

@@ -4,10 +4,10 @@
         path: "{{flagpath}}"
         state: touch
     - copy:
-        src: "{{zuul._test.test_root}}/builds/{{zuul.build}}.flag"
-        dest: "{{zuul._test.test_root}}/builds/{{zuul.build}}.copied"
+        src: "{{zuul.executor.work_root}}/flag"
+        dest: "{{zuul.executor.work_root}}/copied"
     - copy:
         content: "{{test_secret.username}} {{test_secret.password}}"
-        dest: "{{zuul._test.test_root}}/builds/{{zuul.build}}.secrets"
+        dest: "{{zuul.executor.work_root}}/secrets"
   roles:
     - bare-role
