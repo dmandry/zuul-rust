@@ -647,6 +647,7 @@ class JobDir(object):
         #     project_0
         #       <git.example.com>
         #         <project>
+        #   home (mounted in bwrap read-write)
         #   kube (mounted in bwrap read-only)
         #     config
         #   work (mounted in bwrap read-write)
@@ -666,6 +667,8 @@ class JobDir(object):
             tmpdir = tempfile.gettempdir()
         self.root = os.path.realpath(os.path.join(tmpdir, build_uuid))
         os.mkdir(self.root, 0o700)
+        self.home = os.path.join(self.root, 'home')
+        os.makedirs(self.home)
         self.work_root = os.path.join(self.root, 'work')
         os.makedirs(self.work_root)
         self.src_root = os.path.join(self.work_root, 'src')
@@ -3448,12 +3451,11 @@ class AnsibleJob(object):
 
         popen = context.getPopen(
             work_dir=self.jobdir.work_root,
+            home_dir=self.jobdir.home,
             ssh_auth_sock=env_copy.get('SSH_AUTH_SOCK'))
 
         env_copy['ANSIBLE_CONFIG'] = config_file
-        # NOTE(pabelanger): Default HOME variable to jobdir.work_root, as it is
-        # possible we don't bind mount current zuul user home directory.
-        env_copy['HOME'] = self.jobdir.work_root
+        env_copy['HOME'] = self.jobdir.home
 
         with self.proc_lock:
             self.proc_cleanup = playbook.cleanup
