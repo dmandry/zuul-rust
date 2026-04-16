@@ -6,3 +6,13 @@
           - zuul.resources.container.namespace == 'zuul-ci-abcdefg'
           - zuul.resources.container.context == 'zuul-ci-abcdefg:zuul-worker/'
           - zuul.resources.container.pod == 'fedora-abcdefg'
+    - copy:
+        dest: "{{ zuul.executor.work_root }}/../kube/config"
+        content: "This should fail"
+      failed_when: false
+      register: output
+    - debug:
+        var: output
+    - assert:
+        that:
+          - "'kube not writable' in output.msg"
