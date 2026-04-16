@@ -141,8 +141,8 @@ class BubblewrapExecutionContext(BaseExecutionContext):
         # Need users and groups
         uid = os.getuid()
         passwd = list(pwd.getpwuid(uid))
-        # Replace our user's actual home directory with the work dir.
-        passwd = passwd[:5] + [kwargs['work_dir']] + passwd[6:]
+        # Replace our user's actual home directory with the build home dir.
+        passwd = passwd[:5] + [kwargs['home_dir']] + passwd[6:]
         passwd_bytes = b':'.join(
             ['{}'.format(x).encode('utf8') for x in passwd])
         (passwd_r, passwd_w) = os.pipe()
@@ -219,7 +219,8 @@ class BubblewrapDriver(Driver, WrapperInterface):
             # Validate basic bwrap functionality before we attempt to run
             # workloads under bwrap.
             context = self.getExecutionContext()
-            popen = context.getPopen(work_dir='/tmp')
+            popen = context.getPopen(work_dir='/tmp',
+                                     home_dir='/tmp/home')
             p = popen(['id'],
                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             p.communicate()
@@ -228,8 +229,8 @@ class BubblewrapDriver(Driver, WrapperInterface):
                                " ".join(shlex.quote(c)
                                         for c in popen.command + ['id']))
                 raise Exception('bwrap execution validation failed. You can '
-                                'use `zuul-bwrap /tmp id` to investigate '
-                                'manually.')
+                                'use `zuul-bwrap /tmp /tmp/home id` '
+                                'to investigate manually.')
 
     def _is_userns_enabled(self):
         # This is based on the bwrap checks found here:
@@ -309,6 +310,7 @@ class BubblewrapDriver(Driver, WrapperInterface):
             '--ro-bind', '/etc/localtime', '/etc/localtime',
             '--bind', '{work_dir}', '{work_dir}',
             '--tmpfs', '{work_dir}/tmp',
+            '--bind', '{home_dir}', '{home_dir}',
             '--proc', '/proc',
             '--dev', '/dev',
             '--chdir', '{work_dir}',
@@ -360,6 +362,7 @@ def main(args=None):
     parser.add_argument('--rw-paths', nargs='+')
     parser.add_argument('--secret', nargs='+')
     parser.add_argument('work_dir')
+    parser.add_argument('home_dir')
     parser.add_argument('run_args', nargs='+')
     cli_args = parser.parse_args()
 
@@ -378,6 +381,7 @@ def main(args=None):
         secrets)
 
     popen = context.getPopen(work_dir=cli_args.work_dir,
+                             home_dir=cli_args.home_dir,
                              ssh_auth_sock=ssh_auth_sock)
     x = popen(cli_args.run_args)
     x.wait()
