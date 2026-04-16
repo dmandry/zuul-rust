@@ -1,0 +1,9 @@
+- hosts: localhost
+  tasks:
+    - command: ln -s -f /etc/passwd "{{ zuul.executor.log_root }}/job-output.txt"
+    # Pause the job for the side-effect of the executor writing to the
+    # job-output.txt file.
+    - zuul_return:
+        data:
+          zuul:
+            pause: true

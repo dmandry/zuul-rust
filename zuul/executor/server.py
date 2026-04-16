@@ -114,6 +114,21 @@ BLACKLISTED_VARS = dict(
 )
 
 
+@contextlib.contextmanager
+def _safe_open(file, *args, **kwargs):
+    if (resolved := str(pathlib.Path(file).resolve())) != file:
+        raise PathTraversalError(f"Symlink detected {file} -> {resolved}")
+
+    with open(file, *args, **kwargs) as f:
+        yield f
+
+
+def _safe_exists(path):
+    if (resolved := str(pathlib.Path(path).resolve())) != path:
+        raise PathTraversalError(f"Symlink detected {path} -> {resolved}")
+    return os.path.exists(resolved)
+
+
 def _safe_unlink(path):
     if (resolved := str(pathlib.Path(path).resolve())) != path:
         raise PathTraversalError(f"Symlink detected {path} -> {resolved}")
@@ -727,7 +742,7 @@ class JobDir(object):
             json.dump(executor_facts, f)
 
         self.result_data_file = os.path.join(self.work_root, 'results.json')
-        with open(self.result_data_file, 'w'):
+        with _safe_open(self.result_data_file, 'w'):
             pass
         self.known_hosts = os.path.join(ssh_dir, 'known_hosts')
         # This file is not created or used by Zuul, but we forbid its
@@ -748,7 +763,7 @@ class JobDir(object):
         # there is a period of time where the user can click on the live log
         # link on the status page but the log streaming fails because the file
         # is not there yet.
-        with open(self.job_output_file, 'w') as job_output:
+        with _safe_open(self.job_output_file, "w") as job_output:
             job_output.write("{now} | Job console starting\n".format(
                 now=datetime.datetime.now()
             ))
@@ -1202,7 +1217,7 @@ class AnsibleJob(object):
                 self.arguments['zuul']['job'],
                 self.arguments['zuul']['ref'],
                 self.arguments['zuul']['change_url']))
-        with open(self.jobdir.job_output_file, 'a') as job_output:
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
             job_output.write(
                 "{now} |\n"
                 "{now} | Job paused\n".format(now=datetime.datetime.now()))
@@ -1225,7 +1240,7 @@ class AnsibleJob(object):
                 self.arguments['zuul']['job'],
                 self.arguments['zuul']['ref'],
                 self.arguments['zuul']['change_url']))
-        with open(self.jobdir.job_output_file, 'a') as job_output:
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
             job_output.write(
                 "{now} | Job resumed\n"
                 "{now} |\n".format(now=datetime.datetime.now()))
@@ -1488,7 +1503,7 @@ class AnsibleJob(object):
             key = (iv['connection'], iv['project'])
             projects.add(key)
 
-        with open(self.jobdir.job_output_file, 'a') as job_output:
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
             self._jobOutput(job_output, "Updating git repos")
             for (connection, project) in projects:
                 self.log.debug("Updating project %s %s", connection, project)
@@ -1780,7 +1795,7 @@ class AnsibleJob(object):
             return success
 
         node_ids = [x['node'] for x in snapshot_nodes]
-        with open(self.jobdir.job_output_file, 'a') as job_output:
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
             for status in self.executor_server.launcher.snapshotNodeset(
                     self.nodeset, node_ids, self.zuul_event_id):
                 if status.type == status.Type.MESSAGE:
@@ -1863,7 +1878,7 @@ class AnsibleJob(object):
         data = {}
         secret_data = {}
         try:
-            with open(self.jobdir.result_data_file) as f:
+            with _safe_open(self.jobdir.result_data_file) as f:
                 file_data = f.read()
                 if file_data:
                     file_data = json.loads(file_data)
@@ -1876,6 +1891,8 @@ class AnsibleJob(object):
             secret_data_copy = data.copy()
             secret_data_copy.pop('zuul', None)
             check_varnames(secret_data_copy)
+        except PathTraversalError:
+            raise
         except VariableNameError as e:
             self.log.warning("Unable to load result data: %s", str(e))
         except Exception:
@@ -2042,7 +2059,7 @@ class AnsibleJob(object):
         unknown_result = False
         unreachable = False
 
-        with open(self.jobdir.job_output_file, 'a') as job_output:
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
             job_output.write("{now} | Running Ansible setup\n".format(
                 now=datetime.datetime.now()
             ))
@@ -2261,12 +2278,8 @@ class AnsibleJob(object):
         # file and log it.
         json_output = self.jobdir.job_output_file.replace('txt', 'json')
         self.log.debug("Final playbook failed")
-        if not os.path.exists(json_output):
-            self.log.debug("JSON logfile {logfile} is missing".format(
-                logfile=json_output))
-            return
         try:
-            with open(json_output, 'r') as f:
+            with _safe_open(json_output, 'r') as f:
                 output = json.load(f)
             last_playbook = output[-1]
             # Transform json to yaml - because it's easier to read and given
@@ -2275,10 +2288,14 @@ class AnsibleJob(object):
             yaml_out = yaml.safe_dump(last_playbook, default_flow_style=False)
             for line in yaml_out.split('\n'):
                 self.log.debug(line)
+        except PathTraversalError:
+            raise
+        except FileNotFoundError:
+            self.log.debug(f"JSON logfile {json_output} is missing")
+            return
         except Exception:
             self.log.exception(
-                "Could not decode json from {logfile}".format(
-                    logfile=json_output))
+                f"Could not decode json from {json_output}")
 
     def getHostList(self, args, nodes):
         hosts = []
@@ -3150,16 +3167,19 @@ class AnsibleJob(object):
         # Load the unreachable file and update our running scoreboard
         # of unreachable hosts.
         try:
-            for line in open(self.jobdir.job_unreachable_file):
-                node = line.strip()
-                self.log.debug("Noting %s as unreachable", node)
-                self.unreachable_nodes.add(node)
+            with _safe_open(self.jobdir.job_unreachable_file, 'r') as f:
+                for line in f.readlines():
+                    node = line.strip()
+                    self.log.debug("Noting %s as unreachable", node)
+                    self.unreachable_nodes.add(node)
+        except PathTraversalError:
+            raise
         except Exception:
-            self.log.error("Error updating unreachable hosts:")
+            self.log.exception("Error updating unreachable hosts:")
         try:
             os.unlink(self.jobdir.job_unreachable_file)
         except Exception:
-            self.log.error("Error unlinking unreachable host file")
+            self.log.exception("Error unlinking unreachable host file")
 
     def writeDebugInventory(self):
         # This file is unused by Zuul, but the base jobs copy it to logs
@@ -3534,7 +3554,7 @@ class AnsibleJob(object):
         # TODO: Investigate whether the unreachable callback can be
         # removed in favor of the ansible result log stream (see above
         # in pre-fail)
-        if ret == 3 or os.path.exists(self.jobdir.job_unreachable_file):
+        if ret == 3 or _safe_exists(self.jobdir.job_unreachable_file):
             # AnsibleHostUnreachable: We had a network issue connecting to
             # our zuul-worker.
             self.updateUnreachableHosts()
@@ -3595,7 +3615,7 @@ class AnsibleJob(object):
                 line = line.decode('utf-8').rstrip()
                 ansible_error_lines.append(line)
         if ansible_error_lines:
-            with open(self.jobdir.job_output_file, 'a') as job_output:
+            with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
                 for line in ansible_error_lines:
                     job_output.write("{now} | {line}\n".format(
                         now=datetime.datetime.now(),
@@ -3748,7 +3768,7 @@ class AnsibleJob(object):
             msg = msg.format(phase=phase, step=step, trusted=trusted,
                              playbook=playbook, branch=branch)
 
-        with open(self.jobdir.job_output_file, 'a') as job_output:
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
             job_output.write("{now} | {msg}\n".format(
                 now=datetime.datetime.now(),
                 msg=msg))
@@ -3928,50 +3948,55 @@ class AnsibleJob(object):
     def addPlaybookToJson(self, playbook, phase, index, message, start, end):
         # Append debug info to the job-output.json file. Note this needs to
         # work in conjunction with the Ansible zuul_json callback module.
-        output_path = os.path.splitext(
-            self.jobdir.job_output_file)[0] + '.json'
-        first_time = False
-        if not os.path.exists(output_path):
-            # The first playbook failed to write. Set up json then append.
-            first_time = True
-            with open(output_path, 'w') as outfile:
-                outfile.write('[\n\n]\n')
-        self.writePlaybookJson(output_path, first_time, playbook,
-                               phase, index, message, start, end)
+        output_filename = self.jobdir.job_output_file.replace(
+            'txt', 'json')
 
-    def writePlaybookJson(self, output_path, first_time, playbook,
-                          phase, index, message, start, end):
-        with open(output_path, 'r+') as outfile:
-            file_len = outfile.seek(0, os.SEEK_END)
-            # Remove three bytes to eat the trailing newline written by the
-            # json.dump. This puts the ',' on the end of lines.
+        def _write(mode):
+            with _safe_open(output_filename, mode) as f:
+                self.writePlaybookToJson(
+                    f, playbook, phase, index, message, start, end)
+
+        try:
+            _write('r+')
+        except FileNotFoundError:
+            _write('w')
+
+    def writePlaybookToJson(self, outfile, playbook, phase, index, message,
+                            start, end):
+        file_len = outfile.seek(0, os.SEEK_END)
+        if file_len == 0:
+            # This is a new file without any content
+            outfile.write('[\n')
+        else:
+            # Existing file: Remove three bytes to eat the trailing
+            # '\n]\n' and add the ',' on the end of the last line.
             outfile.seek(file_len - 3)
-            if not first_time:
-                outfile.write(',\n')
-            playbook_info = {}
-            playbook_info['playbook'] = playbook.canonical_name_and_path
-            playbook_info['branch'] = playbook.branch
-            playbook_info['phase'] = phase
-            # Index is a string for some reason
-            playbook_info['index'] = str(index)
-            playbook_info['stats'] = {}
-            playbook_info['trusted'] = playbook.trusted
-            playbook_info['plays'] = [{
-                'play': {
-                    'name': message
-                },
-                'tasks': []
-            }]
-            if start and end:
-                playbook_info['plays'][0]['play']['duration'] = {
-                    'start': datetime.datetime.fromtimestamp(
-                        start, tz=datetime.timezone.utc).isoformat(),
-                    'end': datetime.datetime.fromtimestamp(
-                        end, tz=datetime.timezone.utc).isoformat(),
-                }
-            json.dump(playbook_info, outfile,
-                      indent=4, sort_keys=True, separators=(',', ': '))
-            outfile.write('\n]\n')
+            outfile.write(',\n')
+
+        playbook_info = {}
+        playbook_info['playbook'] = playbook.canonical_name_and_path
+        playbook_info['branch'] = playbook.branch
+        playbook_info['phase'] = phase
+        # Index is a string for some reason
+        playbook_info['index'] = str(index)
+        playbook_info['stats'] = {}
+        playbook_info['trusted'] = playbook.trusted
+        playbook_info['plays'] = [{
+            'play': {
+                'name': message
+            },
+            'tasks': []
+        }]
+        if start and end:
+            playbook_info['plays'][0]['play']['duration'] = {
+                'start': datetime.datetime.fromtimestamp(
+                    start, tz=datetime.timezone.utc).isoformat(),
+                'end': datetime.datetime.fromtimestamp(
+                    end, tz=datetime.timezone.utc).isoformat(),
+            }
+        json.dump(playbook_info, outfile,
+                  indent=4, sort_keys=True, separators=(',', ': '))
+        outfile.write('\n]\n')
 
 
 class ExecutorServer(BaseMergeServer):
