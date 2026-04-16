@@ -950,9 +950,10 @@ class TestLauncher(LauncherBaseTestCase):
         inv_path = os.path.join(build.jobdir.root, 'ansible', 'inventory.yaml')
         with open(inv_path, 'r') as f:
             inventory = yaml.safe_load(f)
-        instance_id = (inventory['all']['hosts']['controller']['zuul_node']
-                                ['node_properties']['instance_id'])
+        zuul_node_vars = inventory['all']['hosts']['controller']['zuul_node']
+        instance_id = zuul_node_vars['node_properties']['instance_id']
         self.assertTrue(instance_id.startswith('i-'))
+        self.assertFalse(zuul_node_vars['reusable'])
 
         self.executor_server.hold_jobs_in_build = False
         self.executor_server.release()

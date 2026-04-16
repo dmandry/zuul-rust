@@ -41,6 +41,7 @@ class TestStaticDriver(ZuulTestCase):
         self.assertIsNotNone(pnode.interface_ip)
         self.assertIsNone(pnode.cloud)
         self.assertIsNone(pnode.region)
+        self.assertTrue(pnode.reusable)
         if checks := self.test_config.driver.static.get('node_checks'):
             checks(self, pnode)
 

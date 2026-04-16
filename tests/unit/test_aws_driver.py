@@ -293,6 +293,7 @@ class TestAwsDriver(AwsBaseTest):
             ['Encrypted'], True)
         self.assertTrue(pnode.node_properties['spot'])
         self.assertTrue(pnode.node_properties['instance_id'].startswith('i-'))
+        self.assertFalse(pnode.reusable)
         instance = self.ec2_client.describe_instance_attribute(
             InstanceId=pnode.aws_instance_id,
             Attribute='userData',
