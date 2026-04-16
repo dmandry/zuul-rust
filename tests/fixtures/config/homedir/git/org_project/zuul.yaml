@@ -1,0 +1,17 @@
+- job:
+    name: testjob
+    run: playbooks/test.yaml
+    files:
+      - test
+
+- job:
+    name: linkjob
+    run: playbooks/symlink.yaml
+    files:
+      - link
+
+- project:
+    check:
+      jobs:
+        - testjob
+        - linkjob

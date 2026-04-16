@@ -22,6 +22,7 @@ import jwt
 import logging
 import multiprocessing
 import os
+import pathlib
 import psutil
 import re
 import shutil
@@ -113,6 +114,12 @@ BLACKLISTED_VARS = dict(
 )
 
 
+def _safe_unlink(path):
+    if (resolved := str(pathlib.Path(path).resolve())) != path:
+        raise PathTraversalError(f"Symlink detected {path} -> {resolved}")
+    return os.unlink(resolved)
+
+
 class VerboseCommand(commandsocket.Command):
     name = 'verbose'
     help = 'Enable Ansible verbose mode'
@@ -167,6 +174,10 @@ class ExecutorError(Exception):
 
 
 class RoleNotFoundError(ExecutorError):
+    pass
+
+
+class PathTraversalError(ExecutorError):
     pass
 
 
@@ -719,6 +730,12 @@ class JobDir(object):
         with open(self.result_data_file, 'w'):
             pass
         self.known_hosts = os.path.join(ssh_dir, 'known_hosts')
+        # This file is not created or used by Zuul, but we forbid its
+        # use in jobs.
+        self.path_blocklist = [
+            os.path.join(self.work_root, '.ssh', 'config'),
+            os.path.join(self.work_root, '.kube', 'config'),
+        ]
         self.inventory = os.path.join(self.ansible_root, 'inventory.yaml')
         self.logging_json = os.path.join(self.ansible_root, 'logging.json')
         self.playbooks = []  # The list of candidate playbooks
@@ -3293,6 +3310,17 @@ class AnsibleJob(object):
     def runAnsible(self, cmd, timeout, playbook, ansible_version,
                    allow_pre_fail, wrapped=True, cleanup=False,
                    phase=None, index=None):
+        # Cleanup any forbidden files in the home directory.
+        # TODO: move the home directory to a subdir of work/ and add a
+        # job-based allowlist of files to explicitly copy between
+        # playbook runs.
+
+        for path in self.jobdir.path_blocklist:
+            try:
+                _safe_unlink(path)
+            except FileNotFoundError:
+                pass
+
         config_file = playbook.ansible_config
         env_copy = {key: value
                     for key, value in os.environ.copy().items()
