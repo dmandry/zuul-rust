@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4f073d40_f9163f05",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-04-16T12:31:24Z",
+      "side": 1,
+      "message": "I think we should also document this new flag here: https://zuul-ci.org/docs/zuul/latest/job-content.html#var-nodepool\n\nUnrelated to your change, I think we should also document the new `zuul_node` structure as well (granted currently it is still more or less the same).",
+      "revId": "fb3d6bc347f0d093a1a0de624d89bd4f51769102",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
