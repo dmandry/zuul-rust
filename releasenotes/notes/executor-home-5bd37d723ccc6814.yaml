@@ -1,0 +1,9 @@
+---
+upgrade:
+  - |
+    The home directory of the user that is used to run playbooks on
+    the executor has been moved outside of the build's ``work/``
+    directory.  A future version of Zuul will restict which files in
+    the home directory may be carried over between playbooks.  Files
+    that should persist between playbooks should generally be placed
+    in the build`s ``work/`` directory instead.
