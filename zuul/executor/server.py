@@ -621,11 +621,11 @@ class JobDir(object):
         #     project_0
         #       <git.example.com>
         #         <project>
+        #   kube (mounted in bwrap read-only)
+        #     config
         #   work (mounted in bwrap read-write)
         #     .ssh
         #       known_hosts
-        #     .kube
-        #       config
         #     src
         #       <git.example.com>
         #         <project>
@@ -665,9 +665,9 @@ class JobDir(object):
         os.makedirs(self.untrusted_root)
         ssh_dir = os.path.join(self.work_root, '.ssh')
         os.mkdir(ssh_dir, 0o700)
-        kube_dir = os.path.join(self.work_root, ".kube")
-        os.makedirs(kube_dir)
-        self.kubeconfig = os.path.join(kube_dir, "config")
+        self.kube_dir = os.path.join(self.root, "kube")
+        os.makedirs(self.kube_dir)
+        self.kubeconfig = os.path.join(self.kube_dir, "config")
         # Create ansible cache directory
         self.ansible_cache_root = os.path.join(self.root, '.ansible')
         self.fact_cache = os.path.join(self.ansible_cache_root, 'fact-cache')
@@ -3306,6 +3306,7 @@ class AnsibleJob(object):
             env_copy['ZUUL_CONSOLE_PORT'] = str(
                 self.executor_server.log_console_port)
         env_copy['TMP'] = self.jobdir.local_tmp
+        env_copy['KUBECONFIG'] = self.jobdir.kubeconfig
         env_copy['ZUUL_ANSIBLE_SPLIT_STREAMS'] = str(
             self.ansible_split_streams)
         pythonpath = env_copy.get('PYTHONPATH')
@@ -3335,6 +3336,7 @@ class AnsibleJob(object):
             self.executor_server.ansible_manager.getAnsibleInstallDir(
                 ansible_version))
         ro_paths.append(self.jobdir.ansible_root)
+        ro_paths.append(self.jobdir.kube_dir)
         ro_paths.append(self.jobdir.trusted_root)
         ro_paths.append(self.jobdir.untrusted_root)
         ro_paths.append(playbook.root)
