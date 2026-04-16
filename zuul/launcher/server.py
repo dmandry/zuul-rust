@@ -1747,6 +1747,10 @@ class Launcher:
             quota=label_quota,
             provider=provider.canonical_name,
             endpoint_name=endpoint_name,
+            # Set the reuse information on the node. This is used only for
+            # informational purposes (the actual decision about reuse will
+            # happen later).
+            reuse=label.reuse,
         )
 
         # Save a copy of the args here since nothing below should be

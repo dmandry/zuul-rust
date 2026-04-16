@@ -1505,6 +1505,10 @@ executor running the job is available:
 
       A private IPv6 address of the node.
 
+   .. var:: reuse
+
+      A flag indicating if the node is reusable.
+
 .. _node-properties:
 
    .. var:: node_properties

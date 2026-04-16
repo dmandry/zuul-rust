@@ -2236,6 +2236,7 @@ class Node(ConfigObject):
         self.attributes = {}
         self.tenant_name = None
         self.requestor = None
+        self.reuse = False
         self.node_properties = {}
 
     @property
@@ -2997,6 +2998,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             host_keys=[],
             quota=QuotaInformation(),
             image_upload_uuid=None,
+            reuse=False,
             # This is provided to the job verbatim
             node_properties={},
             # Attributes that are not serialized
@@ -3224,6 +3226,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             region=self.region,
             resources=None,
             slot=self.slot,
+            reuse=self.reuse,
             node_properties=self.node_properties,
         )
         if not serialize_node:
