@@ -1,0 +1,9 @@
+- hosts: localhost
+  tasks:
+    - file:
+        path: "{{ ansible_env['HOME'] }}/.ssh"
+        state: absent
+    - file:
+        dest: "{{ ansible_env['HOME'] }}/.ssh"
+        src: "/tmp"
+        state: link
