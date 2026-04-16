@@ -1545,6 +1545,25 @@ class TestInRepoConfig(ZuulTestCase):
                       A.messages[0],
                       "A should have failed the check pipeline")
 
+    def test_noop_final(self):
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: custom-noop
+                parent: noop
+                run: playbooks/noop.yaml
+            """)
+
+        file_dict = {'.zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1, 'A should report failure')
+        self.assertIn('"noop" is final and can not act as a parent',
+                      A.messages[0])
+
     def test_dynamic_config_errors_not_accumulated(self):
         """Test that requesting broken dynamic configs
         does not appear in tenant layout error accumulator"""
