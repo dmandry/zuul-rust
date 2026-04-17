@@ -79,6 +79,31 @@ and :attr:`section` configurations:
 
 .. include:: aws-attrs.rstinc
 
+
+.. _aws-driver-node-properties:
+
+Node properties
+---------------
+
+Nodes provided via the AWS driver provide the following :var:`node_properties`:
+
+.. var:: instance_id
+
+   The AWS instance ID of the provided node.
+
+.. var:: host_id
+
+   The AWS host ID (if a dedicated host was used).
+
+.. var:: fleet
+
+   A boolean flag indicating if the node was created by using the AWS
+   fleet API.
+
+.. var:: spot
+
+   A boolean flag indicating if the node is an AWS spot instance.
+
 .. _`VM Import/Export service role`: https://docs.aws.amazon.com/vm-import/latest/userguide/vmie_prereqs.html#vmimport-role
 .. _`configuration file`: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#using-a-configuration-file
 .. _`Environment variables`: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#using-environment-variables`

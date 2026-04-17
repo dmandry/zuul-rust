@@ -1437,12 +1437,93 @@ executor running the job is available:
        - shell: echo example
          when: zuul_will_retry | bool
 
+.. var:: zuul_node
+
+   Information about each host is supplied in the `zuul_node` host variable.
+   Availability of values varies based on the node and the driver that supplied
+   it. Values may be ``null`` if they are not applicable. The `zuul_node`
+   variable is a superset of the `nodepool` variable, providing additional
+   information which is not available for Nodepool.
+
+   .. var:: uuid
+
+      The uuid of this node.
+
+   .. var:: label
+
+      The label of this node.
+
+   .. var:: az
+
+      The availability zone in which this node was placed.
+
+   .. var:: cloud
+
+      The name of the cloud in which this node was created.
+
+   .. var:: provider
+
+      The name of the provider of this node.
+
+   .. var:: region
+
+      The name of the provider's region.
+
+   .. var:: host_id
+
+      The cloud's host identification for this node's hypervisor.
+
+   .. var:: external_id
+
+      The cloud's identifier for this node (only available for nodes
+      provided by Nodepool).
+
+   .. var:: slot
+
+      If the node supports running multiple jobs on the node, a unique
+      numeric ID for the subdivision of the node assigned to this job.
+      This may be used to avoid build directory collisions.
+
+   .. var:: interface_ip
+
+      The best IP address to use to contact the node as determined by
+      the cloud provider.
+
+   .. var:: public_ipv4
+
+      A public IPv4 address of the node.
+
+   .. var:: private_ipv4
+
+      A private IPv4 address of the node.
+
+   .. var:: public_ipv6
+
+      A public IPv6 address of the node.
+
+   .. var:: private_ipv6
+
+      A private IPv6 address of the node.
+
+.. _node-properties:
+
+   .. var:: node_properties
+
+      Arbitrary driver-specific data. More information can be found in the
+      driver's documentation, e.g. the AWS driver's
+      :ref:`aws-driver-node-properties`.
+
 .. var:: nodepool
 
    Information about each host from Nodepool is supplied in the
    `nodepool` host variable.  Availability of values varies based on
    the node and the driver that supplied it.  Values may be ``null``
    if they are not applicable.
+
+   .. note::
+
+      This variable is deprecated and may be removed in the future. Use the
+      :var:`zuul_node` host variable instead.
 
    .. var:: label
 
