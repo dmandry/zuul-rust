@@ -16,6 +16,24 @@
       "message": "I think we should also document this new flag here: https://zuul-ci.org/docs/zuul/latest/job-content.html#var-nodepool\n\nUnrelated to your change, I think we should also document the new `zuul_node` structure as well (granted currently it is still more or less the same).",
       "revId": "fb3d6bc347f0d093a1a0de624d89bd4f51769102",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "e1d5e8c5_038a9e88",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-04-17T08:24:27Z",
+      "side": 1,
+      "message": "Good idea. I\u0027ve added a parent change that adds the `zuul_node` variable to the documentation and updated this change to add the `reusable` flag.",
+      "parentUuid": "4f073d40_f9163f05",
+      "revId": "fb3d6bc347f0d093a1a0de624d89bd4f51769102",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
