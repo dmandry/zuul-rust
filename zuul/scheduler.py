@@ -1676,6 +1676,9 @@ class Scheduler(threading.Thread):
         # the events provides a minimum ltime.
         branch_cache_min_ltimes = defaultdict(lambda: -1)
         for connection_name, ltime in event.branch_cache_ltimes.items():
+            if ltime is None:
+                log.warning("Got invalid ltime for for %s", connection_name)
+                continue
             branch_cache_min_ltimes[connection_name] = ltime
 
         loader = configloader.ConfigLoader(

@@ -258,10 +258,7 @@ class ZKBranchCacheMixin:
 
         project = self.source.getProject(event.project_name)
         if event.branch:
-            # Our required ltime should either be the current ltime of
-            # the branch cache, or, if we performed an update, then
-            # the ltime of that update.
-            ltime = self._branch_cache.ltime
+            ltime = None
             if event.branch_deleted:
                 # We currently cannot determine if a deleted branch was
                 # protected so we need to assume it was. GitHub/GitLab don't
@@ -278,7 +275,11 @@ class ZKBranchCacheMixin:
                 # but for the moment, implement the lowest common
                 # denominator and clear the cache so that we query.
                 ltime = self.updateProjectBranches(project, event)
-            event.branch_cache_ltime = ltime
+
+            # Our required ltime should either be the current ltime of
+            # the branch cache, or, if we performed an update, then
+            # the ltime of that update.
+            event.branch_cache_ltime = ltime or self._branch_cache.ltime
         return event
 
     def updateProjectBranches(self, project, zuul_event_id=None):
