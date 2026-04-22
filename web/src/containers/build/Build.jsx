@@ -63,7 +63,7 @@ function getRef(build) {
   return 'project' in build ? build : build.ref
 }
 
-function Build({ build, tenant, timezone, user }) {
+function Build({ build, manifest, tenant, timezone, user }) {
   const [showAutoholdModal, setShowAutoholdModal] = useState(false)
   const buildRef = getRef(build)
   // the change or ref to use for api actions like autohold
@@ -71,7 +71,7 @@ function Build({ build, tenant, timezone, user }) {
   const actionChange = buildRef.change ? String(buildRef.change) : ''
   //const project = build.project
   const job_name = build.job_name
-  const index_links = build.manifest && build.manifest.index_links
+  const index_links = manifest && manifest.index_links
   const build_log_url = build.log_url ?
         (index_links ? build.log_url + 'index.html' : build.log_url)
         : ''
