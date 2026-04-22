@@ -252,7 +252,8 @@ function BuildPageComponent() {
   return (
     <>
       <PageSection variant={preferences.darkMode ? PageSectionVariants.dark : PageSectionVariants.light}>
-        <Build build={build} active={activeTab} hash={hash} />
+        <Build build={build} manifest={manifest}
+               active={activeTab} hash={hash} />
       </PageSection>
       <PageSection variant={preferences.darkMode ? PageSectionVariants.dark : PageSectionVariants.light}>
         <Tabs
