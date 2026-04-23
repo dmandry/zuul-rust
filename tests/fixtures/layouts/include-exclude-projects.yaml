@@ -23,6 +23,8 @@
       nodes:
         - label: ubuntu-xenial
           name: controller
+    exclude-projects:
+      - org/project-unused
 
 - job:
     name: normal-job
@@ -79,3 +81,6 @@
 - project:
     name: org/project2
     queue: shared
+
+- project:
+    name: org/project-unused
