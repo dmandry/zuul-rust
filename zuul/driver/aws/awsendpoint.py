@@ -31,6 +31,7 @@ import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 
 import boto3
+import botocore.config
 import botocore.exceptions
 import botocore.session
 import botocore.utils
@@ -657,10 +658,17 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             self.aws = self._getSessionFromWebIdentity()
         else:
             self.aws = self._getSessionFromCredentials()
+        client_config = botocore.config.Config(retries={
+            "total_max_attempts": 5,
+            # standard mode covers more error cases, especially
+            # TooManyRequestsException
+            "mode": "standard",
+        })
         self.ec2_client = self.aws.client(
             "ec2",
             region_name=self.region,
             endpoint_url=self.connection.endpoint_url,
+            config=client_config,
         )
         self.s3 = self.aws.resource(
             's3',
@@ -671,25 +679,30 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             's3',
             region_name=self.region,
             endpoint_url=self.connection.endpoint_url,
+            config=client_config,
         )
         self.s3_global_client = self.aws.client(
             's3',
             endpoint_url=self.connection.endpoint_url,
+            config=client_config,
         )
         self.aws_quotas = self.aws.client(
             'service-quotas',
             region_name=self.region,
             endpoint_url=self.connection.endpoint_url,
+            config=client_config,
         )
         self.ebs_client = self.aws.client(
             'ebs',
             region_name=self.region,
             endpoint_url=self.connection.endpoint_url,
+            config=client_config,
         )
         self.sts_client = self.aws.client(
             'sts',
             region_name=self.region,
             endpoint_url=self.connection.endpoint_url,
+            config=client_config,
         )
 
     def startEndpoint(self):
