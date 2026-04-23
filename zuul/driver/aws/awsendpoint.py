@@ -1775,7 +1775,11 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             paginator = self.aws_quotas.get_paginator(
                 'list_service_quotas')
             quotas = {}
-            for page in paginator.paginate(ServiceCode=service_code):
+            paginate_args = {
+                'ServiceCode': service_code,
+                'PaginationConfig': {'PageSize': 100},
+            }
+            for page in paginator.paginate(**paginate_args):
                 for quota in page['Quotas']:
                     quotas[quota['QuotaCode']] = quota['Value']
             return quotas
