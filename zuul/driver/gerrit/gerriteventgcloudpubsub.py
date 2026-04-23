@@ -46,7 +46,7 @@ class GerritGcloudPubsubEventListener:
         self._future = None
 
     def start(self):
-        self._thread = threading.Thread(target=self.run)
+        self._thread = threading.Thread(target=self.run, daemon=True)
         self._thread.start()
 
     def stop(self):

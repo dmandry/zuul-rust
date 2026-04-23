@@ -36,6 +36,7 @@ class GerritChecksPoller(threading.Thread):
             connection.sched.zk_client, connection.connection_name, "poller")
         self._stopped = False
         self._stop_event = threading.Event()
+        self.daemon = True
 
     def _makePendingCheckEvent(self, change, uuid, check):
         return {'type': 'pending-check',
