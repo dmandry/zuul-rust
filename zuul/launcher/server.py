@@ -2301,6 +2301,7 @@ class Launcher:
 
                 log.debug("Marking node %s as %s for reuse",
                           node, state)
+                node.nodescan_request = None
                 node.unassign(ctx)
                 node.setState(state)
 
