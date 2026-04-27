@@ -33,6 +33,23 @@
       "message": "This ended up being slower for zuul due to the increase in build time costs. Some individual test cases look like they may be quicker but round trip time on the job is what we care about in CI and that isn\u0027t better.",
       "revId": "7b6a9d2d97c495d38c2ce7f87bcb55bf24e1c648",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3a39259f_7d7f902a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 12015
+      },
+      "writtenOn": "2026-04-27T13:15:40Z",
+      "side": 1,
+      "message": "Maybe this change could be abandoned as Zuul is not using pyenv anymore: https://opendev.org/zuul/zuul/commit/5b854985e4868ec564ea7eabca5fd66b04463713.",
+      "revId": "7b6a9d2d97c495d38c2ce7f87bcb55bf24e1c648",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
