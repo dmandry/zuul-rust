@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "01750176_5227af6e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 12015
+      },
+      "writtenOn": "2026-04-27T13:29:55Z",
+      "side": 1,
+      "message": "I can see more `warn` in the code. Maybe another check could be useful.",
+      "revId": "e763f28b0284c8fbe0012c01fd356b7dec1f5615",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
