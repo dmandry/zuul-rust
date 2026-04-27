@@ -254,6 +254,27 @@ class TestAwsDriver(AwsBaseTest):
     def test_aws_node_lifecycle(self):
         self._test_node_lifecycle('debian-normal')
 
+    def check_node_tags(self, pnode):
+        for tag_spec in self.run_instances_calls[0]['TagSpecifications']:
+            tags = {t["Key"]: t["Value"] for t in tag_spec['Tags']}
+            self.assertEqual(
+                "tenant-one",
+                tags["tenant"])
+            self.assertIn(
+                "event_id",
+                tags)
+            self.assertIn(
+                "buildset",
+                tags)
+            self.assertIn(
+                "foo",
+                tags)
+
+    @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
+    @driver_config('aws', node_checks=check_node_tags)
+    def test_aws_node_tag_inheritance(self):
+        self._test_node_lifecycle('debian-large')
+
     def check_dedicated_host_node_attrs(self, pnode):
         self.assertTrue(pnode.node_properties['host_id'].startswith('h-'))
 
