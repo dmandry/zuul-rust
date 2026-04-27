@@ -1966,6 +1966,9 @@ class ProviderConfig(ConfigObject):
         for k in (str(k) for k in schema.schema.keys()):
             if k not in obj and k in defaults:
                 obj[k] = defaults[k]
+            if k == "tags" and k in obj and k in defaults:
+                obj[k].update(
+                    ProviderConfig._mergeDict(defaults[k], obj[k]))
 
     @staticmethod
     def applyConfig(config, section, layout, schema_class):
