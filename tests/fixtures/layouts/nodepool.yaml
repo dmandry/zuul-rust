@@ -157,6 +157,9 @@
     name: aws-us-east-1
     parent: aws-base
     region: us-east-1
+    label-defaults:
+      tags:
+        buildset: "{buildset_uuid}"
 
 - provider:
     name: aws-us-east-1-main
@@ -169,6 +172,8 @@
         # flavor
         iops: 1000
       - name: debian-large
+        tags:
+          foo: bar
       - name: debian-dedicated
         az: us-east-1b
       - name: debian-invalid
