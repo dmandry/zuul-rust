@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b92a7db4_a87c7c3e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 12015
+      },
+      "writtenOn": "2026-04-27T12:57:35Z",
+      "side": 1,
+      "message": "Too old to be merged, should be abandoned.",
+      "revId": "082d11d713c53c49a043df01de31ea1b932c635a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
