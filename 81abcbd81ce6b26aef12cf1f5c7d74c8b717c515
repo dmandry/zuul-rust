@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "537128af_acf56000",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 12015
+      },
+      "writtenOn": "2026-04-27T13:03:45Z",
+      "side": 1,
+      "message": "Too old to be merged: `pkg_resourses` imports already removed. Should be abandoned.",
+      "revId": "81abcbd81ce6b26aef12cf1f5c7d74c8b717c515",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
