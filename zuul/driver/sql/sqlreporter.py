@@ -56,11 +56,13 @@ class SQLReporter(BaseReporter):
     def _createBuildset(self, db, buildset):
         event_id = None
         event_timestamp = None
+        event_user_id = None
         item = buildset.item
         if item.event is not None:
             event_id = getattr(item.event, "zuul_event_id", None)
             event_timestamp = datetime.datetime.fromtimestamp(
                 item.event.timestamp, tz=datetime.timezone.utc)
+            event_user_id = getattr(item.event, "user_id", None)
 
         db_buildset = db.createBuildSet(
             uuid=buildset.uuid,
@@ -70,6 +72,8 @@ class SQLReporter(BaseReporter):
             event_timestamp=event_timestamp,
             queue_item_uuid=item.uuid,
             updated=datetime.datetime.utcnow(),
+            user_id=event_user_id,
+            parameters=item.parameters,
         )
         for change in item.changes:
             ref = db.getOrCreateRef(

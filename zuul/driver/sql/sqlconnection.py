@@ -817,6 +817,8 @@ class SQLConnection(BaseConnection):
             last_build_end_time = sa.Column(sa.DateTime, nullable=True)
             updated = sa.Column(sa.DateTime, nullable=True)
             queue_item_uuid = sa.Column(sa.String(36), nullable=True)
+            parameters = sa.Column(sa.JSON(), nullable=True)
+            user_id = sa.Column(sa.String(255), nullable=True)
 
             refs = orm.relationship(
                 RefModel,
