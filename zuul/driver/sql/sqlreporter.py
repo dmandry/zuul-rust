@@ -70,6 +70,7 @@ class SQLReporter(BaseReporter):
             event_timestamp=event_timestamp,
             queue_item_uuid=item.uuid,
             updated=datetime.datetime.utcnow(),
+            parameters=item.parameters,
         )
         for change in item.changes:
             ref = db.getOrCreateRef(

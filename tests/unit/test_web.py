@@ -955,9 +955,11 @@ class TestWeb(BaseTestWeb):
                     'pipelines': [{
                         'name': 'check',
                         'jobs': jobs,
+                        'parameters': [],
                     }, {
                         'name': 'gate',
                         'jobs': jobs,
+                        'parameters': [],
                     }, {'name': 'post',
                         'jobs': [[
                             {'abstract': False,
@@ -1010,6 +1012,7 @@ class TestWeb(BaseTestWeb):
                              'workspace_checkout': True,
                              }
                         ]],
+                        'parameters': [],
                     }
                     ]
                 }]
@@ -4196,6 +4199,80 @@ class TestTenantScopedWebApi(BaseTestWeb):
             dict(name='project-test1', result='SUCCESS', changes='2,1'),
             dict(name='project-test2', result='SUCCESS', changes='2,1'),
         ], ordered=False)
+
+    @simple_layout('layouts/parameterized-builds.yaml')
+    def test_web_parameterized_build(self):
+        token = self._getToken(['tenant-one'])
+        resp = self.post_url(
+            "api/tenant/tenant-one/project/org/project/freeze-pipeline",
+            json={
+                'ref': 'refs/heads/master',
+                'pipeline': 'on-demand',
+            })
+        data = resp.json()
+        self.assertEqual([
+            {'default': None,
+             'description': 'Which cluster to deploy to',
+             'name': 'target_cluster',
+             'required': False,
+             'type': 'selection',
+             'values': ['production', 'staging', 'dev']},
+            {'default': None,
+             'description': 'What version to deploy',
+             'name': 'version',
+             'required': False,
+             'type': 'string',
+             'values': None},
+        ], data['parameters'])
+
+        expected_params = {
+            'target_cluster': 'production',
+            'version': '1.0',
+        }
+        resp = self.post_url(
+            "api/tenant/tenant-one/project/org/project/enqueue",
+            headers={'Authorization': 'Bearer %s' % token},
+            json={
+                'ref': 'refs/heads/master',
+                'pipeline': 'on-demand',
+                'parameters': expected_params,
+            })
+        self.assertEqual(200, resp.status_code)
+        self.waitUntilSettled()
+        params = self.builds[0].job.variables
+        self.assertEqual(expected_params, params)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='deploy-app', result='SUCCESS', ref='refs/heads/master'),
+        ], ordered=False)
+
+        buildsets = self.get_url("api/tenant/tenant-one/buildsets").json()
+        self.assertEqual(1, len(buildsets))
+        buildset = self.get_url(
+            "api/tenant/tenant-one/buildset/%s" % buildsets[0]['uuid']).json()
+        self.assertEqual(expected_params, buildset['parameters'])
+
+    @simple_layout('layouts/parameterized-builds.yaml')
+    def test_web_parameterized_build_change(self):
+        token = self._getToken(['tenant-one'])
+        expected_params = {
+            'target_cluster': 'production',
+            'version': '1.0',
+        }
+        resp = self.post_url(
+            "api/tenant/tenant-one/project/org/project/enqueue",
+            headers={'Authorization': 'Bearer %s' % token},
+            json={
+                'ref': 'refs/changes/01/1/1',
+                'pipeline': 'on-demand',
+                'parameters': expected_params,
+            })
+        self.assertEqual(400, resp.status_code)
+        self.assertIn('supported only with branches or tags', resp.text)
 
 
 class TestTenantScopedWebApiWithAccessRules(TestTenantScopedWebApi):
