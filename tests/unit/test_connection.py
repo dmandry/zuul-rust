@@ -92,7 +92,7 @@ class TestSQLConnectionMysql(ZuulTestCase):
         buildset_event_table = table_prefix + 'zuul_buildset_event'
 
         self.assertEqual(9, len(insp.get_columns(ref_table)))
-        self.assertEqual(12, len(insp.get_columns(buildset_table)))
+        self.assertEqual(13, len(insp.get_columns(buildset_table)))
         self.assertEqual(2, len(insp.get_columns(buildset_ref_table)))
         self.assertEqual(15, len(insp.get_columns(build_table)))
         self.assertEqual(5, len(insp.get_columns(artifact_table)))

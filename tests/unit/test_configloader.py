@@ -1935,3 +1935,13 @@ class TestNodepoolConfig(LauncherBaseTestCase):
                       layout.loading_errors[0].error)
         self.assertIn('project_canonical_name',
                       layout.loading_errors[0].error)
+
+
+class TestParameterizedBuilds(ZuulTestCase):
+
+    @simple_layout('layouts/parameterized-builds-not-allowed.yaml')
+    def test_parameterized_builds_not_allowed(self):
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('does not allow parameters',
+                      layout.loading_errors[0].error)
