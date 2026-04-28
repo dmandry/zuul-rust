@@ -1,4 +1,4 @@
-pbr>=1.1.0
+pbr>=2.0.0
 # Early virtualenv 20 had bad file location assumptions
 virtualenv!=20.0.0,!=20.0.1,>20
 
