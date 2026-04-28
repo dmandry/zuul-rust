@@ -21,6 +21,7 @@ import BuildsetsPage from './pages/Buildsets'
 import ChangeStatusPage from './pages/ChangeStatus'
 import ComponentsPage from './pages/Components'
 import ConfigErrorsPage from './pages/ConfigErrors'
+import EnqueuePage from './pages/Enqueue'
 import SystemEventsPage from './pages/SystemEvents'
 import FreezeJobPage from './pages/FreezeJob'
 import JobPage from './pages/Job'
@@ -44,12 +45,15 @@ import SemaphorePage from './pages/Semaphore'
 import SemaphoresPage from './pages/Semaphores'
 import StreamPage from './pages/Stream'
 import TenantsPage from './pages/Tenants'
+import {
+  isAuthorized,
+} from './Misc'
 
 // The Route object are created in the App component.
 // Object with a title are created in the menu.
 // Object with globalRoute are not tenant scoped.
 // Remember to update the api getHomepageUrl subDir list for route with params
-const routes = (info) => {
+const routes = (info, user) => {
   const ret = [
     {
       title: 'Status',
@@ -103,6 +107,10 @@ const routes = (info) => {
     {
       to: '/runtime',
       component: RuntimePage
+    },
+    {
+      to: '/enqueue',
+      component: EnqueuePage
     },
     {
       to: '/status/change/:changeId',
@@ -211,6 +219,15 @@ const routes = (info) => {
         to: '/nodeset-requests',
         component: NodesetRequestsPage,
       }
+    )
+  }
+  if (user && isAuthorized(user, 'enqueue')) {
+    ret.push(
+      {
+        title: 'Enqueue',
+        to: '/enqueue',
+        component: EnqueuePage
+      },
     )
   }
   return ret

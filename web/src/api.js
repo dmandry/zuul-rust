@@ -395,7 +395,7 @@ function enqueue(apiPrefix, projectName, pipeline, change) {
   )
 }
 
-function enqueue_ref(apiPrefix, projectName, pipeline, ref, oldrev, newrev) {
+function enqueue_ref(apiPrefix, projectName, pipeline, ref, oldrev, newrev, params) {
   return makeRequest(
     apiPrefix + 'project/' + projectName + '/enqueue',
     'post',
@@ -404,6 +404,7 @@ function enqueue_ref(apiPrefix, projectName, pipeline, ref, oldrev, newrev) {
       ref: ref,
       oldrev: oldrev,
       newrev: newrev,
+      parameters: params,
     }
   )
 }
@@ -442,6 +443,16 @@ function promote(apiPrefix, pipeline, changes) {
   )
 }
 
+function freezePipeline(apiPrefix, pipeline, project, ref) {
+  return makeRequest(
+    apiPrefix + 'project/' + project + '/freeze-pipeline',
+    'post',
+    {
+      pipeline: pipeline,
+      ref: ref,
+    }
+  )
+}
 
 export {
   apiUrl,
@@ -496,4 +507,5 @@ export {
   setNodeState,
   setTenantState,
   validateImageUpload,
+  freezePipeline,
 }
