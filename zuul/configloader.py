@@ -1315,10 +1315,23 @@ class ProjectTemplateParser(object):
         job = {str: vs.Any(str, JobParser.job_attributes)}
         job_list = [vs.Any(str, job)]
 
+        parameter_types = vs.Any(str, int, float, bool)
+
+        parameter = {
+            vs.Required('name'): ansible_var_name,
+            vs.Required('type'): vs.Any(
+                'string', 'selection', 'multiple-selection', 'bool'),
+            'description': str,
+            'values': [parameter_types],
+            'default': to_list(parameter_types),
+            'required': bool,
+        }
+
         pipeline_contents = {
             'debug': bool,
             'fail-fast': bool,
             'jobs': job_list,
+            'parameters': to_list(parameter),
         }
 
         project = {
@@ -1354,6 +1367,15 @@ class ProjectTemplateParser(object):
             self.parseJobList(
                 conf_pipeline.get('jobs', []),
                 source_context, start_mark, project_pipeline.job_list)
+            for conf_param in conf_pipeline.get('parameters', []):
+                param = model.ProjectParameterConfig()
+                param.name = conf_param['name']
+                param.type = conf_param['type']
+                param.description = conf_param.get('description')
+                param.values = conf_param.get('values')
+                param.default = conf_param.get('default')
+                param.required = conf_param.get('required', False)
+                project_pipeline.parameters[param.name] = param
 
         # If this project definition is in a place where it
         # should get implied branch matchers, set it.
@@ -1400,10 +1422,23 @@ class ProjectParser(object):
         job = {str: vs.Any(str, JobParser.job_attributes)}
         job_list = [vs.Any(str, job)]
 
+        parameter_types = vs.Any(str, int, float, bool)
+
+        parameter = {
+            vs.Required('name'): ansible_var_name,
+            vs.Required('type'): vs.Any(
+                'string', 'selection', 'multiple-selection', 'bool'),
+            'description': str,
+            'values': [parameter_types],
+            'default': to_list(parameter_types),
+            'required': bool,
+        }
+
         pipeline_contents = {
             'debug': bool,
             'fail-fast': bool,
-            'jobs': job_list
+            'jobs': job_list,
+            'parameters': to_list(parameter),
         }
 
         project = {
@@ -1541,6 +1576,7 @@ class PipelineParser(object):
         pipeline = {vs.Required('name'): str,
                     vs.Required('manager'): manager,
                     'allow-other-connections': bool,
+                    'allow-parameters': bool,
                     'precedence': precedence,
                     'supercedes': to_list(str),
                     'description': str,
@@ -1583,6 +1619,8 @@ class PipelineParser(object):
         pipeline.start_mark = conf['_start_mark']
         pipeline.allow_other_connections = conf.get(
             'allow-other-connections', True)
+        pipeline.allow_parameters = conf.get(
+            'allow-parameters', False)
         pipeline.description = conf.get('description')
         pipeline.supercedes = as_list(conf.get('supercedes', []))
 

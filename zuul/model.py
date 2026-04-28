@@ -569,6 +569,7 @@ class Pipeline(object):
     def __init__(self, name):
         self.name = name
         self.allow_other_connections = True
+        self.allow_parameters = False
         self.connections = []
         self.source_context = None
         self.start_mark = None
@@ -1275,14 +1276,17 @@ class ChangeQueue(zkobject.ZKObject):
                     "Unable to identify triggering ref from event %s",
                     event)
             event_info = EventInfo.fromEvent(event, event_ref_cache_key)
+            parameters = getattr(event, 'parameters', None)
         else:
             event_info = None
+            parameters = None
         item = QueueItem.new(self.zk_context,
                              queue=self,
                              changes=changes,
                              event=event_info,
                              span_info=span_info,
                              enqueue_time=enqueue_time,
+                             parameters=parameters,
                              debug=debug)
         self.enqueueItem(item)
         return item
@@ -7151,6 +7155,7 @@ class QueueItem(zkobject.ZKObject):
             _cached_sql_results={},
             event=None,  # Info about the event that lead to this queue item
             debug=False,
+            parameters=None,
             reporter_jobs_state=None,
             # Change.cache_key -> sha for any changes in this item
             # that were merged
@@ -7234,6 +7239,7 @@ class QueueItem(zkobject.ZKObject):
                 "type": event_type,
                 "data": self.event.toDict(),
             },
+            "parameters": self.parameters,
             "dynamic_state": self.dynamic_state,
             "first_job_start_time": self.first_job_start_time,
             "debug": self.debug,
@@ -9010,11 +9016,12 @@ class ChangeManagementEvent(ManagementEvent):
     :arg str newrev: optional, the new revision
     :arg dict orig_ref: optional, the cache key reference of the
         ref of the original triggering event
+    :arg dict parameters: optional, pipeline parameters
     """
 
     def __init__(self, tenant_name, pipeline_name, project_hostname,
                  project_name, change=None, ref=None, oldrev=None,
-                 newrev=None, orig_ref=None):
+                 newrev=None, orig_ref=None, parameters=None):
         super().__init__()
         self.type = None
         self.tenant_name = tenant_name
@@ -9033,6 +9040,7 @@ class ChangeManagementEvent(ManagementEvent):
         self.timestamp = time.time()
         span = trace.get_current_span()
         self.span_context = tracing.getSpanContext(span)
+        self.parameters = parameters
 
     @property
     def canonical_project_name(self):
@@ -9052,6 +9060,7 @@ class ChangeManagementEvent(ManagementEvent):
         d["timestamp"] = self.timestamp
         d["span_context"] = self.span_context
         d["orig_ref"] = self.orig_ref
+        d["parameters"] = self.parameters
         return d
 
     def updateFromDict(self, d):
@@ -9072,6 +9081,7 @@ class ChangeManagementEvent(ManagementEvent):
             data.get("oldrev"),
             data.get("newrev"),
             data.get("orig_ref"),
+            data.get("parameters"),
         )
         event.updateFromDict(data)
         return event
@@ -9609,6 +9619,28 @@ class TenantProjectConfig(object):
         return True
 
 
+class ProjectParameterConfig(ConfigObject):
+    # Represents a project parameter
+    def __init__(self):
+        super().__init__()
+        self.name = None
+        self.description = None
+        self.type = None
+        self.values = None
+        self.default = None
+        self.required = False
+
+    def toDict(self):
+        return {
+            'name': self.name,
+            'description': self.description,
+            'type': self.type,
+            'values': self.values,
+            'default': self.default,
+            'required': self.required,
+        }
+
+
 class ProjectPipelineConfig(ConfigObject):
     # Represents a project cofiguration in the context of a pipeline
     def __init__(self):
@@ -9618,6 +9650,7 @@ class ProjectPipelineConfig(ConfigObject):
         self.debug_messages = []
         self.fail_fast = None
         self.variables = {}
+        self.parameters = {}
 
     def addDebug(self, msg):
         self.debug_messages.append(msg)
@@ -9630,6 +9663,9 @@ class ProjectPipelineConfig(ConfigObject):
         if self.fail_fast is None:
             self.fail_fast = other.fail_fast
         self.job_list.inheritFrom(other.job_list)
+        for p in other.parameters.values():
+            if p.name not in self.parameters:
+                self.parameters[p.name] = p
 
     def updateVariables(self, other):
         # We need to keep this separate to update() because we wish to
@@ -9638,8 +9674,9 @@ class ProjectPipelineConfig(ConfigObject):
         self.variables = Job._deepUpdate(self.variables, other)
 
     def toDict(self):
-        d = {}
-        return d
+        return {
+            'parameters': [x.toDict() for x in self.parameters.values()],
+        }
 
 
 class ProjectConfig(ConfigObject):
@@ -10591,9 +10628,20 @@ class Layout(object):
 
         self.pipeline_managers[manager.pipeline.name] = manager
 
+    def _checkAddPPC(self, pipeline_name, ppc):
+        manager = self.pipeline_managers.get(pipeline_name)
+        # TODO: Consaider raising errors on incorrect pipeline names
+        if manager:
+            pipeline = manager.pipeline
+            if ppc.parameters and not pipeline.allow_parameters:
+                raise Exception("Pipeline does not allow parameters")
+
     def addProjectTemplate(self, project_template):
         for job in project_template.embeddedJobs():
             self._checkAddJob(job)
+
+        for pipeline_name, ppc in project_template.pipelines.items():
+            self._checkAddPPC(pipeline_name, ppc)
 
         template_list = self.project_templates.get(project_template.name)
         if template_list is not None:
@@ -10622,6 +10670,9 @@ class Layout(object):
 
         for job in project_config.embeddedJobs():
             self._checkAddJob(job)
+
+        for pipeline_name, ppc in project_config.pipelines.items():
+            self._checkAddPPC(pipeline_name, ppc)
 
         if project_canonical_name in self.project_configs:
             self.project_configs[project_canonical_name].append(project_config)
@@ -10824,6 +10875,25 @@ class Layout(object):
             raise NoMatchingParentError()
         return jobs
 
+    def collectParameters(self, item, ppc):
+        # Filter supplied parameters against the parameter
+        # specifications in the ppc
+        parameters = {}
+        if not item.parameters:
+            return parameters
+        for (k, v) in item.parameters.items():
+            param_def = ppc.parameters.get(k)
+            if param_def:
+                if param_def.type == 'multiple-selection':
+                    if isinstance(v, list) and set(v) <= set(param_def.values):
+                        parameters[k] = v
+                elif param_def.type == 'selection':
+                    if v in param_def.values:
+                        parameters[k] = v
+                else:
+                    parameters[k] = v
+        return parameters
+
     def extendJobGraph(self, context, item, change, ppc, job_graph,
                        skip_file_matcher, redact_secrets_and_keys,
                        debug_messages, pending_errors):
@@ -10871,6 +10941,11 @@ class Layout(object):
                     final_job.name = variant.name
             final_job.name = jobname
 
+            # Don't accept any parameters that aren't specified in our PPC
+            parameters = self.collectParameters(item, ppc)
+            # Pipeline parameters behave like project variables, but
+            # have higher precedence
+            final_job.updateProjectVariables(parameters)
             # Now merge variables set from this parent ppc
             # (i.e. project+templates) directly into the job vars
             final_job.updateProjectVariables(ppc.variables)

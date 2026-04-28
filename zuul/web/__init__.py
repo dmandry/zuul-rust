@@ -65,7 +65,9 @@ from zuul.model import (
     PromoteEvent,
     ProviderNode,
     QueueItem,
+    Ref,
     SystemAttributes,
+    Tag,
     UnparsedAbideConfig,
     WebInfo,
 )
@@ -357,6 +359,7 @@ class BuildsetConverter:
             'queue_item_uuid': buildset.queue_item_uuid,
             'first_build_start_time': start,
             'last_build_end_time': end,
+            'parameters': buildset.parameters,
             'refs': [
                 RefConverter.toDict(ref)
                 for ref in buildset.refs
@@ -379,6 +382,7 @@ class BuildsetConverter:
             'event_timestamp': str,
             'first_build_start_time': str,
             'last_build_end_time': str,
+            'parameters': dict,
             'refs': [
                 RefConverter.schema()
             ],
@@ -805,6 +809,42 @@ class SystemEventConverter:
             'description': str,
         }
         return Prop('The system event', ret)
+
+
+class ProjectPipelineConverter:
+    # A class to encapsulate the conversion of project pipeline
+    # config objects to API output.
+    def toDict(ppc):
+        parameters = []
+        if ppc:
+            for p in ppc.parameters.values():
+                parameters.append({
+                    'name': p.name,
+                    'type': p.type,
+                    'description': p.description,
+                    'values': p.values,
+                    'default': p.default,
+                    'required': p.required,
+                })
+        ret = {
+            'parameters': parameters,
+        }
+        return ret
+
+    def schema():
+        parameter = {
+            'name': str,
+            'type': str,
+            'description': str,
+            'values': [str],
+            'default': str,
+            'required': bool,
+        }
+
+        ret = {
+            'parameters': [parameter],
+        }
+        return Prop('The project pipeline config', ret)
 
 
 class APIError(cherrypy.HTTPError):
@@ -1506,13 +1546,21 @@ class ZuulWebAPI(object):
         if manager is None:
             raise cherrypy.HTTPError(400, 'Unknown pipeline')
 
+        if body.get('parameters'):
+            ref = body.get('ref', '')
+            if not (ref.startswith('refs/heads') or
+                    ref.startswith('refs/tags')):
+                raise cherrypy.HTTPError(
+                    400, 'Parameters are supported only with branches or tags')
+
         if 'change' in body:
             return self._enqueue(tenant, project, manager.pipeline,
                                  body['change'])
-        elif all(p in body for p in ['ref', 'oldrev', 'newrev']):
+        elif 'ref' in body:
             return self._enqueue_ref(tenant, project,
                                      manager.pipeline, body['ref'],
-                                     body['oldrev'], body['newrev'])
+                                     body.get('oldrev'), body.get('newrev'),
+                                     body.get('parameters'))
         else:
             raise cherrypy.HTTPError(400, 'Invalid request body')
 
@@ -1526,11 +1574,12 @@ class ZuulWebAPI(object):
 
         return True
 
-    def _enqueue_ref(self, tenant, project, pipeline, ref, oldrev, newrev):
+    def _enqueue_ref(self, tenant, project, pipeline, ref, oldrev,
+                     newrev, parameters):
         event = EnqueueEvent(tenant.name, pipeline.name,
                              project.canonical_hostname, project.name,
                              change=None, ref=ref, oldrev=oldrev,
-                             newrev=newrev)
+                             newrev=newrev, parameters=parameters)
         event.zuul_event_id = get_zuul_request_id()
         self.zuulweb.pipeline_management_events[tenant.name][
             pipeline.name].put(event)
@@ -3359,6 +3408,50 @@ class ZuulWebAPI(object):
 
         return item, change
 
+    @cherrypy.expose
+    @cherrypy.tools.save_params()
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
+    @cherrypy.tools.handle_options()
+    @cherrypy.tools.check_tenant_auth()
+    @openapi_response(
+        code=200,
+        content_type='application/json',
+        description='Returns the project pipeline config',
+        schema=ProjectPipelineConverter.schema(),
+    )
+    def project_freeze_pipeline(self, tenant_name, tenant, auth,
+                                project_name):
+        body = cherrypy.request.json
+        if 'ref' not in body:
+            raise cherrypy.HTTPError(400, 'ref is required')
+        if 'pipeline' not in body:
+            raise cherrypy.HTTPError(400, 'pipeline is required')
+
+        project = self._getProjectOrRaise(tenant, project_name)
+        manager = tenant.layout.pipeline_managers.get(body['pipeline'])
+        if not manager:
+            raise cherrypy.HTTPError(404, 'Unknown pipeline')
+
+        # refs/heads/...
+        ref = body['ref'].split('/', 2)
+        if ref[1] == 'heads':
+            change = Branch(project)
+            change.branch = ref[2]
+        elif ref[1] == 'tags':
+            change = Tag(project)
+            change.tag = ref[2]
+        else:
+            change = Ref(project)
+            change.ref = body['ref']
+
+        change.cache_stat = FakeCacheKey()
+        with LocalZKContext(self.log) as context:
+            queue = ChangeQueue.new(context, manager=manager)
+            item = QueueItem.new(context, queue=queue, changes=[change])
+            ppc = tenant.layout.getProjectPipelineConfig(item, change)
+        return ProjectPipelineConverter.toDict(ppc)
+
 
 class StaticHandler(object):
     def __init__(self, root):
@@ -3576,6 +3669,13 @@ class ZuulWeb(object):
                 'api',
                 '/api/tenant/{tenant_name}/project/{project_name:.*}/dequeue',
                 controller=api, action='dequeue')
+        route_map.connect(
+            'api',
+            '/api/tenant/{tenant_name}/project/{project_name:.*}'
+            '/freeze-pipeline',
+            controller=api,
+            action='project_freeze_pipeline',
+        )
         route_map.connect('api',
                           '/api/tenant/{tenant_name}/autohold/{request_id}',
                           controller=api,

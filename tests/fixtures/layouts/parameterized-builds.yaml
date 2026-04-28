@@ -1,0 +1,40 @@
+- pipeline:
+    name: on-demand
+    manager: independent
+    allow-parameters: true
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: ubuntu-xenial
+          name: controller
+
+- job:
+    name: deploy-app
+    run: playbooks/deploy.yaml
+
+- project:
+    name: org/project
+    on-demand:
+      parameters:
+        - name: target_cluster
+          description: Which cluster to deploy to
+          type: selection
+          values:
+            - production
+            - staging
+            - dev
+        - name: version
+          description: What version to deploy
+          type: string
+      jobs:
+        - deploy-app
