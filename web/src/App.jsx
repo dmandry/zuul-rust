@@ -410,7 +410,7 @@ class AppComponent extends React.Component {
     const { isKebabDropdownOpen } = this.state
     const { notifications, tenantStatus, tenant, info, auth } = this.props
 
-    const menu = routes(auth.info)
+    const menu = routes(auth.info, this.props.user)
     const nav = this.renderMenu(menu)
 
     const kebabDropdownItems = []
