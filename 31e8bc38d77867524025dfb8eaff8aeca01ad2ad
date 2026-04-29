@@ -3,6 +3,23 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "602c1576_c1a0dc2c",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-29T18:55:03Z",
+      "side": 1,
+      "message": "Hrm, I agree it\u0027s a good word, but I\u0027m not sure I\u0027m convinced we should use it.\n\nWe use \"reuse\" in the launcher config to indicate that it should be reused (it\u0027s an imperative, a command).\n\nHere, it would mean \"This node will be reused (barring any time or quota limits, or other changes)\".  Certainly \"reusable\" is good for this.  But \"reuse\" meaning \"subject to reuse\" probably isn\u0027t wrong.\n\nI would probably be tempted to make the change to \"reusable\" since I agree it\u0027s the most clear, but, are we sure it\u0027s worth losing the ability to grep for the same word?  (We may find ourselves grepping for \"reus\" in the future.)",
+      "revId": "31e8bc38d77867524025dfb8eaff8aeca01ad2ad",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "1851d20e_0cdc9f3c",
         "filename": "/PATCHSET_LEVEL",
         "patchSetId": 2
