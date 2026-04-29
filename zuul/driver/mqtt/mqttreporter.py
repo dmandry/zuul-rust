@@ -90,21 +90,41 @@ class MQTTReporter(BaseReporter):
                 'job_uuid': job.uuid,
                 'voting': job.voting,
             }
+            change = item.getChangeForJob(job)
+            change_info = {
+                'project': change.project.name,
+                'branch': getattr(change, 'branch', ''),
+                'change_url': change.url,
+                'change': getattr(change, 'number', ''),
+                'patchset': getattr(change, 'patchset', ''),
+                'commit_id': getattr(change, 'commit_id', ''),
+                'owner': getattr(change, 'owner', ''),
+                'ref': getattr(change, 'ref', ''),
+            }
+            other_change_info = []
+            for other_ref in job.other_refs:
+                for change in item.changes:
+                    if change.cache_key == other_ref:
+                        other_change_info.append({
+                            'project': change.project.name,
+                            'branch': getattr(change, 'branch', ''),
+                            'change_url': change.url,
+                            'change': getattr(change, 'number', ''),
+                            'patchset': getattr(change, 'patchset', ''),
+                            'commit_id': getattr(change, 'commit_id', ''),
+                            'owner': getattr(change, 'owner', ''),
+                            'ref': getattr(change, 'ref', ''),
+                        })
+                    break
+            job_informations.update({
+                'change': change_info,
+                'other_changes': other_change_info
+            })
             build = buildset.getBuild(job)
             if build:
                 # Report build data if available
                 (result, web_url) = item.formatJobResult(job)
-                change = item.getChangeForJob(job)
-                change_info = {
-                    'project': change.project.name,
-                    'branch': getattr(change, 'branch', ''),
-                    'change_url': change.url,
-                    'change': getattr(change, 'number', ''),
-                    'patchset': getattr(change, 'patchset', ''),
-                    'commit_id': getattr(change, 'commit_id', ''),
-                    'owner': getattr(change, 'owner', ''),
-                    'ref': getattr(change, 'ref', ''),
-                }
+                result = build.result
                 # Build a list of job dependencies as `job.dependencies`
                 # only gives us `JobDependency` instances that don't
                 # have any information about the UUID of the exact job
@@ -115,7 +135,6 @@ class MQTTReporter(BaseReporter):
                     buildset.job_graph.job_dependencies[job.uuid]
                 ]
                 job_informations.update({
-                    'change': change_info,
                     'uuid': build.uuid,
                     'start_time': build.start_time,
                     'end_time': build.end_time,
