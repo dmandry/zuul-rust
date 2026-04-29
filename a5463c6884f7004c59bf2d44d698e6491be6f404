@@ -16,6 +16,40 @@
       "message": "recheck",
       "revId": "a5463c6884f7004c59bf2d44d698e6491be6f404",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2fa86a00_9f18e9a6",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1478,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-29T18:58:13Z",
+      "side": 1,
+      "message": "If we include this at all, we should indicate that it is only provided for nodes from nodepool.",
+      "revId": "a5463c6884f7004c59bf2d44d698e6491be6f404",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b4fad5fa_54de14eb",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1514,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-04-29T18:58:13Z",
+      "side": 1,
+      "message": "I think we mention too much AWS-driver specifics here.  I would suggest that we just indicate that it contains driver-specific node information.  If we want to get more specific, we should add a section in the AWS driver docs.\n\nWe will probably use this for openstack too -- we should actually move the host_id above into this dict.",
+      "revId": "a5463c6884f7004c59bf2d44d698e6491be6f404",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
