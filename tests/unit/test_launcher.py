@@ -4057,6 +4057,59 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 break
 
     @simple_layout('layouts/nodepool-reuse.yaml', enable_nodepool=True)
+    @okay_tracebacks('_checkNodescanRequest')
+    def test_reuse_unreachable(self):
+        # Regression test to validate a node can be reused
+        # multiple times, while performing a nodescan each time.
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+        node = nodes[0]
+        # Get a copy so we're not modifying the launcher's
+        node = model.ProviderNode.fromZK(ctx, path=node.getPath())
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                node.unassign(ctx)
+                node.assign(ctx, request_id="dne", tenant_name="test")
+                # Modify the request so that the max zxid of the
+                # request cache is later than the node assignment
+                # (since the "dne" request does not exist).
+                with request.locked(ctx), request.activeContext(ctx):
+                    request.priority += 1
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "node to be recycled"):
+            node.refresh(ctx)
+            if node.state == node.State.READY:
+                break
+
+        def my_advance(*args, **kw):
+            raise Exception("Test exception")
+
+        # Fail the nodescan and check that the node is correctly
+        # marked as failed and NOT reused.
+        with mock.patch.object(
+            zuul.launcher.server.NodescanRequest, 'advance', my_advance
+        ):
+            with node.locked(ctx):
+                with node.activeContext(ctx):
+                    node.assign(ctx, request_id="dne", tenant_name="test")
+                    with request.locked(ctx), request.activeContext(ctx):
+                        request.priority += 1
+                    node.setState(node.State.USED)
+
+            for _ in iterate_timeout(10, "node to be failed"):
+                node.refresh(ctx)
+                if node.state == node.State.FAILED:
+                    break
+
+        self.assertEqual(node.State.FAILED, node.state)
+
+    @simple_layout('layouts/nodepool-reuse.yaml', enable_nodepool=True)
     def test_min_retention_time(self):
         ctx = self.createZKContext(None)
         request = self.requestNodes(['macos14-m2'])
