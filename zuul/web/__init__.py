@@ -1398,6 +1398,23 @@ class ZuulWebOIDC(object):
             "use": "sig",
             "kid": f"{alg}-{version}"
         })
+        # We remove the key_ops for a few reasons:
+        # 1) The RFC frowns on having both "use" and "key_ops":
+        #    https://datatracker.ietf.org/doc/html/rfc7517#section-4.3
+        #    (However, it's not explicitly disallowed, and it says
+        #    that if both are present, they should be conisstent, and
+        #    "signature" (use) "verification" (key_ops) sounds
+        #    consistent).
+        # 2) Both AWS and Azure have undocumented prohibitions against
+        #    supplying both for use with their federated identity
+        #    services (STS, Service principal authentication).
+        # 3) AWS will accept either but not both.
+        # 4) Azure will only accept "use".
+        # 5) Github's JWKS only supplies "use".
+        # Therefore, it seems like the best option is to add "use" and
+        # drop "key_ops" (which, as of this writing, is included
+        # automatically by pyjwt, but "use" is not).
+        jwk_dict.pop('key_ops', None)
 
         return jwk_dict
 
