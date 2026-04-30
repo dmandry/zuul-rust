@@ -277,6 +277,55 @@ pipeline.
          can be forced to a specific value by e.g. defining it in a config
          repo.
 
+      .. attr:: parameters
+         :type: list
+
+         If :attr:`pipeline.allow-parameters` for this pipeline is set
+         to `true`, then this may be set to a list of parameters that
+         should be supplied by the user when enqueing changes.
+
+         .. attr:: name
+         :required:
+
+         The name of the parameter.  This must be a valid Ansible
+         variable name.
+
+         .. attr:: type
+
+         One of the following input types:
+
+            .. value:: string
+
+            .. value:: selection
+
+            .. value:: multiple-selection
+
+            .. value:: bool
+
+         .. attr:: description
+
+         Descriptive text about the parameter.
+
+         .. attr:: values
+            :type: list
+
+         If the parameter is a `selection` or `multiple-selection`,
+         this is a list of the permissible values.
+
+         .. attr:: default
+
+         A suggested default value.  This may be used by the web
+         interface or other client applications to supply a default
+         value, but it is not automatically used by Zuul if no value
+         is supplied with the enqueue command.
+
+         .. attr:: required
+
+         Whether the parameter is required.  This is provided to the
+         web interface and other client applications but is not
+         enforced by the enqueue command.
+
+
 .. _project-template:
 
 Project Template
