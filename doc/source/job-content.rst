@@ -95,6 +95,7 @@ order of precedence is:
 #. :ref:`Job extra variables <user_jobs_job_extra_variables>`
 #. :ref:`Secrets <user_jobs_secrets>`
 #. :ref:`Job variables <user_jobs_job_variables>`
+#. :ref:`Parameters <user_jobs_parameters>`
 #. :ref:`Project variables <user_jobs_project_variables>`
 #. :ref:`File variables <user_jobs_file_variables>`
 #. :ref:`Parent job results <user_jobs_parent_results>`
@@ -163,6 +164,20 @@ Any variables specified in the job definition (using the
 They are added to the ``vars`` section of the inventory file under the
 ``all`` hosts group, so they are available to all hosts.  Simply refer
 to them by the name specified in the job's ``vars`` section.
+
+.. _user_jobs_parameters:
+
+Parameters
+~~~~~~~~~~
+
+Any parameters specified when the item was enqueued are available to
+jobs as Ansible host variables in the same way as :ref:`job variables
+<user_jobs_job_variables>`.
+
+This is only supported for items manually enqueued using the web
+interface or API, and only in pipelines that support parameters with
+the :attr:`pipeline.allow-parameters` and
+:attr:`project.<pipeline>.parameters` configuration attributes.
 
 .. _user_jobs_project_variables:
 
