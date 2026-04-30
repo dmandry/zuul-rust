@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    Support for pipelines that run parameterized builds has been
+    added.  This supports a workflow where users may manually enqueue
+    branches or tags using the web interface while supplying
+    parameters that are passed to the resulting builds as Ansible
+    variables.  See the :attr:`pipeline.allow-parameters` and
+    :attr:`project.<pipeline>.parameters` configuration attributes.
