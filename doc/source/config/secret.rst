@@ -48,6 +48,13 @@ following Zuul claims by default:
 
      ``secret:{zuul tenant}/{canonical project name}/{secret name}``
 
+   The `canonical project name` in the sub is the location of the
+   definition of the secret (not the location of the job where it is
+   used).  That is because the sub is intended to identify the secret
+   itself, so that services can base their authorization systems on
+   the basis of Zuul's own rules about what projects and jobs are
+   permitted to use the secret.
+
 The following items are not stable identifiers and may not be suitable
 for use in matching.  Caution is advised when using these.
 
