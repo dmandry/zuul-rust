@@ -1,0 +1,16 @@
+---
+features:
+  - |
+    Support for receiving trigger events from Gerrit's ``webhooks``
+    plugin over HTTP has been added to the Gerrit driver.  This is
+    intended as a lightweight alternative to the SSH ``stream-events``
+    listener for deployments that prefer not to manage an SSH key or
+    open port 29418.  Set ``webhook_events=true`` on the connection
+    and configure the Gerrit ``webhooks`` plugin to POST to the new
+    ``/api/connection/<connection-name>/payload`` endpoint exposed by
+    zuul-web.  An optional ``webhook_token`` connection setting
+    enables shared-secret authentication; the secret is supplied as a
+    ``?token=`` query parameter on the configured webhook URL.  See
+    the Gerrit driver documentation for details, including the
+    delivery-guarantee trade-off relative to the queued event sources
+    (Kafka, Kinesis, Google Cloud Pub/Sub).
