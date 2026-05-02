@@ -18,6 +18,7 @@ import collections
 import copy
 import datetime
 import enum
+import hmac
 import itertools
 import json
 import logging
@@ -32,6 +33,8 @@ import time
 import urllib
 import urllib.parse
 import weakref
+
+import cherrypy
 
 import cachetools
 from typing import Dict, List
@@ -59,6 +62,7 @@ from zuul.driver.gerrit.gerriteventgcloudpubsub import (
     GerritGcloudPubsubEventListener,
 )
 from zuul.driver.git.gitwatcher import GitWatcher
+from zuul.web.handler import BaseWebController
 from zuul.lib import tracing
 from zuul.lib.logutil import get_annotated_logger
 from zuul.model import Ref, Tag, Branch, Project, FalseWithReason
@@ -619,6 +623,54 @@ class GerritEventProcessor:
         return change
 
 
+class GerritWebController(BaseWebController):
+    log = logging.getLogger("zuul.GerritWebController")
+
+    # Reject bodies larger than 1 MiB.  Real Gerrit webhook payloads are
+    # well under 100 KiB; this is purely a guard against abuse.
+    MAX_BODY_BYTES = 1024 * 1024
+
+    def __init__(self, zuul_web, connection):
+        self.connection = connection
+        self.zuul_web = zuul_web
+        self.token = self.connection.connection_config.get('webhook_token')
+
+    def _validateToken(self, headers, token_param):
+        if not self.token:
+            return
+        provided = token_param or headers.get('x-gerrit-token')
+        if not provided:
+            raise cherrypy.HTTPError(
+                401,
+                'Token required: provide ?token=... or X-Gerrit-Token header.')
+        if not hmac.compare_digest(self.token, provided):
+            raise cherrypy.HTTPError(401, 'Invalid token.')
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
+    def payload(self, token=None):
+        headers = {k.lower(): v for k, v in cherrypy.request.headers.items()}
+        self._validateToken(headers, token)
+
+        content_length = headers.get('content-length')
+        if content_length is not None:
+            try:
+                if int(content_length) > self.MAX_BODY_BYTES:
+                    raise cherrypy.HTTPError(413, 'Request body too large.')
+            except ValueError:
+                raise cherrypy.HTTPError(400, 'Invalid Content-Length.')
+
+        body = cherrypy.request.body.read(self.MAX_BODY_BYTES + 1)
+        if len(body) > self.MAX_BODY_BYTES:
+            raise cherrypy.HTTPError(413, 'Request body too large.')
+        try:
+            json_body = json.loads(body.decode('utf-8'))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise cherrypy.HTTPError(400, 'Invalid JSON: %s' % e)
+        self.connection.addEvent(json_body)
+        return {'ok': True}
+
+
 class GerritConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
     driver_name = 'gerrit'
     log = logging.getLogger("zuul.GerritConnection")
@@ -641,6 +693,7 @@ class GerritConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
     EVENT_SOURCE_KAFKA = 'kafka'
     EVENT_SOURCE_KINESIS = 'kinesis'
     EVENT_SOURCE_GCLOUD_PUBSUB = 'gcloudpubsub'
+    EVENT_SOURCE_WEBHOOK = 'webhook'
 
     def __init__(self, driver, connection_name, connection_config):
         super(GerritConnection, self).__init__(driver, connection_name,
@@ -678,6 +731,9 @@ class GerritConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             self.event_source = self.EVENT_SOURCE_KINESIS
         elif self.connection_config.get('gcloud_pubsub_project', None):
             self.event_source = self.EVENT_SOURCE_GCLOUD_PUBSUB
+        elif self.connection_config.get('webhook_events', False) in [
+                'true', 'True', '1', 1, 'TRUE', True]:
+            self.event_source = self.EVENT_SOURCE_WEBHOOK
         self.replication_delay = int(self.connection_config.get(
             'replication_delay', 0))
 
@@ -1415,8 +1471,12 @@ class GerritConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
 
         # If the event might trigger Zuul reconfiguration actions, we
         # keep it; otherwise check to see if it matches our
-        # pre-filters:
-        if not (
+        # pre-filters.  The pre-filter set is only populated in the
+        # scheduler process; when this method is called from zuul-web
+        # (e.g. via the HTTP webhook event source) the set is empty
+        # and we simply enqueue the event for the scheduler-side
+        # connector to handle.
+        if self.watched_event_filters and not (
                 event._branch_ref_update or
                 event.default_branch_changed or
                 event.change_number):
@@ -2046,6 +2106,11 @@ class GerritConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
     def getEventQueue(self):
         return getattr(self, "event_queue", None)
 
+    def getWebController(self, zuul_web):
+        if self.event_source == self.EVENT_SOURCE_WEBHOOK:
+            return GerritWebController(zuul_web, self)
+        return None
+
     def stopEventSourceThread(self):
         if self.event_thread:
             self.event_thread.stop()
@@ -2060,6 +2125,8 @@ class GerritConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             self.startAWSKinesisListener()
         elif self.event_source == self.EVENT_SOURCE_GCLOUD_PUBSUB:
             self.startGcloudPubsubListener()
+        elif self.event_source == self.EVENT_SOURCE_WEBHOOK:
+            self.log.info("Using HTTP webhook event source")
         else:
             self.log.warning("No gerrit event source configured")
             self.startRefWatcherThread()
