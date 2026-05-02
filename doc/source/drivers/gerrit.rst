@@ -29,9 +29,10 @@ Zuul interacts with Gerrit in up to three ways:
 * Fetching source code
 * Reporting results
 
-Trigger events arrive over an event stream, either SSH (via the
-``gerrit stream-events`` command) or other protocols such as Kafka,
-AWS Kinesis, or Google Cloud Pub/Sub.
+Trigger events arrive over an event stream.  Zuul supports several
+event sources: SSH (via the ``gerrit stream-events`` command), HTTP
+webhooks (via the Gerrit ``webhooks`` plugin), Kafka, AWS Kinesis,
+and Google Cloud Pub/Sub.
 
 Fetching source code may happen over SSH or HTTP.
 
@@ -137,6 +138,15 @@ The supported options in ``zuul.conf`` connections are:
       introduce a delay in event processing.  Zuul will ensure that at
       least this amount of time (in seconds) has passed before
       processing the corresponding event.
+
+   .. attr:: webhook_token
+
+      When set, Zuul will receive trigger events via HTTP POST requests
+      from Gerrit's ``webhooks`` plugin instead of via the SSH
+      ``stream-events`` listener, and will use this value as a shared
+      secret to authenticate incoming requests.  See `HTTP Webhook
+      Event Support`_ for details and the required Gerrit-side
+      configuration.
 
 
 SSH Configuration
@@ -384,6 +394,74 @@ There are some implications for event delivery:
       account.  If not provided, then Google Cloud local auth is used.
       If Zuul is not running in the same Google Cloud project as
       Gerrit, this is required.
+
+.. _gerrit_webhook:
+
+HTTP Webhook Event Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Zuul supports receiving trigger events from Gerrit's ``webhooks``
+plugin.  This may be used as an alternative to SSH stream-events when
+the Gerrit ``Stream Events`` permission or SSH key management is
+undesirable.
+
+Unlike Kafka, Kinesis, and Google Cloud Pub/Sub, HTTP webhooks do not
+provide event delivery guarantees.  If Zuul is unreachable when Gerrit
+fires a webhook, the event is lost and Zuul will not be notified.  If
+guaranteed delivery is required, use one of the queued event sources
+instead.
+
+To use this event source:
+
+1. Set ``webhook_token`` to a shared secret in the Zuul connection
+   configuration.  Its presence selects the HTTP webhook event source,
+   and Zuul will reject payloads whose ``token`` query parameter does
+   not match.
+
+2. Configure the Gerrit ``webhooks`` plugin (via its REST API) to POST
+   events to Zuul's payload endpoint::
+
+     curl -u "admin:password" -X PUT \
+       "https://<gerrit>/a/config/server/webhooks~projects/All-Projects/remotes/zuul" \
+       -H "Content-Type: application/json" \
+       -d '{
+         "url": "https://<zuul-web>/api/connection/<connection-name>/payload?token=<secret>",
+         "sslVerify": true,
+         "events": ["patchset-created", "change-abandoned", "change-restored",
+                    "change-merged", "comment-added", "ref-updated",
+                    "reviewer-added", "topic-changed", "hashtags-changed"]
+       }'
+
+   You choose which events the ``webhooks`` plugin sends.  The list
+   above covers the event types Zuul acts on; you may omit any that
+   your pipelines do not use, or add others that the plugin supports.
+
+.. note::
+
+   The ``webhooks`` plugin is bundled with the official Gerrit Docker
+   image.  For manual installation, see the `Gerrit webhooks plugin
+   documentation
+   <https://gerrit.googlesource.com/plugins/webhooks/+/refs/heads/master/src/main/resources/Documentation/config.md>`_.
+
+.. attr:: <gerrit webhook connection>
+
+   .. attr:: webhook_token
+      :required:
+
+      A shared secret used to authenticate incoming webhook requests
+      from Gerrit, and whose presence selects the HTTP webhook event
+      source.  Zuul will reject any request that does not supply a
+      matching value via the ``token`` query parameter.
+
+      .. code-block:: ini
+
+         [connection gerrit]
+         driver=gerrit
+         server=review.example.com
+         user=zuul
+         password=secret
+         webhook_token=mysecret
+
 
 Trigger Configuration
 ---------------------

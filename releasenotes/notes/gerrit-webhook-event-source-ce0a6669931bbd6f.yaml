@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    Support for receiving trigger events from Gerrit's ``webhooks``
+    plugin over HTTP has been added to the Gerrit driver.
+
+    See :ref:`gerrit_webhook` for configuration details.
