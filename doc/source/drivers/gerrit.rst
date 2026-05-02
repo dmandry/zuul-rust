@@ -29,9 +29,10 @@ Zuul interacts with Gerrit in up to three ways:
 * Fetching source code
 * Reporting results
 
-Trigger events arrive over an event stream, either SSH (via the
-``gerrit stream-events`` command) or other protocols such as Kafka,
-AWS Kinesis, or Google Cloud Pub/Sub.
+Trigger events arrive over an event stream.  Zuul supports several
+event sources: SSH (via the ``gerrit stream-events`` command), HTTP
+webhooks (via the Gerrit ``webhooks`` plugin), Kafka, AWS Kinesis,
+and Google Cloud Pub/Sub.
 
 Fetching source code may happen over SSH or HTTP.
 
@@ -137,6 +138,20 @@ The supported options in ``zuul.conf`` connections are:
       introduce a delay in event processing.  Zuul will ensure that at
       least this amount of time (in seconds) has passed before
       processing the corresponding event.
+
+   .. attr:: event_source
+
+      Selects the event source used to receive trigger events.  When
+      set, this option takes priority over the default SSH
+      ``stream-events`` listener.
+
+      .. value:: webhook
+
+         Receive events via HTTP POST requests from Gerrit's
+         ``webhooks`` plugin.  Zuul exposes a ``payload`` endpoint
+         at ``/api/connection/<connection-name>/payload`` that Gerrit
+         posts events to.  See `HTTP Webhook Event Support`_ for
+         details and the required Gerrit-side configuration.
 
 
 SSH Configuration
@@ -384,6 +399,93 @@ There are some implications for event delivery:
       account.  If not provided, then Google Cloud local auth is used.
       If Zuul is not running in the same Google Cloud project as
       Gerrit, this is required.
+
+HTTP Webhook Event Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Zuul supports receiving trigger events from Gerrit's ``webhooks``
+plugin.  This may be used as an alternative to SSH stream-events and
+is the simplest event source to configure — it requires no SSH key
+management and no Gerrit ``Stream Events`` permission.
+
+Unlike Kafka, Kinesis, and Google Cloud Pub/Sub, HTTP webhooks do not
+provide event delivery guarantees.  If Zuul is unreachable when Gerrit
+fires a webhook, the event is lost and Zuul will not be notified.  For
+most installations this is acceptable, as Zuul will also detect changes
+via branch polling.  If guaranteed delivery is required, use one of the
+queued event sources instead.
+
+To use this event source:
+
+1. Set ``event_source=webhook`` in the Zuul connection configuration.
+
+2. Optionally set ``webhook_token`` to a shared secret.  Gerrit will
+   include the token as a query parameter in the webhook URL; Zuul
+   will reject requests that do not supply the correct value.
+
+3. Configure the Gerrit ``webhooks`` plugin (via its REST API) to POST
+   events to Zuul's payload endpoint::
+
+     curl -u "admin:password" -X PUT \
+       "http://<gerrit>:8080/a/config/server/webhooks~projects/All-Projects/remotes/zuul" \
+       -H "Content-Type: application/json" \
+       -d '{
+         "url": "http://<zuul-web>:9000/api/connection/<connection-name>/payload?token=<secret>",
+         "events": ["patchset-created", "change-abandoned", "change-restored",
+                    "change-merged", "comment-added", "ref-updated",
+                    "reviewer-added", "topic-changed", "hashtags-changed"]
+       }'
+
+.. note::
+
+   The Gerrit ``webhooks`` plugin must be installed on the Gerrit
+   server.  It is bundled with the official Gerrit Docker image.  See
+   the `Gerrit webhooks plugin documentation
+   <https://gerrit.googlesource.com/plugins/webhooks/+/refs/heads/master/src/main/resources/Documentation/config.md>`_
+   for installation and configuration details.
+
+.. note::
+
+   The ``pending-check`` event type (used by the Gerrit Checks plugin)
+   is not delivered via the ``webhooks`` plugin.  It continues to
+   function via Zuul's internal checks poller regardless of which event
+   source is selected.
+
+.. attr:: <gerrit webhook connection>
+
+   .. attr:: event_source
+      :required:
+
+      Must be set to ``webhook`` to enable this event source.
+
+      .. code-block:: ini
+
+         [connection gerrit]
+         driver=gerrit
+         server=review.example.com
+         user=zuul
+         password=secret
+         event_source=webhook
+         webhook_token=mysecret
+
+   .. attr:: webhook_token
+
+      A shared secret used to authenticate incoming webhook requests
+      from Gerrit.  If set, Zuul will reject any request that does not
+      supply a matching value via the ``token`` query parameter or the
+      ``X-Gerrit-Token`` HTTP header.  If not set, Zuul will accept all
+      requests to the endpoint without authentication.
+
+      It is strongly recommended to set this value in any deployment
+      where the Zuul web endpoint is reachable from outside a trusted
+      network.
+
+      To pass the token to Gerrit, append it to the webhook URL:
+
+      .. code-block:: text
+
+         http://<zuul-web>:9000/api/connection/<connection-name>/payload?token=<secret>
+
 
 Trigger Configuration
 ---------------------
