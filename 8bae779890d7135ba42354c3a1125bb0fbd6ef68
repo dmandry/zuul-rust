@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "745e2640_6a46d00c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-04T15:56:09Z",
+      "side": 1,
+      "message": "I did not fully review the diff, but this is the plan we discussed and I\u0027m ready to proceed. I trust corvus to revert things properly.",
+      "revId": "8bae779890d7135ba42354c3a1125bb0fbd6ef68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
