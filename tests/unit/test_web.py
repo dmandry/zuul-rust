@@ -449,6 +449,7 @@ class TestWeb(BaseTestWeb):
         }
         run = [{
             'path': 'playbooks/project-test1.yaml',
+            'preserve_home_paths': [],
             'roles': [{
                 'implicit': True,
                 'project_canonical_name': 'review.example.com/common-config',
@@ -651,6 +652,7 @@ class TestWeb(BaseTestWeb):
             return {
                 'cleanup': cleanup,
                 'path': path,
+                'preserve_home_paths': [],
                 'roles': [{
                     'implicit': True,
                     'project_canonical_name':
@@ -1336,6 +1338,8 @@ class TestWeb(BaseTestWeb):
                 'secrets': {},
                 'semaphores': [],
                 'path': 'playbooks/project-test1.yaml',
+                'preserve_home_paths': [],
+
             }],
             'pipeline_builds_images': False,
             'pre_playbooks': [],
