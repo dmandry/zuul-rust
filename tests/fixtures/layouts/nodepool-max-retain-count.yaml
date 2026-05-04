@@ -1,0 +1,43 @@
+- flavor:
+    name: normal
+
+- image:
+    name: debian-local
+    type: zuul
+    max-retain-count: 5
+
+- label:
+    name: debian-local-normal
+    image: debian-local
+    flavor: normal
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    object-storage:
+      bucket-name: zuul
+    image-defaults:
+      max-retain-count: 4
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian-local
+        max-retain-count: 3
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    image-defaults:
+      max-retain-count: 2
+    labels:
+      - name: debian-local-normal
+    images:
+      - name: debian-local
+        retain-count: 3

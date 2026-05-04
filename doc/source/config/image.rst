@@ -95,3 +95,17 @@ The attributes available to top-level image objects are:
       in-use) image is included in the count.  So a `retain-count`
       of 1 means to only keep the current in-use image; a count of 2
       means to keep one extra image as a backup.
+
+   .. attr:: max-retain-count
+      :type: int
+
+      For :value:`image.type.zuul` images only.
+
+      A limit for how many images to keep available.  This provides
+      an upper limit for the `retain-count` attribute; any attempt
+      to set retain-count higher than this value in any images,
+      sections or providers that inherit this value will result in
+      an error.
+
+      Once max-retain-count, sections and providers that inherit it
+      may not set it to a larger value, but may further reduce it.

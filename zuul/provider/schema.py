@@ -321,7 +321,21 @@ common_image_zuul = vs.Schema({
         means to keep one extra image as a backup.
         """,
         default=2,
-    ): vs.All(int, vs.Range(min=1))
+    ): vs.All(int, vs.Range(min=1)),
+    Optional(
+        'max-retain-count',
+        config=False,
+        doc="""\
+        A limit for how many images to keep available.  This provides
+        an upper limit for the `retain-count` attribute; any attempt
+        to set retain-count higher than this value in any images,
+        sections or providers that inherit this value will result in
+        an error.
+
+        Once max-retain-count, sections and providers that inherit it
+        may not set it to a larger value, but may further reduce it.
+        """,
+    ): Nullable(vs.All(int, vs.Range(min=1))),
 })
 
 # The image attributes that, in addition to those above, can appear in

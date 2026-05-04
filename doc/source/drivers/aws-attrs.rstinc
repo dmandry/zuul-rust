@@ -536,6 +536,18 @@
          the documentation under `EBS volume type`_ for the specific
          volume type for details.
 
+      .. attr:: max-retain-count
+         :type: int
+
+         A limit for how many images to keep available.  This provides
+         an upper limit for the `retain-count` attribute; any attempt
+         to set retain-count higher than this value in any images,
+         sections or providers that inherit this value will result in
+         an error.
+
+         Once max-retain-count, sections and providers that inherit it
+         may not set it to a larger value, but may further reduce it.
+
       .. attr:: python-path
          :type: str
 
@@ -1028,6 +1040,18 @@
          the volume.  The default varies based on the volume type; see
          the documentation under `EBS volume type`_ for the specific
          volume type for details.
+
+      .. attr:: max-retain-count
+         :type: int
+
+         A limit for how many images to keep available.  This provides
+         an upper limit for the `retain-count` attribute; any attempt
+         to set retain-count higher than this value in any images,
+         sections or providers that inherit this value will result in
+         an error.
+
+         Once max-retain-count, sections and providers that inherit it
+         may not set it to a larger value, but may further reduce it.
 
       .. attr:: name
          :type: str

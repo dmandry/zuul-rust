@@ -1935,3 +1935,38 @@ class TestNodepoolConfig(LauncherBaseTestCase):
                       layout.loading_errors[0].error)
         self.assertIn('project_canonical_name',
                       layout.loading_errors[0].error)
+
+    @simple_layout('layouts/nodepool-retain-count-inherit1.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_retain_count_inherit1(self):
+        # Test image max-retain-count decreasing down the hierarchy
+        # (which is okay)
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(0, len(layout.loading_errors))
+
+    @simple_layout('layouts/nodepool-retain-count-inherit2.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_retain_count_inherit2(self):
+        # Test that we can't increase the max-retain-count default
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('increase image max-retain-count',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/nodepool-retain-count-inherit3.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_retain_count_inherit3(self):
+        # Test that we can't increase the specific image max-retain-count
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('increase image max-retain-count',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/nodepool-max-retain-count.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_max_retain_count(self):
+        # Test that we can't retain more than the max
+        layout = self.scheds.first.sched.abide.tenants.get('tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('more than the max-retain-count',
+                      layout.loading_errors[0].error)
