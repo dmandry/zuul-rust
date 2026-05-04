@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7158dbde_b3e14d8c",
+        "filename": "releasenotes/notes/kube-config-467c4c0cfef10d8d.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-04T18:18:32Z",
+      "side": 1,
+      "message": "The existing file appears to be releasenotes/notes/kube-config-1ca5078fdcd2f076.yaml which is a different file path to this one. The content appears to be the same?",
+      "revId": "7f17fb0d693b16677ec28a68bd64562bff0f913d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
