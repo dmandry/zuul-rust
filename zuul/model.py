@@ -3606,6 +3606,7 @@ class PlaybookContext(ConfigObject):
         # Set internally after inheritance
         self.nesting_level = None
         self.frozen_trusted = None
+        self.preserve_home_paths = ()
 
     def __repr__(self):
         return '<PlaybookContext %s %s>' % (self.source_context,
@@ -3711,6 +3712,7 @@ class PlaybookContext(ConfigObject):
             path=self.path,
             cleanup=self.cleanup,
             nesting_level=self.nesting_level,
+            preserve_home_paths=self.preserve_home_paths,
         )
 
     def toSchemaDict(self):
@@ -3722,6 +3724,7 @@ class PlaybookContext(ConfigObject):
                         for secret in self.secrets],
             'semaphores': [{'name': sem.name} for sem in self.semaphores],
             'cleanup': self.cleanup,
+            'preserve_home_paths': self.preserve_home_paths,
         }
         if self.source_context:
             d['source_context'] = self.source_context.toDict()
@@ -4495,6 +4498,7 @@ class Job(ConfigObject):
             failure_output=(),
             image_build_name=None,
             type='regular',
+            preserve_home_paths=(),
         )
 
         override_control = defaultdict(lambda: True)
@@ -5282,7 +5286,7 @@ class Job(ConfigObject):
 
     def freezePlaybooks(self, pblist, layout, semaphore_handler):
         """Take a list of playbooks, and return a copy of it updated with this
-        job's roles.
+        job's roles and homedir paths.
 
         """
 
@@ -5290,6 +5294,7 @@ class Job(ConfigObject):
         for old_pb in pblist:
             pb = old_pb.copy()
             pb.roles = self.roles
+            pb.preserve_home_paths = self.preserve_home_paths
             pb.freezeSecrets(layout)
             pb.freezeTrusted(layout)
             pb.freezeSemaphores(layout, semaphore_handler)
@@ -5330,7 +5335,7 @@ class Job(ConfigObject):
                                  'required_projects', 'include_projects',
                                  'exclude_projects', 'allowed_projects',
                                  'semaphores', 'failure_output',
-                                 'include_vars']):
+                                 'include_vars', 'preserve_home_paths']):
                     setattr(self, k, other._get(k))
 
         # Don't set final above so that we don't trip an error halfway
@@ -5371,9 +5376,12 @@ class Job(ConfigObject):
                 self.protected_origin = \
                     other.source_context.project_canonical_name
 
-        # We must update roles before any playbook contexts
+        # We must update roles and home paths before any playbook contexts
         if other._get('roles') is not None:
             self.addRoles(other, layout)
+        if other._get('preserve_home_paths'):
+            self.preserve_home_paths = tuple(set(self.preserve_home_paths +
+                                                 other.preserve_home_paths))
 
         # Freeze the nodeset
         self.nodeset = self.getNodeset(layout)
