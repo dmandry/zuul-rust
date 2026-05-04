@@ -826,6 +826,7 @@ class JobParser(object):
                       'failure-output': override_list(str),
                       'image-build-name': str,
                       'type': vs.Any('regular', 'initializer', 'reporter'),
+                      'preserve-home-paths': to_list(str),
                       'attribute-control': {
                           vs.Any(
                               'requires',
@@ -908,6 +909,13 @@ class JobParser(object):
         'failure-output': 'failure_output',
         'image-build-name': 'image_build_name',
     }
+
+    # These paths could be used to trick Zuul's ansible and should
+    # never be considered safe to preserve between playbooks.
+    disallowed_home_paths = [
+        '.ssh/config',
+        '.kube/config',
+    ]
 
     def _getAttrControlJobAttr(self, attr):
         return self.attr_control_job_attr_map.get(attr, attr)
@@ -1285,6 +1293,15 @@ class JobParser(object):
                     for control, value in controls.items():
                         if control == 'final' and value is True:
                             job.final_control[jobattr] = True
+
+        if 'preserve-home-paths' in conf:
+            with self.pcontext.confAttr(conf,
+                                        'preserve-home-paths') as conf_paths:
+                for path in self.disallowed_home_paths:
+                    if path in conf_paths:
+                        raise Exception(f"{path} not allowed in "
+                                        "preserve-home-paths")
+                job.preserve_home_paths = tuple(conf_paths)
         return job
 
     def _makeZuulRole(self, role):

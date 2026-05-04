@@ -23,3 +23,12 @@
         - name: controller
           label: label1
     attempts: 1
+
+- job:
+    name: empty-base
+    parent: null
+    nodeset:
+      nodes:
+        - name: controller
+          label: label1
+    attempts: 1

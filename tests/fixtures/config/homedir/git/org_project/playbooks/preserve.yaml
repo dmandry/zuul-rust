@@ -1,0 +1,31 @@
+- hosts: localhost
+  tasks:
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/good-parent-file"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists
+
+    # TODO: This should be deleted in the future, but cause a warning now
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/bad-parent-file"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists
+
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/test/good-job-file"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists
+
+    # TODO: This should be deleted in the future, but cause a warning now
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/test/bad-job-file"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists

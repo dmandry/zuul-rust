@@ -587,6 +587,13 @@ class JobDirPlaybook(object):
         self.secrets_keys = set()
         self.secrets_oidc = {}
         self.semaphores = []
+        self.preserve_home_paths = set([
+            '.ssh/known_hosts',  # Created/used by the executor
+            # We can remove these if we don't make noisy warnings for them
+            '.rpmdb/rpmdb.sqlite-shm',  # Automatically created by ansible
+            '.rpmdb/rpmdb.sqlite-wal',  # Automatically created by ansible
+            '.rpmdb/rpmdb.sqlite',    # Automatically created by ansible
+        ])
         self.nesting_level = None
         self.cleanup = False
         self.ignore_result = False
@@ -1124,6 +1131,7 @@ class AnsibleJob(object):
         self.thread = None
         self.project_info = {}
         self.merge_ops = []
+        self.warnings = []
         self.private_key_file = get_default(self.executor_server.config,
                                             'executor', 'private_key_file',
                                             '~/.ssh/id_rsa')
@@ -1765,9 +1773,9 @@ class AnsibleJob(object):
         if self.aborted_reason == self.RESULT_DISK_FULL:
             result = 'DISK_FULL'
         data, secret_data = self.getResultData()
-        warnings = []
-        self.mapLines(args, data, item_commit, warnings)
-        warnings.extend(get_warnings_from_result_data(data, logger=self.log))
+        self.mapLines(args, data, item_commit, self.warnings)
+        self.warnings.extend(get_warnings_from_result_data(
+            data, logger=self.log))
 
         # If we need to snapshot any nodes, do that here
         if result == 'SUCCESS':
@@ -1776,7 +1784,7 @@ class AnsibleJob(object):
 
         result_data = dict(result=result,
                            error_detail=error_detail,
-                           warnings=warnings,
+                           warnings=self.warnings,
                            unreachable=unreachable,
                            data=data,
                            secret_data=secret_data)
@@ -2581,6 +2589,9 @@ class AnsibleJob(object):
         jobdir_playbook.canonical_name_and_path = os.path.join(
             project.canonical_name, playbook['path'])
         jobdir_playbook.semaphores = playbook['semaphores']
+        jobdir_playbook.preserve_home_paths |= set(playbook.get(
+            'preserve_home_paths', []))
+
         path = None
 
         if not jobdir_playbook.trusted:
@@ -3375,12 +3386,26 @@ class AnsibleJob(object):
             except Exception:
                 self.log.exception("Exception while killing ansible process:")
 
+    def cleanHomeDir(self, playbook):
+        for root, dirs, files in os.walk(self.jobdir.home):
+            for fn in files:
+                rpath = os.path.join(root, fn)[len(self.jobdir.home) + 1:]
+                if rpath not in playbook.preserve_home_paths:
+                    self.warnings.append(
+                        f"File {rpath} found in build home directory "
+                        "during playbook "
+                        f"{playbook.canonical_name_and_path}.  "
+                        "Add to preserve-home-paths if safe, "
+                        "or otherwise remove.")
+
     def runAnsible(self, cmd, timeout, playbook, ansible_version,
                    allow_pre_fail, wrapped=True, cleanup=False,
                    phase=None, index=None):
         # Cleanup any forbidden files in the home directory.
         # TODO: add a job-based allowlist of files to explicitly copy
         # between playbook runs.
+
+        self.cleanHomeDir(playbook)
 
         for path in self.jobdir.path_blocklist:
             try:

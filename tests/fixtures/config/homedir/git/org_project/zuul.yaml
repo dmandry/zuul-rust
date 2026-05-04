@@ -10,8 +10,28 @@
     files:
       - link
 
+- job:
+    name: preserve-parent
+    parent: empty-base
+    pre-run: playbooks/preserve-parent-pre.yaml
+    post-run: playbooks/preserve-parent-post.yaml
+    preserve-home-paths:
+      - good-parent-file
+
+- job:
+    name: preservejob
+    parent: preserve-parent
+    pre-run: playbooks/preserve-pre.yaml
+    run: playbooks/preserve.yaml
+    post-run: playbooks/preserve-post.yaml
+    preserve-home-paths:
+      - test/good-job-file
+    files:
+      - preserve
+
 - project:
     check:
       jobs:
         - testjob
         - linkjob
+        - preservejob
