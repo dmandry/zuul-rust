@@ -2,4 +2,4 @@
   tasks:
     - copy:
         content: "{{ zuul_success }}"
-        dest: "{{ zuul.executor.work_root }}/cleanup_flag"
+        dest: "{{ zuul._test.test_root }}/builds/{{ zuul.build }}.cleanup.flag"
