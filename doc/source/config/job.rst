@@ -1621,3 +1621,33 @@ Here is an example of two job definitions:
       If this is an image build job (see :ref:`image-creation`), set
       this to the name of the image that is to be built.  This must
       match an :attr:`image` object defined in the same project.
+
+   .. attr:: preserve-home-paths
+      :type: list
+
+      This is a list of files which are permitted to remain in the
+      build's home directory on the executor between playbook runs.
+      This has no effect on files on the remote nodes.
+
+      Files in the build's home directory could potentially be used to
+      trick later playbooks into behaving differently than their
+      authors intended.  Do not add files to this list without
+      evaluating whether they are safe.
+
+      For security purposes Zuul will (in a future version) delete any
+      files found in the build's home directory between playbook runs
+      unless they are listed here.  During inheritance, files will be
+      added to the list, but the list is frozen at each step and only
+      the files accumulated at any particular inheritance level will
+      be applied to the playbooks specified at that level.  In other
+      words, if a parent job lists a single file, then only that
+      single file will be permitted to be present when that parent
+      job's playbooks run, even if a job inherits from it and adds a
+      second file to the list.
+
+      If Zuul detects a file present which is not in this list, then
+      it will include a warning in the build report.  A future version
+      of Zuul will delete the file.
+
+      The file `.ssh/known_hosts` is implicitly always included.  The
+      files `.ssh/config` and `.kube/config` are never allowed.

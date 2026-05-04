@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    A new job configuration attribute, :attr:`job.preserve-home-paths`
+    has been added.  It may be used to specify files in the build home
+    directory which are safe to preserve between playbook runs.  If
+    any files not in this list are detected, Zuul will issue a warning
+    suggesting that they be added to this list if they are safe.  A
+    future version of Zuul will delete such files.

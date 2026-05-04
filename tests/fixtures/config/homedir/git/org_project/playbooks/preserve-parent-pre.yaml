@@ -1,0 +1,33 @@
+- hosts: localhost
+  tasks:
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/good-parent-file"
+      register: results
+    - assert:
+        that:
+          - not results.stat.exists
+    - file:
+        path: "{{ ansible_env['HOME'] }}/good-parent-file"
+        state: touch
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/good-parent-file"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists
+
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/bad-parent-file"
+      register: results
+    - assert:
+        that:
+          - not results.stat.exists
+    - file:
+        path: "{{ ansible_env['HOME'] }}/bad-parent-file"
+        state: touch
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/bad-parent-file"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists

@@ -20,6 +20,7 @@ import configparser
 import multiprocessing
 import os
 import re
+import textwrap
 import time
 from unittest import mock
 
@@ -1834,3 +1835,59 @@ class TestExecutorHomedir(AnsibleZuulTestCase):
         self.assertEqual(A.reported, 1)
         self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
         self.assertIn('Symlink detected', A.messages[0])
+
+    def test_preserve_home_paths(self):
+        # Test that the files in the path blocklist are deleted
+        # between runs.
+        files = {'preserve': 'run'}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=files)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='preservejob', result='SUCCESS'),
+        ], ordered=False)
+
+        warnings = [
+            # Nothing from preserve-parent-pre
+            # Preserve-pre
+            ('bad-parent-file', 'preserve-pre.yaml'),
+            # Preserve
+            ('bad-parent-file', 'preserve.yaml'),
+            ('test/bad-job-file', 'preserve.yaml'),
+            # Preserve-post
+            ('bad-parent-file', 'preserve-post.yaml'),
+            ('test/bad-job-file', 'preserve-post.yaml'),
+            # Preserve-parent-post
+            ('bad-parent-file', 'preserve-parent-post.yaml'),
+            ('test/bad-job-file', 'preserve-parent-post.yaml'),
+            ('test/good-job-file', 'preserve-parent-post.yaml'),
+        ]
+
+        for (fn, pb) in warnings:
+            msg = (
+                f'File {fn} found in build home directory during playbook '
+                f'review.example.com/org/project/playbooks/{pb}.  Add to '
+                'preserve-home-paths if safe, or otherwise remove.'
+            )
+            self.assertIn(msg, A.messages[0])
+
+    def test_disallowed_preserve_home_paths(self):
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: test
+                preserve-home-paths:
+                  - .ssh/config
+            """)
+
+        file_dict = {'zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertEqual(A.reported, 1)
+        self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
+        self.assertIn('not allowed in preserve-home-paths', A.messages[0])
