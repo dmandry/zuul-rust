@@ -1,5 +1,40 @@
 {
-  "comments": [],
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9fb05d47_fa95bfa6",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 34975
+      },
+      "writtenOn": "2026-05-04T08:46:18Z",
+      "side": 1,
+      "message": "That\u0027s some descriptive commit message. Do you by a chance have some links to the \"previously approved fixes\", so that I can have a look at what\u0027s being fixed and how?",
+      "revId": "37b54283676b372740cd3f33b85171ac677da9de",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8e6153fe_3acc0d86",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 10351,
+      "author": {
+        "id": 34975
+      },
+      "writtenOn": "2026-05-04T08:46:18Z",
+      "side": 1,
+      "message": "This is deliberate? Why?",
+      "revId": "37b54283676b372740cd3f33b85171ac677da9de",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ],
   "submitRequirementResults": [
     {
       "submitRequirement": {
