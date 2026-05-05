@@ -1,8 +1,8 @@
 - hosts: all
   tasks:
     - copy:
-        src: "{{zuul._test.test_root}}/builds/{{zuul.build}}.flag"
-        dest: "{{zuul._test.test_root}}/builds/{{zuul.build}}.failed"
+        src: "{{zuul.executor.work_root}}/flag"
+        dest: "{{zuul.executor.work_root}}/failed"
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.pre.flag"
+        path: "{{zuul.executor.work_root}}/pre_flag"
         state: touch

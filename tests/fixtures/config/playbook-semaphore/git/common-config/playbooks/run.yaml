@@ -2,12 +2,12 @@
   tasks:
     - debug: var=waitpath
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.run_start.flag"
+        path: "{{zuul.executor.work_root}}/run_start_flag"
         state: touch
     # Do not finish until test creates the flag file
     - wait_for:
         state: present
         path: "{{waitpath}}"
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.run_end.flag"
+        path: "{{zuul.executor.work_root}}/run_end_flag"
         state: touch

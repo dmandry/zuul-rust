@@ -22,7 +22,7 @@
 - job:
     name: python27
     vars:
-      waitpath: '{{zuul._test.test_root}}/builds/{{zuul.build}}/test_wait'
+      waitpath: '{{zuul.executor.work_root}}/test_wait'
     run: playbooks/python27.yaml
     nodeset:
       nodes:

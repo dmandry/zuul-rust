@@ -2771,8 +2771,6 @@ class ZuulTestCase(BaseTestCase):
                             self.copyDirToRepo(
                                 project,
                                 os.path.join(git_path, reponame))
-        # Make test_root persist after ansible run for .flag test
-        config.set('executor', 'trusted_rw_paths', self.test_root)
         for section, section_dict in self.test_config.zuul_config.items():
             for k, v in section_dict.items():
                 config.set(section, k, v)

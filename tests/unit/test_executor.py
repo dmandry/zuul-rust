@@ -1435,8 +1435,7 @@ class AnsibleCallbackConfigsMixin:
                          c['callback_test_callback']['file_name'])
         callback_result_file = os.path.join(
             self.getJobFromHistory('callback-test').jobdir.root,
-            'trusted/project_0/review.example.com/',
-            'common-config/playbooks/callback_plugins/',
+            'work',
             c['callback_test_callback']['file_name'])
         self.assertTrue(os.path.isfile(callback_result_file))
         build = self.getJobFromHistory('callback-test', result='SUCCESS')

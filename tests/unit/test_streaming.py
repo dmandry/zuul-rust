@@ -293,7 +293,7 @@ class TestStreaming(TestStreamingBase):
         # Allow the job to complete, which should close the streaming
         # connection (and terminate the thread) as well since the log file
         # gets closed/deleted.
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
         self.waitUntilSettled()
         streamer_thread.join()
@@ -398,7 +398,7 @@ class TestStreaming(TestStreamingBase):
         client1.event.wait()
 
         # Allow the job to complete
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
 
         # Wait for the websocket client to complete, which it should when
@@ -476,7 +476,7 @@ class TestStreaming(TestStreamingBase):
         client2.event.wait()
 
         # Allow the job to complete
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
 
         # Wait for the websocket client to complete, which it should when
@@ -564,7 +564,7 @@ class TestStreaming(TestStreamingBase):
                 break
 
         # Allow the job to complete
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
 
         self.waitUntilSettled()
@@ -626,7 +626,7 @@ class TestStreaming(TestStreamingBase):
         finger_client_event.wait()
 
         # Allow the job to complete
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
 
         # Wait for the finger client to complete, which it should when
@@ -725,7 +725,7 @@ class TestAuthWebsocketStreaming(TestStreamingBase):
         client3 = self.runWSClient(web.port, build.uuid, token=token)
 
         # Allow the job to complete
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
 
         # Wait for the websocket client to complete, which it should when
@@ -894,7 +894,7 @@ class TestStreamingZones(TestStreamingBase):
         gateway_us_west.history.clear()
 
         # Allow the job to complete
-        flag_file = os.path.join(build_dir, 'test_wait')
+        flag_file = os.path.join(build_dir, 'work', 'test_wait')
         open(flag_file, 'w').close()
 
         # Wait for the finger client to complete, which it should when

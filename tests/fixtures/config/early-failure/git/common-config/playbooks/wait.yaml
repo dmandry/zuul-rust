@@ -1,14 +1,14 @@
 - hosts: localhost
   tasks:
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.wait_start.flag"
+        path: "{{zuul.executor.work_root}}/wait_start_flag"
         state: touch
     # Do not finish until test creates the flag file
     - debug:
-        msg: "Waiting for {{zuul._test.test_root}}/builds/{{zuul.build}}/wait_continue_flag"
+        msg: "Waiting for {{zuul.executor.work_root}}/wait_continue_flag"
     - wait_for:
         state: present
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}/wait_continue_flag"
+        path: "{{zuul.executor.work_root}}/wait_continue_flag"
     - file:
-        path: "{{zuul._test.test_root}}/builds/{{zuul.build}}.wait_end.flag"
+        path: "{{zuul.executor.work_root}}/wait_end_flag"
         state: touch

@@ -1,4 +1,4 @@
 - hosts: localhost
   tasks:
     - name: Execute script
-      shell: "bash {{ ansible_env['HOME'] }}/{{ zuul.projects['review.example.com/org/requiredproject'].src_dir }}/script.sh"
+      shell: "bash {{ zuul.executor.work_root }}/{{ zuul.projects['review.example.com/org/requiredproject'].src_dir }}/script.sh"
