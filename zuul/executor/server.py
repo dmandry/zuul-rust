@@ -2215,9 +2215,17 @@ class AnsibleJob(object):
                     # None so the job can be retried. However we still want to
                     # run post playbooks to get a chance to upload logs.
                     allow_post_result = False
-                    should_retry = True
                     error_detail = "Host unreachable"
                     unreachable = True
+                    if self.early_failure:
+                        # Override the result and make sure
+                        # we don't retry.
+                        self.log.info(
+                            "Setting unreachable result as FAILURE "
+                            "due to early failure detection")
+                        result = 'FAILURE'
+                    else:
+                        should_retry = True
                     break
                 elif job_status == self.RESULT_NORMAL:
                     success = (job_code == 0)
@@ -2239,6 +2247,12 @@ class AnsibleJob(object):
                     # run it again.
                     unknown_result = True
                     aborted = True
+                    if self.early_failure:
+                        result = 'ERROR'
+                        error_detail = "Early failure and indeterminate result"
+                    else:
+                        result = None
+                        error_detail = None
                     break
 
         # check if we need to pause here
@@ -2287,9 +2301,10 @@ class AnsibleJob(object):
                 # so the job can be retried. However in the case of post
                 # playbooks we should still try to run all playbooks to get a
                 # chance to upload logs.
-                should_retry = True
                 error_detail = "Host unreachable"
                 unreachable = True
+                if allow_post_result:
+                    should_retry = True
             if post_status != self.RESULT_NORMAL or post_code != 0:
                 # If we encountered a pre-failure, that takes
                 # precedence over the post result.
@@ -2302,7 +2317,7 @@ class AnsibleJob(object):
                     self._logFinalPlaybookError()
 
         if unknown_result:
-            return None, unreachable, None
+            return result, unreachable, None
 
         if aborted:
             return 'ABORTED', unreachable, None
