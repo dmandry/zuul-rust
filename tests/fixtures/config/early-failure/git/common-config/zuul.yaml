@@ -79,6 +79,16 @@
       - playbooks/wait.yaml
 
 - job:
+    name: early-failure-unreachable
+    files:
+      - early-failure-unreachable.txt
+    failure-output:
+      - "^.*output indicates failure.*$"
+    attempts: 1
+    run:
+      - playbooks/early-failure-unreachable.yaml
+
+- job:
     name: wait
     run:
       - playbooks/wait.yaml
@@ -97,6 +107,7 @@
         - early-failure
         - pre-failure
         - output-failure
+        - early-failure-unreachable
     gate:
       jobs:
         - early-failure
