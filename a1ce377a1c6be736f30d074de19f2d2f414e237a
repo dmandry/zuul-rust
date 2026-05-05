@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "06e45e69_a25b5612",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2248,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-05T17:26:31Z",
+      "side": 1,
+      "message": "If we, somehow, reach this case, this will cause a retry as well.  I\u0027m not sure what would cause this; perhaps an oom kill or similar.  If we want to keep the retry behavior, maybe we can just protect this like you did above:\n\n```\nif early_failure:\n  result \u003d \u0027ERROR\u0027\n  error_detail \u003d \"Early failure and indeterminate result\"\nelse:\n  return \u003d None\n  error_detail \u003d None\n```\n\nAnd make an accopanying change below...",
+      "revId": "a1ce377a1c6be736f30d074de19f2d2f414e237a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3ecadc9b_ee3d0dbb",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2314,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-05T17:26:31Z",
+      "side": 1,
+      "message": "Change this to `return result, unreachable, error_detail`",
+      "revId": "a1ce377a1c6be736f30d074de19f2d2f414e237a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
