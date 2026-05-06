@@ -289,7 +289,6 @@ class BubblewrapDriver(Driver, WrapperInterface):
             '-n', str(self.oom_score_adj),
             '--',
             'bwrap',
-            '--dir', '/tmp',
             '--tmpfs', '/tmp',
             '--dir', '/var',
             '--dir', '/var/tmp',
