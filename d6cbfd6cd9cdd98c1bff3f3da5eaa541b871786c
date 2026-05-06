@@ -1,5 +1,23 @@
 {
-  "comments": [],
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "803c446a_28b82467",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 2475
+      },
+      "writtenOn": "2026-05-06T21:50:27Z",
+      "side": 1,
+      "message": "I really welcome this change settling on `build nodes`, I kept being confused between worker/nodes. Thank you for this update @jim@acmegating.com!",
+      "revId": "d6cbfd6cd9cdd98c1bff3f3da5eaa541b871786c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ],
   "submitRequirementResults": [
     {
       "submitRequirement": {
@@ -16,7 +34,7 @@
       },
       "applicabilityExpressionResult": {},
       "submittabilityExpressionResult": {
-        "value": {"expression":{"expressionString":"label:Code-Review=MAX AND -label:Code-Review=MIN"},"status":"PASS","errorMessage":{"value":null},"passingAtoms":["label:Code-Review=MAX"],"failingAtoms":["label:Code-Review=MIN"]}
+        "value": {"expression":{"expressionString":"label:Code-Review=MAX AND -label:Code-Review=MIN"},"status":"PASS","errorMessage":{"value":null},"passingAtoms":["label:Code-Review=MAX"],"failingAtoms":["label:Code-Review=MIN"],"atomExplanations":{"value":null}}
       },
       "overrideExpressionResult": {},
       "patchSetCommitId": "d6cbfd6cd9cdd98c1bff3f3da5eaa541b871786c",
@@ -41,7 +59,7 @@
       },
       "applicabilityExpressionResult": {},
       "submittabilityExpressionResult": {
-        "value": {"expression":{"expressionString":"label:Verified=MAX AND -label:Verified=MIN"},"status":"PASS","errorMessage":{"value":null},"passingAtoms":["label:Verified=MAX"],"failingAtoms":["label:Verified=MIN"]}
+        "value": {"expression":{"expressionString":"label:Verified=MAX AND -label:Verified=MIN"},"status":"PASS","errorMessage":{"value":null},"passingAtoms":["label:Verified=MAX"],"failingAtoms":["label:Verified=MIN"],"atomExplanations":{"value":null}}
       },
       "overrideExpressionResult": {},
       "patchSetCommitId": "d6cbfd6cd9cdd98c1bff3f3da5eaa541b871786c",
@@ -66,7 +84,7 @@
       },
       "applicabilityExpressionResult": {},
       "submittabilityExpressionResult": {
-        "value": {"expression":{"expressionString":"label:Workflow=MAX AND -label:Workflow=MIN"},"status":"PASS","errorMessage":{"value":null},"passingAtoms":["label:Workflow=MAX"],"failingAtoms":["label:Workflow=MIN"]}
+        "value": {"expression":{"expressionString":"label:Workflow=MAX AND -label:Workflow=MIN"},"status":"PASS","errorMessage":{"value":null},"passingAtoms":["label:Workflow=MAX"],"failingAtoms":["label:Workflow=MIN"],"atomExplanations":{"value":null}}
       },
       "overrideExpressionResult": {},
       "patchSetCommitId": "d6cbfd6cd9cdd98c1bff3f3da5eaa541b871786c",
