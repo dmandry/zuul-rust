@@ -88,7 +88,12 @@ pipeline.
 
    .. attr:: branches
 
-      A list of branches to which this `project` stanza should apply.
+      A regular expression (or list of regular expressions) which describe to
+      to which branches this `project` stanza should apply.  A partial match
+      is treated as a valid match.  Therefore, be careful when specifying
+      branch names which are a partial match of other branch names
+      (e.g. `main` matches `maint`).  Enforce a full match, such like
+      `^main$`, to avoid ambiguity.
 
       If omitted on a `project` stanza within an
       :term:`untrusted-project` that is configuring its own project,
