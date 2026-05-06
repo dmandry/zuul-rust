@@ -1919,19 +1919,11 @@ class AnsibleJob(object):
             del data['zuul']['file_comments']
             return
 
-        repo = None
-        for project in args['projects']:
-            if (project['canonical_name'] !=
-                args['zuul']['project']['canonical_name']):
-                continue
-            repo = self.workspace_merger.getRepo(project['connection'],
-                                                 project['name'])
-        # If the repo doesn't exist, abort
-        if not repo:
-            return
-
-        selected_ref = args['zuul']['projects'][project['canonical_name']
-                                                ]['checkout']
+        zuul_project = args['zuul']['project']
+        # TODO: set checkout on zuul.project so we don't need to look
+        # this up in zuul.projects
+        selected_ref = args['zuul']['projects'][
+            zuul_project['canonical_name']]['checkout']
         lines = filecomments.extractLines(fc)
         new_lines = {}
         mappers = {}
@@ -1944,7 +1936,9 @@ class AnsibleJob(object):
             try:
                 mapper = mappers.get(filename)
                 if not mapper:
-                    mapper = repo.getLineMapper(commit, selected_ref, filename)
+                    mapper = self.getLineMapper(
+                        zuul_project,
+                        commit, selected_ref, filename)
                     mappers[filename] = mapper
                 new_lineno = mapper.mapLine(lineno)
             except Exception as e:
@@ -1962,6 +1956,53 @@ class AnsibleJob(object):
                 new_lines[(filename, lineno)] = new_lineno
 
         filecomments.updateLines(fc, new_lines)
+
+    def getLineMapper(self, project, commit, head, filename):
+        # project is args['zuul']['project']
+        env_copy, popen = self.getWrappedUtilityContext()
+        repo_dir = os.path.join(self.jobdir.work_root,
+                                project['src_dir'], '.git')
+        cmd = [
+            'git',
+            '--git-dir', repo_dir,
+            'diff',
+            '--no-color',
+            f'{commit}..{head}',
+            '--',
+            filename,
+        ]
+        proc = popen(
+            cmd,
+            cwd=self.jobdir.work_root,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+            env=env_copy,
+        )
+        diff, err = proc.communicate()
+        if err:
+            err = err.decode('utf-8')
+            self.log.warning("Error from line mapping diff: %s", err.strip())
+        diff = diff.decode('utf-8')
+        return filecomments.LineMapper(diff)
+
+    def getWrappedUtilityContext(self):
+        # Get a wrapped popen suitable for running a utility program
+        # inside the sandbox.  Does not include any mounts other than
+        # the work directory.
+        env_copy = {}
+        env_copy['TMP'] = self.jobdir.local_tmp
+        env_copy['HOME'] = self.jobdir.work_root
+        ro_paths = []
+        rw_paths = []
+        secrets = {}
+        wrapper = self.executor_server.execution_wrapper
+        context = wrapper.getExecutionContext(ro_paths, rw_paths, secrets)
+        return env_copy, context.getPopen(
+            work_dir=self.jobdir.work_root,
+            share_net=False,
+        )
 
     def doMergeChanges(self, items, repo_state, recent, merged_repos):
         try:
