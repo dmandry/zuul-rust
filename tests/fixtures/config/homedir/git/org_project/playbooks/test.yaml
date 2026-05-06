@@ -1,0 +1,44 @@
+- hosts: localhost
+  tasks:
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/.ssh/config"
+      register: results
+    - assert:
+        that:
+          - not results.stat.exists
+    - file:
+        path: "{{ ansible_env['HOME'] }}/.ssh/config"
+        state: touch
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/.ssh/config"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/.kube/config"
+      register: results
+    - assert:
+        that:
+          - not results.stat.exists
+    - file:
+        path: "{{ ansible_env['HOME'] }}/.kube"
+        state: directory
+    - file:
+        path: "{{ ansible_env['HOME'] }}/.kube/config"
+        state: touch
+    - stat:
+        path: "{{ ansible_env['HOME'] }}/.kube/config"
+      register: results
+    - assert:
+        that:
+          - results.stat.exists
+    # Also assert that $HOME matches homedir of effective uid
+    - command: whoami
+      register: username
+    - getent:
+        database: passwd
+        key: "{{ username.stdout }}"
+    - assert:
+        that:
+          - ansible_facts.getent_passwd[username.stdout][4] == ansible_env['HOME']
