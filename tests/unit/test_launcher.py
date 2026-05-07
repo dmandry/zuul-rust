@@ -3750,15 +3750,15 @@ class TestSnapshot(AnsibleZuulTestCase, LauncherBaseTestCase):
                    'advance',
                    advance)
 
-        orig_updateNodeFromInstance = zuul.launcher.server.Launcher.\
-            _updateNodeFromInstance
+        orig_updateNode = zuul.driver.aws.awsendpoint.AwsCreateStateMachine.\
+            _updateNode
 
-        def _updateNodeFromInstance(self, node, instance):
-            orig_updateNodeFromInstance(self, node, instance)
-            node.connection_type = 'local'
-        self.patch(zuul.launcher.server.Launcher,
-                   '_updateNodeFromInstance',
-                   _updateNodeFromInstance)
+        def _updateNode(self):
+            orig_updateNode(self)
+            self.node.connection_type = 'local'
+        self.patch(zuul.driver.aws.awsendpoint.AwsCreateStateMachine,
+                   '_updateNode',
+                   _updateNode)
 
     def _waitForUploads(self, image_cname, count=None):
         for _ in iterate_timeout(60, "upload to complete"):

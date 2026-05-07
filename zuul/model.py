@@ -3249,6 +3249,50 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
     def createSnapshot(self, context):
         self.snapshot.internalCreate(context)
 
+    def updateFromInstance(self, instance):
+        if instance is None:
+            return
+
+        # TODO:
+        # if (pool.use_internal_ip and
+        #     (instance.private_ipv4 or instance.private_ipv6)):
+        #     server_ip = instance.private_ipv4 or instance.private_ipv6
+        # else:
+        server_ip = instance.interface_ip
+
+        self.interface_ip = server_ip
+        self.public_ipv4 = instance.public_ipv4
+        self.private_ipv4 = instance.private_ipv4
+        self.public_ipv6 = instance.public_ipv6
+        self.private_ipv6 = instance.private_ipv6
+        self.host_id = instance.host_id
+        self.cloud = instance.cloud
+        self.region = instance.region
+        self.az = instance.az
+        self.driver_data = instance.driver_data
+
+        # If we did not know the resource information before
+        # launching, update it now.
+        self.quota = instance.getQuotaInformation()
+
+        # Optionally, if the node has updated values that we set from
+        # the image attributes earlier, set those.
+        for attr in ('username', 'python_path', 'shell_type',
+                     'connection_port', 'connection_type',
+                     'host_keys'):
+            if hasattr(instance, attr):
+                setattr(self, attr, getattr(instance, attr))
+
+        # As a special case for metastatic, if we got node_attributes
+        # from the backing driver, use them as default values and let
+        # the values from the pool override.
+        instance_node_attrs = getattr(instance, 'node_attributes', None)
+        if instance_node_attrs is not None:
+            attrs = instance_node_attrs.copy()
+            if self.attributes:
+                attrs.update(self.attributes)
+            self.attributes = attrs
+
 
 class SnapshotStatus:
     class Type(StrEnum):

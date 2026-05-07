@@ -76,7 +76,6 @@ def generate_password():
 
 class AzureDeleteStateMachine(statemachine.StateMachine):
     VM_DELETING = 'deleting vm'
-    COMPLETE = 'complete'
 
     def __init__(self, endpoint, node, log):
         self.log = log
@@ -106,7 +105,6 @@ class AzureCreateStateMachine(statemachine.StateMachine):
     VM_CREATING = 'creating vm'
     NIC_QUERY = 'querying nic'
     PIP_QUERY = 'querying pip'
-    COMPLETE = 'complete'
 
     def __init__(self, provider, endpoint, node, hostname, label,
                  flavor, image, image_external_id, tags, log):
@@ -239,13 +237,17 @@ class AzureCreateStateMachine(statemachine.StateMachine):
                 if 'ipAddress' not in self.public_ipv6['properties']:
                     all_found = False
             if all_found:
+                self._updateNode()
                 self.state = self.COMPLETE
 
         if self.state == self.COMPLETE:
             self.complete = True
-            return AzureInstance(self.endpoint.region, self.vm,
+
+    def _updateNode(self):
+        instance = AzureInstance(self.endpoint.region, self.vm,
                                  self.node.quota, self.nic,
                                  self.public_ipv4, self.public_ipv6)
+        self.node.updateFromInstance(instance)
 
 
 class AzureImageUploadJob(BaseImageUploadJob):

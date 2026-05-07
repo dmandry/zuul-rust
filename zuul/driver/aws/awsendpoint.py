@@ -72,7 +72,6 @@ class AwsDeleteStateMachine(statemachine.StateMachine):
     HOST_RELEASING = 'releasing host'
     INSTANCE_DELETING_START = 'start deleting instance'
     INSTANCE_DELETING = 'deleting instance'
-    COMPLETE = 'complete'
 
     def __init__(self, endpoint, node, log):
         self.log = log
@@ -131,7 +130,6 @@ class AwsCreateStateMachine(statemachine.StateMachine):
     HOST_ALLOCATING = 'allocating host'
     INSTANCE_CREATING_START = 'start creating instance'
     INSTANCE_CREATING = 'creating instance'
-    COMPLETE = 'complete'
 
     def __init__(self, provider, endpoint, node, hostname, label,
                  flavor, image, image_external_id, tags, log):
@@ -266,6 +264,7 @@ class AwsCreateStateMachine(statemachine.StateMachine):
             self.instance = self.endpoint._refresh(self.instance)
 
             if self.instance['State']['Name'].lower() == "running":
+                self._updateNode()
                 self.state = self.COMPLETE
             elif self.instance['State']['Name'].lower() == "terminated":
                 raise exceptions.LaunchStatusException(
@@ -275,15 +274,17 @@ class AwsCreateStateMachine(statemachine.StateMachine):
 
         if self.state == self.COMPLETE:
             self.complete = True
-            self.node.quota = self.endpoint.getQuotaForLabel(
-                self.label, self.flavor, self.instance['InstanceType'])
-            return AwsInstance(self.endpoint.region, self.instance,
+
+    def _updateNode(self):
+        self.node.quota = self.endpoint.getQuotaForLabel(
+            self.label, self.flavor, self.instance['InstanceType'])
+        instance = AwsInstance(self.endpoint.region, self.instance,
                                self.host, self.node.quota)
+        self.node.updateFromInstance(instance)
 
 
 class AwsSnapshotStateMachine(statemachine.StateMachine):
     SNAPSHOT_PENDING = 'snapshot pending'
-    COMPLETE = 'complete'
 
     def __init__(self, endpoint, node, log):
         self.log = log
