@@ -6323,15 +6323,15 @@ For CI problems and help debugging, contact ci@example.org"""
         # to order submitted.
 
         # * gate first - high priority - change C
-        self.assertEqual(reqs[0]['_oid'], '100-0000000002')
+        self.assertEqual(reqs[0]['_oid'], '300-0000000002')
         self.assertEqual(reqs[0]['node_types'], ['label1'])
         # * check second - normal priority - change B
-        self.assertEqual(reqs[1]['_oid'], '200-0000000001')
+        self.assertEqual(reqs[1]['_oid'], '500-0000000001')
         self.assertEqual(reqs[1]['node_types'], ['label1'])
         # * post third - low priority - change A
         # additionally, the post job defined uses an ubuntu-xenial node,
         # so we include that check just as an extra verification
-        self.assertEqual(reqs[2]['_oid'], '300-0000000000')
+        self.assertEqual(reqs[2]['_oid'], '700-0000000000')
         self.assertEqual(reqs[2]['node_types'], ['ubuntu-xenial'])
 
         self.fake_nodepool.unpause()
@@ -6375,20 +6375,20 @@ For CI problems and help debugging, contact ci@example.org"""
         # The requests come back sorted by priority.
 
         # Change A, first change for project, high relative priority.
-        self.assertEqual(reqs[0]['_oid'], '200-0000000000')
+        self.assertEqual(reqs[0]['_oid'], '500-0000000000')
         self.assertEqual(reqs[0]['relative_priority'], 0)
 
         # Change C, first change for project1, high relative priority.
-        self.assertEqual(reqs[1]['_oid'], '200-0000000002')
+        self.assertEqual(reqs[1]['_oid'], '500-0000000002')
         self.assertEqual(reqs[1]['relative_priority'], 0)
 
         # Change B, second change for project, lower relative priority.
-        self.assertEqual(reqs[2]['_oid'], '200-0000000001')
+        self.assertEqual(reqs[2]['_oid'], '500-0000000001')
         self.assertEqual(reqs[2]['relative_priority'], 1)
 
         # Change D, first change for project2 shared with project1,
         # lower relative priority than project1.
-        self.assertEqual(reqs[3]['_oid'], '200-0000000003')
+        self.assertEqual(reqs[3]['_oid'], '500-0000000003')
         self.assertEqual(reqs[3]['relative_priority'], 1)
 
         # Fulfill only the first request
@@ -6402,16 +6402,16 @@ For CI problems and help debugging, contact ci@example.org"""
         reqs = self.fake_nodepool.getNodeRequests()
 
         # Change B, now first change for project, equal priority.
-        self.assertEqual(reqs[0]['_oid'], '200-0000000001')
+        self.assertEqual(reqs[0]['_oid'], '500-0000000001')
         self.assertEqual(reqs[0]['relative_priority'], 0)
 
         # Change C, now first change for project1, equal priority.
-        self.assertEqual(reqs[1]['_oid'], '200-0000000002')
+        self.assertEqual(reqs[1]['_oid'], '500-0000000002')
         self.assertEqual(reqs[1]['relative_priority'], 0)
 
         # Change D, first change for project2 shared with project1,
         # still lower relative priority than project1.
-        self.assertEqual(reqs[2]['_oid'], '200-0000000003')
+        self.assertEqual(reqs[2]['_oid'], '500-0000000003')
         self.assertEqual(reqs[2]['relative_priority'], 1)
 
         self.fake_nodepool.unpause()
@@ -6487,17 +6487,17 @@ For CI problems and help debugging, contact ci@example.org"""
 
         # Change A, first change for shared queue, high relative
         # priority.
-        self.assertEqual(reqs[0]['_oid'], '100-0000000000')
+        self.assertEqual(reqs[0]['_oid'], '300-0000000000')
         self.assertEqual(reqs[0]['relative_priority'], 0)
 
         # Change C, first change for independent project, high
         # relative priority.
-        self.assertEqual(reqs[1]['_oid'], '100-0000000002')
+        self.assertEqual(reqs[1]['_oid'], '300-0000000002')
         self.assertEqual(reqs[1]['relative_priority'], 0)
 
         # Change B, second change for shared queue, lower relative
         # priority.
-        self.assertEqual(reqs[2]['_oid'], '100-0000000001')
+        self.assertEqual(reqs[2]['_oid'], '300-0000000001')
         self.assertEqual(reqs[2]['relative_priority'], 1)
 
         self.fake_nodepool.unpause()
@@ -8391,9 +8391,9 @@ class TestSemaphore(ZuulTestCase):
         status = tenant.layout.pipeline_managers["check"].formatStatusJSON()
         jobs = status["change_queues"][0]["heads"][0][0]["jobs"]
         self.assertEqual(jobs[0]["waiting_status"],
-                         'node request: 200-0000000000')
+                         'node request: 500-0000000000')
         self.assertEqual(jobs[1]["waiting_status"],
-                         'node request: 200-0000000001')
+                         'node request: 500-0000000001')
         self.assertEqual(jobs[2]["waiting_status"],
                          'semaphores: test-semaphore')
 

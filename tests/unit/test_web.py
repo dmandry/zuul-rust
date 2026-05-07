@@ -2243,7 +2243,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
             'pipeline_name': 'gate',
             'job_name': 'check-job',
             'labels': ['debian-normal'],
-            'priority': 100,
+            'priority': 300,
             'image_names': None,
             'image_upload_uuid': None,
             'relative_priority': 0,
