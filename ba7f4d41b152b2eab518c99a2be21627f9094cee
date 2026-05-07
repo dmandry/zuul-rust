@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "0dabb200_87ecee3e",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1324,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "b61dd688_e5d2ab82",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "4237eab7_afb6cd36",
@@ -31,6 +49,24 @@
       "writtenOn": "2026-05-07T00:16:14Z",
       "side": 1,
       "message": "In the case of a multiple-selection would you maybe want a list/tuple default value?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "995f0769_b8b82dea",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1429,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "Good point!",
+      "parentUuid": "4237eab7_afb6cd36",
       "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -52,6 +88,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "722a7ba1_fafd5bc0",
+        "filename": "zuul/driver/sql/sqlreporter.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 74,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "The latter: no coordination required.",
+      "parentUuid": "22098fbd_e96f0776",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "6567d685_0dca7a78",
@@ -65,6 +119,24 @@
       "writtenOn": "2026-05-07T00:16:14Z",
       "side": 1,
       "message": "I guess we don\u0027t need a Zookeeper db model api bump beacuse we default to None for parameters and only write them out if we know about them. Similarly we\u0027ll deserialize and ignore them if present in the record but loaded by the old version of the code?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "dfc524a7_4039fa94",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 7158,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "Yep that\u0027s the idea.",
+      "parentUuid": "6567d685_0dca7a78",
       "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -103,6 +175,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "7dd76a1e_8ebb76d7",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9084,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "b86401e9_749615bc",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "07213c68_e023443c",
@@ -116,6 +206,24 @@
       "writtenOn": "2026-05-07T00:16:14Z",
       "side": 1,
       "message": "Does this mean we won\u0027t override parameter values? I guess these apply at a pipeline level so maybe overriding simply isn\u0027t a concern.",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "21f286a7_b32db390",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9667,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "If there are two project stanzas, then we will not let the second stanza override the parameters in the first stanza.  There\u0027s a general approach of \"first one wins\" with project stanzas (as you can see above with fail_fast -- elsewhere it also applies with queue names and types; debug is obviously different).  So this sort of mimics that approach for conflict resolution.",
+      "parentUuid": "07213c68_e023443c",
       "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -139,6 +247,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "6af1b124_1d1fc83a",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 840,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "We don\u0027t yet have a way to express openapi\u0027s \"oneof\" types... we usually just punt and use str, so I\u0027d prefer to do that here; this is mostly just for human consumption; I don\u0027t think it\u0027s critical.",
+      "parentUuid": "f2e976d8_255edbd3",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "f939375d_003fe521",
         "filename": "zuul/web/__init__.py",
         "patchSetId": 1
@@ -150,6 +276,24 @@
       "writtenOn": "2026-05-07T00:16:14Z",
       "side": 1,
       "message": "Should this check if ref is present before getting it from body? I don\u0027t know that we\u0027ve enforced anything about the schema of the request body before this point. That way we can respond with an appropriate error rather than a what I assume will be a generic 500 error?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c22b6707_0e952c34",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 3432,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-07T14:58:13Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "f939375d_003fe521",
       "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
