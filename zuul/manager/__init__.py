@@ -1279,12 +1279,11 @@ class PipelineManager(metaclass=ABCMeta):
         return None
 
     def _calculateNodeRequestPriority(self, build_set, job):
-        precedence_adjustment = 0
-        precedence = self.pipeline.precedence
+        initial_priority = self.pipeline.precedence
+        priority_adjustment = 0
         if self._getPausedParent(build_set, job):
-            precedence_adjustment = -1
-        initial_precedence = model.PRIORITY_MAP[precedence]
-        return max(0, initial_precedence + precedence_adjustment)
+            priority_adjustment = -1
+        return max(0, initial_priority + priority_adjustment)
 
     def _executeJobs(self, item, jobs):
         log = get_annotated_logger(self.log, item.event)

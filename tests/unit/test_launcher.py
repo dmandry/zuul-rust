@@ -3282,15 +3282,15 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
         # priority.
 
         # * gate first - high priority - change C
-        self.assertEqual(reqs[0].priority, 100)
+        self.assertEqual(reqs[0].priority, 300)
         self.assertEqual(reqs[0].labels, ['label1'])
         # * check second - normal priority - change B
-        self.assertEqual(reqs[1].priority, 200)
+        self.assertEqual(reqs[1].priority, 500)
         self.assertEqual(reqs[1].labels, ['label1'])
         # * post third - low priority - change A
         # additionally, the post job defined uses an ubuntu-xenial node,
         # so we include that check just as an extra verification
-        self.assertEqual(reqs[2].priority, 300)
+        self.assertEqual(reqs[2].priority, 700)
         self.assertEqual(reqs[2].labels, ['ubuntu-xenial'])
 
         self.hold_nodeset_requests_in_queue = False
@@ -3335,20 +3335,20 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
         reqs = self.launcher.api.getNodesetRequests()
 
         # Change A, first change for project, high relative priority.
-        self.assertEqual(reqs[0].priority, 200)
+        self.assertEqual(reqs[0].priority, 500)
         self.assertEqual(reqs[0].relative_priority, 0)
 
         # Change C, first change for project1, high relative priority.
-        self.assertEqual(reqs[1].priority, 200)
+        self.assertEqual(reqs[1].priority, 500)
         self.assertEqual(reqs[1].relative_priority, 0)
 
         # Change B, second change for project, lower relative priority.
-        self.assertEqual(reqs[2].priority, 200)
+        self.assertEqual(reqs[2].priority, 500)
         self.assertEqual(reqs[2].relative_priority, 1)
 
         # Change D, first change for project2 shared with project1,
         # lower relative priority than project1.
-        self.assertEqual(reqs[3].priority, 200)
+        self.assertEqual(reqs[3].priority, 500)
         self.assertEqual(reqs[3].relative_priority, 1)
 
         # Fulfill only the first request
@@ -3363,16 +3363,16 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
         reqs = self.launcher.api.getNodesetRequests()
 
         # Change B, now first change for project, equal priority.
-        self.assertEqual(reqs[0].priority, 200)
+        self.assertEqual(reqs[0].priority, 500)
         self.assertEqual(reqs[0].relative_priority, 0)
 
         # Change C, now first change for project1, equal priority.
-        self.assertEqual(reqs[1].priority, 200)
+        self.assertEqual(reqs[1].priority, 500)
         self.assertEqual(reqs[1].relative_priority, 0)
 
         # Change D, first change for project2 shared with project1,
         # still lower relative priority than project1.
-        self.assertEqual(reqs[2].priority, 200)
+        self.assertEqual(reqs[2].priority, 500)
         self.assertEqual(reqs[2].relative_priority, 1)
 
         self.hold_nodeset_requests_in_queue = False
@@ -3445,17 +3445,17 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
 
         # Change A, first change for shared queue, high relative
         # priority.
-        self.assertEqual(reqs[0].priority, 100)
+        self.assertEqual(reqs[0].priority, 300)
         self.assertEqual(reqs[0].relative_priority, 0)
 
         # Change C, first change for independent project, high
         # relative priority.
-        self.assertEqual(reqs[1].priority, 100)
+        self.assertEqual(reqs[1].priority, 300)
         self.assertEqual(reqs[1].relative_priority, 0)
 
         # Change B, second change for shared queue, lower relative
         # priority.
-        self.assertEqual(reqs[2].priority, 100)
+        self.assertEqual(reqs[2].priority, 300)
         self.assertEqual(reqs[2].relative_priority, 1)
 
         self.hold_nodeset_requests_in_queue = False

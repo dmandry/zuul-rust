@@ -10262,7 +10262,7 @@ class TestJobPause(AnsibleZuulTestCase):
         self.executor_server.verbose = True
 
         # Second node request should fail
-        fail = {'_oid': '199-0000000001'}
+        fail = {'_oid': '499-0000000001'}
         self.fake_nodepool.addFailRequest(fail)
 
         A = self.fake_gerrit.addFakeChange('org/project2', 'master', 'A')
@@ -10761,7 +10761,7 @@ class TestProvidesRequiresMysql(ZuulTestCase):
         status = tenant.layout.pipeline_managers["gate"].formatStatusJSON()
         jobs = status["change_queues"][0]["heads"][0][0]["jobs"]
         self.assertEqual(jobs[0]["waiting_status"],
-                         'node request: 100-0000000000')
+                         'node request: 300-0000000000')
         self.assertEqual(jobs[1]["waiting_status"],
                          'dependencies: image-builder')
 
@@ -11353,7 +11353,7 @@ class TestJobPausePriority(AnsibleZuulTestCase):
 
         reqs = self.fake_nodepool.getNodeRequests()
         self.assertEqual(len(reqs), 1)
-        self.assertEqual(reqs[0]['_oid'], '100-0000000000')
+        self.assertEqual(reqs[0]['_oid'], '300-0000000000')
         self.assertEqual(reqs[0]['provider'], None)
 
         self.fake_nodepool.unpause()
@@ -11368,7 +11368,7 @@ class TestJobPausePriority(AnsibleZuulTestCase):
                 break
 
         self.assertEqual(len(reqs), 1)
-        self.assertEqual(reqs[0]['_oid'], '099-0000000001')
+        self.assertEqual(reqs[0]['_oid'], '299-0000000001')
         self.assertEqual(reqs[0]['provider'], 'test-provider')
 
         self.fake_nodepool.unpause()

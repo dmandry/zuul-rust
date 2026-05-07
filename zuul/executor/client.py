@@ -23,7 +23,6 @@ from zuul.model import (
     BuildCompletedEvent,
     BuildRequest,
     BuildStartedEvent,
-    PRIORITY_MAP,
 )
 from zuul.zk.event_queues import PipelineResultEventQueue
 from zuul.zk.executor import ExecutorApi
@@ -176,7 +175,7 @@ class ExecutorClient(object):
                 pipeline_name=manager.pipeline.name,
                 zone=executor_zone,
                 event_id=item.event.zuul_event_id,
-                precedence=PRIORITY_MAP[pipeline.precedence],
+                precedence=pipeline.precedence,
             )
         self.executor_api.submit(request, params)
         build.updateAttributes(manager.current_context,
