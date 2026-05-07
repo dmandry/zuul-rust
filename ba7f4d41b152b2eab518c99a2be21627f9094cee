@@ -1,0 +1,157 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b61dd688_e5d2ab82",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1324,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "See comment below.",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4237eab7_afb6cd36",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1429,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "In the case of a multiple-selection would you maybe want a list/tuple default value?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "22098fbd_e96f0776",
+        "filename": "zuul/driver/sql/sqlreporter.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 74,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "Does this update require coordination when rolling out to ensure the new DB column exists? Or is it a non issue because any reporter trying to add parameters will have already created the column on startup and any reporter unaware of parameters can write to the db without adding parameters in the old and new db state?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6567d685_0dca7a78",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 7158,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "I guess we don\u0027t need a Zookeeper db model api bump beacuse we default to None for parameters and only write them out if we know about them. Similarly we\u0027ll deserialize and ignore them if present in the record but loaded by the old version of the code?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "70abbde5_ed5fb632",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9043,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "Note we\u0027re modifying the base class for ChangeManagementEvent which affects dequeue, enqueue, etc. But I think we\u0027re only currently making use of parameters in the enqueue event class.",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b86401e9_749615bc",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9084,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "See above comment about model api version bumps.",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "07213c68_e023443c",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9667,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "Does this mean we won\u0027t override parameter values? I guess these apply at a pipeline level so maybe overriding simply isn\u0027t a concern.",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f2e976d8_255edbd3",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 840,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "This may need updating depending on whether we change the voluptuous schema type in the configloader.",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f939375d_003fe521",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 3432,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T00:16:14Z",
+      "side": 1,
+      "message": "Should this check if ref is present before getting it from body? I don\u0027t know that we\u0027ve enforced anything about the schema of the request body before this point. That way we can respond with an appropriate error rather than a what I assume will be a generic 500 error?",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
