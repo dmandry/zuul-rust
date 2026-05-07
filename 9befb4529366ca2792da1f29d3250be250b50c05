@@ -1,0 +1,78 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9ad29c0e_b4dba944",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3391,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T18:49:01Z",
+      "side": 1,
+      "message": "We are only looping over files not dirs. This implies that if a path is a an entire directory we want to preserve we will fail to do so. This is a safe failure as the directory and its contents should get removed and the job will need to be updated. Maybe we should document this fact?",
+      "revId": "9befb4529366ca2792da1f29d3250be250b50c05",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d87d8bfe_0f735a6f",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3392,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T18:49:01Z",
+      "side": 1,
+      "message": "This os.path.join is going to root the files to self.jobdir.home (and subsequent nested dirs) via the root path. Then we drop off the top level portion of the homedir from the path.\n\nThis should ensure that all of the comparisons we\u0027re doing are relative to the home dir path. I think this is a sane approach since we\u0027re deleting by default and preserving whatever is in the list so an accidentally included rooted path should fail safe (the job may fail, but the file will be cleaned and we won\u0027t accidentally over share between playbooks).\n\nWe should probably document that the files paths are expected to be relative to the homedir path as I don\u0027t think the new docs capture this important detail.",
+      "revId": "9befb4529366ca2792da1f29d3250be250b50c05",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4f57e696_ed4cdec3",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3401,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T18:49:01Z",
+      "side": 1,
+      "message": "It looks like playbook here is a jobdir_playbook so we have the added preserve paths from `JobDirPlaybook.__init__()`",
+      "range": {
+        "startLine": 3401,
+        "startChar": 39,
+        "endLine": 3401,
+        "endChar": 47
+      },
+      "revId": "9befb4529366ca2792da1f29d3250be250b50c05",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "70cef078_7f2c9bb9",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 5384,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T18:49:01Z",
+      "side": 1,
+      "message": "I wonder if we should use a set operation here to deduplicate paths? It should be fine as is, but unnecessary file/disk io maybe problematic if we start adding a bunch of duplicate files (arguably that is a bug in the job configuration themselves).",
+      "revId": "9befb4529366ca2792da1f29d3250be250b50c05",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
