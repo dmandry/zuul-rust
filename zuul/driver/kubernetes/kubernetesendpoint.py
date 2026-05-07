@@ -347,7 +347,7 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
                     'verbs': all_verbs
                 }, {
                     'apiGroups': [""],
-                    'resources': ["pods/logs"],
+                    'resources': ["pods/log"],
                     'verbs': all_verbs
                 }, {
                     'apiGroups': [""],
