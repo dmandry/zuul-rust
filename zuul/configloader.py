@@ -1531,7 +1531,8 @@ class PipelineParser(object):
                          'serial',
                          'supercedent')
 
-        precedence = vs.Any('normal', 'low', 'high')
+        precedence = vs.Any('normal', 'low', 'high',
+                            100, 200, 300, 400, 500, 600, 700, 800, 900)
 
         window = vs.All(int, vs.Range(min=0))
         window_floor = vs.All(int, vs.Range(min=1))

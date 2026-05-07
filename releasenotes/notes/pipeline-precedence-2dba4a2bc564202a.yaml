@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    The :attr:`pipeline.precedence` configuration attribute will now
+    accept some numeric values in order to facilitate more
+    fine-grained control over pipeline precedence.

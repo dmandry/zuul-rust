@@ -335,7 +335,39 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
       different pipelines.  Each pipeline may have one precedence,
       jobs for pipelines with a higher precedence will be run before
       ones with lower.  The value should be one of ``high``,
-      ``normal``, or ``low``.  Default: ``normal``.
+      ``normal``, or ``low``, or one of the numeric values below
+      (lower numeric values have higher precedence).  Default:
+      ``normal``.
+
+      .. value:: high
+
+         Equivalent to 100.
+
+      .. value:: normal
+
+         Equivalent to 500.
+
+      .. value:: low
+
+         Equivalent to 900.
+
+      .. value:: 900
+
+      .. value:: 800
+
+      .. value:: 700
+
+      .. value:: 600
+
+      .. value:: 500
+
+      .. value:: 400
+
+      .. value:: 300
+
+      .. value:: 200
+
+      .. value:: 100
 
    .. _reporters:
 

@@ -10262,7 +10262,7 @@ class TestJobPause(AnsibleZuulTestCase):
         self.executor_server.verbose = True
 
         # Second node request should fail
-        fail = {'_oid': '199-0000000001'}
+        fail = {'_oid': '499-0000000001'}
         self.fake_nodepool.addFailRequest(fail)
 
         A = self.fake_gerrit.addFakeChange('org/project2', 'master', 'A')
