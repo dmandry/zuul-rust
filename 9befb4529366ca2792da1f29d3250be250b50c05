@@ -127,6 +127,24 @@
       "parentUuid": "70cef078_7f2c9bb9",
       "revId": "9befb4529366ca2792da1f29d3250be250b50c05",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4d3ebce5_a4151faf",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 5384,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-07T19:41:24Z",
+      "side": 1,
+      "message": "You\u0027re right I completely overlooked that. I saw `tuple` and `+` and not `set1.union(set2)` or `set1|set2` and completely overlooked the list into set into tuple conversion path.",
+      "parentUuid": "50ac1510_67a2b18a",
+      "revId": "9befb4529366ca2792da1f29d3250be250b50c05",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
