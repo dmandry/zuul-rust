@@ -176,6 +176,8 @@ class GitlabEventConnector(threading.Thread):
             event.unlabels = list(removed_labels)
         elif attrs['action'] in ('approved', 'unapproved'):
             event.action = attrs['action']
+        elif attrs['action'] == 'reopen':
+            event.action = 'reopened'
         else:
             # Do not handle other merge_request action for now.
             return None

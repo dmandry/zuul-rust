@@ -342,6 +342,29 @@ class TestGitlabDriver(ZuulTestCase):
         self.assertEqual(2, self.countJobResults(self.history, 'ABORTED'))
 
     @simple_layout('layouts/basic-gitlab.yaml', driver='gitlab')
+    def test_merge_request_reopened(self):
+        A = self.fake_gitlab.openFakeMergeRequest('org/project', 'master', 'A')
+        self.fake_gitlab.emitEvent(A.getMergeRequestOpenedEvent())
+        self.waitUntilSettled()
+        self.assertEqual(2, len(self.history))
+
+        self.fake_gitlab.emitEvent(A.getMergeRequestClosedEvent())
+        self.waitUntilSettled()
+        self.assertEqual(2, len(self.history))
+
+        self.fake_gitlab.emitEvent(A.getMergeRequestReopenedEvent())
+        self.waitUntilSettled()
+        self.assertEqual(4, len(self.history))
+        self.assertHistory(
+            [
+                {'name': 'project-test1', 'changes': '1,%s' % A.sha},
+                {'name': 'project-test2', 'changes': '1,%s' % A.sha},
+                {'name': 'project-test1', 'changes': '1,%s' % A.sha},
+                {'name': 'project-test2', 'changes': '1,%s' % A.sha},
+            ], ordered=False
+        )
+
+    @simple_layout('layouts/basic-gitlab.yaml', driver='gitlab')
     def test_merge_request_commented(self):
 
         A = self.fake_gitlab.openFakeMergeRequest('org/project', 'master', 'A')
