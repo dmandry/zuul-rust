@@ -24,9 +24,7 @@ libssl1.1 [platform:debian platform:ubuntu-bionic !platform:debian-bookworm]
 libssl1.0.0 [platform:ubuntu-xenial]
 libffi-dev [compile test platform:dpkg platform:apk]
 libffi [platform:apk]
-libffi8 [platform:ubuntu-jammy platform:ubuntu-noble platform:debian-bookworm]
-libffi7 [platform:ubuntu-focal platform:debian-bullseye]
-libffi6 [platform:dpkg !platform:ubuntu-focal !platform:ubuntu-jammy !platform:ubuntu-noble !platform:debian-bullseye !platform:debian-bookworm]
+libffi8 [platform:dpkg]
 libffi-devel [compile test platform:rpm]
 # These two compression libs are needed when installing python3.12 from
 # source using pyenv. We can drop them once we're using distro packages.
