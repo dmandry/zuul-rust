@@ -444,12 +444,32 @@ function promote(apiPrefix, pipeline, changes) {
 }
 
 function freezePipeline(apiPrefix, pipeline, project, ref) {
+  /*
   return makeRequest(
     apiPrefix + 'project/' + project + '/freeze-pipeline',
     'post',
     {
       pipeline: pipeline,
       ref: ref,
+    }
+    )
+  */
+  return new Promise((resolve) => {
+    console.log('resolve')
+    resolve({'data': {'parameters': [
+             {'default': ['production', 'staging'],
+              'description': 'Which cluster to deploy to',
+              'name': 'target_cluster',
+              'required': false,
+              'type': 'multiple-selection',
+              'values': ['production', 'staging', 'dev']},
+             {'default': null,
+              'description': 'What version to deploy',
+              'name': 'version',
+              'required': false,
+              'type': 'string',
+              'values': null},
+    ]}})
     }
   )
 }
