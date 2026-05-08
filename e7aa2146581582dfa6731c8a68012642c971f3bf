@@ -3,6 +3,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "1958aaa7_6bf736a8",
+        "filename": "web/src/containers/build/Buildset.jsx",
+        "patchSetId": 4
+      },
+      "lineNbr": 224,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-08T19:26:17Z",
+      "side": 1,
+      "message": "I guess this is everything needed to reenqueue a buildset that already ran with the same set of parameters. Then the bulk of this change is setting up an enqueue page where you can direct enqueue buildsets with custom parameter values.",
+      "revId": "e7aa2146581582dfa6731c8a68012642c971f3bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "efaa2b72_176aa345",
         "filename": "web/src/containers/build/Buildset.jsx",
         "patchSetId": 4
