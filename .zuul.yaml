@@ -139,14 +139,15 @@
         ZUUL_SCHEDULER_COUNT: 2
 
 - job:
-    name: zuul-nox-py312
+    name: zuul-nox-py314
     # This could probably use some refactoring to have a base unittest job
     # that isn't python version specific.
     parent: zuul-nox-py311
-    nodeset: ubuntu-noble
+    nodeset: ubuntu-resolute-8GB
     vars:
-      nox_force_python: "3.12"
-      python_version: "3.12"
+      nox_force_python: "3.14"
+      python_version: "3.14"
+      mirror_fqdn: "{{ undef() }}"
 
 - job:
     name: zuul-build-dashboard
@@ -372,7 +373,7 @@
               nox_install_bindep: false
             nodeset: ubuntu-jammy
         - zuul-nox-py311
-        - zuul-nox-py312
+        - zuul-nox-py314
         - zuul-nox-upgrade
         - zuul-build-dashboard-openstack-whitelabel
         - zuul-build-dashboard-software-factory
@@ -406,7 +407,7 @@
               nox_install_bindep: false
             nodeset: ubuntu-jammy
         - zuul-nox-py311
-        - zuul-nox-py312
+        - zuul-nox-py314
         - zuul-nox-upgrade
         - zuul-build-dashboard
         - nodejs-run-lint:
