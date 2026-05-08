@@ -58,9 +58,10 @@
     name: zuul-nox
     description: |
       Zuul unit tests with ZooKeeper running
-    parent: nox
+    parent: base
     nodeset: ubuntu-jammy
     pre-run: playbooks/zuul-nox/pre.yaml
+    run: playbooks/zuul-nox/run.yaml
     post-run: playbooks/zuul-nox/post-system-logs.yaml
     vars:
       nox_environment:
@@ -139,14 +140,30 @@
         ZUUL_SCHEDULER_COUNT: 2
 
 - job:
-    name: zuul-nox-py312
+    name: zuul-nox-py314
     # This could probably use some refactoring to have a base unittest job
     # that isn't python version specific.
     parent: zuul-nox-py311
-    nodeset: ubuntu-noble
+    nodeset:
+      nodes:
+        - name: controller
+          label: test-ubuntu-resolute-16GB
     vars:
-      nox_force_python: "3.12"
-      python_version: "3.12"
+      python_use_pyenv: true
+      nox_force_python: "3.14"
+      python_version: "3.14"
+      mirror_fqdn: "archive.ubuntu.com"
+
+- job: {name: zuul-nox-py314-0, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-1, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-2, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-3, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-4, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-5, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-6, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-7, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-8, parent: zuul-nox-py314}
+- job: {name: zuul-nox-py314-9, parent: zuul-nox-py314}
 
 - job:
     name: zuul-build-dashboard
@@ -365,35 +382,16 @@
       release_python: python3
     check:
       jobs:
-        - zuul-build-image
-        - zuul-nox-docs
-        - nox-linters:
-            vars:
-              nox_install_bindep: false
-            nodeset: ubuntu-jammy
-        - zuul-nox-py311
-        - zuul-nox-py312
-        - zuul-nox-upgrade
-        - zuul-build-dashboard-openstack-whitelabel
-        - zuul-build-dashboard-software-factory
-        - zuul-build-dashboard-opendev
-        - nodejs-run-lint:
-            vars:
-              zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            nodeset: ubuntu-jammy
-        - nodejs-run-test:
-            vars:
-              zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            files:
-              - web/.*
-            nodeset: ubuntu-jammy
-        - zuul-stream-functional-9
-        - zuul-stream-functional-11
-        - zuul-nox-remote
-        - zuul-quick-start:
-            dependencies: zuul-build-image
-        - zuul-nox-zuul-client
-        - zuul-build-python-release
+        - zuul-nox-py314-0
+        - zuul-nox-py314-1
+        - zuul-nox-py314-2
+        # - zuul-nox-py314-3
+        # - zuul-nox-py314-4
+        # - zuul-nox-py314-5
+        # - zuul-nox-py314-6
+        # - zuul-nox-py314-7
+        # - zuul-nox-py314-8
+        # - zuul-nox-py314-9
     experimental:
       jobs:
         - zuul-nox-py311-multi-scheduler
@@ -406,7 +404,7 @@
               nox_install_bindep: false
             nodeset: ubuntu-jammy
         - zuul-nox-py311
-        - zuul-nox-py312
+        - zuul-nox-py314
         - zuul-nox-upgrade
         - zuul-build-dashboard
         - nodejs-run-lint:
