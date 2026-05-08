@@ -155,6 +155,10 @@ the following options.
 
          Merge request opened.
 
+      .. value:: reopened
+
+         Merge request reopened.
+
       .. value:: changed
 
          Merge request synchronized.

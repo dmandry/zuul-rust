@@ -12,6 +12,7 @@
         - event: gl_merge_request
           action:
             - opened
+            - reopened
             - changed
     success:
       gitlab.com:
