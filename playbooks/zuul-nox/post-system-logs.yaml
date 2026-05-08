@@ -1,5 +1,9 @@
 - hosts: all
   roles:
+    - fetch-subunit-output
+
+- hosts: all
+  roles:
     - dstat-graph
   tasks:
     - name: Collect zookeeper logs
