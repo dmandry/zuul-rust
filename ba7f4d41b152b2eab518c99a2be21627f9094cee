@@ -228,6 +228,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "25caf92f_39d8e1f3",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9667,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-08T19:06:46Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "21f286a7_b32db390",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "f2e976d8_255edbd3",
@@ -259,6 +277,24 @@
       "side": 1,
       "message": "We don\u0027t yet have a way to express openapi\u0027s \"oneof\" types... we usually just punt and use str, so I\u0027d prefer to do that here; this is mostly just for human consumption; I don\u0027t think it\u0027s critical.",
       "parentUuid": "f2e976d8_255edbd3",
+      "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "dc9cab88_8e884a8b",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 840,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-08T19:06:46Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "6af1b124_1d1fc83a",
       "revId": "ba7f4d41b152b2eab518c99a2be21627f9094cee",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
