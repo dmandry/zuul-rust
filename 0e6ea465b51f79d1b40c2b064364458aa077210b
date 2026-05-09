@@ -16,6 +16,40 @@
       "message": "Thanks, I think this is what we are looking for. This should be enough to prioritize all of our pipelines with more granularity",
       "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7ea7dbf5_ca0cc1c9",
+        "filename": "releasenotes/notes/pipeline-precedence-2dba4a2bc564202a.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 6,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-09T16:27:05Z",
+      "side": 1,
+      "message": "I wonder if we should have an upgrade note here that captures what the commit message says about the interim period with both old and new priorities in place. May help avoid some confusion during the upgrade for some operators.\n\nFWIW I agree with the commit message\u0027s assessment. The period should be relatively brief and self resolve. But explaining that in the release notes may be helpful for some.",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3937e2bb_1acd8738",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 3256,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-09T16:27:05Z",
+      "side": 1,
+      "message": "Nit: Should we add a new test case that uses a priority like 700? I think this change is straightforward enough as is to rely on the existing backward compatible handling and existing test cases. But figured I\u0027d call this out.",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
