@@ -845,6 +845,9 @@ class JobParser(object):
                               'dependencies',
                               'failure-output',
                               'type',
+                              'pre-run',
+                              'run',
+                              'post-run',
                               # Normally we don't include context
                               # attributes since they are not affected
                               # by "final", but we make an exception

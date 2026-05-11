@@ -881,7 +881,7 @@ class TestJob(BaseTestCase):
 
     def _test_job_final_control(self, attr, job_attr,
                                 default, default_value,
-                                final):
+                                final, mutate_value=None):
         # Default behavior
         data = configloader.safe_load_yaml(default, self.context)
         parent = self.pcontext.job_parser.fromYaml(data[0]['job'])
@@ -889,7 +889,10 @@ class TestJob(BaseTestCase):
         job = parent.copy()
         job.setBase(self.layout, None)
         job.applyVariant(child, self.layout, None)
-        self.assertEqual(default_value, getattr(job, job_attr))
+        value = getattr(job, job_attr)
+        if mutate_value:
+            value = mutate_value(value)
+        self.assertEqual(default_value, value)
 
         # Verify final attr exception
         data = configloader.safe_load_yaml(final, self.context)
@@ -1190,6 +1193,54 @@ class TestJob(BaseTestCase):
                                      'voting',
                                      default, default_value,
                                      final)
+
+    def _test_job_final_control_playbooks(self, attr, job_attr,
+                                          default_value):
+        default = textwrap.dedent(
+            f"""
+            - job:
+                name: parent
+                {attr}: parent-playbook
+            - job:
+                name: child
+                {attr}: child-playbook
+            """)
+
+        final = textwrap.dedent(
+            f"""
+            - job:
+                name: parent
+                {attr}: parent-playbook
+                attribute-control:
+                  {attr}:
+                    final: true
+            - job:
+                name: child
+                {attr}: child-playbook
+            """)
+
+        def mutate_value(playbooks):
+            return [
+                playbook_context.path for playbook_context in playbooks
+            ]
+
+        self._test_job_final_control(attr, job_attr,
+                                     default, default_value,
+                                     final, mutate_value=mutate_value)
+
+    def test_job_final_control_pre_run(self):
+        default_value = ['parent-playbook', 'child-playbook']
+        self._test_job_final_control_playbooks('pre-run', 'pre_run',
+                                               default_value)
+
+    def test_job_final_control_run(self):
+        default_value = ['child-playbook']
+        self._test_job_final_control_playbooks('run', 'run', default_value)
+
+    def test_job_final_control_post_run(self):
+        default_value = ['child-playbook', 'parent-playbook']
+        self._test_job_final_control_playbooks('post-run', 'post_run',
+                                               default_value)
 
     @mock.patch("zuul.model.zkobject.ZKObject._save")
     def test_image_permissions(self, save_mock):

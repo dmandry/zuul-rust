@@ -314,6 +314,9 @@ Here is an example of two job definitions:
         * failure-output
         * type
         * voting
+        * pre-run
+        * run
+        * post-run
 
    .. attr:: success-message
       :default: SUCCESS
