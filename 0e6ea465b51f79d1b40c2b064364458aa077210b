@@ -20,6 +20,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "c66c4af5_6a9048a1",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-11T15:45:16Z",
+      "side": 1,
+      "message": "I\u0027ve been thinking about this and wonder if we should consider two things:\n\n1) Should we make the new values for low/med/high 700/500/300 instead of 900/500/10?  That way users can use low/med/high and still insert numeric values above and below each of them.\n\n2) If we do the above, should we also consider using words for all of them?  We could have:\n\n* 100 very-very-low\n* 200 very-low\n* 300 low\n* 400 medium-low\n* 500 medium\n* 600 medium-high\n* 700 high\n* 800 very-high\n* 900 very-very-high\n\nOkay, I don\u0027t like the \"very-very-*\" ones; if anyone has a suggestion that doesn\u0027t sound silly, I\u0027m all for it.  But if we solve that problem, it might be nice to be able to use words for everything instead of numbers -- it may be more clear (and no one has to go to the docs to see that a low number means a high precedence).",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "7ea7dbf5_ca0cc1c9",
         "filename": "releasenotes/notes/pipeline-precedence-2dba4a2bc564202a.yaml",
         "patchSetId": 1
