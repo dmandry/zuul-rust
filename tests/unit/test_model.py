@@ -1160,6 +1160,37 @@ class TestJob(BaseTestCase):
                                      default, default_value,
                                      final)
 
+    def test_job_final_control_voting(self):
+        default = textwrap.dedent(
+            """
+            - job:
+                name: parent
+                voting: true
+            - job:
+                name: child
+                voting: false
+            """)
+
+        final = textwrap.dedent(
+            """
+            - job:
+                name: parent
+                voting: true
+                attribute-control:
+                  voting:
+                    final: true
+            - job:
+                name: child
+                voting: false
+            """)
+
+        default_value = False
+
+        self._test_job_final_control('voting',
+                                     'voting',
+                                     default, default_value,
+                                     final)
+
     @mock.patch("zuul.model.zkobject.ZKObject._save")
     def test_image_permissions(self, save_mock):
         self.pipeline.post_review = False

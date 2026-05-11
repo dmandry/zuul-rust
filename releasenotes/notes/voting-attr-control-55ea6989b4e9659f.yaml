@@ -1,0 +1,5 @@
+---
+features:
+  - |
+    The :attr:`job.attribute-control` setting now permits declaring
+    the ``voting`` attribute as final.

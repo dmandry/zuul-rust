@@ -313,6 +313,7 @@ Here is an example of two job definitions:
         * dependencies
         * failure-output
         * type
+        * voting
 
    .. attr:: success-message
       :default: SUCCESS
@@ -342,7 +343,10 @@ Here is an example of two job definitions:
       :default: true
 
       Indicates whether the result of this job should be used in
-      determining the overall result of the item.
+      determining the overall result of the item.  Normally this
+      attribute may be overidden even if the job is set to
+      :attr:`job.final`, however, the value may be enforced
+      nevertheless by using the :attr:`job.attribute-control` setting.
 
    .. attr:: semaphore
 
