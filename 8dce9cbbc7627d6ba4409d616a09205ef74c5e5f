@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2a7a159a_268ec4df",
+        "filename": "doc/source/drivers/aws.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 107,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-11T19:05:35Z",
+      "side": 1,
+      "message": "Since this is not an aws-specific property (and not node_properties), it should be back in the main docs, not the driver-specific docs.",
+      "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d3cc943f_f804921f",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 2599,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-11T19:05:35Z",
+      "side": 1,
+      "message": "I think it would be good to note in this comment (or elsewhere if you prefer) that this is used only for informational purposes (the actual decision about reuse will happen later).",
+      "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "49978e98_56ceac88",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 2602,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-11T19:05:35Z",
+      "side": 1,
+      "message": "These lines reference the launcher itself which the rest of this method doesn\u0027t do.  That\u0027s going to be a problem since https://review.opendev.org/987752 moves it out of the launcher and into the model.\n\nI think we should do two things:\n\n1) Rebase this series on https://review.opendev.org/987752\n2) Move this code to _requestNode so that we set it at the start of the creation process rather than the end.",
+      "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
