@@ -54,6 +54,7 @@ import SourceContext from '../SourceContext'
 import Nodeset from './Nodeset'
 import Role from './Role'
 import JobProject from './JobProject'
+import JobIncludeExcludeProject from './JobIncludeExcludeProject'
 import JobDescriptionCard from './JobDescriptionCard'
 
 
@@ -285,6 +286,12 @@ class JobVariant extends React.Component {
             if (label === 'required_projects') {
               nice_label = 'Required Projects'
               item = <JobProject project={value} />
+            } else if (label === 'include_projects') {
+              nice_label = 'Include Projects'
+              item = <JobIncludeExcludeProject project={value} />
+            } else if (label === 'exclude_projects') {
+              nice_label = 'Exclude Projects'
+              item = <JobIncludeExcludeProject project={value} />
             } else if (label === 'roles') {
               nice_label = (<span><AnsibleTowerIcon /> Uses roles from</span>)
               item = <Role role={value} />
