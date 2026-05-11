@@ -37,6 +37,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "d4a43688_3dc50055",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 34899
+      },
+      "writtenOn": "2026-05-11T17:31:53Z",
+      "side": 1,
+      "message": "1. I think I prefer that yes because we have high set on gate right now but may want some admin/release type jobs to get higher precedence.\n2. Here is my ideas:\n100 Minimal\n200 Very Low\n300 Low\n400 Medium Low\n500 Medium\n600 Medium High\n700 High\n800 Very High\n900 Critical\n\nIf it is preferred that they are one word maybe something like this:\n\n100 Background\n200 Deferred\n300 Low\n400 Reduced\n500 Medium\n600 Elevated\n700 High\n800 Urgent\n900 Immediate (or Maximum)",
+      "parentUuid": "c66c4af5_6a9048a1",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "7ea7dbf5_ca0cc1c9",
         "filename": "releasenotes/notes/pipeline-precedence-2dba4a2bc564202a.yaml",
         "patchSetId": 1
