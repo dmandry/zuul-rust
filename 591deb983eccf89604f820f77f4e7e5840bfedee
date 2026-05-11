@@ -16,6 +16,24 @@
       "message": "Is it safe to retry a build here or should we check as well if `self.early_failure` is set?",
       "revId": "591deb983eccf89604f820f77f4e7e5840bfedee",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "6fdf4778_578aa861",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 2306,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-05-11T09:20:39Z",
+      "side": 1,
+      "message": "Good point! I think we should NOT retry in that case.",
+      "parentUuid": "731bfdfa_c816003e",
+      "revId": "591deb983eccf89604f820f77f4e7e5840bfedee",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
