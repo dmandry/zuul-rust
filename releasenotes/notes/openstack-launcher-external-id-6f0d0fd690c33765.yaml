@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    OpenStack nodes provided by zuul-launcher now include the server ID
+    in the ``nodepool.external_id`` and ``zuul_node.external_id`` Ansible
+    inventory variables, matching the behavior of Nodepool-launched nodes.

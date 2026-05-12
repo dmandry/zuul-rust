@@ -650,7 +650,7 @@ class ProviderNodeConverter:
             'type': [node.label],
             'label': node.label,
             'connection_type': node.connection_type,
-            'external_id': None,
+            'external_id': node.getExternalId(),
             'state': node.state,
             'state_time': state_time,
             'next_state': node.next_state,

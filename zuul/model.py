@@ -2992,6 +2992,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             cloud=None,
             provider=None,
             region=None,
+            external_id=None,
             hold_expiration=None,
             attributes={},
             host_keys=[],
@@ -3193,6 +3194,9 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
     def getDriverData(self):
         return dict()
 
+    def getExternalId(self):
+        return self.external_id
+
     def getNodeData(self, serialize_node=False):
         # This gets stored on the ProviderNode object, but also copied
         # to the Node object for use by the executor.
@@ -3204,6 +3208,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             snapshot_timeout=self.snapshot_timeout,
             snapshot_expiration=self.snapshot_expiration,
             executor_zone=self.executor_zone,
+            external_id=self.getExternalId(),
             cloud=self.cloud,
             connection_port=self.connection_port,
             connection_type=self.connection_type,
