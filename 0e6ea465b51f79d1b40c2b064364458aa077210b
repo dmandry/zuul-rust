@@ -53,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "f28cf698_3f183e41",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-12T20:36:29Z",
+      "side": 1,
+      "message": "Okay, that\u0027s done.  I tweaked the names a little bit: I used minimum and maximum instead of minimal and critical since I thought they balanced better.  Also, my mistake, the current \"middle\" level is \"normal\" not \"medium\" so I corrected that.",
+      "parentUuid": "d4a43688_3dc50055",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "7ea7dbf5_ca0cc1c9",

@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "476d0369_f189e0b6",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-12T20:36:29Z",
+      "side": 1,
+      "message": "I split this into two changes:\n\nThe first (this one) adds additional levels with strings for each of them.  A followup change adds the ability to use numbers instead of (or in addition to) strings.  We can decide independently whether we want that additional feature.",
+      "revId": "b0dc9b1566aef21ec904ae0eceafa5ad076e18df",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
