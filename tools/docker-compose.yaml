@@ -16,14 +16,14 @@ services:
 
   postgres:
     container_name: zuul-test-postgres
-    image: postgres:17
+    image: postgres:latest
     environment:
       - POSTGRES_USER=openstack_citest
       - POSTGRES_PASSWORD=openstack_citest
     ports:
       - "5432:5432"
     tmpfs:
-      - /var/lib/postgresql/data
+      - /var/lib/postgresql
 
   zookeeper:
     container_name: zuul-test-zookeeper
