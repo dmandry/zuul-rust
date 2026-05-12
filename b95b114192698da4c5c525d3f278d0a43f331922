@@ -22,6 +22,24 @@
       },
       "revId": "b95b114192698da4c5c525d3f278d0a43f331922",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2816d5f9_42cd2d5d",
+        "filename": "releasenotes/notes/playbook-attribute-control-2f56b6cccb664482.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 5,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-12T13:33:03Z",
+      "side": 1,
+      "message": "Oops, thanks.",
+      "parentUuid": "5dfa0e98_6328de0d",
+      "revId": "b95b114192698da4c5c525d3f278d0a43f331922",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
