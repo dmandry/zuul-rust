@@ -334,25 +334,45 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
       Indicates how the build scheduler should prioritize jobs for
       different pipelines.  Each pipeline may have one precedence,
       jobs for pipelines with a higher precedence will be run before
-      ones with lower.  The value should be one of the following:
+      ones with lower.  The value should be one of the following
+      strings or numerical values (lower numerical values have higher
+      precedence):
 
       .. value:: minimum
 
+         Equivalent to 900.
+
       .. value:: very-low
+
+         Equivalent to 800.
 
       .. value:: low
 
+         Equivalent to 700.
+
       .. value:: normal-low
+
+         Equivalent to 600.
 
       .. value:: normal
 
+         Equivalent to 500.
+
       .. value:: normal-high
+
+         Equivalent to 400.
 
       .. value:: high
 
+         Equivalent to 300.
+
       .. value:: very-high
 
+         Equivalent to 200.
+
       .. value:: maximum
+
+         Equivalent to 100.
 
    .. _reporters:
 
