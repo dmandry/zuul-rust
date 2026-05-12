@@ -18,6 +18,7 @@
         # from this checkout.
         ZUUL_CONSOLE_PORT: 19887
         ZUUL_JOB_LOG_CONFIG: "{{ ansible_user_dir}}/logging.json"
+        ZUUL_JSON_OUTPUT_FILE: "{{ ansible_user_dir}}/job-output.json"
         ZUUL_JOBDIR: "{{ ansible_user_dir}}"
         ZUUL_ANSIBLE_SPLIT_STREAMS: False
         ZUUL_OUTPUT_MAX_BYTES: 1073741824
@@ -31,7 +32,7 @@
 
     - name: Save output
       shell: |
-          mv job-output.txt job-output-success-19887.txt
+          mv test-job-output.txt job-output-success-19887.txt
           mv job-output.json job-output-success-19887.json
 
     # Streamer puts out a line like
@@ -71,7 +72,7 @@
 
     - name: Save output
       shell: |
-          mv job-output.txt job-output-success-19885.txt
+          mv test-job-output.txt job-output-success-19885.txt
           mv job-output.json job-output-success-19885.json
 
     - name: Validate text outputs
@@ -113,7 +114,7 @@
 
     - name: Save output
       shell: |
-          mv job-output.txt job-output-failure.txt
+          mv test-job-output.txt job-output-failure.txt
           mv job-output.json job-output-failure.json
 
     - name: Validate output - failure shell task with exception
