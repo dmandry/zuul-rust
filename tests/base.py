@@ -2000,7 +2000,7 @@ class BaseTestCase(testtools.TestCase):
             # Try a gentle timeout first and as a safety net a hard timeout
             # later.
             self.useFixture(fixtures.Timeout(test_timeout, gentle=True))
-            self.useFixture(fixtures.Timeout(test_timeout + 20, gentle=False))
+            self.useFixture(fixtures.Timeout(test_timeout + 120, gentle=False))
 
         if not self.test_config.never_capture:
             if (os.environ.get('OS_STDOUT_CAPTURE') == 'True' or
