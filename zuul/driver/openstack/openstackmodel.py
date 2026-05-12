@@ -31,6 +31,10 @@ class OpenstackProviderNode(model.ProviderNode, subclass_id="openstack"):
             openstack_floating_ip_id=self.openstack_floating_ip_id,
         )
 
+    def setOpenstackServerId(self, server_id):
+        self.openstack_server_id = server_id
+        self.node_properties['server_id'] = server_id
+
 
 class OpenstackInstance(statemachine.Instance):
     def __init__(self, cloud, region, server, quota):

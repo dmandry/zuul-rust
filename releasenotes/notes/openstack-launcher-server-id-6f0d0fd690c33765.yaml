@@ -1,0 +1,5 @@
+---
+features:
+  - |
+    OpenStack nodes provided by zuul-launcher now include the server ID in
+    the ``zuul_node.node_properties.server_id`` Ansible inventory variable.

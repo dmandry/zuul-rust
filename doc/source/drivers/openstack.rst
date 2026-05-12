@@ -48,4 +48,16 @@ and :attr:`section` configurations:
 
 .. include:: openstack-attrs.rstinc
 
+.. _openstack-driver-node-properties:
+
+Node properties
+---------------
+
+Nodes provided via the OpenStack driver provide the following
+``node_properties``:
+
+.. var:: server_id
+
+   The OpenStack server ID of the provided node.
+
 .. _`OpenStack SDK`: https://docs.openstack.org/openstacksdk/latest/user/config/index.html

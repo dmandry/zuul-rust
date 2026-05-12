@@ -113,6 +113,8 @@ class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
         super()._assertProviderNodeAttributes(pnode)
         self.assertEqual('fakecloud', pnode.cloud)
         self.assertEqual('region1', pnode.region)
+        self.assertEqual(pnode.openstack_server_id,
+                         pnode.node_properties['server_id'])
         if checks := self.test_config.driver.openstack.get('node_checks'):
             checks(self, pnode)
 
