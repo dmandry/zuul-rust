@@ -18,7 +18,9 @@ import time
 from unittest import mock
 
 import fixtures
+import testtools
 
+import zuul.web
 from zuul.driver.openstack import OpenstackDriver
 from zuul.driver.openstack.openstackmodel import OpenstackProviderNode
 
@@ -108,11 +110,25 @@ class BaseOpenstackDriverTest(ZuulTestCase):
             yield
 
 
+class TestOpenstackProviderNode(testtools.TestCase):
+    def test_external_id(self):
+        node = OpenstackProviderNode()
+        node._set(openstack_server_id='server-id')
+
+        self.assertEqual('server-id', node.getExternalId())
+        self.assertEqual('server-id', node.getNodeData()['external_id'])
+        self.assertEqual(
+            'server-id',
+            zuul.web.ProviderNodeConverter.toDict(node)['external_id'])
+
+
 class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
     def _assertProviderNodeAttributes(self, pnode):
         super()._assertProviderNodeAttributes(pnode)
         self.assertEqual('fakecloud', pnode.cloud)
         self.assertEqual('region1', pnode.region)
+        self.assertEqual(pnode.openstack_server_id,
+                         pnode.getNodeData()['external_id'])
         if checks := self.test_config.driver.openstack.get('node_checks'):
             checks(self, pnode)
 
