@@ -9651,22 +9651,23 @@ class TestSchedulerFailFast(ZuulTestCase):
         # Release the failing build first so it is the first
         # result event to be processed.
         job_workers = self.executor_server.job_workers.copy()
-        released = self.executor_server.release('project-test1')
-        for _ in iterate_timeout(10, 'project-test1 to be released'):
-            if len(self.builds) == 1:
-                break
-        fake_build = released[0]
-        job = job_workers.get(fake_build.build_request.uuid)
-        job.wait()
-        # Release successful build and wait for it to be gone,
-        # so both result events are processed in the same iteration.
-        released = self.executor_server.release('project-test2')
-        for _ in iterate_timeout(10, 'project-test2 to be released'):
-            if len(self.builds) == 0:
-                break
-        fake_build = released[0]
-        job = job_workers.get(fake_build.build_request.uuid)
-        job.wait()
+        with self.scheds.first.sched.run_handler_lock:
+            released = self.executor_server.release('project-test1')
+            for _ in iterate_timeout(10, 'project-test1 to be released'):
+                if len(self.builds) == 1:
+                    break
+            fake_build = released[0]
+            job = job_workers.get(fake_build.build_request.uuid)
+            job.wait()
+            # Release successful build and wait for it to be gone,
+            # so both result events are processed in the same iteration.
+            released = self.executor_server.release('project-test2')
+            for _ in iterate_timeout(10, 'project-test2 to be released'):
+                if len(self.builds) == 0:
+                    break
+            fake_build = released[0]
+            job = job_workers.get(fake_build.build_request.uuid)
+            job.wait()
 
         self.executor_server.hold_jobs_in_build = False
         self.fake_nodepool.unpause()
