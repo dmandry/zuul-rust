@@ -29,6 +29,7 @@ import shutil
 import signal
 import shlex
 import socket
+import socketserver
 import subprocess
 import tempfile
 import threading
@@ -543,6 +544,64 @@ class KubeFwd(object):
             pass
 
 
+class LogReceiver:
+    # The syslog format combines facility and severity into a priority
+    # code.  We don't need to reverse that; since we know the
+    # combinations we're using, we just map the constants here.
+    # TODO: in the future we can shift the result output to this
+    # system via a different facility code.
+    OUTPUT_PRIORITY = '134'
+    SYSLOG_RE = re.compile(r'^<(\d+)>(.*)\x00')
+
+    def __init__(self, zuul_event_id, build, jobdir):
+        self.jobdir = jobdir
+        self.log = get_annotated_logger(
+            logging.getLogger("zuul.ExecutorServer"),
+            zuul_event_id, build=build)
+        self.thread = threading.Thread(target=self.run,
+                                       name=f"log-{build}")
+
+        class MyHandler(socketserver.BaseRequestHandler):
+            def handle(this):
+                try:
+                    data = this.request[0].decode('utf8')
+                    if m := self.SYSLOG_RE.match(data):
+                        priority, message = m.groups()
+                        fd = self.output_map.get(priority)
+                        if fd is not None:
+                            fd.write(message)
+                            fd.flush()
+                except Exception:
+                    self.log.exception("Error in log receiver:")
+
+        self.handler_class = MyHandler
+        self.server = None
+        self.output_map = {}
+
+    def start(self):
+        self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
+        self.thread.start()
+
+    def run(self):
+        try:
+            with _safe_open(self.jobdir.job_output_file, "a") as job_output:
+                self.output_map[self.OUTPUT_PRIORITY] = job_output
+                with socketserver.UnixDatagramServer(
+                    self.jobdir.log_socket,
+                    self.handler_class) as server:
+                    self.server = server
+                    self.server.serve_forever()
+        except Exception:
+            self.log.exception("Error in log receiver:")
+
+    def stop(self):
+        try:
+            if self.server:
+                self.server.shutdown()
+        except Exception:
+            self.log.exception('Unable to stop log receiver:')
+
+
 class JobDirPlaybookRole(object):
     def __init__(self, root):
         self.root = root
@@ -632,6 +691,7 @@ class JobDir(object):
         #     inventory.yaml
         #     vars_blacklist.yaml
         #     zuul_vars.yaml
+        #     log.socket
         #   .ansible (mounted in bwrap read-write)
         #     fact-cache/localhost
         #     cp
@@ -759,11 +819,13 @@ class JobDir(object):
         ]
         self.inventory = os.path.join(self.ansible_root, 'inventory.yaml')
         self.logging_json = os.path.join(self.ansible_root, 'logging.json')
+        self.log_socket = os.path.join(self.ansible_root, 'log.socket')
         self.playbooks = []  # The list of candidate playbooks
         self.pre_playbooks = []
         self.post_playbooks = []
         self.cleanup_playbooks = []
         self.job_output_file = os.path.join(self.log_root, 'job-output.txt')
+        self.json_output_file = os.path.join(self.log_root, 'job-output.json')
         # We need to create the job-output.txt upfront in order to close the
         # gap between url reporting and ansible creating the file. Otherwise
         # there is a period of time where the user can click on the live log
@@ -1143,6 +1205,7 @@ class AnsibleJob(object):
             'winrm_read_timeout_sec')
         self.ssh_agent = SshAgent(zuul_event_id=self.zuul_event_id,
                                   build=self.build_request.uuid)
+        self.log_receiver = None
         self.port_forwards = []
         self.executor_variables_file = None
 
@@ -1299,6 +1362,13 @@ class AnsibleJob(object):
             self.jobdir = JobDir(self.executor_server.jobdir_root,
                                  self.executor_server.keep_jobdir,
                                  str(self.build_request.uuid))
+            self.log_receiver = LogReceiver(
+                zuul_event_id=self.zuul_event_id,
+                build=self.build_request.uuid,
+                jobdir=self.jobdir,
+            )
+            self.log_receiver.start()
+
             self.lockNodes()
             self._execute()
         except NodeRequestError:
@@ -1337,6 +1407,11 @@ class AnsibleJob(object):
                     fwd.stop()
                 except Exception:
                     self.log.exception("Error stopping port forward:")
+            if self.log_receiver:
+                try:
+                    self.log_receiver.stop()
+                except Exception:
+                    self.log.exception("Error stopping log receiver:")
 
             # Make sure we return the nodes to nodepool in any case.
             self.unlockNodes()
@@ -2324,7 +2399,7 @@ class AnsibleJob(object):
         # uploading logs, which makes diagnosing issues difficult.
         # Grab the output from the last playbook from the json
         # file and log it.
-        json_output = self.jobdir.job_output_file.replace('txt', 'json')
+        json_output = self.jobdir.json_output_file
         self.log.debug("Final playbook failed")
         try:
             with _safe_open(json_output, 'r') as f:
@@ -3272,7 +3347,7 @@ class AnsibleJob(object):
                        self.jobdir.job_output_file,
                        self.jobdir.logging_json)
         logging_config = zuul.ansible.logconfig.JobLoggingConfig(
-            job_output_file=self.jobdir.job_output_file)
+            log_socket=self.jobdir.log_socket)
         logging_config.writeJson(self.jobdir.logging_json)
 
     def writeAnsibleConfig(self, jobdir_playbook):
@@ -3395,6 +3470,7 @@ class AnsibleJob(object):
         env_copy.update(self.ssh_agent.env)
         env_copy['ZUUL_OUTPUT_MAX_BYTES'] = str(self.output_max_bytes)
         env_copy['ZUUL_JOB_LOG_CONFIG'] = self.jobdir.logging_json
+        env_copy['ZUUL_JSON_OUTPUT_FILE'] = self.jobdir.json_output_file
         env_copy['ZUUL_JOB_FAILURE_OUTPUT'] = self.failure_output
         env_copy['ZUUL_JOBDIR'] = self.jobdir.root
         if self.executor_server.log_console_port != DEFAULT_STREAM_PORT:
@@ -3994,11 +4070,8 @@ class AnsibleJob(object):
     def addPlaybookToJson(self, playbook, phase, index, message, start, end):
         # Append debug info to the job-output.json file. Note this needs to
         # work in conjunction with the Ansible zuul_json callback module.
-        output_filename = self.jobdir.job_output_file.replace(
-            'txt', 'json')
-
         def _write(mode):
-            with _safe_open(output_filename, mode) as f:
+            with _safe_open(self.jobdir.json_output_file, mode) as f:
                 self.writePlaybookToJson(
                     f, playbook, phase, index, message, start, end)
 
