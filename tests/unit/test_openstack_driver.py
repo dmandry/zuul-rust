@@ -13,14 +13,17 @@
 # under the License.
 
 import contextlib
+import logging
 import os
 import time
 from unittest import mock
 
 import fixtures
+import testtools
 
 from zuul.driver.openstack import OpenstackDriver
 from zuul.driver.openstack.openstackmodel import OpenstackProviderNode
+from zuul.zk.zkobject import LocalZKContext
 
 from tests.fake_openstack import (
     FakeOpenstackCloud,
@@ -108,11 +111,27 @@ class BaseOpenstackDriverTest(ZuulTestCase):
             yield
 
 
+class TestOpenstackProviderNode(testtools.TestCase):
+    def test_server_id_node_property(self):
+        node = OpenstackProviderNode()
+        node._set(node_properties={})
+
+        with LocalZKContext(logging.getLogger(__name__)) as ctx:
+            with node.activeContext(ctx):
+                node.setOpenstackServerId('server-id')
+
+        self.assertEqual('server-id', node.openstack_server_id)
+        self.assertEqual('server-id',
+                         node.getNodeData()['node_properties']['server_id'])
+
+
 class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
     def _assertProviderNodeAttributes(self, pnode):
         super()._assertProviderNodeAttributes(pnode)
         self.assertEqual('fakecloud', pnode.cloud)
         self.assertEqual('region1', pnode.region)
+        self.assertEqual(pnode.openstack_server_id,
+                         pnode.node_properties['server_id'])
         if checks := self.test_config.driver.openstack.get('node_checks'):
             checks(self, pnode)
 

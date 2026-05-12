@@ -256,8 +256,8 @@ class OpenstackCreateStateMachine(statemachine.StateMachine):
         if self.state == self.SERVER_CREATING_SUBMIT:
             for instance in self.endpoint.listInstances():
                 if instance.metadata.get('zuul_node_uuid') == node.uuid:
-                    self.node.openstack_server_id =\
-                        instance.openstack_server_id
+                    self.node.setOpenstackServerId(
+                        instance.openstack_server_id)
             if self.node.openstack_server_id:
                 self.state = self.SERVER_CREATING
 
@@ -326,11 +326,11 @@ class OpenstackCreateStateMachine(statemachine.StateMachine):
                         self.create_future)
                     if self.server is None:
                         return
-                    self.node.openstack_server_id = self.server['id']
+                    self.node.setOpenstackServerId(self.server['id'])
                     self.state = self.SERVER_CREATING
                 except openstack.cloud.exc.OpenStackCloudCreateException as e:
                     if e.resource_id:
-                        self.node.openstack_server_id = e.resource_id
+                        self.node.setOpenstackServerId(e.resource_id)
                         if self._handleServerFault():
                             self.log.error("Launch attempt failed: %s", str(e))
                             raise exceptions.QuotaException("Quota exceeded")
