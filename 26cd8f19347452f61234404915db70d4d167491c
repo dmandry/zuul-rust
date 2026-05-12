@@ -50,6 +50,148 @@
       "message": "recheck",
       "revId": "26cd8f19347452f61234404915db70d4d167491c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "60a3b513_4561062d",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 403,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "I\u0027m wary of suggesting this is the simplest to configure. OpenDev has used ssh stream events for over a decade with minimal issues. Whether you manage an ssh key or ssl certs I\u0027m not sure there is a lot of difference.",
+      "range": {
+        "startLine": 403,
+        "startChar": 0,
+        "endLine": 403,
+        "endChar": 41
+      },
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9e112063_76321e60",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 416,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "I\u0027m not sure this should be optional. There is a trust relationship between zuul and its git repos. I\u0027m worried that being able to spoof events on those repos may lead to unintended consequences.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0885ecab_f6893046",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 429,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "Given my previous comment I think the examples used here should use https and verify ssl as well using `\"sslVerify\": true` in the PUT data. I think its ok for people to not do these things but our examples should provide a happier path.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ed32873d_6560df3c",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 434,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "I don\u0027t think we give networking help in any of the other Zuul documentation. Maybe we can just leave this out? I don\u0027t want to imply that we\u0027re supporting random network setups like those created by docker.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7514ecfe_a8201e63",
+        "filename": "tests/fixtures/zuul-gerrit-webhook.conf",
+        "patchSetId": 6
+      },
+      "lineNbr": 28,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "Small nit. It looks like stream events is enabled by default then subsequent configuration can override that value. To ensure that we\u0027re not accidentally using stream events to process events we may want to explicitly disable stream events here. Or check that the event originated from the webhooks somehow in the test case?",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f98a66fa_4231cfe4",
+        "filename": "tests/unit/test_gerrit_webhook.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 89,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "FWIW reading the webhook plugin code it does appear to use POST.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "849db84e_df5b0ed0",
+        "filename": "tests/unit/test_gerrit_webhook.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 107,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "This would be the test case where we want to check the event was processed via webhook and not stream events (re my comment in the config file) assuming we don\u0027t disable stream events as an event source in the config.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d6c31649_02e5bf95",
+        "filename": "zuul/driver/gerrit/gerritconnection.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 627,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-12T17:09:53Z",
+      "side": 1,
+      "message": "Will this logger by used by cherrpy? It doesn\u0027t look like we use it here and BaseWebController doesn\u0027t log anything either?\n\nAlternatively, there may be some things we do want to log? Like the event type? or even the entire event at debug level? I\u0027m not sure if we get that from cherrypy already, but I think the stream events handler does log like that at a debug level.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
