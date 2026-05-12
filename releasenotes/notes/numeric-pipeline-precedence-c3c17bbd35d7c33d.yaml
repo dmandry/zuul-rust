@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    The :attr:`pipeline.precedence` configuration attribute now
+    accepts some numeric values in addition to the existing precedence
+    level names.
