@@ -70,6 +70,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "fa3ee357_15137582",
+        "filename": "releasenotes/notes/pipeline-precedence-2dba4a2bc564202a.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 6,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-12T20:22:35Z",
+      "side": 1,
+      "message": "Good idea.",
+      "parentUuid": "7ea7dbf5_ca0cc1c9",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "3937e2bb_1acd8738",
@@ -83,6 +101,24 @@
       "writtenOn": "2026-05-09T16:27:05Z",
       "side": 1,
       "message": "Nit: Should we add a new test case that uses a priority like 700? I think this change is straightforward enough as is to rely on the existing backward compatible handling and existing test cases. But figured I\u0027d call this out.",
+      "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c6f6e8c0_1cd633cd",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 3256,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-12T20:22:35Z",
+      "side": 1,
+      "message": "Yeah, I think the only thing that would be more useful would be to exhaustively test all of them and that sounds like more touble than it\u0027s worth.",
+      "parentUuid": "3937e2bb_1acd8738",
       "revId": "0e6ea465b51f79d1b40c2b064364458aa077210b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
