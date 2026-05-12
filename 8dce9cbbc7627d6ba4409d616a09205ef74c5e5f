@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "630e07e8_33bf047a",
+        "filename": "doc/source/drivers/aws.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 107,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-05-12T09:15:34Z",
+      "side": 1,
+      "message": "Good point. I think I messed this up during the rebase. Fixed in PS4.",
+      "parentUuid": "2a7a159a_268ec4df",
+      "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "d3cc943f_f804921f",
@@ -35,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "0263bee8_29e0d81d",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 2599,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-05-12T09:15:34Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "d3cc943f_f804921f",
+      "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "49978e98_56ceac88",
@@ -48,6 +84,24 @@
       "writtenOn": "2026-05-11T19:05:35Z",
       "side": 1,
       "message": "These lines reference the launcher itself which the rest of this method doesn\u0027t do.  That\u0027s going to be a problem since https://review.opendev.org/987752 moves it out of the launcher and into the model.\n\nI think we should do two things:\n\n1) Rebase this series on https://review.opendev.org/987752\n2) Move this code to _requestNode so that we set it at the start of the creation process rather than the end.",
+      "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c374bfe6_ecdaf37a",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 2602,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-05-12T09:15:34Z",
+      "side": 1,
+      "message": "Thanks for the hint. This also simplifies things as we don\u0027t have to look up the label and the provider first.",
+      "parentUuid": "49978e98_56ceac88",
       "revId": "8dce9cbbc7627d6ba4409d616a09205ef74c5e5f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
