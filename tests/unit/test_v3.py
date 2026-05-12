@@ -9121,6 +9121,8 @@ class TestSecretLeaks(AnsibleZuulTestCase):
         matches = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for filename in filenames:
+                if filename == 'log.socket':
+                    continue
                 filepath = os.path.join(dirpath, filename)
                 with open(filepath, 'rb') as f:
                     if content in f.read():
@@ -9205,6 +9207,8 @@ class TestParseErrors(AnsibleZuulTestCase):
         matches = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for filename in filenames:
+                if filename == 'log.socket':
+                    continue
                 filepath = os.path.join(dirpath, filename)
                 with open(filepath, 'rb') as f:
                     if content in f.read():
