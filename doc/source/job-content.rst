@@ -32,6 +32,11 @@ that is readable and writable by the job.  The hierarchy is:
   Where the Ansible log for the job is written; your job
   may place other logs here as well.
 
+The home directory of the user running the job is outside this
+hierarchy.  A future version of Zuul will restrict which files in the
+home directory may be carried over between playbooks.  To use files in
+later playbooks, put them under ``work/`` rather than ``$HOME``.
+
 Git Repositories
 ----------------
 
