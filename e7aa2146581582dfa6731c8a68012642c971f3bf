@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "43117f5a_56df72f4",
+        "filename": "web/src/containers/build/Buildset.jsx",
+        "patchSetId": 4
+      },
+      "lineNbr": 224,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-13T14:14:53Z",
+      "side": 1,
+      "message": "Yep.",
+      "parentUuid": "1958aaa7_6bf736a8",
+      "revId": "e7aa2146581582dfa6731c8a68012642c971f3bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "efaa2b72_176aa345",
@@ -43,6 +61,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "69b11d31_0bbec65e",
+        "filename": "web/src/containers/build/Buildset.jsx",
+        "patchSetId": 4
+      },
+      "lineNbr": 351,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-13T14:14:53Z",
+      "side": 1,
+      "message": "I think this is a niche feature so we should not display it unless it\u0027s used.  We don\u0027t want people thinking that any buildset can have parameters, or wondering why their job variables aren\u0027t showing up here.\n\nAlso, we do this with a lot of other attributes elsewhere in the app; it keeps the page smaller and easier to read since most features aren\u0027t used most of the time.",
+      "parentUuid": "efaa2b72_176aa345",
+      "range": {
+        "startLine": 351,
+        "startChar": 15,
+        "endLine": 351,
+        "endChar": 34
+      },
+      "revId": "e7aa2146581582dfa6731c8a68012642c971f3bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "699bffde_41d2cba8",
         "filename": "web/src/pages/Enqueue.jsx",
         "patchSetId": 4
@@ -54,6 +96,30 @@
       "writtenOn": "2026-05-08T19:21:57Z",
       "side": 1,
       "message": "If we hit this branch and set ref to undefined will we make a request to the backend with ref set to undefined or will some error checking catch it first?",
+      "range": {
+        "startLine": 261,
+        "startChar": 42,
+        "endLine": 261,
+        "endChar": 51
+      },
+      "revId": "e7aa2146581582dfa6731c8a68012642c971f3bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "aa6aa088_a27b1b6b",
+        "filename": "web/src/pages/Enqueue.jsx",
+        "patchSetId": 4
+      },
+      "lineNbr": 261,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-13T14:14:53Z",
+      "side": 1,
+      "message": "I think we will submit it with undefined, which will return an error.  I don\u0027t think that\u0027s a bad outcome since it should be impossible to hit the case without deliberate manipulation of data outside of the form fields.",
+      "parentUuid": "699bffde_41d2cba8",
       "range": {
         "startLine": 261,
         "startChar": 42,
