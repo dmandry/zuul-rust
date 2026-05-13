@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "47ba408a_6ece49a2",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 267,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-13T14:03:11Z",
+      "side": 1,
+      "message": "This will run each time we process the state machine after we send the createInstance call.  We can make it a bit more efficient if we move this to inside the \"running\" check below, or even in _updateNode.",
+      "revId": "bccc90c80e9fae98a31a245bbee60d63bfa48ef7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
