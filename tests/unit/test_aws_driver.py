@@ -256,6 +256,8 @@ class TestAwsDriver(AwsBaseTest):
 
     def check_dedicated_host_node_attrs(self, pnode):
         self.assertTrue(pnode.node_properties['host_id'].startswith('h-'))
+        self.assertTrue(
+            pnode.node_properties['ebs_volume_id'].startswith('vol-'))
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     @driver_config('aws', node_checks=check_dedicated_host_node_attrs)
@@ -293,6 +295,8 @@ class TestAwsDriver(AwsBaseTest):
             ['Encrypted'], True)
         self.assertTrue(pnode.node_properties['spot'])
         self.assertTrue(pnode.node_properties['instance_id'].startswith('i-'))
+        self.assertTrue(
+            pnode.node_properties['ebs_volume_id'].startswith('vol-'))
         self.assertFalse(pnode.reuse)
         instance = self.ec2_client.describe_instance_attribute(
             InstanceId=pnode.aws_instance_id,
@@ -317,6 +321,8 @@ class TestAwsDriver(AwsBaseTest):
                 'AllocationStrategy'])
         self.assertTrue(pnode.node_properties['fleet'])
         self.assertTrue(pnode.node_properties['instance_id'].startswith('i-'))
+        self.assertTrue(
+            pnode.node_properties['ebs_volume_id'].startswith('vol-'))
         instance = self.ec2_client.describe_instance_attribute(
             InstanceId=pnode.aws_instance_id,
             Attribute='userData',
