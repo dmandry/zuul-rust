@@ -953,6 +953,8 @@ class TestLauncher(LauncherBaseTestCase):
         zuul_node_vars = inventory['all']['hosts']['controller']['zuul_node']
         instance_id = zuul_node_vars['node_properties']['instance_id']
         self.assertTrue(instance_id.startswith('i-'))
+        ebs_volume_id = zuul_node_vars['node_properties']['ebs_volume_id']
+        self.assertTrue(ebs_volume_id.startswith('vol-'))
         self.assertFalse(zuul_node_vars['reuse'])
 
         self.executor_server.hold_jobs_in_build = False

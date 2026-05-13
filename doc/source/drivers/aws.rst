@@ -95,6 +95,10 @@ Nodes provided via the AWS driver provide the following :var:`node_properties`:
 
    The AWS host ID (if a dedicated host was used).
 
+.. var:: ebs_volume_id
+
+   The volume ID of the EBS volume which is mounted as root device.
+
 .. var:: fleet
 
    A boolean flag indicating if the node was created by using the AWS

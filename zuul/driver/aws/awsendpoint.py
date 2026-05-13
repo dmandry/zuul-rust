@@ -258,6 +258,16 @@ class AwsCreateStateMachine(statemachine.StateMachine):
             self.instance = instance
             self.node.aws_instance_id = instance['InstanceId']
             self.node.node_properties['instance_id'] = instance['InstanceId']
+
+            # Extract the ID of the EBS volume that was created together
+            # with the instance
+            for attachment in self.instance['BlockDeviceMappings']:
+                if attachment['DeviceName'] == self.instance['RootDeviceName']:
+                    self.node.node_properties['ebs_volume_id'] = (
+                        attachment['Ebs']['VolumeId']
+                    )
+                    break
+
             self.state = self.INSTANCE_CREATING
 
         if self.state == self.INSTANCE_CREATING:
