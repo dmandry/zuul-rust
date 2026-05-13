@@ -263,6 +263,15 @@ class AwsCreateStateMachine(statemachine.StateMachine):
         if self.state == self.INSTANCE_CREATING:
             self.instance = self.endpoint._refresh(self.instance)
 
+            # Extract the ID of the EBS volume that was created together
+            # with the instance
+            for attachment in self.instance['BlockDeviceMappings']:
+                if attachment['DeviceName'] == self.instance['RootDeviceName']:
+                    self.node.node_properties['ebs_volume_id'] = (
+                        attachment['Ebs']['VolumeId']
+                    )
+                    break
+
             if self.instance['State']['Name'].lower() == "running":
                 self._updateNode()
                 self.state = self.COMPLETE
