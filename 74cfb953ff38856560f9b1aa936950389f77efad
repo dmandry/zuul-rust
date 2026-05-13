@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "13daf8ca_45e97ece",
+        "filename": "releasenotes/notes/openstack-launcher-server-id-6f0d0fd690c33765.yaml",
+        "patchSetId": 3
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 34899
+      },
+      "writtenOn": "2026-05-13T14:20:34Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "8a3567df_05ac902b",
+      "revId": "74cfb953ff38856560f9b1aa936950389f77efad",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1242d22a_78b55288",
@@ -31,6 +49,24 @@
       "writtenOn": "2026-05-13T14:09:14Z",
       "side": 1,
       "message": "We generally prefer an end-to-end functional test.  Fortunately, the test below handles that and covers everything this test does, so you can just delete this test class.",
+      "revId": "74cfb953ff38856560f9b1aa936950389f77efad",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9b1fdfc1_67abdc04",
+        "filename": "tests/unit/test_openstack_driver.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 125,
+      "author": {
+        "id": 34899
+      },
+      "writtenOn": "2026-05-13T14:20:34Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1242d22a_78b55288",
       "revId": "74cfb953ff38856560f9b1aa936950389f77efad",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
