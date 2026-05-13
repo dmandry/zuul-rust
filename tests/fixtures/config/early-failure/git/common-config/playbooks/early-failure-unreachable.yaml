@@ -1,0 +1,14 @@
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - shell: "echo This output indicates failure"
+    - name: Add a fake unreachable host
+      add_host:
+        hostname: fake-unreachable
+        ansible_host: notexisting.example.notexisting
+
+- hosts: fake-unreachable
+  gather_facts: no
+  tasks:
+    - name: Attempt connection to unreachable host
+      command: echo hello

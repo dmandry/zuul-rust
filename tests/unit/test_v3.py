@@ -7777,6 +7777,20 @@ class TestEarlyFailure(AnsibleZuulTestCase):
             dict(name='wait', result='SUCCESS', changes='2,1'),
         ], ordered=True)
 
+    def test_early_failure_unreachable(self):
+        # Test that a job with an early failure detected, that also
+        # encounters an unreachable hosts is not retried.
+        file_dict = {'early-failure-unreachable.txt': ''}
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='early-failure-unreachable', result='FAILURE',
+                 changes='1,1'),
+        ])
+
 
 class TestMaxNodesPerJob(AnsibleZuulTestCase):
     tenant_config_file = 'config/multi-tenant/main.yaml'
