@@ -2140,7 +2140,7 @@ class Launcher:
                     # Start the clock for launch-timeout from this point.
                     self._emitMessages(log, messages)
                     node.create_state_machine.start_time = time.time()
-                instance = node.create_state_machine.advance()
+                node.create_state_machine.advance()
                 new_state = node.create_state_machine.state
                 if old_state != new_state:
                     log.debug("Node %s advanced from %s to %s",
@@ -2161,10 +2161,6 @@ class Launcher:
                             raise LaunchTimeoutError("Timeout creating node")
                     self.wake_event.set()
                     return
-                elif node.nodescan_request is None:
-                    # We just finished the create state machine,
-                    # update with new info.
-                    self._updateNodeFromInstance(node, instance)
 
                 # Note this method has the side effect of updating
                 # node info from the instance.
@@ -2574,50 +2570,6 @@ class Launcher:
             if label.config_hash == node.label_config_hash:
                 return provider
         raise ProviderNodeError(f"Unable to find provider for node {node}")
-
-    def _updateNodeFromInstance(self, node, instance):
-        if instance is None:
-            return
-
-        # TODO:
-        # if (pool.use_internal_ip and
-        #     (instance.private_ipv4 or instance.private_ipv6)):
-        #     server_ip = instance.private_ipv4 or instance.private_ipv6
-        # else:
-        server_ip = instance.interface_ip
-
-        node.interface_ip = server_ip
-        node.public_ipv4 = instance.public_ipv4
-        node.private_ipv4 = instance.private_ipv4
-        node.public_ipv6 = instance.public_ipv6
-        node.private_ipv6 = instance.private_ipv6
-        node.host_id = instance.host_id
-        node.cloud = instance.cloud
-        node.region = instance.region
-        node.az = instance.az
-        node.driver_data = instance.driver_data
-
-        # If we did not know the resource information before
-        # launching, update it now.
-        node.quota = instance.getQuotaInformation()
-
-        # Optionally, if the node has updated values that we set from
-        # the image attributes earlier, set those.
-        for attr in ('username', 'python_path', 'shell_type',
-                     'connection_port', 'connection_type',
-                     'host_keys'):
-            if hasattr(instance, attr):
-                setattr(node, attr, getattr(instance, attr))
-
-        # As a special case for metastatic, if we got node_attributes
-        # from the backing driver, use them as default values and let
-        # the values from the pool override.
-        instance_node_attrs = getattr(instance, 'node_attributes', None)
-        if instance_node_attrs is not None:
-            attrs = instance_node_attrs.copy()
-            if node.attributes:
-                attrs.update(node.attributes)
-            node.attributes = attrs
 
     def _getProvider(self, tenant_name, provider_name):
         for provider in self.tenant_providers[tenant_name]:

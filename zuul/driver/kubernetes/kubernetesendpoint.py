@@ -156,12 +156,16 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
         if self.state == self.POD_CREATING:
             if not self.endpoint._getPod(self.namespace, self.hostname):
                 return
+            self._updateNode()
             self.state = self.COMPLETE
 
         if self.state == self.COMPLETE:
             self.complete = True
-            return KubernetesInstance(self.label.kind, self.hostname,
+
+    def _updateNode(self):
+        instance = KubernetesInstance(self.label.kind, self.hostname,
                                       self.node.tags, self.quota)
+        self.node.updateFromInstance(instance)
 
 
 class KubernetesProviderEndpoint(BaseProviderEndpoint):

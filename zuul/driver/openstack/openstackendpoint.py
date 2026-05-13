@@ -144,7 +144,6 @@ class OpenstackDeleteStateMachine(statemachine.StateMachine):
     FLOATING_IP_DELETING = 'deleting floating ip'
     SERVER_DELETE = 'delete server'
     SERVER_DELETING = 'deleting server'
-    COMPLETE = 'complete'
 
     def __init__(self, endpoint, node, log):
         self.log = log
@@ -214,7 +213,6 @@ class OpenstackCreateStateMachine(statemachine.StateMachine):
     SERVER_CREATING = 'creating server'
     FLOATING_IP_CREATING = 'creating floating ip'
     FLOATING_IP_ATTACHING = 'attaching floating ip'
-    COMPLETE = 'complete'
 
     def __init__(self, endpoint, node, hostname, label, flavor, image,
                  image_external_id, tags, log):
@@ -352,6 +350,7 @@ class OpenstackCreateStateMachine(statemachine.StateMachine):
                     self.node.openstack_floating_ip_id = self.floating_ip['id']
                     self.state = self.FLOATING_IP_CREATING
                 else:
+                    self._updateNode()
                     self.state = self.COMPLETE
             elif self.server['status'] == 'ERROR':
                 if ('fault' in self.server and self.server['fault'] is not None
@@ -384,13 +383,17 @@ class OpenstackCreateStateMachine(statemachine.StateMachine):
             ext_ip = openstack.cloud.meta.get_server_ip(
                 self.server, ext_tag='floating', public=True)
             if ext_ip == self.floating_ip['floating_ip_address']:
+                self._updateNode()
                 self.state = self.COMPLETE
             else:
                 return
 
         if self.state == self.COMPLETE:
             self.complete = True
-            return self.endpoint._getInstance(self.server, self.node.quota)
+
+    def _updateNode(self):
+        instance = self.endpoint._getInstance(self.server, self.node.quota)
+        self.node.updateFromInstance(instance)
 
 
 class OpenstackImageUploadJob(BaseImageUploadJob):

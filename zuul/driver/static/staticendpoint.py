@@ -64,14 +64,12 @@ class StaticCreateStateMachine(statemachine.StateMachine):
         self.provider = provider
         self.node = node
         super().__init__(node.create_state)
-        self.state = self.COMPLETE
-        self.complete = True
         node_config = provider.nodes[node.uuid]
         quota = self.provider.getQuotaForLabel(label)
-        self.instance = StaticInstance(node_config, quota)
-
-    def advance(self):
-        return self.instance
+        instance = StaticInstance(node_config, quota)
+        self.node.updateFromInstance(instance)
+        self.state = self.COMPLETE
+        self.complete = True
 
 
 class StaticProviderEndpoint(BaseProviderEndpoint):
