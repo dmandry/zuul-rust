@@ -1,0 +1,7 @@
+# NOTE: Heat fixture templates MUST use YAML block-style mappings for
+# intrinsic functions (no flow-style braces). This allows the test
+# harness to use Python str.format() for parameterization.
+heat_template_version: rocky
+
+resources:
+{resources}

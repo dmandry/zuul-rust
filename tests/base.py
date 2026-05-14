@@ -91,6 +91,7 @@ from zuul.driver import ProviderInterface
 from zuul.driver.aws import AwsDriver
 from zuul.driver.azure import AzureDriver
 from zuul.driver.openstack import OpenstackDriver
+from zuul.driver.heat import HeatDriver
 from zuul.driver.static import StaticDriver
 from zuul.driver.kubernetes import KubernetesDriver
 from zuul.lib.collections import DefaultKeyDict
@@ -498,6 +499,7 @@ class TestConnectionRegistry(ConnectionRegistry):
         self.registerDriver(AwsDriver())
         self.registerDriver(AzureDriver())
         self.registerDriver(OpenstackDriver())
+        self.registerDriver(HeatDriver())
         self.registerDriver(StaticDriver())
         self.registerDriver(KubernetesDriver())
 
