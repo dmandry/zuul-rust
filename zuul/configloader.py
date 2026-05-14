@@ -37,6 +37,7 @@ import zuul.manager.dependent
 import zuul.manager.independent
 import zuul.manager.supercedent
 import zuul.manager.serial
+from zuul.lib import heatutils
 from zuul.lib.logutil import get_annotated_logger
 from zuul.lib.re2util import ZuulRegex
 from zuul.lib.varnames import check_varnames
@@ -49,6 +50,7 @@ from zuul.exceptions import (
     DuplicateGroupError,
     DuplicateNodeError,
     GlobalSemaphoreNotFoundError,
+    HeatTemplateSecurityError,
     MultipleProjectConfigurations,
     NodeFromGroupNotFoundError,
     PipelineNotPermittedError,
@@ -624,7 +626,6 @@ class NodeSetParser(object):
                     raise DuplicateNodeError(name, conf_node['name'])
             node = model.Node(as_list(conf_node['name']), conf_node['label'])
             if 'template-config' in conf_node:
-                # Convert hyphenated keys to underscored
                 for key, value in conf_node['template-config'].items():
                     node.template_config[key.replace('-', '_')] = value
             ns.addNode(node)
@@ -2071,6 +2072,7 @@ class TenantParser(object):
         'exclude-unprotected-branches': bool,
         'exclude-locked-branches': bool,
         'extra-config-paths': no_dup_config_paths,
+        'heat-template-dirs': to_list(str),
         'load-branch': str,
         'include-branches': to_list(str),
         'exclude-branches': to_list(str),
@@ -2282,6 +2284,8 @@ class TenantParser(object):
         parsed_config = self._loadTenantParsedConfig(
             abide, tenant, pcontext)
 
+        self._resolveHeatTemplates(parsed_config)
+
         tenant.layout = self._parseLayout(
             tenant, parsed_config, pcontext, layout_uuid)
 
@@ -2360,6 +2364,7 @@ class TenantParser(object):
     def _getProject(source, conf, current_include):
         extra_config_files = ()
         extra_config_dirs = ()
+        heat_template_dirs = ()
 
         if isinstance(conf, str):
             # Return a project object whether conf is a dict or a str
@@ -2436,6 +2441,8 @@ class TenantParser(object):
                                             if not x.endswith('/')])
                 extra_config_dirs = tuple([x[:-1] for x in extra_config_paths
                                            if x.endswith('/')])
+            heat_template_dirs = tuple(
+                as_list(conf[project_name].get('heat-template-dirs', [])))
             project_load_branch = conf[project_name].get(
                 'load-branch', None)
             project_implied_branch_matchers = conf[project_name].get(
@@ -2465,6 +2472,7 @@ class TenantParser(object):
             project_always_dynamic_branches
         tenant_project_config.extra_config_files = extra_config_files
         tenant_project_config.extra_config_dirs = extra_config_dirs
+        tenant_project_config.heat_template_dirs = heat_template_dirs
         tenant_project_config.load_branch = project_load_branch
         tenant_project_config.implied_branch_matchers = \
             project_implied_branch_matchers
@@ -2704,6 +2712,7 @@ class TenantParser(object):
 
         extra_config_files = abide.getExtraConfigFiles(project.name)
         extra_config_dirs = abide.getExtraConfigDirs(project.name)
+        heat_template_dirs = abide.getHeatTemplateDirs(project.name)
         if not self.merger:
             err = Exception(
                 "Configuration files missing from cache. "
@@ -2716,7 +2725,8 @@ class TenantParser(object):
             project.name, branch,
             files=(['zuul.yaml', '.zuul.yaml'] +
                    list(extra_config_files)),
-            dirs=['zuul.d', '.zuul.d'] + list(extra_config_dirs))
+            dirs=(['zuul.d', '.zuul.d'] + list(extra_config_dirs)
+                  + list(heat_template_dirs)))
         self.log.debug("Submitting cat job %s for %s %s %s" % (
             job, project.source.connection.connection_name,
             project.name, branch))
@@ -2855,6 +2865,59 @@ class TenantParser(object):
                         branch_config, trusted=False)
 
         return parsed_config
+
+    def _resolveHeatTemplates(self, parsed_config, files=None):
+        """Resolve heat template content from already-fetched files.
+
+        Scan nodesets for heat_template_path references and look up the
+        content from ``files`` (a RepoFiles object, used in the dynamic
+        layout path) or from the unparsed_config_cache (used in the
+        static / tenant-load path).
+
+        After resolving each template, run unconditional security
+        checks (external_id, deletion_policy, get_file, unsupported
+        resource types).  These are provider-independent and can reject
+        dangerous templates before the job is scheduled.
+        """
+        parser = heatutils.HeatTemplateParser(endpoint=None)
+        for ns in parsed_config.nodesets:
+            if not ns.source_context:
+                continue
+            sc = ns.source_context
+            for node in ns.getNodes():
+                path = node.template_config.get('heat_template_path')
+                if not path:
+                    continue
+                content = None
+                if files is not None:
+                    content = files.getFile(
+                        sc.project_connection_name,
+                        sc.project_name,
+                        sc.branch, path)
+                else:
+                    files_cache = (
+                        self.unparsed_config_cache.getFilesCache(
+                            sc.project_canonical_name, sc.branch))
+                    try:
+                        content = files_cache[path]
+                    except KeyError:
+                        pass
+                if not content:
+                    self.log.warning(
+                        "Heat template not found in repo files: "
+                        "%s in %s/%s@%s",
+                        path, sc.project_connection_name,
+                        sc.project_name, sc.branch)
+                    continue
+                try:
+                    parser.validateSecurity(content)
+                except (heatutils.TemplatePolicyViolation, ValueError) as e:
+                    parsed_config.nodeset_errors.append(
+                        HeatTemplateSecurityError(
+                            path, ns.name, e))
+                else:
+                    node.template_config[
+                        'heat_template_content'] = content
 
     def addProjectBranchConfig(self, parse_context, parsed_config,
                                tenant, tpc, branch_config, trusted):
@@ -3716,6 +3779,8 @@ class ConfigLoader(object):
             self._loadDynamicProjectData(abide, config, project, files,
                                          additional_project_branches,
                                          False, item, pcontext)
+
+        self.tenant_parser._resolveHeatTemplates(config, files)
 
         layout = model.Layout(tenant, item.layout_uuid)
         log.debug("Created layout id %s", layout.uuid)

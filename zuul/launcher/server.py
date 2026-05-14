@@ -1005,6 +1005,7 @@ class CleanupWorker:
 
         # Get information about all nodes and their required resources
         node_ids = []
+        managed_resource_ids = {}
         for node in self.launcher.api.nodes_cache.getItems():
             node_ids.append(node.uuid)
             # If this node is associated with a provider on this
@@ -1012,6 +1013,16 @@ class CleanupWorker:
             if node.endpoint_name == endpoint.name:
                 required_resource_ids.update(set(
                     node.getRequiredResources()))
+                # Collect physical resource IDs from Heat nodes for
+                # managed vs unmanaged classification in listInstances().
+                # Maps each resource UUID to the owning stack node's
+                # UUID so listInstances() can reconstruct Zuul metadata.
+                resource_ids = getattr(
+                    node, 'heat_physical_resource_ids', None)
+                if resource_ids:
+                    for rid in resource_ids:
+                        managed_resource_ids[rid] = node.uuid
+        endpoint.managed_resource_ids = managed_resource_ids
 
         # Update quota; we get different classes back from
         # listInstances and listResources, so we can't use the same

@@ -90,6 +90,7 @@ from zuul.driver.elasticsearch import ElasticsearchDriver
 from zuul.driver.aws import AwsDriver
 from zuul.driver.azure import AzureDriver
 from zuul.driver.openstack import OpenstackDriver
+from zuul.driver.heat import HeatDriver
 from zuul.driver.static import StaticDriver
 from zuul.driver.kubernetes import KubernetesDriver
 from zuul.lib.collections import DefaultKeyDict
@@ -495,6 +496,7 @@ class TestConnectionRegistry(ConnectionRegistry):
         self.registerDriver(AwsDriver())
         self.registerDriver(AzureDriver())
         self.registerDriver(OpenstackDriver())
+        self.registerDriver(HeatDriver())
         self.registerDriver(StaticDriver())
         self.registerDriver(KubernetesDriver())
 
@@ -2839,6 +2841,23 @@ class ZuulTestCase(BaseTestCase):
                 for fn in zuul.configloader.as_list(
                         item['job'].get('post-run', [])):
                     files['%s' % fn] = ''
+                # Include template files for orchestration drivers (heat)
+                nodeset_conf = item['job'].get('nodeset', {})
+                # If nodeset is referenced by name, no inline nodes to
+                # extract template paths from.
+                if not isinstance(nodeset_conf, dict):
+                    continue
+                for node_conf in zuul.configloader.as_list(
+                        nodeset_conf.get('nodes', [])):
+                    tc = node_conf.get('template-config', {})
+                    htp = tc.get('heat-template-path')
+                    if not htp:
+                        continue
+                    tpl_fixture = os.path.join(
+                        os.path.dirname(path), os.path.basename(htp))
+                    if os.path.exists(tpl_fixture):
+                        with open(tpl_fixture) as tf:
+                            files[htp] = tf.read()
 
         root = os.path.join(self.test_root, "config")
         if not os.path.exists(root):
@@ -4109,7 +4128,7 @@ class ZuulTestCase(BaseTestCase):
                 break
 
     def requestNodes(self, labels, tenant="tenant-one", pipeline="check",
-                     provider=None, timeout=10):
+                     provider=None, timeout=10, template_config=None):
         result_queue = PipelineResultEventQueue(
             self.zk_client, tenant, pipeline)
 
@@ -4123,8 +4142,7 @@ class ZuulTestCase(BaseTestCase):
             # Lock the pipeline, so we can grab the result event
             with (self.scheds.first.sched.run_handler_lock,
                   pipeline_lock(self.zk_client, tenant, pipeline)):
-                request = model.NodesetRequest.new(
-                    ctx,
+                kwargs = dict(
                     tenant_name=tenant,
                     pipeline_name="check",
                     buildset_uuid=uuid.uuid4().hex,
@@ -4137,6 +4155,9 @@ class ZuulTestCase(BaseTestCase):
                     span_info=None,
                     preferred_provider=provider,
                 )
+                if template_config is not None:
+                    kwargs['template_config'] = template_config
+                request = model.NodesetRequest.new(ctx, **kwargs)
                 if timeout:
                     for _ in iterate_timeout(
                             timeout, "nodeset request to be fulfilled"):
