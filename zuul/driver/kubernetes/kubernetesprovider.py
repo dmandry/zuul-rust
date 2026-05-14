@@ -332,7 +332,7 @@ class KubernetesProvider(BaseProvider, subclass_id='kubernetes'):
     def getEndpointLimits(self):
         return QuotaInformation(default=math.inf)
 
-    def getQuotaForLabel(self, label):
+    def getQuotaForLabel(self, label, node_properties=None):
         return self.endpoint.getQuotaForLabel(label)
 
     def refreshQuotaForLabel(self, label, update):
