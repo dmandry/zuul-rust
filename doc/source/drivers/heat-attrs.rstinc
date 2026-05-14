@@ -1,0 +1,132 @@
+.. attr:: provider[heat]
+   :type: dict
+
+   The attributes available for configuring a Heat provider.
+
+   .. attr:: connection
+      :type: str
+
+      The name of the :ref:`connection <connections>` to use.
+
+   .. attr:: resource-limits
+      :type: dict
+
+      Global resource limits across all stacks for this provider.
+
+      .. attr:: max-stacks
+         :type: int
+
+         Maximum number of Heat stacks.
+
+   .. attr:: resource-policy
+      :type: dict
+
+      Policy for allowed/disallowed Heat resource types in templates.
+
+      .. attr:: allowed-resource-types
+         :type: list
+
+         Whitelist of allowed Heat resource types (e.g.,
+         ``OS::Nova::Server``). If specified, templates may only use
+         these types.
+
+      .. attr:: disallowed-resource-types
+         :type: list
+
+         Blacklist of disallowed Heat resource types (e.g.,
+         ``OS::Heat::ResourceGroup``). Templates using these types
+         will be rejected.
+
+   .. attr:: labels
+      :type: list
+
+      .. attr:: region
+         :type: str
+
+         OpenStack region name.
+
+      .. attr:: availability-zone
+         :type: str
+
+         OpenStack availability zone.
+
+      .. attr:: flavor
+         :type: str
+         :required:
+
+         Flavor name for this label.
+
+      .. attr:: image
+         :type: str
+         :required:
+
+         Image name for this label.
+
+   .. attr:: flavors
+      :type: list
+
+      .. attr:: name
+         :type: str
+         :required:
+
+         Flavor name.
+
+      .. attr:: max-instances
+         :type: int
+
+         Maximum instances per stack using this flavor.
+
+      .. attr:: max-cores
+         :type: int
+
+         Maximum CPU cores per stack.
+
+      .. attr:: max-ram
+         :type: int
+
+         Maximum RAM (MB) per stack.
+
+      .. attr:: max-volumes
+         :type: int
+
+         Maximum volumes per stack.
+
+      .. attr:: max-volume-gb
+         :type: int
+
+         Maximum volume storage (GB) per stack.
+
+      .. attr:: max-networks
+         :type: int
+
+         Maximum networks per stack.
+
+      .. attr:: max-routers
+         :type: int
+
+         Maximum routers per stack.
+
+      .. attr:: max-routers-with-external-gw
+         :type: int
+
+         Maximum routers with external gateways per stack.
+
+      .. attr:: max-floating-ips
+         :type: int
+
+         Maximum floating IPs per stack.
+
+   .. attr:: images
+      :type: list
+
+      .. attr:: name
+         :type: str
+         :required:
+
+         Image name used in label configuration.
+
+      .. attr:: image-name
+         :type: str
+         :required:
+
+         Glance image name or ID.
