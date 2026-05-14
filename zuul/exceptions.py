@@ -100,6 +100,11 @@ class TemplatePolicyViolation(Exception):
     pass
 
 
+class FlavorLimitExceeded(Exception):
+    """Exception raised when a template exceeds flavor resource limits."""
+    pass
+
+
 class AlgorithmNotSupportedException(Exception):
     pass
 
@@ -423,6 +428,30 @@ class GlobalSemaphoreNotFoundError(ConfigurationSyntaxError):
         file by the Zuul administrator.""")
         message = textwrap.fill(message.format(semaphore=semaphore))
         super(GlobalSemaphoreNotFoundError, self).__init__(message)
+
+
+class HeatTemplateSecurityError(ConfigurationSyntaxError):
+    zuul_error_name = 'Heat Template Security Error'
+
+    def __init__(self, path, nodeset, detail):
+        message = textwrap.dedent("""\
+        Heat template "{path}" in nodeset "{nodeset}" failed a
+        security check: {detail}""")
+        message = textwrap.fill(message.format(
+            path=path, nodeset=nodeset, detail=detail))
+        super().__init__(message)
+
+
+class HeatTemplateNotFoundError(ConfigurationSyntaxError):
+    zuul_error_name = 'Heat Template Not Found'
+
+    def __init__(self, path, nodeset):
+        message = textwrap.dedent("""\
+        Heat template "{path}" referenced in nodeset "{nodeset}"
+        was not found in the repository.""")
+        message = textwrap.fill(message.format(
+            path=path, nodeset=nodeset))
+        super().__init__(message)
 
 
 class YAMLDuplicateKeyError(ConfigurationSyntaxError):
