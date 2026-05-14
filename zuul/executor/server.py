@@ -2421,6 +2421,7 @@ class AnsibleJob(object):
                         private_ipv4=node.private_ipv4,
                         public_ipv6=node.public_ipv6,
                         private_ipv6=node.private_ipv6,
+                        reuse=node.reuse,
                         node_properties=node.node_properties,
                     ),
                 ))
