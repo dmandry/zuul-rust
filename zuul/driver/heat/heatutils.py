@@ -20,6 +20,7 @@ import yaml
 
 import openstack
 
+from zuul.driver.heat.exceptions import FlavorNotFoundError
 from zuul.exceptions import TemplatePolicyViolation
 from zuul.model import QuotaInformation
 
@@ -461,7 +462,8 @@ class HeatTemplateParser:
         try:
             flavor = self.endpoint._findFlavor(flavor_name)
             return (flavor.vcpus, flavor.ram)
-        except openstack.exceptions.SDKException as e:
+        except (FlavorNotFoundError,
+                openstack.exceptions.SDKException) as e:
             raise ValueError(
                 f"Unable to find Nova flavor '{flavor_name}': {e}") from e
 

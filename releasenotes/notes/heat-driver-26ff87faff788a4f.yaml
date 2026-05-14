@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    A new provider driver for OpenStack Heat is now available. The Heat driver
+    enables zuul-launcher to request resource stacks through OpenStack Heat
+    instead of individual instances. This allows for more complex resource
+    topologies including networks, routers, volumes, and multiple interconnected
+    instances to be provisioned for job execution. The driver supports templated
+    Heat stacks, stack state management, and automatic resource cleanup.
