@@ -1980,3 +1980,128 @@ class TestParameterizedBuilds(ZuulTestCase):
         self.assertEqual(1, len(layout.loading_errors))
         self.assertIn('does not allow parameters',
                       layout.loading_errors[0].error)
+
+
+class TestResolveHeatTemplates(ZuulTestCase):
+    config_file = 'zuul-connections-nodepool.conf'
+
+    _RESOLVE_TPL = 'zuul.heat.d/test-stack-resolve.yaml'
+
+    _VALID_RESOURCES = (
+        "  net:\n"
+        "    type: OS::Neutron::Net\n"
+        "  server:\n"
+        "    type: OS::Nova::Server\n"
+        "    properties:\n"
+        "      flavor: m1.small"
+    )
+
+    _EXTERNAL_ID_RESOURCES = (
+        "  leaked_net:\n"
+        "    type: OS::Neutron::Net\n"
+        "    external_id: some-existing-uuid"
+    )
+
+    _DELETION_POLICY_RESOURCES = (
+        "  kept_vol:\n"
+        "    type: OS::Cinder::Volume\n"
+        "    deletion_policy: Retain\n"
+        "    properties:\n"
+        "      size: 10"
+    )
+
+    _GET_FILE_RESOURCES = (
+        "  config:\n"
+        "    type: OS::Heat::CloudConfig\n"
+        "    properties:\n"
+        "      cloud_config:\n"
+        "        write_files:\n"
+        "          - content: {get_file: setup.sh}\n"
+        "            path: /opt/setup.sh"
+    )
+
+    _UNSUPPORTED_TYPE_RESOURCES = (
+        "  nested:\n"
+        "    type: OS::Heat::ResourceGroup\n"
+        "    properties:\n"
+        "      count: 3\n"
+        "      resource_def:\n"
+        "        type: OS::Nova::Server"
+    )
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       TestResolveHeatTemplates._RESOLVE_TPL,
+                       'resources':
+                       TestResolveHeatTemplates._VALID_RESOURCES,
+                   })
+    def test_valid_template_resolved(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        heat_errors = [e for e in layout.loading_errors
+                       if 'Heat' in e.name or 'heat' in str(e.error)]
+        self.assertEqual(0, len(heat_errors))
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       TestResolveHeatTemplates._RESOLVE_TPL,
+                       'resources':
+                       TestResolveHeatTemplates._EXTERNAL_ID_RESOURCES,
+                   })
+    def test_rejects_template_with_external_id(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('external_id', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       TestResolveHeatTemplates._RESOLVE_TPL,
+                       'resources':
+                       TestResolveHeatTemplates._DELETION_POLICY_RESOURCES,
+                   })
+    def test_rejects_template_with_deletion_policy(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('deletion_policy', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       TestResolveHeatTemplates._RESOLVE_TPL,
+                       'resources':
+                       TestResolveHeatTemplates._GET_FILE_RESOURCES,
+                   })
+    def test_rejects_template_with_get_file(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('get_file', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       TestResolveHeatTemplates._RESOLVE_TPL,
+                       'resources':
+                       TestResolveHeatTemplates._UNSUPPORTED_TYPE_RESOURCES,
+                   })
+    def test_rejects_template_with_unsupported_resource_type(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('ResourceGroup', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/nonexistent.yaml',
+                   })
+    def test_rejects_missing_template(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('not found', layout.loading_errors[0].error)
