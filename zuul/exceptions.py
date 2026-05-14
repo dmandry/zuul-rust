@@ -420,6 +420,30 @@ class GlobalSemaphoreNotFoundError(ConfigurationSyntaxError):
         super(GlobalSemaphoreNotFoundError, self).__init__(message)
 
 
+class HeatTemplateSecurityError(ConfigurationSyntaxError):
+    zuul_error_name = 'Heat Template Security Error'
+
+    def __init__(self, path, nodeset, detail):
+        message = textwrap.dedent("""\
+        Heat template "{path}" in nodeset "{nodeset}" failed a
+        security check: {detail}""")
+        message = textwrap.fill(message.format(
+            path=path, nodeset=nodeset, detail=detail))
+        super().__init__(message)
+
+
+class HeatTemplateNotFoundError(ConfigurationSyntaxError):
+    zuul_error_name = 'Heat Template Not Found'
+
+    def __init__(self, path, nodeset):
+        message = textwrap.dedent("""\
+        Heat template "{path}" referenced in nodeset "{nodeset}"
+        was not found in the repository.""")
+        message = textwrap.fill(message.format(
+            path=path, nodeset=nodeset))
+        super().__init__(message)
+
+
 class YAMLDuplicateKeyError(ConfigurationSyntaxError):
     def __init__(self, key, source_context, start_mark):
         self.source_context = source_context
