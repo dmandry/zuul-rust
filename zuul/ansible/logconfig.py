@@ -47,6 +47,7 @@ _DEFAULT_JOB_LOGGING_CONFIG = {
             'level': 'INFO',
             'formatter': 'plain',
             'facility': 'local0',
+            'socktype': 1,  # SOCK_STREAM
         },
     },
     'loggers': {
