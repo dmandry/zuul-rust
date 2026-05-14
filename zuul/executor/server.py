@@ -567,25 +567,29 @@ class LogReceiver:
                     data = this.request[0].decode('utf8')
                     if m := self.SYSLOG_RE.match(data):
                         priority, message = m.groups()
-                        fd = self.output_map.get(priority)
-                        if fd is not None:
-                            fd.write(message + '\n')
-                            fd.flush()
+                        if priority == self.OUTPUT_PRIORITY:
+                            self.addLineToJobOutput(message)
                 except Exception:
                     self.log.exception("Error in log receiver:")
 
         self.handler_class = MyHandler
         self.server = None
-        self.output_map = {}
+        self.job_output_file = None
 
     def start(self):
         self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
         self.thread.start()
 
+    def addLineToJobOutput(self, message):
+        output = self.job_output_file
+        if output is not None:
+            output.write(message + '\n')
+            output.flush()
+
     def run(self):
         try:
             with _safe_open(self.jobdir.job_output_file, "a") as job_output:
-                self.output_map[self.OUTPUT_PRIORITY] = job_output
+                self.job_output_file = job_output
                 with socketserver.UnixDatagramServer(
                     self.jobdir.log_socket,
                     self.handler_class) as server:
@@ -1282,11 +1286,8 @@ class AnsibleJob(object):
                 self.arguments['zuul']['job'],
                 self.arguments['zuul']['ref'],
                 self.arguments['zuul']['change_url']))
-        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-            job_output.write(
-                "{now} |\n"
-                "{now} | Job paused\n".format(now=datetime.datetime.now()))
-
+        self._jobOutput('')
+        self._jobOutput('Job paused')
         self.paused = True
 
         result_data, secret_result_data = self.getResultData()
@@ -1305,11 +1306,8 @@ class AnsibleJob(object):
                 self.arguments['zuul']['job'],
                 self.arguments['zuul']['ref'],
                 self.arguments['zuul']['change_url']))
-        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-            job_output.write(
-                "{now} | Job resumed\n"
-                "{now} |\n".format(now=datetime.datetime.now()))
-
+        self._jobOutput('Job resumed')
+        self._jobOutput('')
         self.paused = False
         self.executor_server.resumeBuild(self.build_request)
         self._resume_event.set()
@@ -1544,11 +1542,12 @@ class AnsibleJob(object):
         result = dict(result='ABORTED')
         self.executor_server.completeBuild(self.build_request, result)
 
-    def _jobOutput(self, job_output, msg):
-        job_output.write("{now} | {msg}\n".format(
-            now=datetime.datetime.now(),
-            msg=msg,
-        ))
+    def _jobOutput(self, msg):
+        self.log_receiver.addLineToJobOutput(
+            "{now} | {msg}".format(
+                now=datetime.datetime.now(),
+                msg=msg,
+            ))
 
     def _execute(self):
         tracer = trace.get_tracer("zuul")
@@ -1580,253 +1579,250 @@ class AnsibleJob(object):
             key = (iv['connection'], iv['project'])
             projects.add(key)
 
-        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-            self._jobOutput(job_output, "Updating git repos")
-            for (connection, project) in projects:
-                self.log.debug("Updating project %s %s", connection, project)
-                tasks.append(self.executor_server.update(
-                    connection, project, repo_state=self.repo_state,
-                    zuul_event_id=self.zuul_event_id,
-                    build=self.build_request.uuid,
-                    span_context=tracing.getSpanContext(
-                        trace.get_current_span()),
-                ))
+        self._jobOutput("Updating git repos")
+        for (connection, project) in projects:
+            self.log.debug("Updating project %s %s", connection, project)
+            tasks.append(self.executor_server.update(
+                connection, project, repo_state=self.repo_state,
+                zuul_event_id=self.zuul_event_id,
+                build=self.build_request.uuid,
+                span_context=tracing.getSpanContext(
+                    trace.get_current_span()),
+            ))
 
-            for task in tasks:
-                task.wait()
+        for task in tasks:
+            task.wait()
 
-                if not task.success:
-                    # On transient error retry the job
-                    if (hasattr(task, 'transient_error') and
-                        task.transient_error):
-                        result = dict(
-                            result=None,
-                            error_detail=f'Failed to update project '
-                                         f'{task.project_name}')
-                        self.executor_server.completeBuild(
-                            self.build_request, result)
-                        return
-
-                    raise ExecutorError(
-                        'Failed to update project %s' % task.project_name)
-
-                # Take refs and branches from repo state
-                project_repo_state = \
-                    self.repo_state[task.connection_name][task.project_name]
-                # All branch names
-                branches = [
-                    ref[11:]  # strip refs/heads/
-                    for ref in project_repo_state
-                    if ref.startswith('refs/heads/')
-                ]
-                # All refs without refs/*/ prefix
-                refs = []
-                for ref in project_repo_state:
-                    r = '/'.join(ref.split('/')[2:])
-                    if r:
-                        refs.append(r)
-                self.project_info[task.canonical_name] = {
-                    'refs': refs,
-                    'branches': branches,
-                }
-
-            # Early abort if abort requested
-            if self.aborted:
-                self._send_aborted()
-                return
-            self.log.debug("Git updates complete")
-
-            self._jobOutput(job_output, "Cloning repos into workspace")
-            self.workspace_merger = self.executor_server._getMerger(
-                self.jobdir.src_root,
-                self.executor_server.merge_root,
-                logger=self.log,
-                scheme=self.scheme)
-            # Subset of the repo state that is relevant for this job
-            relevant_repo_state = collections.defaultdict(dict)
-            repos = {}
-            for project in args['projects']:
-                self.log.debug("Cloning %s/%s" % (project['connection'],
-                                                  project['name'],))
-                with tracer.start_as_current_span(
-                        'BuildCloneRepo',
-                        attributes={'connection': project['connection'],
-                                    'project': project['name']}):
-                    if self.checkout_workspace_repos:
-                        sparse_paths = SparsePaths.FULL
-                    else:
-                        sparse_paths = SparsePaths.EMPTY
-                    repo = self.workspace_merger.getRepo(
-                        project['connection'],
-                        project['name'],
-                        sparse_paths=sparse_paths,
-                    )
-                repos[project['canonical_name']] = repo
-                try:
-                    project_rs = self.repo_state[project['connection']][
-                        project['name']]
-                except KeyError:
-                    self.log.warning("Project %s/%s not in repo state",
-                                     connection, project)
-                else:
-                    relevant_repo_state[project['connection']][
-                        project['name']] = project_rs
-
-            # Early abort if abort requested
-            if self.aborted:
-                self._send_aborted()
-                return
-
-            self._jobOutput(job_output, "Restoring repo states")
-            with tracer.start_as_current_span('BuildSetRepoState'):
-                recent = self.workspace_merger.setBulkRepoState(
-                    relevant_repo_state,
-                    self.zuul_event_id,
-                    self.executor_server.process_worker,
-                )
-
-            # The commit ID of the original item (before merging).  Used
-            # later for line mapping.
-            item_commit = None
-            # Repos that have been checked out during the merge operation.
-            merged_repos = set()
-
-            self._jobOutput(job_output, "Merging changes")
-            merge_items = [
-                i for i in args['items']
-                if (i.get('number') and
-                    (i['connection'], i['project']) in projects)
-            ]
-            if merge_items:
-                with tracer.start_as_current_span(
-                        'BuildMergeChanges'):
-                    item_commit = self.doMergeChanges(
-                        merge_items, self.repo_state, recent, merged_repos)
-                if item_commit is None:
-                    # There was a merge conflict and we have already sent
-                    # a work complete result, don't run any jobs
+            if not task.success:
+                # On transient error retry the job
+                if (hasattr(task, 'transient_error') and
+                    task.transient_error):
+                    result = dict(
+                        result=None,
+                        error_detail=f'Failed to update project '
+                                     f'{task.project_name}')
+                    self.executor_server.completeBuild(
+                        self.build_request, result)
                     return
 
-            # Early abort if abort requested
-            if self.aborted:
-                self._send_aborted()
-                return
+                raise ExecutorError(
+                    'Failed to update project %s' % task.project_name)
 
-            self._jobOutput(job_output, "Checking out repos")
-            for project in args['projects']:
-                repo = repos[project['canonical_name']]
-                # If this project is the Zuul project and this is a ref
-                # rather than a change, checkout the ref.
-                if (project['canonical_name'] ==
-                    args['zuul']['project']['canonical_name'] and
-                    (not args['zuul'].get('branch')) and
-                    args['zuul'].get('ref')):
-                    ref = args['zuul']['ref']
+            # Take refs and branches from repo state
+            project_repo_state = \
+                self.repo_state[task.connection_name][task.project_name]
+            # All branch names
+            branches = [
+                ref[11:]  # strip refs/heads/
+                for ref in project_repo_state
+                if ref.startswith('refs/heads/')
+            ]
+            # All refs without refs/*/ prefix
+            refs = []
+            for ref in project_repo_state:
+                r = '/'.join(ref.split('/')[2:])
+                if r:
+                    refs.append(r)
+            self.project_info[task.canonical_name] = {
+                'refs': refs,
+                'branches': branches,
+            }
+
+        # Early abort if abort requested
+        if self.aborted:
+            self._send_aborted()
+            return
+        self.log.debug("Git updates complete")
+
+        self._jobOutput("Cloning repos into workspace")
+        self.workspace_merger = self.executor_server._getMerger(
+            self.jobdir.src_root,
+            self.executor_server.merge_root,
+            logger=self.log,
+            scheme=self.scheme)
+        # Subset of the repo state that is relevant for this job
+        relevant_repo_state = collections.defaultdict(dict)
+        repos = {}
+        for project in args['projects']:
+            self.log.debug("Cloning %s/%s" % (project['connection'],
+                                              project['name'],))
+            with tracer.start_as_current_span(
+                    'BuildCloneRepo',
+                    attributes={'connection': project['connection'],
+                                'project': project['name']}):
+                if self.checkout_workspace_repos:
+                    sparse_paths = SparsePaths.FULL
                 else:
-                    ref = None
-                selected_ref, selected_desc = self.resolveBranch(
-                    project['canonical_name'],
-                    ref,
-                    args['branch'],
-                    self.job.override_branch,
-                    self.job.override_checkout,
-                    project['override_branch'],
-                    project['override_checkout'],
-                    project['default_branch'])
-                self.log.info("Checking out %s %s %s",
-                              project['canonical_name'], selected_desc,
-                              selected_ref)
-                with tracer.start_as_current_span(
-                        'BuildCheckout',
-                        attributes={'connection': project['connection'],
-                                    'project': project['name']}):
-                    if self.checkout_workspace_repos:
-                        hexsha = repo.checkout(selected_ref)
-                    else:
-                        hexsha = repo.getRef(selected_ref)[1]
-                        # So that we have a consistent workspace
-                        # regardless of whether we merged changes, remove
-                        # the working tree if we're not checking out repos
-                        # in the workspace.
-                        if ((project['connection'], project['name'])
-                            in merged_repos):
-                            self.log.info("Emptying work tree for %s",
-                                          project['canonical_name'])
-                            repo.uncheckout()
-
-                # Update the inventory variables to indicate the ref we
-                # checked out
-                p = args['zuul']['projects'][project['canonical_name']]
-                p['checkout'] = selected_ref
-                p['checkout_description'] = selected_desc
-                p['commit'] = hexsha
-                self.merge_ops.append(zuul.model.MergeOp(
-                    cmd=['git', 'checkout', selected_ref],
-                    path=repo.workspace_project_path))
-
-            # Set the URL of the origin remote for each repo to a bogus
-            # value. Keeping the remote allows tools to use it to determine
-            # which commits are part of the current change.
-            for repo in repos.values():
-                repo.setRemoteUrl('file:///dev/null')
-
-            # Early abort if abort requested
-            if self.aborted:
-                self._send_aborted()
-                return
-
-            self.loadIncludeVars()
-
-            # We set the nodes to "in use" as late as possible. So in case
-            # the build failed during the checkout phase, the node is
-            # still untouched and nodepool can re-allocate it to a
-            # different node request / build.  Below this point, we may
-            # start to run tasks on nodes (prepareVars in particular uses
-            # Ansible to freeze hostvars).
-            if self.node_request:
-                tenant_name = self.arguments["zuul"]["tenant"]
-                project_name = self.arguments["zuul"]["project"][
-                    "canonical_name"]
-                self.executor_server.nodepool.useNodeSet(
-                    self.nodeset, tenant_name, project_name,
-                    self.zuul_event_id)
-            elif self.nodeset_request:
-                self.executor_server.launcher.useNodeset(
-                    self.nodeset, self.zuul_event_id)
-
-            self._jobOutput(job_output, "Preparing playbooks")
-            # This prepares each playbook and the roles needed for each.
-            self.preparePlaybooks(args)
-            self.writeLoggingConfig()
-            zuul_resources = self.prepareNodes(args)  # set self.host_list
+                    sparse_paths = SparsePaths.EMPTY
+                repo = self.workspace_merger.getRepo(
+                    project['connection'],
+                    project['name'],
+                    sparse_paths=sparse_paths,
+                )
+            repos[project['canonical_name']] = repo
             try:
-                # set self.original_hostvars
-                self.prepareVars(args, zuul_resources)
-            except VariableNameError as e:
-                raise ExecutorError(str(e))
-            self.writeDebugInventory()
-            self.writeRepoStateFile(repos)
+                project_rs = self.repo_state[project['connection']][
+                    project['name']]
+            except KeyError:
+                self.log.warning("Project %s/%s not in repo state",
+                                 connection, project)
+            else:
+                relevant_repo_state[project['connection']][
+                    project['name']] = project_rs
 
-            # Early abort if abort requested
-            if self.aborted:
-                self._send_aborted()
+        # Early abort if abort requested
+        if self.aborted:
+            self._send_aborted()
+            return
+
+        self._jobOutput("Restoring repo states")
+        with tracer.start_as_current_span('BuildSetRepoState'):
+            recent = self.workspace_merger.setBulkRepoState(
+                relevant_repo_state,
+                self.zuul_event_id,
+                self.executor_server.process_worker,
+            )
+
+        # The commit ID of the original item (before merging).  Used
+        # later for line mapping.
+        item_commit = None
+        # Repos that have been checked out during the merge operation.
+        merged_repos = set()
+
+        self._jobOutput("Merging changes")
+        merge_items = [
+            i for i in args['items']
+            if (i.get('number') and
+                (i['connection'], i['project']) in projects)
+        ]
+        if merge_items:
+            with tracer.start_as_current_span(
+                    'BuildMergeChanges'):
+                item_commit = self.doMergeChanges(
+                    merge_items, self.repo_state, recent, merged_repos)
+            if item_commit is None:
+                # There was a merge conflict and we have already sent
+                # a work complete result, don't run any jobs
                 return
 
-            data = self._base_job_data()
-            if self.executor_server.log_streaming_port != DEFAULT_FINGER_PORT:
-                data['url'] = "finger://{hostname}:{port}/{uuid}".format(
-                    hostname=self.executor_server.hostname,
-                    port=self.executor_server.log_streaming_port,
-                    uuid=self.build_request.uuid)
+        # Early abort if abort requested
+        if self.aborted:
+            self._send_aborted()
+            return
+
+        self._jobOutput("Checking out repos")
+        for project in args['projects']:
+            repo = repos[project['canonical_name']]
+            # If this project is the Zuul project and this is a ref
+            # rather than a change, checkout the ref.
+            if (project['canonical_name'] ==
+                args['zuul']['project']['canonical_name'] and
+                (not args['zuul'].get('branch')) and
+                args['zuul'].get('ref')):
+                ref = args['zuul']['ref']
             else:
-                data['url'] = 'finger://{hostname}/{uuid}'.format(
-                    hostname=self.executor_server.hostname,
-                    uuid=self.build_request.uuid)
+                ref = None
+            selected_ref, selected_desc = self.resolveBranch(
+                project['canonical_name'],
+                ref,
+                args['branch'],
+                self.job.override_branch,
+                self.job.override_checkout,
+                project['override_branch'],
+                project['override_checkout'],
+                project['default_branch'])
+            self.log.info("Checking out %s %s %s",
+                          project['canonical_name'], selected_desc,
+                          selected_ref)
+            with tracer.start_as_current_span(
+                    'BuildCheckout',
+                    attributes={'connection': project['connection'],
+                                'project': project['name']}):
+                if self.checkout_workspace_repos:
+                    hexsha = repo.checkout(selected_ref)
+                else:
+                    hexsha = repo.getRef(selected_ref)[1]
+                    # So that we have a consistent workspace
+                    # regardless of whether we merged changes, remove
+                    # the working tree if we're not checking out repos
+                    # in the workspace.
+                    if ((project['connection'], project['name'])
+                        in merged_repos):
+                        self.log.info("Emptying work tree for %s",
+                                      project['canonical_name'])
+                        repo.uncheckout()
 
-            self.executor_server.updateBuildStatus(self.build_request, data)
+            # Update the inventory variables to indicate the ref we
+            # checked out
+            p = args['zuul']['projects'][project['canonical_name']]
+            p['checkout'] = selected_ref
+            p['checkout_description'] = selected_desc
+            p['commit'] = hexsha
+            self.merge_ops.append(zuul.model.MergeOp(
+                cmd=['git', 'checkout', selected_ref],
+                path=repo.workspace_project_path))
 
-        # job_output is out of scope now; playbook methods may open
-        # the file again on their own.
+        # Set the URL of the origin remote for each repo to a bogus
+        # value. Keeping the remote allows tools to use it to determine
+        # which commits are part of the current change.
+        for repo in repos.values():
+            repo.setRemoteUrl('file:///dev/null')
+
+        # Early abort if abort requested
+        if self.aborted:
+            self._send_aborted()
+            return
+
+        self.loadIncludeVars()
+
+        # We set the nodes to "in use" as late as possible. So in case
+        # the build failed during the checkout phase, the node is
+        # still untouched and nodepool can re-allocate it to a
+        # different node request / build.  Below this point, we may
+        # start to run tasks on nodes (prepareVars in particular uses
+        # Ansible to freeze hostvars).
+        if self.node_request:
+            tenant_name = self.arguments["zuul"]["tenant"]
+            project_name = self.arguments["zuul"]["project"][
+                "canonical_name"]
+            self.executor_server.nodepool.useNodeSet(
+                self.nodeset, tenant_name, project_name,
+                self.zuul_event_id)
+        elif self.nodeset_request:
+            self.executor_server.launcher.useNodeset(
+                self.nodeset, self.zuul_event_id)
+
+        self._jobOutput("Preparing playbooks")
+        # This prepares each playbook and the roles needed for each.
+        self.preparePlaybooks(args)
+        self.writeLoggingConfig()
+        zuul_resources = self.prepareNodes(args)  # set self.host_list
+        try:
+            # set self.original_hostvars
+            self.prepareVars(args, zuul_resources)
+        except VariableNameError as e:
+            raise ExecutorError(str(e))
+        self.writeDebugInventory()
+        self.writeRepoStateFile(repos)
+
+        # Early abort if abort requested
+        if self.aborted:
+            self._send_aborted()
+            return
+
+        data = self._base_job_data()
+        if self.executor_server.log_streaming_port != DEFAULT_FINGER_PORT:
+            data['url'] = "finger://{hostname}:{port}/{uuid}".format(
+                hostname=self.executor_server.hostname,
+                port=self.executor_server.log_streaming_port,
+                uuid=self.build_request.uuid)
+        else:
+            data['url'] = 'finger://{hostname}/{uuid}'.format(
+                hostname=self.executor_server.hostname,
+                uuid=self.build_request.uuid)
+
+        self.executor_server.updateBuildStatus(self.build_request, data)
+
         result, unreachable, error_detail = self.runPlaybooks(args)
 
         # Stop the persistent SSH connections.
@@ -1872,27 +1868,24 @@ class AnsibleJob(object):
             return success
 
         node_ids = [x['node'] for x in snapshot_nodes]
-        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-            for status in self.executor_server.launcher.snapshotNodeset(
-                    self.nodeset, node_ids, self.zuul_event_id):
-                if status.type == status.Type.MESSAGE:
-                    job_output.write("{now} | {msg}\n".format(
-                        now=datetime.datetime.now(),
-                        msg=status.message))
-                elif status.type == status.Type.STARTED:
-                    self.executor_server.updateBuildStatus(
-                        self.build_request,
-                        {'snapshot':
-                         {'event': BuildEvent.TYPE_SNAPSHOT_STARTED,
-                          'time': time.time(),
-                          }})
-                elif status.type == status.Type.COMPLETED:
-                    self.executor_server.updateBuildStatus(
-                        self.build_request,
-                        {'snapshot':
-                         {'event': BuildEvent.TYPE_SNAPSHOT_COMPLETED,
-                          'time': time.time(),
-                          }})
+        for status in self.executor_server.launcher.snapshotNodeset(
+                self.nodeset, node_ids, self.zuul_event_id):
+            if status.type == status.Type.MESSAGE:
+                self._jobOutput(status.message)
+            elif status.type == status.Type.STARTED:
+                self.executor_server.updateBuildStatus(
+                    self.build_request,
+                    {'snapshot':
+                     {'event': BuildEvent.TYPE_SNAPSHOT_STARTED,
+                      'time': time.time(),
+                      }})
+            elif status.type == status.Type.COMPLETED:
+                self.executor_server.updateBuildStatus(
+                    self.build_request,
+                    {'snapshot':
+                     {'event': BuildEvent.TYPE_SNAPSHOT_COMPLETED,
+                      'time': time.time(),
+                      }})
 
         artifacts = zuul_data.setdefault('artifacts', [])
         for snapshot_info in snapshot_nodes:
@@ -2177,10 +2170,7 @@ class AnsibleJob(object):
         unknown_result = False
         unreachable = False
 
-        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-            job_output.write("{now} | Running Ansible setup\n".format(
-                now=datetime.datetime.now()
-            ))
+        self._jobOutput("Running Ansible setup")
         # Run the Ansible 'setup' module on all hosts in the inventory
         # at the start of the job with a 60 second timeout.  If we
         # aren't able to connect to all the hosts and gather facts
@@ -3757,11 +3747,8 @@ class AnsibleJob(object):
                 line = line.decode('utf-8').rstrip()
                 ansible_error_lines.append(line)
         if ansible_error_lines:
-            with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-                for line in ansible_error_lines:
-                    job_output.write("{now} | {line}\n".format(
-                        now=datetime.datetime.now(),
-                        line=line))
+            for line in ansible_error_lines:
+                self._jobOutput(line)
         if ansible_error_lines and phase and index is not None:
             try:
                 message = ' '.join(ansible_error_lines)
@@ -3909,11 +3896,7 @@ class AnsibleJob(object):
             msg = "{phase} {step}: [{trusted} : {playbook}@{branch}]"
             msg = msg.format(phase=phase, step=step, trusted=trusted,
                              playbook=playbook, branch=branch)
-
-        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
-            job_output.write("{now} | {msg}\n".format(
-                now=datetime.datetime.now(),
-                msg=msg))
+        self._jobOutput(msg)
 
     def _generateOidcTokens(self, playbook):
         # In case web_root is not configured in zuul and tenant,
