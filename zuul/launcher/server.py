@@ -1481,13 +1481,19 @@ class Launcher:
                     # We need to request a new node
                     if provider.driver.name == 'static':
                         return
+                    props = {}
+                    if (request.node_properties
+                            and i < len(request.node_properties)):
+                        props = request.node_properties[i]
                     # If we have not assigned any nodes to this
                     # request we don't have to proceed if there is no
                     # quota.
                     if not bool(request.provider_node_data):
                         try:
                             has_quota = self.doesProviderHaveQuotaForLabel(
-                                request.tenant_name, provider, label, messages)
+                                request.tenant_name, provider, label,
+                                messages,
+                                node_properties=props)
                         except Exception:
                             self.log.exception(
                                 "Error checking quota for label %s "
@@ -1504,7 +1510,8 @@ class Launcher:
                             return
                     self._emitMessages(log, messages)
                     node = self._requestNode(
-                        label, request, provider, log, ctx)
+                        label, request, provider, log, ctx,
+                        node_properties=props)
                     log.debug("Requested node %s", node.uuid)
                 request.addProviderNode(node)
             if request.provider_node_data:
@@ -1604,10 +1611,15 @@ class Launcher:
                 # TODO: consider the impact of a multi-node request
                 # for the same label where that single request is
                 # larger than the capacity.
+                props = {}
+                if (request.node_properties
+                        and i < len(request.node_properties)):
+                    props = request.node_properties[i]
                 try:
                     if not self.doesProviderHaveQuotaForLabel(
                             request.tenant_name, provider, label, messages,
-                            include_usage=False):
+                            include_usage=False,
+                            node_properties=props):
                         continue
                 except Exception:
                     self.log.exception(
@@ -1712,9 +1724,10 @@ class Launcher:
                     ctx, node, node.State.DEREGISTER, self.log)
 
     def _requestNode(self, label, request, provider, log, ctx,
-                     static_node=None):
+                     static_node=None, node_properties=None):
         image = provider.images[label.image]
-        label_quota = provider.getQuotaForLabel(label)
+        label_quota = provider.getQuotaForLabel(
+            label, node_properties=node_properties)
         endpoint_name = provider.getEndpoint().name
         if static_node:
             node_uuid = static_node.node_id
@@ -1754,6 +1767,7 @@ class Launcher:
             # informational purposes (the actual decision about reuse will
             # happen later).
             reuse=label.reuse,
+            node_properties=node_properties or {},
         )
 
         # Save a copy of the args here since nothing below should be
@@ -1859,8 +1873,15 @@ class Launcher:
                         if node is None:
                             if provider.driver.name == 'static':
                                 return
+                            props = {}
+                            if (request.node_properties
+                                    and i < len(
+                                        request.node_properties)):
+                                props = request.node_properties[i]
                             node = self._requestNode(
-                                label, request, provider, log, ctx)
+                                label, request, provider,
+                                log, ctx,
+                                node_properties=props)
                         requested_nodes[i] = node
                         # if this was a tempfail, retry again as
                         # normal; otherwise, add to the failed
@@ -3242,7 +3263,8 @@ class Launcher:
         return False
 
     def doesProviderHaveQuotaForLabel(self, tenant_name, provider, label,
-                                      messages, include_usage=True):
+                                      messages, include_usage=True,
+                                      node_properties=None):
         if include_usage:
             # When include_usage is True, we include requested nodes here
             # because this is called to decide whether to add a new request
@@ -3266,7 +3288,8 @@ class Launcher:
             total.min(provider_limits)
             messages.append(f"Provider {provider} limits: {total}")
 
-        label_quota = provider.getQuotaForLabel(label)
+        label_quota = provider.getQuotaForLabel(
+            label, node_properties=node_properties)
         total.subtract(label_quota)
         messages.append(
             f"Label {label} required quota: {label_quota}")
