@@ -860,7 +860,7 @@ class AwsProvider(BaseProvider, subclass_id='aws'):
 
         return QuotaInformation(**args)
 
-    def getQuotaForLabel(self, label):
+    def getQuotaForLabel(self, label, node_properties=None):
         flavor = self.flavors[label.flavor]
         return self.endpoint.getQuotaForLabel(label, flavor)
 

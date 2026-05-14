@@ -2272,6 +2272,7 @@ class Node(ConfigObject):
         d['user_data'] = self.user_data
         d['tenant_name'] = self.tenant_name
         d['requestor'] = self.requestor
+        d['node_properties'] = self.node_properties
         for k in self._keys:
             d[k] = getattr(self, k)
         if internal_attributes:
@@ -2398,7 +2399,9 @@ class NodeSet(ConfigObject):
     def copy(self):
         n = NodeSet(self.name)
         for name, node in self.nodes.items():
-            n.addNode(Node(node.name, node.label))
+            new_node = Node(node.name, node.label)
+            new_node.node_properties = node.node_properties.copy()
+            n.addNode(new_node)
         for name, group in self.groups.items():
             n.addGroup(Group(group.name, group.nodes[:]))
         for alt in self.alternatives:
@@ -2692,6 +2695,7 @@ class NodesetRequest(zkobject.LockableZKObject):
             job_uuid="",
             job_name="",
             labels=[],
+            node_properties=[],
             priority=0,
             request_time=time.time(),
             zuul_event_id="",
@@ -2818,6 +2822,9 @@ class NodesetRequest(zkobject.LockableZKObject):
             provider_node_data=self.provider_node_data,
             _relative_priority=self.relative_priority,
         )
+        # MODEL_API: > 38
+        if COMPONENT_REGISTRY.model_api >= 38:
+            data['node_properties'] = self.node_properties
         return json.dumps(data, sort_keys=True).encode("utf-8")
 
     def deserialize(self, raw, context, extra=None):
@@ -2826,7 +2833,10 @@ class NodesetRequest(zkobject.LockableZKObject):
                 self._revision.refresh(context)
             except NoNodeError:
                 pass
-        return super().deserialize(raw, context, extra)
+        data = super().deserialize(raw, context, extra)
+        # MODEL_API: > 38
+        data.setdefault('node_properties', [])
+        return data
 
     def __repr__(self):
         return (f"<NodesetRequest uuid={self.uuid}, state={self.state},"
@@ -9643,6 +9653,8 @@ class TenantProjectConfig(object):
         self.extra_config_files = ()
         # The list of paths to look for extra zuul config dirs
         self.extra_config_dirs = ()
+        # The list of dirs to look for heat templates
+        self.heat_template_dirs = ()
         # Load config from a different branch if this is a config project
         self.load_branch = None
         self.merge_modes = None
@@ -11632,6 +11644,12 @@ class Abide(object):
         """Get all extra config dirs for a project accross tenants."""
         return set(itertools.chain.from_iterable(
             tpc.extra_config_dirs
+            for tpc in self._allProjectTPCs(project_name)))
+
+    def getHeatTemplateDirs(self, project_name):
+        """Get all heat template dirs for a project across tenants."""
+        return set(itertools.chain.from_iterable(
+            tpc.heat_template_dirs
             for tpc in self._allProjectTPCs(project_name)))
 
     def hasConfigObjectCache(self, canonical_project_name, branch):
