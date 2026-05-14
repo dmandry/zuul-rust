@@ -1,0 +1,9 @@
+heat_template_version: rocky
+
+resources:
+  net:
+    type: OS::Neutron::Net
+  server:
+    type: OS::Nova::Server
+    properties:
+      flavor: m1.small

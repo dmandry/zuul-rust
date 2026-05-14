@@ -1792,6 +1792,7 @@ class PipelineManager(metaclass=ABCMeta):
                 # Collect extra config files and dirs of required changes.
                 extra_config_files = set()
                 extra_config_dirs = set()
+                heat_template_dirs = set()
                 for merger_item in item.current_build_set.merger_items:
                     source = self.sched.connections.getSource(
                         merger_item["connection"])
@@ -1800,13 +1801,15 @@ class PipelineManager(metaclass=ABCMeta):
                     if tpc:
                         extra_config_files.update(tpc.extra_config_files)
                         extra_config_dirs.update(tpc.extra_config_dirs)
+                        heat_template_dirs.update(tpc.heat_template_dirs)
 
                 ready = self.scheduleMerge(
                     item,
                     files=(['zuul.yaml', '.zuul.yaml'] +
                            list(extra_config_files)),
                     dirs=(['zuul.d', '.zuul.d'] +
-                          list(extra_config_dirs)))
+                          list(extra_config_dirs) +
+                          list(heat_template_dirs)))
         if build_set.merge_state == build_set.PENDING:
             ready = False
 

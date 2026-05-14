@@ -1,0 +1,6 @@
+heat_template_version: rocky
+
+resources:
+  leaked_net:
+    type: OS::Neutron::Net
+    external_id: some-existing-uuid

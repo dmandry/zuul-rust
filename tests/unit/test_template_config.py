@@ -247,7 +247,6 @@ class TestTemplateConfig(ZuulTestCase):
         self.assertEqual(len(nodes), 1)
         node = nodes[0]
 
-        # configloader converts hyphens to underscores in keys
         self.assertIn('heat_template_path', node.template_config)
         self.assertEqual(node.template_config['heat_template_path'],
                          'ci/heat/verify.yaml')

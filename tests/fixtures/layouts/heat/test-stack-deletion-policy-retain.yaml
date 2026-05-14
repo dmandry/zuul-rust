@@ -1,0 +1,8 @@
+heat_template_version: rocky
+
+resources:
+  kept_vol:
+    type: OS::Cinder::Volume
+    deletion_policy: Retain
+    properties:
+      size: 10

@@ -18,7 +18,6 @@ import testtools
 import voluptuous as vs
 from collections import defaultdict
 from configparser import ConfigParser
-
 from zuul import model
 from zuul.lib.ansible import AnsibleManager
 from zuul.configloader import (
@@ -1980,3 +1979,75 @@ class TestParameterizedBuilds(ZuulTestCase):
         self.assertEqual(1, len(layout.loading_errors))
         self.assertIn('does not allow parameters',
                       layout.loading_errors[0].error)
+
+
+class TestResolveHeatTemplates(ZuulTestCase):
+    config_file = 'zuul-connections-nodepool.conf'
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/test-stack-valid.yaml',
+                   })
+    def test_valid_template_resolved(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        heat_errors = [e for e in layout.loading_errors
+                       if 'Heat' in e.name or 'heat' in str(e.error)]
+        self.assertEqual(0, len(heat_errors))
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/test-stack-external-id.yaml',
+                   })
+    def test_rejects_template_with_external_id(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('external_id', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/test-stack-deletion-policy-retain.yaml',
+                   })
+    def test_rejects_template_with_deletion_policy(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('deletion_policy', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/test-stack-get-file.yaml',
+                   })
+    def test_rejects_template_with_get_file(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('get_file', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/test-stack-unsupported-type.yaml',
+                   })
+    def test_rejects_template_with_unsupported_resource_type(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertEqual(1, len(layout.loading_errors))
+        self.assertIn('ResourceGroup', layout.loading_errors[0].error)
+
+    @simple_layout('layouts/heat/resolve.yaml', enable_nodepool=True,
+                   replace=lambda _: {
+                       'heat_template_path':
+                       'zuul.heat.d/nonexistent.yaml',
+                   })
+    def test_missing_template_warns(self):
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        heat_errors = [e for e in layout.loading_errors
+                       if 'Heat' in e.name or 'heat' in str(e.error)]
+        self.assertEqual(0, len(heat_errors))

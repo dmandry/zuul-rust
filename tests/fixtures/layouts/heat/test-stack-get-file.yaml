@@ -1,0 +1,10 @@
+heat_template_version: rocky
+
+resources:
+  config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        write_files:
+          - content: {get_file: setup.sh}
+            path: /opt/setup.sh
