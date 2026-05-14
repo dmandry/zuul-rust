@@ -550,8 +550,7 @@ class LogReceiver:
     # combinations we're using, we just map the constants here.
     # TODO: in the future we can shift the result output to this
     # system via a different facility code.
-    OUTPUT_PRIORITY = '134'
-    SYSLOG_RE = re.compile(r'^<(\d+)>(.*)\x00')
+    OUTPUT_PRIORITY = '<134>'
 
     def __init__(self, zuul_event_id, build, jobdir):
         self.jobdir = jobdir
@@ -581,20 +580,28 @@ class LogReceiver:
     def addLineToJobOutput(self, message):
         self.parent_conn.send(message)
 
+    def _handlePacket(self, data):
+        data = data.decode('utf8')
+        try:
+            if data[:5] == self.OUTPUT_PRIORITY:
+                message = data[5:]
+                self._addLineToJobOutput(message)
+        except Exception:
+            self.log.exception("Error in log receiver:")
+
     def run(self):
         # This is the main method of the subprocess
         self.log = multiprocessing.log_to_stderr(level=logging.WARNING)
 
-        class MyHandler(socketserver.BaseRequestHandler):
+        class MyHandler(socketserver.StreamRequestHandler):
             def handle(this):
-                try:
-                    data = this.request[0].decode('utf8')
-                    if m := self.SYSLOG_RE.match(data):
-                        priority, message = m.groups()
-                        if priority == self.OUTPUT_PRIORITY:
-                            self._addLineToJobOutput(message)
-                except Exception:
-                    self.log.exception("Error in log receiver:")
+                buf = bytearray()
+                while b := this.rfile.read(1):
+                    if b == b'\x00':
+                        self._handlePacket(buf)
+                        buf = bytearray()
+                    else:
+                        buf.extend(b)
 
         self.thread = threading.Thread(target=self.manage,
                                        name=f"manage-{self.name}")
@@ -602,7 +609,7 @@ class LogReceiver:
             with _safe_open(self.jobdir.job_output_file, "a") as job_output:
                 self.job_output_file = job_output
                 self.thread.start()
-                with socketserver.UnixDatagramServer(
+                with socketserver.UnixStreamServer(
                     self.jobdir.log_socket,
                         MyHandler) as server:
                     self.server = server
@@ -634,6 +641,10 @@ class LogReceiver:
         self.proc.join(30)
         if self.proc.exitcode is None:
             self.log.error('Log receiver did not exit')
+            try:
+                self.proc.terminate()
+            except Exception:
+                self.log.exception("Error terminating log receiver")
 
 
 class JobDirPlaybookRole(object):
