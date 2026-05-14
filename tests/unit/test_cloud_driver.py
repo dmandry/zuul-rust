@@ -52,7 +52,7 @@ class BaseCloudDriverTest(ZuulTestCase):
                          self.cloud_test_connection_type)
         self.assertIsNotNone(pnode.interface_ip)
 
-    def _test_node_lifecycle(self, label):
+    def _test_node_lifecycle(self, label, template_config=None):
         # Call this in a test to run a node lifecycle
         for _ in iterate_timeout(
                 30, "scheduler and launcher to have the same layout"):
@@ -64,7 +64,9 @@ class BaseCloudDriverTest(ZuulTestCase):
         nodeset.addNode(model.Node("node", label))
 
         ctx = self.createZKContext(None)
-        request = self.requestNodes([n.label for n in nodeset.getNodes()])
+        request = self.requestNodes(
+            [n.label for n in nodeset.getNodes()],
+            template_config=template_config)
 
         client = LauncherClient(self.zk_client, None)
         request = client.getRequest(request.uuid)
@@ -118,7 +120,7 @@ class BaseCloudDriverTest(ZuulTestCase):
                 self.cloud_test_min_instances):
                 break
 
-    def _test_quota(self, label):
+    def _test_quota(self, label, template_config=None):
         for _ in iterate_timeout(
                 30, "scheduler and launcher to have the same layout"):
             if (self.scheds.first.sched.local_layout_state.get("tenant-one") ==
@@ -132,9 +134,12 @@ class BaseCloudDriverTest(ZuulTestCase):
         nodeset2.addNode(model.Node("node", label))
 
         ctx = self.createZKContext(None)
-        request1 = self.requestNodes([n.label for n in nodeset1.getNodes()])
+        request1 = self.requestNodes(
+            [n.label for n in nodeset1.getNodes()],
+            template_config=template_config)
         request2 = self.requestNodes(
             [n.label for n in nodeset2.getNodes()],
+            template_config=template_config,
             timeout=None)
 
         client = LauncherClient(self.zk_client, None)

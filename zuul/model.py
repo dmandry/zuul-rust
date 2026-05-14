@@ -8643,6 +8643,9 @@ class Ref(object):
             for ed in tpc.extra_config_dirs:
                 if fn.startswith(ed):
                     return True
+            for htd in tpc.heat_template_dirs:
+                if fn.startswith(htd):
+                    return True
         return False
 
     def getSafeAttributes(self):
@@ -9682,6 +9685,8 @@ class TenantProjectConfig(object):
         self.extra_config_files = ()
         # The list of paths to look for extra zuul config dirs
         self.extra_config_dirs = ()
+        # The list of dirs to look for heat templates
+        self.heat_template_dirs = ()
         # Load config from a different branch if this is a config project
         self.load_branch = None
         self.merge_modes = None
@@ -11736,6 +11741,12 @@ class Abide(object):
         """Get all extra config dirs for a project accross tenants."""
         return set(itertools.chain.from_iterable(
             tpc.extra_config_dirs
+            for tpc in self._allProjectTPCs(project_name)))
+
+    def getHeatTemplateDirs(self, project_name):
+        """Get all heat template dirs for a project across tenants."""
+        return set(itertools.chain.from_iterable(
+            tpc.heat_template_dirs
             for tpc in self._allProjectTPCs(project_name)))
 
     def hasConfigObjectCache(self, canonical_project_name, branch):
