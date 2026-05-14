@@ -38,6 +38,7 @@ from zuul.model_api import MODEL_API
 from zuul.zk.zkobject import LocalZKContext
 from zuul.zk.components import COMPONENT_REGISTRY
 from zuul import change_matcher
+from zuul.driver.static.staticmodel import StaticProviderNode
 
 
 class Dummy(object):
@@ -1738,7 +1739,7 @@ class TestTemplateConfig(BaseTestCase):
         Ensures the attribute exists and is exposed via getNodeData
         so it is serialized to ZK and copied to the executor Node.
         """
-        pnode = model.ProviderNode()
+        pnode = StaticProviderNode()
         self.assertEqual(pnode.template_config, {})
         pnode._set(template_config={
             'heat_template_path': 'templates/stack.yaml',
