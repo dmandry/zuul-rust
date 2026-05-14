@@ -18,8 +18,10 @@ import testtools
 import voluptuous as vs
 from collections import defaultdict
 from configparser import ConfigParser
+from unittest import mock
 
 from zuul import model
+from zuul import configloader
 from zuul.lib.ansible import AnsibleManager
 from zuul.configloader import (
     AuthorizationRuleParser, AuthorizationRoleParser,
@@ -27,15 +29,24 @@ from zuul.configloader import (
 )
 from zuul.exceptions import AuthZRoleNotFoundError, AuthZRuleNotFoundError
 from zuul.model import Abide, MergeRequest, SourceContext
+from zuul.model_api import MODEL_API
+from zuul.zk.components import COMPONENT_REGISTRY
 from zuul.zk.locks import tenant_read_lock
 
 from tests.base import (
+    BaseTestCase,
     ZuulTestCase,
     iterate_timeout,
     okay_tracebacks,
     simple_layout,
 )
 from tests.unit.test_launcher import LauncherBaseTestCase
+
+
+class Dummy(object):
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
 
 
 class TestConfigLoader(ZuulTestCase):
@@ -1970,3 +1981,160 @@ class TestNodepoolConfig(LauncherBaseTestCase):
         self.assertEqual(1, len(layout.loading_errors))
         self.assertIn('more than the max-retain-count',
                       layout.loading_errors[0].error)
+
+
+class TestResolveHeatTemplates(BaseTestCase):
+    """Tests for TenantParser._resolveHeatTemplates"""
+
+    def setUp(self):
+        super().setUp()
+        COMPONENT_REGISTRY.registry = Dummy()
+        COMPONENT_REGISTRY.registry.model_api = MODEL_API
+        self.connection = Dummy(connection_name='gerrit')
+        self.source = Dummy(canonical_hostname='review.example.com',
+                            connection=self.connection)
+        self.project = model.Project('test-project', self.source)
+        self.sc = model.SourceContext(
+            self.project.canonical_name, self.project.name,
+            self.project.connection_name, 'main', 'zuul.yaml')
+
+        self.tenant_parser = configloader.TenantParser(
+            connections=None, zk_client=None, scheduler=None,
+            merger=None, keystorage=None, zuul_globals=None,
+            statsd=None, unparsed_config_cache=mock.MagicMock())
+
+    def _make_nodeset(self, template_config):
+        ns = model.NodeSet('test-ns')
+        ns.source_context = self.sc
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = template_config.copy()
+        ns.addNode(node)
+        return ns
+
+    def test_resolves_from_repofiles(self):
+        template_content = 'heat_template_version: 2021-04-16'
+        files = mock.MagicMock()
+        files.getFile.return_value = template_content
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(self._make_nodeset({
+            'heat_template_path': 'ci/heat/stack.yaml',
+        }))
+
+        self.tenant_parser._resolveHeatTemplates(parsed, files)
+
+        node = parsed.nodesets[0].getNodes()[0]
+        self.assertEqual(node.template_config['heat_template_content'],
+                         template_content)
+        files.getFile.assert_called_once_with(
+            'gerrit', 'test-project', 'main', 'ci/heat/stack.yaml')
+
+    def test_resolves_from_files_cache(self):
+        template_content = 'heat_template_version: 2021-04-16'
+        files_cache = {'ci/heat/stack.yaml': template_content}
+        self.tenant_parser.unparsed_config_cache.getFilesCache.return_value = (
+            files_cache)
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(self._make_nodeset({
+            'heat_template_path': 'ci/heat/stack.yaml',
+        }))
+
+        self.tenant_parser._resolveHeatTemplates(parsed)
+
+        node = parsed.nodesets[0].getNodes()[0]
+        self.assertEqual(node.template_config['heat_template_content'],
+                         template_content)
+        self.tenant_parser.unparsed_config_cache.getFilesCache \
+            .assert_called_once_with(
+                self.project.canonical_name, 'main')
+
+    def test_skips_node_without_heat_template_path(self):
+        files = mock.MagicMock()
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(self._make_nodeset({
+            'some_other_prop': 'value',
+        }))
+
+        self.tenant_parser._resolveHeatTemplates(parsed, files)
+
+        node = parsed.nodesets[0].getNodes()[0]
+        self.assertNotIn('heat_template_content', node.template_config)
+        files.getFile.assert_not_called()
+
+    def test_skips_node_with_existing_content(self):
+        files = mock.MagicMock()
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(self._make_nodeset({
+            'heat_template_path': 'ci/heat/stack.yaml',
+            'heat_template_content': 'already-loaded',
+        }))
+
+        self.tenant_parser._resolveHeatTemplates(parsed, files)
+
+        node = parsed.nodesets[0].getNodes()[0]
+        self.assertEqual(node.template_config['heat_template_content'],
+                         'already-loaded')
+        files.getFile.assert_not_called()
+
+    def test_skips_nodeset_without_source_context(self):
+        files = mock.MagicMock()
+
+        ns = model.NodeSet('test-ns')
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = {
+            'heat_template_path': 'ci/heat/stack.yaml',
+        }
+        ns.addNode(node)
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(ns)
+
+        self.tenant_parser._resolveHeatTemplates(parsed, files)
+
+        self.assertNotIn('heat_template_content', node.node_properties)
+        files.getFile.assert_not_called()
+
+    def test_warns_when_template_not_found(self):
+        files = mock.MagicMock()
+        files.getFile.return_value = None
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(self._make_nodeset({
+            'heat_template_path': 'ci/heat/missing.yaml',
+        }))
+
+        with mock.patch.object(self.tenant_parser, 'log') as mock_log:
+            self.tenant_parser._resolveHeatTemplates(parsed, files)
+
+        node = parsed.nodesets[0].getNodes()[0]
+        self.assertNotIn('heat_template_content', node.template_config)
+        mock_log.warning.assert_called_once()
+        args = mock_log.warning.call_args[0]
+        self.assertIn('ci/heat/missing.yaml', args[1])
+
+    def test_resolves_multiple_nodesets(self):
+        files = mock.MagicMock()
+        files.getFile.side_effect = lambda c, p, b, path: {
+            'ci/heat/a.yaml': 'template-a',
+            'ci/heat/b.yaml': 'template-b',
+        }.get(path)
+
+        parsed = model.ParsedConfig()
+        parsed.nodesets.append(self._make_nodeset({
+            'heat_template_path': 'ci/heat/a.yaml',
+        }))
+        parsed.nodesets.append(self._make_nodeset({
+            'heat_template_path': 'ci/heat/b.yaml',
+        }))
+
+        self.tenant_parser._resolveHeatTemplates(parsed, files)
+
+        node_a = parsed.nodesets[0].getNodes()[0]
+        node_b = parsed.nodesets[1].getNodes()[0]
+        self.assertEqual(node_a.template_config['heat_template_content'],
+                         'template-a')
+        self.assertEqual(node_b.template_config['heat_template_content'],
+                         'template-b')
