@@ -1500,8 +1500,13 @@ class Launcher:
                             # label immediately.
                             return
                     self._emitMessages(log, messages)
+                    props = {}
+                    if (request.node_properties
+                            and i < len(request.node_properties)):
+                        props = request.node_properties[i]
                     node = self._requestNode(
-                        label, request, provider, log, ctx)
+                        label, request, provider, log, ctx,
+                        node_properties=props)
                     log.debug("Requested node %s", node.uuid)
                 request.addProviderNode(node)
             if request.provider_node_data:
@@ -1709,7 +1714,7 @@ class Launcher:
                     ctx, node, node.State.DEREGISTER, self.log)
 
     def _requestNode(self, label, request, provider, log, ctx,
-                     static_node=None):
+                     static_node=None, node_properties=None):
         image = provider.images[label.image]
         label_quota = provider.getQuotaForLabel(label)
         endpoint_name = provider.getEndpoint().name
@@ -1751,6 +1756,7 @@ class Launcher:
             # informational purposes (the actual decision about reuse will
             # happen later).
             reuse=label.reuse,
+            node_properties=node_properties or {},
         )
 
         # Save a copy of the args here since nothing below should be
@@ -1859,8 +1865,15 @@ class Launcher:
                         if node is None:
                             if provider.driver.name == 'static':
                                 return
+                            props = {}
+                            if (request.node_properties
+                                    and i < len(
+                                        request.node_properties)):
+                                props = request.node_properties[i]
                             node = self._requestNode(
-                                label, request, provider, log, ctx)
+                                label, request, provider,
+                                log, ctx,
+                                node_properties=props)
                         requested_nodes[i] = node
                         # if this was a tempfail, retry again as
                         # normal; otherwise, add to the failed

@@ -52,7 +52,9 @@ class LauncherClient:
     def requestNodeset(self, item, job, priority, relative_priority,
                        preferred_provider):
         log = get_annotated_logger(self.log, item.event)
-        labels = [n.label for n in job.nodeset.getNodes()]
+        nodes = job.nodeset.getNodes()
+        labels = [n.label for n in nodes]
+        node_properties = [n.node_properties for n in nodes]
 
         buildset = item.current_build_set
         parent_span = tracing.restoreSpan(buildset.span_info)
@@ -75,6 +77,7 @@ class LauncherClient:
                 job_uuid=job.uuid,
                 job_name=job.name,
                 labels=labels,
+                node_properties=node_properties,
                 priority=priority,
                 _relative_priority=relative_priority,
                 request_time=request_time,
