@@ -558,8 +558,32 @@ class LogReceiver:
         self.log = get_annotated_logger(
             logging.getLogger("zuul.ExecutorServer"),
             zuul_event_id, build=build)
-        self.thread = threading.Thread(target=self.run,
-                                       name=f"log-{build}")
+        self.parent_conn, self.child_conn = multiprocessing.Pipe()
+        self.name = f"log-{build}"
+        self.proc = multiprocessing.Process(target=self.run,
+                                            name=self.name)
+
+        self.server = None
+        self.job_output_file = None
+
+    def start(self):
+        self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
+        self.proc.start()
+        # Wait for the child to send None to tell us it's started up
+        self.parent_conn.recv()
+
+    def _addLineToJobOutput(self, message):
+        # Only used within the subprocess
+        output = self.job_output_file
+        output.write(message + '\n')
+        output.flush()
+
+    def addLineToJobOutput(self, message):
+        self.parent_conn.send(message)
+
+    def run(self):
+        # This is the main method of the subprocess
+        self.log = multiprocessing.log_to_stderr(level=logging.WARNING)
 
         class MyHandler(socketserver.BaseRequestHandler):
             def handle(this):
@@ -568,37 +592,35 @@ class LogReceiver:
                     if m := self.SYSLOG_RE.match(data):
                         priority, message = m.groups()
                         if priority == self.OUTPUT_PRIORITY:
-                            self.addLineToJobOutput(message)
+                            self._addLineToJobOutput(message)
                 except Exception:
                     self.log.exception("Error in log receiver:")
 
-        self.handler_class = MyHandler
-        self.server = None
-        self.job_output_file = None
-
-    def start(self):
-        self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
-        self.thread.start()
-
-    def addLineToJobOutput(self, message):
-        output = self.job_output_file
-        if output is not None:
-            output.write(message + '\n')
-            output.flush()
-
-    def run(self):
+        self.thread = threading.Thread(target=self.manage,
+                                       name=f"manage-{self.name}")
         try:
             with _safe_open(self.jobdir.job_output_file, "a") as job_output:
                 self.job_output_file = job_output
+                self.thread.start()
                 with socketserver.UnixDatagramServer(
                     self.jobdir.log_socket,
-                    self.handler_class) as server:
+                        MyHandler) as server:
                     self.server = server
+                    self.child_conn.send(None)
                     self.server.serve_forever()
         except Exception:
             self.log.exception("Error in log receiver:")
 
-    def stop(self):
+    def manage(self):
+        while True:
+            msg = self.child_conn.recv()
+            if msg is None:
+                self._stop()
+                return
+            else:
+                self._addLineToJobOutput(msg)
+
+    def _stop(self):
         try:
             if self.server:
                 # The server polls for shutown, so this can take up to
@@ -606,6 +628,12 @@ class LogReceiver:
                 self.server.shutdown()
         except Exception:
             self.log.exception('Unable to stop log receiver:')
+
+    def stop(self):
+        self.parent_conn.send(None)
+        self.proc.join(30)
+        if self.proc.exitcode is None:
+            self.log.error('Log receiver did not exit')
 
 
 class JobDirPlaybookRole(object):
