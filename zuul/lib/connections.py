@@ -35,6 +35,7 @@ import zuul.driver.aws
 import zuul.driver.azure
 import zuul.driver.openstack
 import zuul.driver.static
+import zuul.driver.heat
 import zuul.driver.kubernetes
 from zuul.connection import BaseConnection
 from zuul.driver import (
@@ -78,6 +79,7 @@ class ConnectionRegistry(object):
         self.registerDriver(zuul.driver.azure.AzureDriver())
         self.registerDriver(zuul.driver.openstack.OpenstackDriver())
         self.registerDriver(zuul.driver.static.StaticDriver())
+        self.registerDriver(zuul.driver.heat.HeatDriver())
         self.registerDriver(zuul.driver.kubernetes.KubernetesDriver())
 
     def registerDriver(self, driver):
