@@ -396,7 +396,7 @@ class OpenstackProvider(BaseProvider, subclass_id='openstack'):
             limits = limits.quota
         return QuotaInformation(default=math.inf, **limits)
 
-    def getQuotaForLabel(self, label):
+    def getQuotaForLabel(self, label, node_properties=None):
         flavor = self.flavors[label.flavor]
         return self.endpoint.getQuotaForLabel(label, flavor)
 
