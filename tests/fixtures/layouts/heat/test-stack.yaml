@@ -1,0 +1,59 @@
+# NOTE: Heat fixture templates MUST use YAML block-style mappings for
+# intrinsic functions (no flow-style braces). This allows the test
+# harness to use Python str.format() for parameterization.
+heat_template_version: rocky
+
+parameters:
+  zuul_ephemeral_public_key:
+    type: string
+  zuul_external_network:
+    type: string
+  my_param:
+    type: string
+
+resources:
+  internal_net:
+    type: OS::Neutron::Net
+  internal_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network:
+        get_resource: internal_net
+      cidr: 192.168.1.0/24
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network:
+          get_param: zuul_external_network
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router:
+        get_resource: router
+      subnet:
+        get_resource: internal_subnet
+  bastion:
+    type: OS::Nova::Server
+    properties:
+      flavor: Fake Flavor
+      networks:
+        - subnet:
+            get_resource: internal_subnet
+  worker:
+    type: OS::Nova::Server
+    properties:
+      flavor: Fake Flavor
+      networks:
+        - subnet:
+            get_resource: internal_subnet
+  bastion_fip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network:
+        get_param: zuul_external_network
+
+outputs:
+  bastion_ip:
+    value:
+      get_attr: [bastion_fip, floating_ip_address]

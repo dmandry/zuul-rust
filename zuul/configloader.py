@@ -2113,6 +2113,10 @@ class TenantParser(object):
         self.globals = zuul_globals
         self.statsd = statsd
         self.unparsed_config_cache = unparsed_config_cache
+        for conn in self.connections.getProviderConnections():
+            for k, v in conn.driver.getProjectConfigKeys().items():
+                self.inner_config_project_dict[k] = v
+                self.inner_untrusted_project_dict[k] = v
 
         self.inner_config_project_dict = dict(
             TenantParser.inner_config_project_dict)
@@ -2354,6 +2358,8 @@ class TenantParser(object):
         parsed_config = self._loadTenantParsedConfig(
             abide, tenant, pcontext)
 
+        self._resolveProviderTemplates(parsed_config)
+
         tenant.layout = self._parseLayout(
             tenant, parsed_config, pcontext, layout_uuid)
 
@@ -2428,10 +2434,10 @@ class TenantParser(object):
             self.keystorage.getTenantSSHKeys(tenant.name)
         )
 
-    @staticmethod
-    def _getProject(source, conf, current_include):
+    def _getProject(self, source, conf, current_include):
         extra_config_files = ()
         extra_config_dirs = ()
+        provider_template_dirs = {}
 
         if isinstance(conf, str):
             # Return a project object whether conf is a dict or a str
@@ -2508,6 +2514,11 @@ class TenantParser(object):
                                             if not x.endswith('/')])
                 extra_config_dirs = tuple([x[:-1] for x in extra_config_paths
                                            if x.endswith('/')])
+            for conn in self.connections.getProviderConnections():
+                for key in conn.driver.getProjectConfigKeys():
+                    if key in conf[project_name]:
+                        provider_template_dirs[key] = tuple(
+                            as_list(conf[project_name][key]))
             project_load_branch = conf[project_name].get(
                 'load-branch', None)
             project_implied_branch_matchers = conf[project_name].get(
@@ -2537,6 +2548,7 @@ class TenantParser(object):
             project_always_dynamic_branches
         tenant_project_config.extra_config_files = extra_config_files
         tenant_project_config.extra_config_dirs = extra_config_dirs
+        tenant_project_config.provider_template_dirs = provider_template_dirs
         tenant_project_config.load_branch = project_load_branch
         tenant_project_config.implied_branch_matchers = \
             project_implied_branch_matchers
@@ -2776,6 +2788,10 @@ class TenantParser(object):
 
         extra_config_files = abide.getExtraConfigFiles(project.name)
         extra_config_dirs = abide.getExtraConfigDirs(project.name)
+        provider_dirs = []
+        for conn in self.connections.getProviderConnections():
+            provider_dirs.extend(
+                conn.driver.getFileDiscoveryDirs(tpc))
         if not self.merger:
             err = Exception(
                 "Configuration files missing from cache. "
@@ -2788,7 +2804,8 @@ class TenantParser(object):
             project.name, branch,
             files=(['zuul.yaml', '.zuul.yaml'] +
                    list(extra_config_files)),
-            dirs=['zuul.d', '.zuul.d'] + list(extra_config_dirs))
+            dirs=(['zuul.d', '.zuul.d'] + list(extra_config_dirs)
+                  + provider_dirs))
         self.log.debug("Submitting cat job %s for %s %s %s" % (
             job, project.source.connection.connection_name,
             project.name, branch))
@@ -2927,6 +2944,31 @@ class TenantParser(object):
                         branch_config, trusted=False)
 
         return parsed_config
+
+    def _resolveProviderTemplates(self, parsed_config, files=None):
+        """Resolve template content for all nodesets via driver hooks."""
+        nodesets = list(parsed_config.nodesets)
+        for job in parsed_config.jobs:
+            if isinstance(job.nodeset, model.NodeSet):
+                nodesets.append(job.nodeset)
+
+        for ns in nodesets:
+            if not ns.source_context:
+                continue
+            sc = ns.source_context
+            if files is not None:
+                files_cache = files
+            else:
+                files_cache = (
+                    self.unparsed_config_cache.getFilesCache(
+                        sc.project_canonical_name, sc.branch))
+            for node in ns.getNodes():
+                if not node.template_config:
+                    continue
+                for conn in self.connections.getProviderConnections():
+                    conn.driver.resolveTemplateConfig(
+                        node, ns, parsed_config, files_cache,
+                        sc)
 
     def addProjectBranchConfig(self, parse_context, parsed_config,
                                tenant, tpc, branch_config, trusted):
@@ -3788,6 +3830,8 @@ class ConfigLoader(object):
             self._loadDynamicProjectData(abide, config, project, files,
                                          additional_project_branches,
                                          False, item, pcontext)
+
+        self.tenant_parser._resolveProviderTemplates(config, files)
 
         layout = model.Layout(tenant, item.layout_uuid)
         log.debug("Created layout id %s", layout.uuid)
