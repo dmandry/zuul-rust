@@ -550,7 +550,11 @@ class LogReceiver:
     # combinations we're using, we just map the constants here.
     # TODO: in the future we can shift the result output to this
     # system via a different facility code.
-    OUTPUT_PRIORITY = '<134>'
+    OUTPUT_PRIORITY = '<135>'
+    JSON_PRIORITY = '<134>'
+    TYPE_STOP = 0
+    TYPE_MESSAGE = 1
+    TYPE_JSON = 2
 
     def __init__(self, zuul_event_id, build, jobdir):
         self.jobdir = jobdir
@@ -576,8 +580,27 @@ class LogReceiver:
         output.write(message + '\n')
         output.flush()
 
+    def _addPlaybookToJson(self, message):
+        # Only used within the subprocess
+        output = self.json_output_file
+        file_len = output.seek(0, os.SEEK_END)
+        if file_len == 0:
+            # This is a new file without any content
+            output.write('[\n')
+        else:
+            # Existing file: Remove three bytes to eat the trailing
+            # '\n]\n' and add the ',' on the end of the last line.
+            output.seek(file_len - 3)
+            output.write(',\n')
+        output.write(message)
+        output.write('\n]\n')
+        output.flush()
+
     def addLineToJobOutput(self, message):
-        self.parent_conn.send(message)
+        self.parent_conn.send((self.TYPE_MESSAGE, message))
+
+    def addPlaybookToJson(self, data):
+        self.parent_conn.send((self.TYPE_JSON, data))
 
     def _handlePacket(self, data):
         data = data.decode('utf8')
@@ -585,6 +608,9 @@ class LogReceiver:
             if data[:5] == self.OUTPUT_PRIORITY:
                 message = data[5:]
                 self._addLineToJobOutput(message)
+            elif data[:5] == self.JSON_PRIORITY:
+                message = data[5:]
+                self._addPlaybookToJson(message)
         except Exception:
             self.log.exception("Error in log receiver:")
 
@@ -606,25 +632,30 @@ class LogReceiver:
                                        name=f"manage-{self.name}")
         try:
             with _safe_open(self.jobdir.job_output_file, "a") as job_output:
-                self.job_output_file = job_output
-                self.thread.start()
-                with socketserver.UnixStreamServer(
-                    self.jobdir.log_socket,
-                        MyHandler) as server:
-                    self.server = server
-                    self.child_conn.send(None)
-                    self.server.serve_forever()
+                with (_safe_open(self.jobdir.json_output_file, "w") as
+                      json_output):
+                    self.job_output_file = job_output
+                    self.json_output_file = json_output
+                    self.thread.start()
+                    with socketserver.UnixStreamServer(
+                            self.jobdir.log_socket,
+                            MyHandler) as server:
+                        self.server = server
+                        self.child_conn.send(None)
+                        self.server.serve_forever()
         except Exception:
             self.log.exception("Error in log receiver:")
 
     def manage(self):
         while True:
-            msg = self.child_conn.recv()
-            if msg is None:
+            kind, msg = self.child_conn.recv()
+            if kind == self.TYPE_STOP:
                 self._stop()
                 return
-            else:
+            elif kind == self.TYPE_MESSAGE:
                 self._addLineToJobOutput(msg)
+            elif kind == self.TYPE_JSON:
+                self._addPlaybookToJson(msg)
 
     def _stop(self):
         try:
@@ -636,7 +667,7 @@ class LogReceiver:
             self.log.exception('Unable to stop log receiver:')
 
     def stop(self):
-        self.parent_conn.send(None)
+        self.parent_conn.send((self.TYPE_STOP, None))
         self.proc.join(30)
         if self.proc.exitcode is None:
             self.log.error('Log receiver did not exit')
@@ -3548,7 +3579,6 @@ class AnsibleJob(object):
         env_copy.update(self.ssh_agent.env)
         env_copy['ZUUL_OUTPUT_MAX_BYTES'] = str(self.output_max_bytes)
         env_copy['ZUUL_JOB_LOG_CONFIG'] = self.jobdir.logging_json
-        env_copy['ZUUL_JSON_OUTPUT_FILE'] = self.jobdir.json_output_file
         env_copy['ZUUL_JOB_FAILURE_OUTPUT'] = self.failure_output
         env_copy['ZUUL_JOBDIR'] = self.jobdir.root
         if self.executor_server.log_console_port != DEFAULT_STREAM_PORT:
@@ -4140,30 +4170,6 @@ class AnsibleJob(object):
         return result, code
 
     def addPlaybookToJson(self, playbook, phase, index, message, start, end):
-        # Append debug info to the job-output.json file. Note this needs to
-        # work in conjunction with the Ansible zuul_json callback module.
-        def _write(mode):
-            with _safe_open(self.jobdir.json_output_file, mode) as f:
-                self.writePlaybookToJson(
-                    f, playbook, phase, index, message, start, end)
-
-        try:
-            _write('r+')
-        except FileNotFoundError:
-            _write('w')
-
-    def writePlaybookToJson(self, outfile, playbook, phase, index, message,
-                            start, end):
-        file_len = outfile.seek(0, os.SEEK_END)
-        if file_len == 0:
-            # This is a new file without any content
-            outfile.write('[\n')
-        else:
-            # Existing file: Remove three bytes to eat the trailing
-            # '\n]\n' and add the ',' on the end of the last line.
-            outfile.seek(file_len - 3)
-            outfile.write(',\n')
-
         playbook_info = {}
         playbook_info['playbook'] = playbook.canonical_name_and_path
         playbook_info['branch'] = playbook.branch
@@ -4185,9 +4191,9 @@ class AnsibleJob(object):
                 'end': datetime.datetime.fromtimestamp(
                     end, tz=datetime.timezone.utc).isoformat(),
             }
-        json.dump(playbook_info, outfile,
-                  indent=4, sort_keys=True, separators=(',', ': '))
-        outfile.write('\n]\n')
+        data = json.dumps(playbook_info,
+                          indent=4, sort_keys=True, separators=(',', ': '))
+        self.log_receiver.addPlaybookToJson(data)
 
 
 class ExecutorServer(BaseMergeServer):
