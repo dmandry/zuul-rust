@@ -3885,12 +3885,14 @@ class ZuulWeb(object):
             controller=StaticHandler(self.static_path),
             action='default')
 
+        webhook_mounts = []
         for connection in connections.connections.values():
             controller = connection.getWebController(self)
             if controller:
-                cherrypy.tree.mount(
+                webhook_mount = cherrypy.tree.mount(
                     controller,
                     '/api/connection/%s' % connection.connection_name)
+                webhook_mounts.append(webhook_mount)
 
         self.apsched = BackgroundScheduler()
         cherrypy.tools.stats = StatsTool(self.statsd, self.metrics)
@@ -3911,6 +3913,8 @@ class ZuulWeb(object):
 
         api_app = cherrypy.tree.mount(api, '/', config=conf)
         api_app.log = ZuulCherrypyLogManager(appid=api_app.log.appid)
+        for wh_mount in webhook_mounts:
+            wh_mount.log = ZuulCherrypyLogManager(appid=api_app.log.appid)
 
     @property
     def port(self):

@@ -2276,14 +2276,30 @@ class TestGithubWebhook(ZuulTestCase):
 
         self.executor_server.hold_jobs_in_build = True
 
-        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
-        self.fake_github.emitEvent(A.getPullRequestOpenedEvent(),
-                                   use_zuulweb=True)
-        self.waitUntilSettled()
+        # TODO not sure what the logger name should be
+        with self.assertLogs(level='INFO') as logged:
+            A = self.fake_github.openFakePullRequest(
+                'org/project', 'master', 'A')
+            ghEvent = self.fake_github.emitEvent(
+                A.getPullRequestOpenedEvent(),
+                use_zuulweb=True)
+            self.waitUntilSettled()
 
-        self.executor_server.hold_jobs_in_build = False
-        self.executor_server.release()
-        self.waitUntilSettled()
+            self.executor_server.hold_jobs_in_build = False
+            self.executor_server.release()
+            self.waitUntilSettled()
+
+        expectedID = ghEvent.request.headers.get('x-github-delivery', 'nope')
+        # Ensure the initial POST call has the proper uuid
+        self.assertRegexInList(
+            r'%s.+payload HTTP' % expectedID,
+            logged.output
+        )
+        # That uuid should also appear as a zuul event id
+        self.assertRegexInList(
+            r'\[e: %s\]' % expectedID,
+            logged.output
+        )
 
         self.assertEqual('SUCCESS',
                          self.getJobFromHistory('project-test1').result)
@@ -2313,6 +2329,7 @@ class TestGithubWebhook(ZuulTestCase):
         self.waitUntilSettled()
 
         self.assertEqual(2, len(self.history))
+        self.assertEqual(True, False)
 
 
 class TestGithubShaCache(BaseTestCase):

@@ -25,6 +25,7 @@ import socketserver
 import threading
 import time
 import urllib.parse
+import uuid
 
 import zuul.driver.gitlab.gitlabconnection as gitlabconnection
 from tests.util import random_sha1
@@ -371,7 +372,8 @@ class FakeGitlabConnection(gitlabconnection.GitlabConnection):
         name, payload = event
         if use_zuulweb:
             payload = json.dumps(payload).encode('utf-8')
-            headers = {'x-gitlab-token': self.webhook_token}
+            headers = {'x-gitlab-token': self.webhook_token,
+                       'x-gitlab-event-uuid': str(uuid.uuid4())}
             return requests.post(
                 'http://127.0.0.1:%s/api/connection/%s/payload'
                 % (self.zuul_web_port, self.connection_name),

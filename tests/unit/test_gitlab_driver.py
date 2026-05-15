@@ -82,10 +82,23 @@ class TestGitlabWebhook(ZuulTestCase):
     def test_webhook_via_zuulweb(self):
         A = self.fake_gitlab.openFakeMergeRequest(
             'org/project', 'master', 'A')
-        self.fake_gitlab.emitEvent(A.getMergeRequestOpenedEvent(),
-                                   use_zuulweb=True,
-                                   project='org/project')
-        self.waitUntilSettled()
+        # TODO not sure what the logger name should be
+        with self.assertLogs(level='INFO') as logged:
+            glEvent = self.fake_gitlab.emitEvent(A.getMergeRequestOpenedEvent(),
+                                                 use_zuulweb=True,
+                                                 project='org/project')
+            self.waitUntilSettled()
+        expectedID = glEvent.request.headers.get('x-gitlab-event-uuid', 'nope')
+        # Ensure the initial POST call has the proper uuid
+        self.assertRegexInList(
+            r'%s.+payload HTTP' % expectedID,
+            logged.output
+        )
+        # That uuid should also appear as a zuul event id
+        self.assertRegexInList(
+            r'\[e: %s\]' % expectedID,
+            logged.output
+        )
 
         self.assertEqual('SUCCESS',
                          self.getJobFromHistory('project-test1').result)
