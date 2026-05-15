@@ -346,7 +346,7 @@ class CallbackModule(default.CallbackModule):
 
         logging_config.apply()
 
-        self._logger = logging.getLogger('zuul.executor.ansible')
+        self._logger = logging.getLogger('zuul.executor.ansible.stream')
         self._result_logger = logging.getLogger(
             'zuul.executor.ansible.result')
 
@@ -379,7 +379,7 @@ class CallbackModule(default.CallbackModule):
         msg = msg.rstrip()
         if job:
             now = ts or datetime.datetime.now()
-            self._logger.info("{now} | {msg}".format(now=now, msg=msg))
+            self._logger.debug("{now} | {msg}".format(now=now, msg=msg))
         if executor:
             if debug:
                 self._display.vvv(msg)

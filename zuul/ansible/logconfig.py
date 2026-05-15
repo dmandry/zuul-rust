@@ -44,7 +44,7 @@ _DEFAULT_JOB_LOGGING_CONFIG = {
         'jobfile': {
             # used by executor to emit log file
             'class': 'logging.handlers.SysLogHandler',
-            'level': 'INFO',
+            'level': 'DEBUG',
             'formatter': 'plain',
             'facility': 'local0',
             'socktype': 1,  # SOCK_STREAM
@@ -55,9 +55,13 @@ _DEFAULT_JOB_LOGGING_CONFIG = {
             'handlers': ['result'],
             'level': 'INFO',
         },
-        'zuul.executor.ansible': {
+        'zuul.executor.ansible.json': {
             'handlers': ['jobfile'],
             'level': 'INFO',
+        },
+        'zuul.executor.ansible.stream': {
+            'handlers': ['jobfile'],
+            'level': 'DEBUG',
         },
         'sqlalchemy.engine': {
             'handlers': ['console'],
@@ -206,7 +210,10 @@ class JobLoggingConfig(DictLoggingConfig):
 
     def setDebug(self):
         # Set the level for zuul.executor.ansible to DEBUG
-        self._config['loggers']['zuul.executor.ansible']['level'] = 'DEBUG'
+        self._config['loggers']['zuul.executor.ansible.stream']['level'] =\
+            'DEBUG'
+        self._config['loggers']['zuul.executor.ansible.json']['level'] =\
+            'DEBUG'
 
     @property
     def log_socket(self):
