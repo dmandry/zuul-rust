@@ -1616,6 +1616,20 @@ class FakeGithubConnection(githubconnection.GithubConnection):
         }
         return (name, data)
 
+    def getReleaseEvent(self, project, action, tag):
+        name = 'release'
+        data = {
+            'action': action,
+            'release': {
+                'name': tag,
+                'tag_name': tag,
+            },
+            'repository': {
+                'full_name': project,
+            },
+        }
+        return (name, data)
+
     def getBranchProtectionRuleEvent(self, project, action):
         name = 'branch_protection_rule'
         data = {
