@@ -265,6 +265,44 @@ class TestGithubDriver(ZuulTestCase):
         self.assertEqual(2, len(self.history))
 
     @simple_layout('layouts/push-tag-github.yaml', driver='github')
+    def test_release_event(self):
+        self.executor_server.hold_jobs_in_build = True
+
+        self.create_branch('org/project', 'tagbranch')
+        files = {'README.txt': 'test'}
+        self.addCommitToRepo('org/project', 'test tag',
+                             files, branch='master', tag='v1.0.0')
+        path = os.path.join(self.upstream_root, 'org/project')
+        repo = git.Repo(path)
+        tag = repo.tags['v1.0.0']
+        # sha = tag.commit.hexsha
+        del repo
+
+        # Notify zuul about the new release to load the config
+        self.fake_github.emitEvent(
+            self.fake_github.getReleaseEvent(
+                'org/project',
+                action='published',
+                tag='v1.0.0')
+        )
+        self.waitUntilSettled()
+
+        build_params = self.builds[0].parameters
+        self.assertEqual('refs/tags/v1.0.0', build_params['zuul']['ref'])
+        # self.assertFalse('oldrev' in build_params['zuul'])
+        # self.assertEqual(sha, build_params['zuul']['newrev'])
+        # self.assertEqual(sha, build_params['zuul']['commit_id'])
+        # self.assertEqual(
+        #     'https://github.com/org/project/releases/tag/v1.0.0',
+        #     build_params['zuul']['change_url'])
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertEqual('SUCCESS',
+                         self.getJobFromHistory('project-tag').result)
+
+    @simple_layout('layouts/push-tag-github.yaml', driver='github')
     def test_tag_event(self):
         self.executor_server.hold_jobs_in_build = True
 
