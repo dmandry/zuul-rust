@@ -506,6 +506,28 @@ class GithubEventProcessor(object):
 
         return event
 
+    def _event_release(self):
+        action = self.body.get('action')
+        if action not in ['published', 'released']:
+            message = ("Unhandled action for "
+                       "X-Github-Event release: {0}".format(action))
+            self.log.debug(message)
+            return
+        # treat this event as a push to refs/tags/XXX, since from observation
+        # it seems like a push tag event never occurs alongside a release event
+        event = GithubTriggerEvent()
+        project_name = self.body.get('repository').get('full_name')
+        event.connection_name = self.connection.connection_name
+        event.trigger_name = 'github'
+        event.project_name = project_name
+        event.type = 'push'
+
+        tag = self.body.get('release', {}).get('tag_name')
+        event.ref = 'refs/tags/{0}'.format(tag)
+        self.connection.clearConnectionCacheOnBranchEvent(event)
+
+        return event
+
     def _event_pull_request(self):
         action = self.body.get('action')
         pr_body = self.body.get('pull_request')
