@@ -23,7 +23,18 @@ def main():
     output_txt_path = sys.argv[2]
     output_json_path = sys.argv[3]
     with open(output_json_path) as f:
-        output_json = json.loads(f.read())
+        # Our test logging configuration just outputs json blobs for
+        # each playbook and does not assemble them into an array like
+        # the log receiver does; therefore we must do that here.
+        data = '['
+        first = True
+        for line in f:
+            if not first and line == '{':
+                line = ',' + line
+                first = False
+            data += line
+        data += ']'
+        output_json = json.loads(data)
     with open(output_txt_path) as f:
         output_txt = f.read()
     with open(console_path) as f:
