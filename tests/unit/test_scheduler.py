@@ -4717,7 +4717,8 @@ class TestScheduler(ZuulTestCase):
         # timer-triggered job so that we have an opportunity to set
         # the hold flag before the first job.
         timer = self.scheds.first.sched.connections.drivers['timer']
-        start_jobs = timer.apsched.get_jobs()
+        start_jobs = (
+            timer.apsched.get_jobs() if timer.apsched else [])
 
         self.create_branch('org/project', 'stable')
         self.fake_gerrit.addEvent(
