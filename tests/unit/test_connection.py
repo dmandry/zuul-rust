@@ -18,6 +18,7 @@ import re
 import textwrap
 import time
 import types
+from collections import OrderedDict
 
 import sqlalchemy as sa
 
@@ -27,6 +28,7 @@ from zuul.driver.sql.sqlreporter import (
     SQL_MAX_STRING_LENGTH
 )
 from zuul.lib import yamlutil
+from zuul.lib.connections import ConnectionRegistry
 from tests.base import (
     AnsibleZuulTestCase,
     BaseTestCase,
@@ -577,6 +579,103 @@ class TestRequiredSQLConnection(BaseTestCase):
 
     def stop_connection(self):
         self.connections.stop()
+
+
+class TestConnectionRegistryStop(BaseTestCase):
+    """Unit tests for :meth:`ConnectionRegistry.stop` teardown ordering."""
+
+    @staticmethod
+    def _bare_registry():
+        reg = ConnectionRegistry.__new__(ConnectionRegistry)
+        reg.connections = OrderedDict()
+        reg.drivers = OrderedDict()
+        return reg
+
+    @okay_tracebacks('RuntimeError: bad_conn')
+    def test_stop_runs_later_connections_if_on_stop_raises(self):
+        order = []
+
+        class BadConn:
+            def onStop(self):
+                order.append('bad_conn')
+                raise RuntimeError('bad_conn')
+
+        class GoodConn:
+            def onStop(self):
+                order.append('good_conn')
+
+        class StubDriver:
+            name = 'stub'
+
+            def stop(self):
+                order.append('stub_driver')
+
+        reg = self._bare_registry()
+        reg.connections['bad'] = BadConn()
+        reg.connections['good'] = GoodConn()
+        reg.drivers['stub'] = StubDriver()
+
+        with self.assertRaises(RuntimeError) as ctx:
+            reg.stop()
+        self.assertEqual('bad_conn', str(ctx.exception))
+        self.assertEqual(
+            ['bad_conn', 'good_conn', 'stub_driver'], order)
+
+    @okay_tracebacks('RuntimeError: bad_driver')
+    def test_stop_runs_later_drivers_if_driver_stop_raises(self):
+        order = []
+
+        class GoodConn:
+            def onStop(self):
+                order.append('conn')
+
+        class BadDriver:
+            name = 'bad'
+
+            def stop(self):
+                order.append('bad_driver')
+                raise RuntimeError('bad_driver')
+
+        class GoodDriver:
+            name = 'good'
+
+            def stop(self):
+                order.append('good_driver')
+
+        reg = self._bare_registry()
+        reg.connections['c'] = GoodConn()
+        reg.drivers['bad'] = BadDriver()
+        reg.drivers['good'] = GoodDriver()
+
+        with self.assertRaises(RuntimeError) as ctx:
+            reg.stop()
+        self.assertEqual('bad_driver', str(ctx.exception))
+        self.assertEqual(['conn', 'bad_driver', 'good_driver'], order)
+
+    @okay_tracebacks('ValueError: first', 'OSError: second')
+    def test_stop_raises_first_recorded_error(self):
+        order = []
+
+        class BadConn:
+            def onStop(self):
+                order.append('bad_conn')
+                raise ValueError('first')
+
+        class GoodDriver:
+            name = 'good'
+
+            def stop(self):
+                order.append('good_driver')
+                raise OSError('second')
+
+        reg = self._bare_registry()
+        reg.connections['bad'] = BadConn()
+        reg.drivers['good'] = GoodDriver()
+
+        with self.assertRaises(ValueError) as ctx:
+            reg.stop()
+        self.assertEqual('first', str(ctx.exception))
+        self.assertEqual(['bad_conn', 'good_driver'], order)
 
 
 class TestMultipleGerrits(ZuulTestCase):

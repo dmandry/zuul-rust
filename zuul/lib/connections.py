@@ -100,11 +100,52 @@ class ConnectionRegistry(object):
             if hasattr(driver, 'reconfigure'):
                 driver.reconfigure(tenant)
 
-    def stop(self):
+    def _stop_all_connections(self, errors):
+        """Run ``onStop()`` for every registered connection.
+
+        Exceptions from one connection do not prevent others from
+        stopping.  Each failure is logged and appended to *errors*.
+
+        :param list errors: Collect ``Exception`` instances raised while
+           stopping; the caller may re-raise after further cleanup.
+        """
         for connection_name, connection in self.connections.items():
-            connection.onStop()
+            try:
+                connection.onStop()
+            except Exception as exc:
+                self.log.exception(
+                    "Error while running onStop for connection %s",
+                    connection_name)
+                errors.append(exc)
+
+    def _stop_all_drivers(self, errors):
+        """Run ``stop()`` for every registered driver.
+
+        Exceptions from one driver do not prevent others from
+        stopping.  Each failure is logged and appended to *errors*.
+
+        :param list errors: Collect ``Exception`` instances raised while
+           stopping; the caller may re-raise after other teardown.
+        """
         for driver in self.drivers.values():
-            driver.stop()
+            try:
+                driver.stop()
+            except Exception as exc:
+                self.log.exception(
+                    "Error while running stop for driver %s",
+                    driver.name)
+                errors.append(exc)
+
+    def stop(self):
+        # Run every onStop/stop even when one raises, so later cleanups (e.g.
+        # TimerDriver / APScheduler) are not skipped.
+        errors = []
+        try:
+            self._stop_all_connections(errors)
+        finally:
+            self._stop_all_drivers(errors)
+        if errors:
+            raise errors[0]
 
     def configure(self, config, database=False, sources=False,
                   triggers=False, reporters=False, providers=False):
