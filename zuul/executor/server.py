@@ -551,6 +551,7 @@ class LogReceiver:
     # TODO: in the future we can shift the result output to this
     # system via a different facility code.
     OUTPUT_PRIORITY = '<134>'
+    JSON_PRIORITY = '<142>'
 
     def __init__(self, zuul_event_id, build, jobdir):
         self.jobdir = jobdir
@@ -575,6 +576,20 @@ class LogReceiver:
         output.write(message + '\n')
         output.flush()
 
+    def _addPlaybookToJSON(self, message):
+        # Only used within the subprocess
+        output = self.json_output_file
+
+        file_len = output.seek(0, os.SEEK_END)
+        # Remove three bytes to eat the trailing newline written by the
+        # json.dump. This puts the ',' on the end of lines.
+        output.seek(file_len - 3)
+        if not self.json_first_playbook:
+            output.write(',\n')
+        self.json_first_playbook = False
+        output.write(message)
+        output.write('\n]\n')
+
     def addLineToJobOutput(self, message):
         self.parent_conn.send(message)
 
@@ -584,6 +599,9 @@ class LogReceiver:
             if data[:5] == self.OUTPUT_PRIORITY:
                 message = data[5:]
                 self._addLineToJobOutput(message)
+            elif data[:5] == self.JSON_PRIORITY:
+                message = data[5:]
+                self._addPlaybookToJSON(message)
         except Exception:
             self.log.exception("Error in log receiver:")
 
@@ -605,13 +623,18 @@ class LogReceiver:
                                        name=f"manage-{self.name}")
         try:
             with _safe_open(self.jobdir.job_output_file, "a") as job_output:
-                self.job_output_file = job_output
-                self.thread.start()
-                with socketserver.UnixStreamServer(
-                    self.jobdir.log_socket,
-                        MyHandler) as server:
-                    self.server = server
-                    self.server.serve_forever()
+                with (_safe_open(self.jobdir.json_output_file, "w") as
+                      json_output):
+                    json_output.write('[\n\n]\n')
+                    self.json_first_playbook = True
+                    self.job_output_file = job_output
+                    self.json_output_file = json_output
+                    self.thread.start()
+                    with socketserver.UnixStreamServer(
+                            self.jobdir.log_socket,
+                            MyHandler) as server:
+                        self.server = server
+                        self.server.serve_forever()
         except Exception:
             self.log.exception("Error in log receiver:")
 
@@ -3513,7 +3536,6 @@ class AnsibleJob(object):
         env_copy.update(self.ssh_agent.env)
         env_copy['ZUUL_OUTPUT_MAX_BYTES'] = str(self.output_max_bytes)
         env_copy['ZUUL_JOB_LOG_CONFIG'] = self.jobdir.logging_json
-        env_copy['ZUUL_JSON_OUTPUT_FILE'] = self.jobdir.json_output_file
         env_copy['ZUUL_JOB_FAILURE_OUTPUT'] = self.failure_output
         env_copy['ZUUL_JOBDIR'] = self.jobdir.root
         if self.executor_server.log_console_port != DEFAULT_STREAM_PORT:

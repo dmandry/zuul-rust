@@ -49,13 +49,25 @@ _DEFAULT_JOB_LOGGING_CONFIG = {
             'facility': 'local0',
             'socktype': 1,  # SOCK_STREAM
         },
+        'jsonfile': {
+            # used by executor to emit log file
+            'class': 'logging.handlers.SysLogHandler',
+            'level': 'INFO',
+            'formatter': 'plain',
+            'facility': 'local1',
+            'socktype': 1,  # SOCK_STREAM
+        },
     },
     'loggers': {
         'zuul.executor.ansible.result': {
             'handlers': ['result'],
             'level': 'INFO',
         },
-        'zuul.executor.ansible': {
+        'zuul.executor.ansible.json': {
+            'handlers': ['jsonfile'],
+            'level': 'INFO',
+        },
+        'zuul.executor.ansible.stream': {
             'handlers': ['jobfile'],
             'level': 'INFO',
         },
@@ -206,7 +218,10 @@ class JobLoggingConfig(DictLoggingConfig):
 
     def setDebug(self):
         # Set the level for zuul.executor.ansible to DEBUG
-        self._config['loggers']['zuul.executor.ansible']['level'] = 'DEBUG'
+        self._config['loggers']['zuul.executor.ansible.stream']['level'] =\
+            'DEBUG'
+        self._config['loggers']['zuul.executor.ansible.json']['level'] =\
+            'DEBUG'
 
     @property
     def log_socket(self):
@@ -215,6 +230,7 @@ class JobLoggingConfig(DictLoggingConfig):
     @log_socket.setter
     def log_socket(self, filename):
         self._config['handlers']['jobfile']['address'] = filename
+        self._config['handlers']['jsonfile']['address'] = filename
 
 
 class ServerLoggingConfig(DictLoggingConfig):

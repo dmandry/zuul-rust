@@ -18,7 +18,6 @@
         # from this checkout.
         ZUUL_CONSOLE_PORT: 19887
         ZUUL_JOB_LOG_CONFIG: "{{ ansible_user_dir}}/logging.json"
-        ZUUL_JSON_OUTPUT_FILE: "{{ ansible_user_dir}}/job-output.json"
         ZUUL_JOBDIR: "{{ ansible_user_dir}}"
         ZUUL_ANSIBLE_SPLIT_STREAMS: False
         ZUUL_OUTPUT_MAX_BYTES: 1073741824

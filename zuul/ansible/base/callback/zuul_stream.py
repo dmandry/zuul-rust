@@ -346,7 +346,7 @@ class CallbackModule(default.CallbackModule):
 
         logging_config.apply()
 
-        self._logger = logging.getLogger('zuul.executor.ansible')
+        self._logger = logging.getLogger('zuul.executor.ansible.stream')
         self._result_logger = logging.getLogger(
             'zuul.executor.ansible.result')
 
