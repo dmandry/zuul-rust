@@ -555,6 +555,8 @@ class LogReceiver:
     TYPE_STOP = 0
     TYPE_MESSAGE = 1
     TYPE_JSON = 2
+    TYPE_SECRETS = 3
+    TYPE_SYNC = 4
 
     def __init__(self, zuul_event_id, build, jobdir, stop_conn):
         self.jobdir = jobdir
@@ -569,6 +571,7 @@ class LogReceiver:
         self.server = None
         self.job_output_file = None
         self.stop_conn = stop_conn
+        self.secrets = []
 
     def start(self):
         self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
@@ -579,14 +582,25 @@ class LogReceiver:
     def _stopJob(self):
         self.stop_conn.send(self.build)
 
+    def _containsSecrets(self, message):
+        for secret in self.secrets:
+            if secret in message:
+                self.log.error("Secret detected in output")
+                # TODO: stop job
+                return True
+
     def _addLineToJobOutput(self, message):
         # Only used within the subprocess
+        if self._containsSecrets(message):
+            return
         output = self.job_output_file
         output.write(message + '\n')
         output.flush()
 
     def _addPlaybookToJson(self, message):
         # Only used within the subprocess
+        if self._containsSecrets(message):
+            return
         output = self.json_output_file
         file_len = output.seek(0, os.SEEK_END)
         if file_len == 0:
@@ -601,11 +615,18 @@ class LogReceiver:
         output.write('\n]\n')
         output.flush()
 
+    def _setSecrets(self, message):
+        self.secrets = json.loads(message)
+
     def addLineToJobOutput(self, message):
         self.parent_conn.send((self.TYPE_MESSAGE, message))
 
     def addPlaybookToJson(self, data):
         self.parent_conn.send((self.TYPE_JSON, data))
+
+    def sendSecrets(self, secrets):
+        secrets = json.dumps(secrets)
+        self.parent_conn.send((self.TYPE_SECRETS, secrets))
 
     def _handlePacket(self, data):
         data = data.decode('utf8')
@@ -642,7 +663,7 @@ class LogReceiver:
                     self.job_output_file = job_output
                     self.json_output_file = json_output
                     self.thread.start()
-                    with socketserver.UnixStreamServer(
+                    with socketserver.ThreadingUnixStreamServer(
                             self.jobdir.log_socket,
                             MyHandler) as server:
                         self.server = server
@@ -661,6 +682,21 @@ class LogReceiver:
                 self._addLineToJobOutput(msg)
             elif kind == self.TYPE_JSON:
                 self._addPlaybookToJson(msg)
+            elif kind == self.TYPE_SECRETS:
+                self._setSecrets(msg)
+            elif kind == self.TYPE_SYNC:
+                self._sync()
+
+    def _sync(self):
+        # This uses an internal attribute; if it ever changes, we can
+        # perform our own thread accounting using the handler methods;
+        # but this is simpler for now.
+        self.server._threads.join()
+        self.child_conn.send((self.TYPE_SYNC, None))
+
+    def sync(self):
+        self.parent_conn.send((self.TYPE_SYNC, None))
+        kind, msg = self.parent_conn.recv()
 
     def _stop(self):
         try:
@@ -668,6 +704,7 @@ class LogReceiver:
                 # The server polls for shutown, so this can take up to
                 # 0.5 seconds.
                 self.server.shutdown()
+                self.server.server_close()
         except Exception:
             self.log.exception('Unable to stop log receiver:')
 
@@ -724,7 +761,9 @@ class JobDirPlaybook(object):
         self.secrets = os.path.join(self.secrets_root, 'all.yaml')
         self.secrets_content = None
         self.secrets_keys = set()
+        self.secrets_dict = {}
         self.secrets_oidc = {}
+        self.secrets_values = []
         self.semaphores = []
         self.preserve_home_paths = set([
             '.ssh/known_hosts',  # Created/used by the executor
@@ -1342,6 +1381,9 @@ class AnsibleJob(object):
             # Remove backward compatibility handling
             max_attempts = self.arguments["max_attempts"]
         self.retry_limit = self.arguments["zuul"]["attempts"] >= max_attempts
+        # The accumulated secret data of the playbooks run thus far
+        # (for log reciever redaction)
+        self.secrets_values = set()
 
         # We don't set normal_vars until we load the include-vars
         # files after preparing repos.
@@ -1904,10 +1946,6 @@ class AnsibleJob(object):
         setup_status, setup_code = self.runAnsibleCleanup(
             self.jobdir.setup_playbook)
 
-        if self.aborted_reason == self.RESULT_DISK_FULL:
-            result = 'DISK_FULL'
-        elif self.aborted_reason == self.RESULT_SECRET_EXPOSURE:
-            result = 'SECRET_EXPOSURE'
         data, secret_data = self.getResultData()
         self.mapLines(args, data, item_commit, self.warnings)
         self.warnings.extend(get_warnings_from_result_data(
@@ -1917,6 +1955,17 @@ class AnsibleJob(object):
         if result == 'SUCCESS':
             if not self.handleSnapshots(data):
                 result = 'SNAPSHOT_FAILURE'
+
+        # Stop the log receiver to make sure it's done.
+        try:
+            self.log_receiver.stop()
+        except Exception:
+            self.log.exception("Error stopping log receiver:")
+
+        if self.aborted_reason == self.RESULT_DISK_FULL:
+            result = 'DISK_FULL'
+        elif self.aborted_reason == self.RESULT_SECRET_EXPOSURE:
+            result = 'SECRET_EXPOSURE'
 
         result_data = dict(result=result,
                            error_detail=error_detail,
@@ -2758,15 +2807,19 @@ class AnsibleJob(object):
         for role in playbook['roles']:
             self.prepareRole(jobdir_playbook, role, args)
 
-        secrets, jobdir_playbook.secrets_oidc = \
+        (jobdir_playbook.secrets_dict,
+         jobdir_playbook.secrets_oidc,
+         jobdir_playbook.secrets_values) = \
             self.decryptSecrets(playbook['secrets'])
-        secrets = self.mergeSecretVars(secrets, jobdir_playbook.secrets_oidc)
+        secrets = self.mergeSecretVars(jobdir_playbook.secrets_dict,
+                                       jobdir_playbook.secrets_oidc)
         if secrets:
             check_varnames(secrets)
             secrets = yaml.mark_strings_unsafe(secrets)
             jobdir_playbook.secrets_content = yaml.ansible_unsafe_dump(
                 secrets, default_flow_style=False)
             jobdir_playbook.secrets_keys = set(secrets.keys())
+        # TODO: Is this necessary since they are merged above?
         if jobdir_playbook.secrets_oidc:
             jobdir_playbook.secrets_keys.update(
                 jobdir_playbook.secrets_oidc.keys())
@@ -2785,11 +2838,14 @@ class AnsibleJob(object):
         :param dict secrets: The playbook secrets dictionary from the
             scheduler
 
-        :returns: Tuple of decrypted secrets dictionary and oidc dictionary
+        :returns: Tuple of decrypted secrets dictionary, oidc dictionary,
+                  and secret values of only the previously encrypted
+                  secrets
 
         """
         ret_secret_data = {}
         ret_secret_oidc = {}
+        ret_secret_values = []
         with self.executor_server.zk_context as ctx:
             blobstore = BlobStore(ctx)
             for secret_name, secret_index in secrets.items():
@@ -2803,26 +2859,29 @@ class AnsibleJob(object):
                 else:
                     frozen_secret = self.job.secrets[secret_index]
                 secret = zuul.model.Secret(secret_name, None)
-                decrypted_dict = yaml.encrypted_load(
+                encrypted_dict = yaml.encrypted_load(
                     frozen_secret['encrypted_data'])
-                if "secret_oidc" not in decrypted_dict:
+                if "secret_oidc" not in encrypted_dict:
                     # MODEL_API < 35
-                    secret.secret_data = decrypted_dict
+                    secret.secret_data = encrypted_dict
                 else:
-                    secret.secret_data = decrypted_dict['secret_data']
-                    secret.secret_oidc = decrypted_dict['secret_oidc']
+                    secret.secret_data = encrypted_dict['secret_data']
+                    secret.secret_oidc = encrypted_dict['secret_oidc']
 
                 if secret.secret_data:
                     private_secrets_key, public_secrets_key = \
                         self.executor_server.keystore.getProjectSecretsKeys(
                             frozen_secret['connection_name'],
                             frozen_secret['project_name'])
+                    ret_secret_values.extend(secret.collectEncryptedValues(
+                        private_secrets_key
+                    ))
                     secret = secret.decrypt(private_secrets_key)
                     ret_secret_data[secret_name] = secret.secret_data
                 else:
                     ret_secret_oidc[secret_name] = secret.secret_oidc
 
-        return ret_secret_data, ret_secret_oidc
+        return ret_secret_data, ret_secret_oidc, ret_secret_values
 
     def checkoutTrustedProject(self, project, branch, args):
         pi = self.jobdir.getTrustedProject(project.canonical_name,
@@ -4065,6 +4124,7 @@ class AnsibleJob(object):
                 payload, private_secrets_key, algorithm=algorithm,
                 headers={"kid": f"{algorithm}-{version}"})
             oidc_tokens[oidc_name] = token
+            playbook.secrets_values.append(token)
 
         oidc_tokens_content = yaml.ansible_unsafe_dump(
             yaml.mark_strings_unsafe(oidc_tokens), default_flow_style=False)
@@ -4079,6 +4139,11 @@ class AnsibleJob(object):
                            will_retry=None):
         if playbook.secrets_oidc:
             self._generateOidcTokens(playbook)
+
+        # Add the secrets from this playbook to the accumulated list
+        # of values and update the logreceiver
+        self.secrets_values |= set(playbook.secrets_values)
+        self.log_receiver.sendSecrets(list(self.secrets_values))
 
         if playbook.trusted or playbook.secrets_content:
             self.writeInventory(playbook, self.frozen_hostvars)
@@ -4177,6 +4242,9 @@ class AnsibleJob(object):
                 phase=phase or 'unknown')
 
         self.emitPlaybookBanner(playbook, 'END', phase, result=result)
+        # Make sure the log receiver has finished writing logs for
+        # this playbook.
+        self.log_receiver.sync()
         return result, code
 
     def addPlaybookToJson(self, playbook, phase, index, message, start, end):

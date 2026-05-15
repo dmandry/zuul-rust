@@ -3534,6 +3534,26 @@ class Secret(ConfigObject):
         r.secret_data = self._decrypt(private_key, self.secret_data)
         return r
 
+    def _decryptForCollection(self, private_key, secret_data):
+        # recursive function to decrypt data
+        if hasattr(secret_data, 'decrypt'):
+            yield secret_data.decrypt(private_key)
+
+        if isinstance(secret_data, (dict, types.MappingProxyType)):
+            for k, v in secret_data.items():
+                yield from self._decryptForCollection(private_key, v)
+
+        if isinstance(secret_data, (list, tuple)):
+            for v in secret_data:
+                yield from self._decryptForCollection(private_key, v)
+
+    def collectEncryptedValues(self, private_key):
+        """Return a list of the decrypted contents of encrypted values
+        in this secret"""
+
+        return [x for x in self._decryptForCollection(
+            private_key, self.secret_data)]
+
     def serialize(self, layout):
         # The output of this method is used by the executor
         # Set the ttl for this tenant
