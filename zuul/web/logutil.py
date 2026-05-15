@@ -21,12 +21,29 @@ import cherrypy
 from cherrypy._cplogging import LogManager
 
 
+def set_request_id(request):
+    if not hasattr(request, 'zuul_request_id'):
+        lowercase_headers = dict(
+            (k.lower(), request.headers[k]) for k in request.headers.keys()
+        )
+        # github webhook
+        if "x-github-delivery" in lowercase_headers:
+            request.zuul_request_id = lowercase_headers["x-github-delivery"]
+            return
+        # gitlab webhook
+        elif "x-gitlab-event-uuid" in lowercase_headers:
+            request.zuul_request_id = lowercase_headers["x-gitlab-event-uuid"]
+            return
+        else:
+            request.zuul_request_id = uuid.uuid4().hex
+    return
+
+
 class ZuulCherrypyLogManager(LogManager):
     @property
     def access_log(self):
         request = cherrypy.serving.request
-        if not hasattr(request, 'zuul_request_id'):
-            request.zuul_request_id = uuid.uuid4().hex
+        set_request_id(request)
         return get_annotated_logger(self._access_log,
                                     request=request.zuul_request_id)
 
