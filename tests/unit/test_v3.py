@@ -9517,6 +9517,17 @@ class TestJobOutput(AnsibleZuulTestCase):
         with open(p) as f:
             return f.read()
 
+    def _getSecrets(self, job, pbtype):
+        secrets = []
+        build = self.getJobFromHistory(job)
+        for pb in getattr(build.jobdir, pbtype):
+            if pb.secrets_content:
+                secrets.append(
+                    yamlutil.ansible_unsafe_load(pb.secrets_content))
+            else:
+                secrets.append({})
+        return secrets
+
     def test_job_output_split_streams(self):
         # Verify that command standard output appears in the job output,
         # and that failures in the final playbook get logged.
