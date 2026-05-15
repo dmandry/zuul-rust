@@ -136,6 +136,16 @@ def _safe_unlink(path):
     return os.unlink(resolved)
 
 
+def _recursive_values(d):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            yield from _recursive_values(v)
+        elif isinstance(v, list):
+            yield from v
+        else:
+            yield v
+
+
 class VerboseCommand(commandsocket.Command):
     name = 'verbose'
     help = 'Enable Ansible verbose mode'
@@ -555,6 +565,7 @@ class LogReceiver:
     TYPE_STOP = 0
     TYPE_MESSAGE = 1
     TYPE_JSON = 2
+    TYPE_SECRETS = 3
 
     def __init__(self, zuul_event_id, build, jobdir):
         self.jobdir = jobdir
@@ -568,6 +579,7 @@ class LogReceiver:
 
         self.server = None
         self.job_output_file = None
+        self.secrets = []
 
     def start(self):
         self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
@@ -575,16 +587,26 @@ class LogReceiver:
         # Wait for the child to send None to tell us it's started up
         self.parent_conn.recv()
 
+    def _containsSecrets(self, message):
+        for secret in self.secrets:
+            if secret in message:
+                self.log.error("Secret detected in output")
+                # TODO: stop job
+                return True
+
     def _addLineToJobOutput(self, message):
         # Only used within the subprocess
+        if self._containsSecrets(message):
+            return
         output = self.job_output_file
         output.write(message + '\n')
         output.flush()
 
     def _addPlaybookToJson(self, message):
         # Only used within the subprocess
+        if self._containsSecrets(message):
+            return
         output = self.json_output_file
-
         file_len = output.seek(0, os.SEEK_END)
         # Remove three bytes to eat the trailing newline written by the
         # json.dump. This puts the ',' on the end of lines.
@@ -596,11 +618,18 @@ class LogReceiver:
         output.write('\n]\n')
         output.flush()
 
+    def _setSecrets(self, message):
+        self.secrets = json.loads(message)
+
     def addLineToJobOutput(self, message):
         self.parent_conn.send((self.TYPE_MESSAGE, message))
 
     def addPlaybookToJson(self, data):
         self.parent_conn.send((self.TYPE_JSON, data))
+
+    def sendSecrets(self, secrets):
+        secrets = json.dumps(secrets)
+        self.parent_conn.send((self.TYPE_SECRETS, secrets))
 
     def _handlePacket(self, data):
         data = data.decode('utf8')
@@ -658,6 +687,8 @@ class LogReceiver:
                 self._addLineToJobOutput(msg)
             elif kind == self.TYPE_JSON:
                 self._addPlaybookToJson(msg)
+            elif kind == self.TYPE_SECRETS:
+                self._setSecrets(msg)
 
     def _stop(self):
         try:
@@ -721,6 +752,7 @@ class JobDirPlaybook(object):
         self.secrets = os.path.join(self.secrets_root, 'all.yaml')
         self.secrets_content = None
         self.secrets_keys = set()
+        self.secrets_dict = {}
         self.secrets_oidc = {}
         self.semaphores = []
         self.nesting_level = None
@@ -993,6 +1025,13 @@ class JobDir(object):
         playbook = JobDirPlaybook(root)
         self.playbooks.append(playbook)
         return playbook
+
+    @property
+    def all_playbooks(self):
+        for k in ('pre_playbooks', 'playbooks', 'post_playbooks',
+                  'cleanup_playbooks'):
+            playbooks = getattr(self, k)
+            yield from playbooks
 
     def cleanup(self):
         if not self.keep:
@@ -1866,6 +1905,7 @@ class AnsibleJob(object):
         self._jobOutput("Preparing playbooks")
         # This prepares each playbook and the roles needed for each.
         self.preparePlaybooks(args)
+        self.prepareSecretRedaction()
         self.writeLoggingConfig()
         zuul_resources = self.prepareNodes(args)  # set self.host_list
         try:
@@ -2748,15 +2788,17 @@ class AnsibleJob(object):
         for role in playbook['roles']:
             self.prepareRole(jobdir_playbook, role, args)
 
-        secrets, jobdir_playbook.secrets_oidc = \
+        jobdir_playbook.secrets_dict, jobdir_playbook.secrets_oidc = \
             self.decryptSecrets(playbook['secrets'])
-        secrets = self.mergeSecretVars(secrets, jobdir_playbook.secrets_oidc)
+        secrets = self.mergeSecretVars(jobdir_playbook.secrets_dict,
+                                       jobdir_playbook.secrets_oidc)
         if secrets:
             check_varnames(secrets)
             secrets = yaml.mark_strings_unsafe(secrets)
             jobdir_playbook.secrets_content = yaml.ansible_unsafe_dump(
                 secrets, default_flow_style=False)
             jobdir_playbook.secrets_keys = set(secrets.keys())
+        # TODO: Is this necessary since they are merged above?
         if jobdir_playbook.secrets_oidc:
             jobdir_playbook.secrets_keys.update(
                 jobdir_playbook.secrets_oidc.keys())
@@ -3420,6 +3462,14 @@ class AnsibleJob(object):
         with open(jobdir_playbook.inventory, 'w') as inventory_yaml:
             inventory_yaml.write(
                 yaml.ansible_unsafe_dump(inventory, default_flow_style=False))
+
+    def prepareSecretRedaction(self):
+        # For all playbooks, extract secret content
+        values = []
+        for jobdir_playbook in self.jobdir.all_playbooks:
+            values.extend(_recursive_values(jobdir_playbook.secrets_dict))
+        # Send secret content to logreceiver
+        self.log_receiver.sendSecrets(values)
 
     def writeLoggingConfig(self):
         self.log.debug("Writing logging config for job %s %s",
