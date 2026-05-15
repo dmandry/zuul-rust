@@ -42,9 +42,10 @@ class TimerDriver(Driver, TriggerInterface):
     tracer = trace.get_tracer("zuul")
 
     def __init__(self):
-        self.log.debug("Starting apscheduler")
-        self.apsched = BackgroundScheduler()
-        self.apsched.start()
+        # APScheduler is started from reconfigure() only when a tenant
+        # uses timer triggers or still has timer jobs to remove, so idle
+        # registries (e.g. executor) do not keep a background thread.
+        self.apsched = None
         self.tenant_jobs = {}
         self.election = None
         self.election_thread = None
@@ -55,6 +56,9 @@ class TimerDriver(Driver, TriggerInterface):
         self.project_update_locks = defaultdict(threading.Lock)
         self.stop_event = threading.Event()
         self.stopped = False
+        # Serialize reconfigure (and lazy APScheduler startup) across
+        # tenants; coordinate with stop() so teardown does not race jobs.
+        self._reconfigure_lock = threading.Lock()
 
     def registerScheduler(self, scheduler):
         self.sched = scheduler
@@ -96,15 +100,29 @@ class TimerDriver(Driver, TriggerInterface):
             self.stop_event.clear()
             self.log.debug("Timer election tenure ended")
 
-    def reconfigure(self, tenant):
-        if self.stopped:
+    def _tenant_needs_apsched(self, tenant):
+        if self.tenant_jobs.get(tenant.name):
+            return True
+        for manager in tenant.layout.pipeline_managers.values():
+            for ef in manager.pipeline.event_filters:
+                if isinstance(ef.trigger, timertrigger.TimerTrigger):
+                    return True
+        return False
+
+    def _ensure_apsched_started(self):
+        if self.apsched:
             return
-        if not self.apsched:
-            # Handle possible reuse of the driver without connection objects.
-            self.log.debug("Starting apscheduler on reconfigure")
-            self.apsched = BackgroundScheduler()
-            self.apsched.start()
-        self._addJobs(tenant)
+        self.log.debug("Starting apscheduler for timer driver")
+        self.apsched = BackgroundScheduler()
+        self.apsched.start()
+
+    def reconfigure(self, tenant):
+        with self._reconfigure_lock:
+            if self.stopped:
+                return
+            if self._tenant_needs_apsched(tenant):
+                self._ensure_apsched_started()
+            self._addJobs(tenant)
 
     def _removeJobs(self, tenant, new_jobs):
         # Compare existing jobs to new jobs and remove any that should
@@ -296,13 +314,14 @@ class TimerDriver(Driver, TriggerInterface):
 
     def stop(self):
         self.log.debug("Stopping timer driver")
-        self.stopped = True
-        self.stop_event.set()
-        if self.apsched:
-            self.log.debug("Stopping apscheduler")
-            self.apsched.shutdown()
-            self.apsched = None
-            self.log.debug("Stopped apscheduler")
+        with self._reconfigure_lock:
+            self.stopped = True
+            self.stop_event.set()
+            if self.apsched:
+                self.log.debug("Stopping apscheduler")
+                self.apsched.shutdown()
+                self.apsched = None
+                self.log.debug("Stopped apscheduler")
         if self.election:
             self.log.debug("Stopping election")
             self.election.cancel()

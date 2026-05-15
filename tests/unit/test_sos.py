@@ -864,6 +864,8 @@ class TestScaleOutScheduler(ZuulTestCase):
         timer2 = sched2.connections.drivers['timer']
 
         for _ in iterate_timeout(10, "until jobs registered"):
+            if not timer2.apsched:
+                continue
             timer2_jobs = sorted(timer2.apsched.get_jobs(),
                                  key=lambda x: x.trigger._zuul_jitter)
             if timer2_jobs:
