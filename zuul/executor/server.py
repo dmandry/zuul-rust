@@ -647,12 +647,11 @@ class JobDir(object):
         #     project_0
         #       <git.example.com>
         #         <project>
-        #   home (mounted in bwrap read-write)
-        #     .ssh
-        #       known_hosts
         #   kube (mounted in bwrap read-only)
         #     config
         #   work (mounted in bwrap read-write)
+        #     .ssh
+        #       known_hosts
         #     src
         #       <git.example.com>
         #         <project>
@@ -667,13 +666,6 @@ class JobDir(object):
             tmpdir = tempfile.gettempdir()
         self.root = os.path.realpath(os.path.join(tmpdir, build_uuid))
         os.mkdir(self.root, 0o700)
-        self.home = os.path.join(self.root, 'home')
-        os.makedirs(self.home)
-        ssh_dir = os.path.join(self.home, '.ssh')
-        os.mkdir(ssh_dir, 0o700)
-        # A home directory with nothing in it for utility calls.
-        self.utility_home = os.path.join(self.root, 'utility-home')
-        os.makedirs(self.utility_home)
         self.work_root = os.path.join(self.root, 'work')
         os.makedirs(self.work_root)
         self.src_root = os.path.join(self.work_root, 'src')
@@ -697,6 +689,8 @@ class JobDir(object):
         os.makedirs(self.trusted_root)
         self.untrusted_root = os.path.join(self.root, 'untrusted')
         os.makedirs(self.untrusted_root)
+        ssh_dir = os.path.join(self.work_root, '.ssh')
+        os.mkdir(ssh_dir, 0o700)
         self.kube_dir = os.path.join(self.root, "kube")
         os.makedirs(self.kube_dir)
         self.kubeconfig = os.path.join(self.kube_dir, "config")
@@ -751,11 +745,11 @@ class JobDir(object):
         with _safe_open(self.result_data_file, 'w'):
             pass
         self.known_hosts = os.path.join(ssh_dir, 'known_hosts')
-        # The ssh config file is not created or used by Zuul, but we
-        # forbid its use in jobs.
+        # This file is not created or used by Zuul, but we forbid its
+        # use in jobs.
         self.path_blocklist = [
-            os.path.join(self.home, '.ssh', 'config'),
-            os.path.join(self.home, '.kube', 'config'),
+            os.path.join(self.work_root, '.ssh', 'config'),
+            os.path.join(self.work_root, '.kube', 'config'),
         ]
         self.inventory = os.path.join(self.ansible_root, 'inventory.yaml')
         self.logging_json = os.path.join(self.ansible_root, 'logging.json')
@@ -1999,7 +1993,7 @@ class AnsibleJob(object):
         # the work directory.
         env_copy = {}
         env_copy['TMP'] = self.jobdir.local_tmp
-        env_copy['HOME'] = self.jobdir.utility_home
+        env_copy['HOME'] = self.jobdir.work_root
         ro_paths = []
         rw_paths = []
         secrets = {}
@@ -2007,7 +2001,6 @@ class AnsibleJob(object):
         context = wrapper.getExecutionContext(ro_paths, rw_paths, secrets)
         return env_copy, context.getPopen(
             work_dir=self.jobdir.work_root,
-            home_dir=self.jobdir.utility_home,
             share_net=False,
         )
 
@@ -3395,8 +3388,9 @@ class AnsibleJob(object):
                    allow_pre_fail, wrapped=True, cleanup=False,
                    phase=None, index=None):
         # Cleanup any forbidden files in the home directory.
-        # TODO: add a job-based allowlist of files to explicitly copy
-        # between playbook runs.
+        # TODO: move the home directory to a subdir of work/ and add a
+        # job-based allowlist of files to explicitly copy between
+        # playbook runs.
 
         for path in self.jobdir.path_blocklist:
             try:
@@ -3470,11 +3464,12 @@ class AnsibleJob(object):
 
         popen = context.getPopen(
             work_dir=self.jobdir.work_root,
-            home_dir=self.jobdir.home,
             ssh_auth_sock=env_copy.get('SSH_AUTH_SOCK'))
 
         env_copy['ANSIBLE_CONFIG'] = config_file
-        env_copy['HOME'] = self.jobdir.home
+        # NOTE(pabelanger): Default HOME variable to jobdir.work_root, as it is
+        # possible we don't bind mount current zuul user home directory.
+        env_copy['HOME'] = self.jobdir.work_root
 
         with self.proc_lock:
             self.proc_cleanup = playbook.cleanup
