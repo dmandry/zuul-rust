@@ -35,7 +35,6 @@ from tests.base import (
     FIXTURE_DIR,
     ZuulTestCase,
     iterate_timeout,
-    okay_tracebacks,
     simple_layout,
 )
 from tests.unit.test_cloud_driver import BaseCloudDriverTest
@@ -191,7 +190,6 @@ class TestKubernetesDriver(BaseKubernetesDriverTest, BaseCloudDriverTest):
             time.sleep(1)
 
     @simple_layout('layouts/kubernetes/nodepool.yaml', enable_nodepool=True)
-    @okay_tracebacks("Unable to start kubectl port forward")
     def test_kubernetes_inventory(self):
         # Test the unique aspects of k8s inventory files
         self.patch(zuul.executor.server.KubeFwd,
@@ -277,7 +275,6 @@ class TestKubernetesDriverOpenShift(
             time.sleep(1)
 
     @simple_layout('layouts/kubernetes/openshift.yaml', enable_nodepool=True)
-    @okay_tracebacks("Unable to start kubectl port forward")
     def test_kubernetes_inventory_openshift(self):
         # Test the unique aspects of k8s inventory files
         self.patch(zuul.executor.server.KubeFwd,
