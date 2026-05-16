@@ -16,6 +16,46 @@
       "message": "No concerns here.",
       "revId": "ff7c37c2abbeffa8b931b8cb2fb6f42c6c9dae2d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "60ca8089_295cc363",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:38:33Z",
+      "side": 1,
+      "message": "-1 for a small but important typo in the docs. Otherwise this lgtm.",
+      "revId": "ff7c37c2abbeffa8b931b8cb2fb6f42c6c9dae2d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "81ffcb36_9f1eb37d",
+        "filename": "doc/source/config/pipeline.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 345,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:38:33Z",
+      "side": 1,
+      "message": "There is a small but important typo here. `now` should be `low`. This is why I -1\u0027d",
+      "range": {
+        "startLine": 345,
+        "startChar": 24,
+        "endLine": 345,
+        "endChar": 27
+      },
+      "revId": "ff7c37c2abbeffa8b931b8cb2fb6f42c6c9dae2d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
