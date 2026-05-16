@@ -3,9 +3,15 @@
 # Script arguments look like:
 # --kubeconfig=/tmp/tmppm0yyqvv/zuul-test/builds/c21fc1eb7e2c469cb4997d688252dc3c/work/.kube/config --context=zuul-ci-abcdefg:zuul-worker/ -n zuul-ci-abcdefg port-forward pod/fedora-abcdefg 37303:19885
 
+kubeconfig=${1#*=}
+if [ ! -f $kubeconfig ]; then
+    echo "Unable to find kubeconfig $kubeconfig"
+    exit 1
+fi
+
 # Get the last argument to the script
-arg1=${@: -2}
-arg2=${@: -1}
+arg1=${@: -2:1}
+arg2=${@: -1:1}
 
 # Split on the colon
 ports1=(${arg1//:/ })
