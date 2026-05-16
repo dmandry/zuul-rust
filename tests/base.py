@@ -3069,31 +3069,71 @@ class ZuulTestCase(BaseTestCase):
         manager = tenant.layout.pipeline_managers[pipeline_name]
         return manager.state.queues
 
+    def _shutdown_step(self, errors, description, func):
+        try:
+            func()
+        except Exception as exc:
+            self.log.exception("Error during shutdown %s", description)
+            errors.append(exc)
+
     def shutdown(self):
         # Note: when making changes to this sequence, check if
         # corresponding changes need to happen in
         # tests/upgrade/test_upgrade_old.py
+        errors = []
         self.log.debug("Shutting down after tests")
         self.executor_server.hold_jobs_in_build = False
         self.executor_server.release()
-        self.scheds.execute(lambda app: app.sched.executor.stop())
+        self._shutdown_step(
+            errors, "stopping scheduler executor client",
+            lambda: self.scheds.execute(
+                lambda app: app.sched.executor.stop()))
         if self.merge_server:
-            self.merge_server.stop()
-            self.merge_server.join()
+            self._shutdown_step(
+                errors, "stopping merge server",
+                lambda: self.merge_server.stop())
+            self._shutdown_step(
+                errors, "joining merge server",
+                lambda: self.merge_server.join())
 
-        self.executor_server.stop()
-        self.executor_server.join()
-        self.launcher.stop()
-        self.launcher.join()
+        self._shutdown_step(
+            errors, "stopping executor server",
+            lambda: self.executor_server.stop())
+        self._shutdown_step(
+            errors, "joining executor server",
+            lambda: self.executor_server.join())
+        self._shutdown_step(
+            errors, "stopping launcher",
+            lambda: self.launcher.stop())
+        self._shutdown_step(
+            errors, "joining launcher",
+            lambda: self.launcher.join())
         if self.validate_tenants is None:
-            self.scheds.execute(lambda app: app.sched.stop())
-            self.scheds.execute(lambda app: app.sched.join())
+            self._shutdown_step(
+                errors, "stopping scheduler",
+                lambda: self.scheds.execute(
+                    lambda app: app.sched.stop()))
+            self._shutdown_step(
+                errors, "joining scheduler",
+                lambda: self.scheds.execute(
+                    lambda app: app.sched.join()))
         else:
-            self.scheds.execute(lambda app: app.sched.stopConnections())
-        self.statsd.stop()
-        self.statsd.join()
-        self.fake_nodepool.stop()
-        self.zk_client.disconnect()
+            self._shutdown_step(
+                errors, "stopping scheduler connections",
+                lambda: self.scheds.execute(
+                    lambda app: app.sched.stopConnections()))
+        self._shutdown_step(
+            errors, "stopping statsd",
+            lambda: self.statsd.stop())
+        self._shutdown_step(
+            errors, "joining statsd",
+            lambda: self.statsd.join())
+        self._shutdown_step(
+            errors, "stopping fake nodepool",
+            lambda: self.fake_nodepool.stop())
+        self._shutdown_step(
+            errors, "disconnecting zookeeper",
+            lambda: self.zk_client.disconnect())
         self.printHistory()
         # We whitelist watchdog threads as they have relatively long delays
         # before noticing they should exit, but they should exit on their own.
@@ -3125,6 +3165,8 @@ class ZuulTestCase(BaseTestCase):
             self.log.debug(log_str)
             raise Exception("More than one thread is running: %s" % threads)
         self.cleanupTestServers()
+        if errors:
+            raise errors[0]
 
     def cleanupTestServers(self):
         del self.executor_server

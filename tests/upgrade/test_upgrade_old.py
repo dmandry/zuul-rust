@@ -32,28 +32,63 @@ class TestUpgradeOld(LauncherBaseTestCase):
 
     def shutdown(self):
         # Shutdown the scheduler now before it gets any aborted events
+        errors = []
         if self.validate_tenants is None:
-            self.scheds.execute(lambda app: app.sched.stop())
-            self.scheds.execute(lambda app: app.sched.join())
+            self._shutdown_step(
+                errors, "stopping scheduler",
+                lambda: self.scheds.execute(
+                    lambda app: app.sched.stop()))
+            self._shutdown_step(
+                errors, "joining scheduler",
+                lambda: self.scheds.execute(
+                    lambda app: app.sched.join()))
         else:
-            self.scheds.execute(lambda app: app.sched.stopConnections())
+            self._shutdown_step(
+                errors, "stopping scheduler connections",
+                lambda: self.scheds.execute(
+                    lambda app: app.sched.stopConnections()))
         # Then release the executor jobs and stop the executors
         self.executor_server.hold_jobs_in_build = False
         self.executor_server.release()
-        self.scheds.execute(lambda app: app.sched.executor.stop())
+        self._shutdown_step(
+            errors, "stopping scheduler executor client",
+            lambda: self.scheds.execute(
+                lambda app: app.sched.executor.stop()))
         if self.merge_server:
-            self.merge_server.stop()
-            self.merge_server.join()
+            self._shutdown_step(
+                errors, "stopping merge server",
+                lambda: self.merge_server.stop())
+            self._shutdown_step(
+                errors, "joining merge server",
+                lambda: self.merge_server.join())
 
-        self.executor_server.stop()
-        self.executor_server.join()
-        self.launcher.stop()
-        self.launcher.join()
-        self.statsd.stop()
-        self.statsd.join()
-        self.fake_nodepool.stop()
-        self.zk_client.disconnect()
+        self._shutdown_step(
+            errors, "stopping executor server",
+            lambda: self.executor_server.stop())
+        self._shutdown_step(
+            errors, "joining executor server",
+            lambda: self.executor_server.join())
+        self._shutdown_step(
+            errors, "stopping launcher",
+            lambda: self.launcher.stop())
+        self._shutdown_step(
+            errors, "joining launcher",
+            lambda: self.launcher.join())
+        self._shutdown_step(
+            errors, "stopping statsd",
+            lambda: self.statsd.stop())
+        self._shutdown_step(
+            errors, "joining statsd",
+            lambda: self.statsd.join())
+        self._shutdown_step(
+            errors, "stopping fake nodepool",
+            lambda: self.fake_nodepool.stop())
+        self._shutdown_step(
+            errors, "disconnecting zookeeper",
+            lambda: self.zk_client.disconnect())
         self.printHistory()
+        if errors:
+            raise errors[0]
 
     def test_upgrade(self):
         self.executor_server.hold_jobs_in_build = True
