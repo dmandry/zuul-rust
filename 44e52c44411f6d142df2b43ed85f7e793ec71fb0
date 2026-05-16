@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "e9a78947_4b30e2be",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:40:23Z",
+      "side": 1,
+      "message": "I guess the primary benefit of using numerical values is that you can directly see the relative priorities between them without using a lookup table/documentation. Giving users this options seems reasonable in that case.",
+      "revId": "44e52c44411f6d142df2b43ed85f7e793ec71fb0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
