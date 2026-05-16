@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ca353e20_be60c919",
+        "filename": "web/src/containers/build/Buildset.jsx",
+        "patchSetId": 5
+      },
+      "lineNbr": 224,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:29:58Z",
+      "side": 1,
+      "message": "To double check we don\u0027t need to supply the user_id explicitly here because the API on the backend side retrieves it from the authentication info.",
+      "revId": "d516ff38bc6e41198a91de2e13bd047a25901d07",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

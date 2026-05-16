@@ -83,6 +83,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "91e16e11_2f10f5f6",
+        "filename": "web/src/containers/build/Buildset.jsx",
+        "patchSetId": 4
+      },
+      "lineNbr": 351,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:29:58Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "69b11d31_0bbec65e",
+      "range": {
+        "startLine": 351,
+        "startChar": 15,
+        "endLine": 351,
+        "endChar": 34
+      },
+      "revId": "e7aa2146581582dfa6731c8a68012642c971f3bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "699bffde_41d2cba8",
@@ -120,6 +144,30 @@
       "side": 1,
       "message": "I think we will submit it with undefined, which will return an error.  I don\u0027t think that\u0027s a bad outcome since it should be impossible to hit the case without deliberate manipulation of data outside of the form fields.",
       "parentUuid": "699bffde_41d2cba8",
+      "range": {
+        "startLine": 261,
+        "startChar": 42,
+        "endLine": 261,
+        "endChar": 51
+      },
+      "revId": "e7aa2146581582dfa6731c8a68012642c971f3bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "fac4f0d8_ad8a75b1",
+        "filename": "web/src/pages/Enqueue.jsx",
+        "patchSetId": 4
+      },
+      "lineNbr": 261,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:29:58Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "aa6aa088_a27b1b6b",
       "range": {
         "startLine": 261,
         "startChar": 42,
