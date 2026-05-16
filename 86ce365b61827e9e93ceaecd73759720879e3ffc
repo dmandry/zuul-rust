@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5f2017cf_794cb34e",
+        "filename": "zuul/driver/sql/alembic/versions/268b2da7a66e_postgres18_bundle_fix.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 55,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:47:28Z",
+      "side": 1,
+      "message": "This is the condition we expect to hit on postgres 17 because the constraint doesn\u0027t exist there? In that case we will still run the `nested.rollback()` call below because the string will be in `str(err)` and we don\u0027t raise. I guess in that case its a noop to rollback because we didn\u0027t do anything? Do we need to rollback?",
+      "range": {
+        "startLine": 55,
+        "startChar": 15,
+        "endLine": 55,
+        "endChar": 51
+      },
+      "revId": "86ce365b61827e9e93ceaecd73759720879e3ffc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "17e9e9e4_10074468",
+        "filename": "zuul/driver/sql/alembic/versions/268b2da7a66e_postgres18_bundle_fix.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 68,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-16T17:47:28Z",
+      "side": 1,
+      "message": "See above.",
+      "revId": "86ce365b61827e9e93ceaecd73759720879e3ffc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
