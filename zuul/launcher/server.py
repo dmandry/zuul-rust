@@ -1647,8 +1647,8 @@ class Launcher:
                 if main_provider.canonical_name == main_provider_name:
                     break
             else:
-                raise Exception(
-                    f"Unable to find provider {main_provider_name}")
+                messages.append(
+                    f"Unable to find provider {main_provider_name}; ignoring")
         elif providers_for_all_labels:
             main_provider = providers_for_all_labels[0]
             messages.append(

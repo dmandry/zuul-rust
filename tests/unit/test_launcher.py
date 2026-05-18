@@ -1671,6 +1671,26 @@ class TestLauncher(LauncherBaseTestCase):
             dict(name='check-job', result='SUCCESS', changes='1,1'),
         ], ordered=False)
 
+    @simple_layout('layouts/launcher-nodepool-paused-parent.yaml',
+                   enable_nodepool=True)
+    def test_nodepool_paused_parent(self):
+        # Test that a nodeset request for a job with a launcher label
+        # that depends on a paused job with a Nodepool legacy label is
+        # fulfilled and the preferred provider correctly ignored.
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.executor_server.returnData(
+            'parent-job', A,
+            {'zuul': {'pause': True}}
+        )
+
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='parent-job', result='SUCCESS', changes='1,1'),
+            dict(name='child-job', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     @mock.patch(
         'zuul.driver.aws.awsendpoint.AwsProviderEndpoint._createInstance',
