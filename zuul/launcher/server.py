@@ -1118,6 +1118,9 @@ class Launcher:
     DELETE_TIMEOUT = 600
     MAX_QUOTA_AGE = 5 * 60  # How long to keep the quota information cached
     _stats_interval = 30
+    # If subnodes do not appear within this window, assume a crash and
+    # clean them up.
+    SUBNODE_SYNC_TIME = 300
 
     def __init__(self, config, connections, _hostname=None):
         # _hostname is only used by the unit tests
@@ -1773,43 +1776,40 @@ class Launcher:
         else:
             args['tags'] = provider.getNodeTags(
                 self.system.system_id, label, node_uuid)
-        if not (label.slots and label.slots > 1):
+        subnodes = []
+        if label.slots and label.slots > 1:
+            for slot in range(max(label.slots, 0)):
+                subnodes.append(uuid.uuid4().hex)
+            args['subnodes'] = subnodes
+        else:
             args.update(request_args)
         node_class = provider.driver.getProviderNodeClass()
         node = node_class.new(ctx, **args)
         log.debug("Requested node %s", node)
-        subnodes = []
         retnode = node
 
-        if label.slots and label.slots > 1:
-            for slot in range(max(label.slots, 0)):
-                if slot == 0:
-                    merged_subnode_args = {}
-                    merged_subnode_args.update(subnode_args)
-                    merged_subnode_args.update(request_args)
-                else:
-                    merged_subnode_args = subnode_args
-                subnode = self._createSubNode(
-                    ctx, node, merged_subnode_args, slot)
-                log.debug("Requested subnode %s for node %s", subnode, node)
-                subnodes.append(subnode.uuid)
-                if slot == 0:
-                    retnode = subnode
-                    if request is not None:
-                        # Assign the sub node
-                        subnode.assign(ctx, **assign_args)
-            node.updateAttributes(
-                ctx,
-                subnodes=subnodes,
-            )
-        elif request is not None:
+        for slot, subnode_uuid in enumerate(subnodes):
+            if slot == 0:
+                merged_subnode_args = {}
+                merged_subnode_args.update(subnode_args)
+                merged_subnode_args.update(request_args)
+            else:
+                merged_subnode_args = subnode_args
+            subnode = self._createSubNode(
+                ctx, node, merged_subnode_args, slot, subnode_uuid)
+            log.debug("Requested subnode %s for node %s", subnode, node)
+            if slot == 0:
+                retnode = subnode
+                if request is not None:
+                    # Assign the sub node
+                    subnode.assign(ctx, **assign_args)
+        if not subnodes and request is not None:
             # Assign the main (only) node
             node.assign(ctx, **assign_args)
         return retnode
 
-    def _createSubNode(self, context, node, args, slot):
-        # Get a new uuid for the subnode
-        args['uuid'] = uuid.uuid4().hex
+    def _createSubNode(self, context, node, args, slot, subnode_uuid):
+        args['uuid'] = subnode_uuid
         # Subnodes use no quota
         args['quota'] = model.QuotaInformation()
         args['state'] = node.state
@@ -2116,6 +2116,12 @@ class Launcher:
 
     def _checkNodeCreate(self, node, log):
         if isinstance(node, SubnodeProviderNode):
+            if self.api.getProviderNode(node.main_node_id) is None:
+                self.wake_event.set()
+                now = time.time()
+                if (now - node.request_time > self.SUBNODE_SYNC_TIME):
+                    raise ProviderNodeError(
+                        "Main node not present")
             return
         # Log messages that we will only emit if they are interesting
         messages = []
@@ -2166,10 +2172,23 @@ class Launcher:
                     self.wake_event.set()
                     return
 
-                # Note this method has the side effect of updating
-                # node info from the instance.
                 if self._checkNodescanRequest(node, log):
                     if node.subnodes:
+                        # Handle a race where we finish building the
+                        # main node very quickly (ie, static driver)
+                        # before we have completely written all the
+                        # subnode records.
+                        for subnode_id in node.subnodes:
+                            if not self.api.getProviderNode(subnode_id):
+                                log.warning("Subnode %s does not exist",
+                                            subnode_id)
+                                now = time.time()
+                                if (now - node.request_time >
+                                    self.SUBNODE_SYNC_TIME):
+                                    raise ProviderNodeError(
+                                        "Subnodes not present at creation")
+                                self.wake_event.set()
+                                return
                         state = node.State.SLOT_HOST
                     else:
                         state = node.State.READY

@@ -3919,6 +3919,48 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
             except NoNodeError:
                 break
 
+    @simple_layout('layouts/nodepool-subnodes.yaml', enable_nodepool=True)
+    @okay_tracebacks('_checkNodeCreate')
+    def test_subnodes_crash_during_create(self):
+        # Test that we clean up subnodes if a launcher crashes while
+        # creating them after having created the main node.
+        self.useFixture(fixtures.MonkeyPatch(
+            'zuul.launcher.server.Launcher.SUBNODE_SYNC_TIME',
+            2))
+
+        event = threading.Event()
+        orig_getProviderNode = zuul.zk.launcher.LauncherApi.getProviderNode
+
+        def getProviderNode(*args, **kw):
+            if event.is_set():
+                return orig_getProviderNode(*args, **kw)
+
+        self.useFixture(fixtures.MonkeyPatch(
+            'zuul.zk.launcher.LauncherApi.getProviderNode',
+            getProviderNode))
+
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'], timeout=None)
+
+        for _ in iterate_timeout(10, "main to fail"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            if len(nodes) != 3:
+                continue
+            # Get a list with the main node first and the subnodes last
+            nodes.sort(key=lambda x: len(x.subnodes))
+            nodes.reverse()
+            main = nodes[0]
+            if main.state == main.State.FAILED:
+                break
+        event.set()
+
+        # The rest is just cleanup; the request will be retried and
+        # fulfilled.
+        for _ in iterate_timeout(60, "request to be fulfilled"):
+            request.refresh(ctx)
+            if request.state == model.NodesetRequest.State.FULFILLED:
+                break
+
     @simple_layout('layouts/nodepool-subnodes-ready.yaml',
                    enable_nodepool=True)
     def test_subnodes_max_ready_age(self):
