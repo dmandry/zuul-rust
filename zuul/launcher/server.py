@@ -1647,7 +1647,7 @@ class Launcher:
                 if main_provider.canonical_name == main_provider_name:
                     break
             else:
-                raise Exception(
+                raise NodesetRequestError(
                     f"Unable to find provider {main_provider_name}")
         elif providers_for_all_labels:
             main_provider = providers_for_all_labels[0]
