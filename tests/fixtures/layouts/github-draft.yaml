@@ -1,0 +1,24 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      github:
+        - event: pull_request
+          action: converted_to_draft
+        - event: pull_request
+          action: ready_for_review
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+
+- job:
+    name: test-job
+    run: playbooks/run.yaml
+
+- project:
+    name: org/project
+    check:
+      jobs:
+        - test-job
