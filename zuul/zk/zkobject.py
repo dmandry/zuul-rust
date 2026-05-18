@@ -515,6 +515,9 @@ class ZKObject:
         path = self.getPath()
         if context.sessionIsInvalid():
             raise Exception("ZooKeeper session or lock not valid")
+        if hasattr(self, '_lock') and not create:
+            if not self._lock:
+                raise Exception("Saving outside of lock")
         compressed_data = self._compressData(data)
 
         try:

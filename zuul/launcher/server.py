@@ -2199,6 +2199,8 @@ class Launcher:
         new_state = state
         for subnode_id in node.subnodes:
             if subnode := self.api.getProviderNode(subnode_id):
+                if not subnode._lock:
+                    subnode._set(_lock='foo')
                 with subnode.activeContext(node._active_context):
                     if state == node.State.SLOT_HOST:
                         # This is the initial creation, so we copy
@@ -2206,6 +2208,8 @@ class Launcher:
                         subnode.updateFromMainNode(node)
                         new_state = node.State.READY
                     subnode.setState(new_state)
+                if subnode._lock == 'foo':
+                    subnode._set(_lock=None)
                 log.debug("Marking subnode %s as %s",
                           subnode, subnode.state)
 
