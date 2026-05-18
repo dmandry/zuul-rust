@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "192747f2_239e9dc1",
+        "filename": "zuul/model.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 10923,
+      "author": {
+        "id": 39140
+      },
+      "writtenOn": "2026-05-18T13:40:44Z",
+      "side": 1,
+      "message": "Maybe this is not the right place, but we we will not get feedback for invalid parameters, which would be nice - logging or even returning 400 or raising exception would be fine with me.  For example, if I enqueue with a mistyped multi-select value, it will silently get dropped.\n\nI do not see required parameters enforced.\n\nAlso maybe raise an exception if I try to enqueue with parameters but the config has none.\n\nShould we prefix variable names?  Will we be able to override important variables with this?",
+      "revId": "1e5dba6e50213594f929d3e9d18f8058a24e2e3b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
