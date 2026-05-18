@@ -2377,7 +2377,7 @@ class Launcher:
                 # Snapshot is complete
                 snapshot.complete = True
                 snapshot.external_id = external_id
-                snapshot.releaseLock(ctx)
+            snapshot.releaseLock(ctx)
 
     def _cleanupNode(self, node, log):
         with self.createZKContext(node._lock, self.log) as ctx:
