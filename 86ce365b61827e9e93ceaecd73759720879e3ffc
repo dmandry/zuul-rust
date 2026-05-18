@@ -24,6 +24,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "1a89af6a_200c432c",
+        "filename": "zuul/driver/sql/alembic/versions/268b2da7a66e_postgres18_bundle_fix.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 55,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-18T17:06:20Z",
+      "side": 1,
+      "message": "The statement execution failed, so if we don\u0027t rollback here, then below we will execute another statement after a failed transaction, which is an error.",
+      "parentUuid": "5f2017cf_794cb34e",
+      "revId": "86ce365b61827e9e93ceaecd73759720879e3ffc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "17e9e9e4_10074468",
