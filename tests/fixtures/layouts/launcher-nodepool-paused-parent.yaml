@@ -1,0 +1,86 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+
+- job:
+    name: parent-job
+    run: playbooks/run.yaml
+    nodeset:
+      nodes:
+        - name: controller
+          label: debian-legacy
+
+- job:
+    name: child-job
+    run: playbooks/run.yaml
+    nodeset:
+      nodes:
+        - name: controller
+          label: debian-normal
+
+- project:
+    name: org/project
+    check:
+      jobs:
+        - parent-job
+        - child-job:
+            dependencies: parent-job
+
+# Only debian-normal is known to the launcher. The debian-legacy label is not
+# configured here, so jobs using it will fall back to Nodepool.
+
+- image:
+    name: debian
+    type: cloud
+
+- flavor:
+    name: normal
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    launch-timeout: 600
+    launch-attempts: 2
+    object-storage:
+      bucket-name: zuul
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 300
+      key-name: zuul
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: debian-normal
