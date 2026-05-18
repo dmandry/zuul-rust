@@ -16,6 +16,24 @@
       "message": "Maybe this is not the right place, but we we will not get feedback for invalid parameters, which would be nice - logging or even returning 400 or raising exception would be fine with me.  For example, if I enqueue with a mistyped multi-select value, it will silently get dropped.\n\nI do not see required parameters enforced.\n\nAlso maybe raise an exception if I try to enqueue with parameters but the config has none.\n\nShould we prefix variable names?  Will we be able to override important variables with this?",
       "revId": "1e5dba6e50213594f929d3e9d18f8058a24e2e3b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4e7212ec_728a9a62",
+        "filename": "zuul/model.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 10923,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-18T13:58:08Z",
+      "side": 1,
+      "message": "Regarding validation, that\u0027s correct.  The design document[1] specifies only that the \"Web UI performs minimal validation that required fields are present\".  The reason we don\u0027t check anything on the server side is because we also don\u0027t have any type declarations or validation for job variables.  The types in the spec are designed to create an input form, but not otherwise change the way Zuul operates with parameters.  That\u0027s at least partly to maintain parity with other variable sources.\n\nIf you need to enforce certain parameters in a job, then you can still do that in the job itself (perhaps in a pre-run playbook, with a zuul_return task that sets retry to false).  That hardens the job against incorrect variables from other sources too.\n\nAs long as a user uses the web UI and not the API directly, then the parameters should be submitted with the correct form (and with the required parameters).\n\nRegarding variable names: In the documentation change in this series, you can see where parameters fit in the hierarchy: https://review.opendev.org/c/zuul/zuul/+/987113/6/doc/source/job-content.rst\n\nParameters can override project variables, file variables, and parent job results.  They can not override job variables, secrets,  extra-variables, and site-wide variables.  So if you want a job to use a variable that is not overridden by parameters, select one of those.  The fact that parameters can not override job variables is quite intentional -- that way you can still define a job with some variables, make it parameterized, and still be sure that the job itself operates as designed.\n\n[1] https://zuul-ci.org/docs/zuul/latest/developer/specs/parameterized-builds.html",
+      "parentUuid": "192747f2_239e9dc1",
+      "revId": "1e5dba6e50213594f929d3e9d18f8058a24e2e3b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
