@@ -130,6 +130,23 @@ class SessionAwareReadLock(SessionAwareMixin, ReadLock):
     pass
 
 
+class FakeLock:
+    """A lock that implements the protocol but does not write to ZK.
+    Use this when intentionally violating a lock protocol."""
+
+    def __init__(self, *args, **kw):
+        pass
+
+    def is_still_valid(self):
+        return True
+
+    def acquire(self, blocking, timeout):
+        return True
+
+    def release(self):
+        pass
+
+
 @contextmanager
 def locked(lock, blocking=True, timeout=None):
     try:

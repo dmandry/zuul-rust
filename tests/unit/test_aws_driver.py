@@ -724,7 +724,8 @@ class TestAwsDriver(AwsBaseTest):
                 break
 
         with self.createZKContext(None) as ctx:
-            with target_upload.activeContext(ctx):
+            with (target_upload.locked(ctx, fake=True),
+                  target_upload.activeContext(ctx)):
                 self.log.debug("Resetting upload %s to pending",
                                target_upload)
                 target_upload.state = target_upload.State.PENDING

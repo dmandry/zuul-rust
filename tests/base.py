@@ -17,7 +17,7 @@
 import configparser
 from collections import OrderedDict, Counter
 from configparser import ConfigParser
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import errno
 import gc
 from io import StringIO
@@ -3272,7 +3272,12 @@ class ZuulTestCase(BaseTestCase):
         if not requests:
             requests = self.launcher.api.getNodesetRequests()
         for req in requests:
-            req.updateAttributes(ctx, state=req.State.REQUESTED)
+            if req._lock:
+                lock_context = nullcontext()
+            else:
+                lock_context = req.locked(ctx, fake=True)
+            with lock_context:
+                req.updateAttributes(ctx, state=req.State.REQUESTED)
 
     @property
     def merge_job_history(self):

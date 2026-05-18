@@ -1509,7 +1509,8 @@ class TestLauncher(LauncherBaseTestCase):
             if node.request_id is None:
                 break
 
-        with node.activeContext(ctx):
+        with (node.locked(ctx, fake=True),
+              node.activeContext(ctx)):
             self.log.debug("Set node to used")
             node.setState(node.State.USED)
 
@@ -1625,8 +1626,9 @@ class TestLauncher(LauncherBaseTestCase):
         # without error.
         self.log.debug("Resetting request state")
         ctx = self.createZKContext(None)
-        request.updateAttributes(
-            ctx, state=model.NodesetRequest.State.REQUESTED)
+        with request.locked(ctx, fake=True):
+            request.updateAttributes(
+                ctx, state=model.NodesetRequest.State.REQUESTED)
         self.launcher.wake_event.set()
         self.log.debug("Waiting for request")
         for _ in iterate_timeout(60, "request to be accepted"):
@@ -2446,7 +2448,8 @@ class TestLauncher(LauncherBaseTestCase):
             result_events = list(result_queue)
             self.assertEqual(0, len(result_events))
             ctx = self.createZKContext(None)
-            request.updateAttributes(ctx, event_state=0)
+            with request.locked(ctx, fake=True):
+                request.updateAttributes(ctx, event_state=0)
             result_events = list(result_queue)
             for _ in iterate_timeout(
                     timeout, "nodeset request to be fulfilled"):
@@ -3356,7 +3359,8 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
 
         # Fulfill only the first request
         ctx = self.createZKContext(None)
-        reqs[0].updateAttributes(ctx, state=reqs[0].State.REQUESTED)
+        with reqs[0].locked(ctx, fake=True):
+            reqs[0].updateAttributes(ctx, state=reqs[0].State.REQUESTED)
         for x in iterate_timeout(30, 'fulfill request'):
             reqs = self.launcher.api.getNodesetRequests()
             if len(reqs) < 4:

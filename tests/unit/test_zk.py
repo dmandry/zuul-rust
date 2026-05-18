@@ -3185,7 +3185,8 @@ class TestLauncherApi(ZooKeeperBaseTestCase):
                 requested.quota.get('instances', 0) == 1):
                 break
 
-        node1.updateAttributes(context, state=node_class.State.BUILDING)
+        with node1.locked(context, fake=True):
+            node1.updateAttributes(context, state=node_class.State.BUILDING)
         for _ in iterate_timeout(10, "cache to sync"):
             used = self.api.nodes_cache.getQuota(provider)
             requested = self.api.nodes_cache.getQuota(

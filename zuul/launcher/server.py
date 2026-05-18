@@ -2209,13 +2209,26 @@ class Launcher:
         new_state = state
         for subnode_id in node.subnodes:
             if subnode := self.api.getProviderNode(subnode_id):
-                with subnode.activeContext(node._active_context):
-                    if state == node.State.SLOT_HOST:
-                        # This is the initial creation, so we copy
-                        # data and set the state to READY.
-                        subnode.updateFromMainNode(node)
-                        new_state = node.State.READY
-                    subnode.setState(new_state)
+                # We intentionally violate the locking protocol here
+                # because we only call this method when acting on the
+                # main node, and we know that all other launchers will
+                # avoid touching subnodes until the main node is
+                # ready.  We might have the lock if the subnode is
+                # being handled by this launcher, so we handle both
+                # cases.
+                if subnode._lock:
+                    lock_context = nullcontext()
+                else:
+                    lock_context = subnode.locked(
+                        node._active_context, fake=True)
+                with lock_context:
+                    with subnode.activeContext(node._active_context):
+                        if state == node.State.SLOT_HOST:
+                            # This is the initial creation, so we copy
+                            # data and set the state to READY.
+                            subnode.updateFromMainNode(node)
+                            new_state = node.State.READY
+                        subnode.setState(new_state)
                 log.debug("Marking subnode %s as %s",
                           subnode, subnode.state)
 
