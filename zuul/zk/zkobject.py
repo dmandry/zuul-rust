@@ -35,7 +35,7 @@ from kazoo.retry import KazooRetry
 from zuul.zk import sharding
 from zuul.zk import ZooKeeperClient
 from zuul.zk.exceptions import LockException
-from zuul.zk.locks import SessionAwareLock
+from zuul.zk.locks import FakeLock, SessionAwareLock
 
 
 class BaseZKContext:
@@ -515,6 +515,9 @@ class ZKObject:
         path = self.getPath()
         if context.sessionIsInvalid():
             raise Exception("ZooKeeper session or lock not valid")
+        if hasattr(self, '_lock') and not create:
+            if not self._lock:
+                raise Exception("Saving outside of lock")
         compressed_data = self._compressData(data)
 
         try:
@@ -634,10 +637,11 @@ class LockableZKObjectMixin(abc.ABC):
                 time.sleep(1)
 
     @contextmanager
-    def locked(self, context, blocking=True, timeout=None, ensure_path=None):
+    def locked(self, context, blocking=True, timeout=None, ensure_path=None,
+               fake=False):
         if not (lock := self.acquireLock(
                 context, blocking=blocking,
-                timeout=timeout, ensure_path=ensure_path)):
+                timeout=timeout, ensure_path=ensure_path, fake=fake)):
             raise LockException(f"Failed to acquire lock on {self}")
         try:
             yield lock
@@ -648,7 +652,7 @@ class LockableZKObjectMixin(abc.ABC):
                 context.log.exception("Failed to release lock on %s", self)
 
     def acquireLock(self, context, blocking=True, timeout=None,
-                    identifier=None, ensure_path=None):
+                    identifier=None, ensure_path=None, fake=False):
         # For most objects, we create the lock path when we create the
         # object in ZK, so there is no need to ensure the path on
         # lock.  Setting ensure_path to false lets us avoid
@@ -660,10 +664,14 @@ class LockableZKObjectMixin(abc.ABC):
         lock = None
         path = self.getLockPath()
         identifier = identifier or context.default_lock_identifier
+        if fake:
+            lock_class = FakeLock
+        else:
+            lock_class = SessionAwareLock
         try:
-            lock = SessionAwareLock(context.client, path,
-                                    identifier=identifier,
-                                    ensure_path=ensure_path)
+            lock = lock_class(context.client, path,
+                              identifier=identifier,
+                              ensure_path=ensure_path)
             have_lock = lock.acquire(blocking, timeout)
         except NoNodeError:
             # Request disappeared
