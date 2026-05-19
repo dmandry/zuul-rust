@@ -104,6 +104,7 @@ class BuildsPageComponent extends React.Component {
           'EXCEPTION',
           'NO_HANDLE',
           'SNAPSHOT_FAILURE',
+          'SECRET_EXPOSURE',
         ],
         fuzzy: false,
       },
