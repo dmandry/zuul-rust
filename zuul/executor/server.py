@@ -556,8 +556,9 @@ class LogReceiver:
     TYPE_MESSAGE = 1
     TYPE_JSON = 2
 
-    def __init__(self, zuul_event_id, build, jobdir):
+    def __init__(self, zuul_event_id, build, jobdir, stop_conn):
         self.jobdir = jobdir
+        self.build = build
         self.log = get_annotated_logger(
             logging.getLogger("zuul.ExecutorServer"),
             zuul_event_id, build=build)
@@ -567,12 +568,16 @@ class LogReceiver:
                                             name=self.name)
         self.server = None
         self.job_output_file = None
+        self.stop_conn = stop_conn
 
     def start(self):
         self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
         self.proc.start()
         # Wait for the child to send None to tell us it's started up
         self.parent_conn.recv()
+
+    def _stopJob(self):
+        self.stop_conn.send(self.build)
 
     def _addLineToJobOutput(self, message):
         # Only used within the subprocess
@@ -1196,6 +1201,7 @@ class AnsibleJob(object):
     RESULT_UNREACHABLE = 3
     RESULT_ABORTED = 4
     RESULT_DISK_FULL = 5
+    RESULT_SECRET_EXPOSURE = 6
 
     RESULT_MAP = {
         RESULT_NORMAL: 'RESULT_NORMAL',
@@ -1203,6 +1209,7 @@ class AnsibleJob(object):
         RESULT_UNREACHABLE: 'RESULT_UNREACHABLE',
         RESULT_ABORTED: 'RESULT_ABORTED',
         RESULT_DISK_FULL: 'RESULT_DISK_FULL',
+        RESULT_SECRET_EXPOSURE: 'RESULT_SECRET_EXPOSURE',
     }
 
     semaphore_sleep_time = 30
@@ -1430,6 +1437,7 @@ class AnsibleJob(object):
                 zuul_event_id=self.zuul_event_id,
                 build=self.build_request.uuid,
                 jobdir=self.jobdir,
+                stop_conn=self.executor_server.stop_worker_parent_conn,
             )
             self.log_receiver.start()
 
@@ -1901,6 +1909,8 @@ class AnsibleJob(object):
 
         if self.aborted_reason == self.RESULT_DISK_FULL:
             result = 'DISK_FULL'
+        elif self.aborted_reason == self.RESULT_SECRET_EXPOSURE:
+            result = 'SECRET_EXPOSURE'
         data, secret_data = self.getResultData()
         warnings = []
         self.mapLines(args, data, item_commit, warnings)
@@ -4388,6 +4398,13 @@ class ExecutorServer(BaseMergeServer):
         self.semaphore_handler = SemaphoreHandler(
             self.zk_client, self.statsd, None, None, None)
 
+        self.stop_worker_parent_conn, self.stop_worker_child_conn =\
+            multiprocessing.Pipe()
+        self.stop_worker = threading.Thread(
+            target=self.runStopWorker,
+            name="ExecutorServerStopWorkerThread",
+        )
+
     def _get_key_store_password(self):
         try:
             return self.config["keystore"]["password"]
@@ -4424,6 +4441,7 @@ class ExecutorServer(BaseMergeServer):
             self.log.warning('Multiprocessing context has already been set')
         self.process_worker = ProcessPoolExecutor()
 
+        self.stop_worker.start()
         self.build_worker.start()
 
         self.log.debug("Starting command processor")
@@ -4502,6 +4520,9 @@ class ExecutorServer(BaseMergeServer):
 
         if self.process_worker is not None:
             self.process_worker.shutdown()
+
+        self.stop_worker_parent_conn.send(None)
+        self.stop_worker.join()
 
         if self.statsd:
             base_key = 'zuul.executor.{hostname}'
@@ -4832,6 +4853,13 @@ class ExecutorServer(BaseMergeServer):
             self.completeBuild(build_request, result)
             return False
         return True
+
+    def runStopWorker(self):
+        while self._running:
+            msg = self.stop_worker_child_conn.recv()
+            if msg is None:
+                return
+            self.stopJobByUnique(msg, reason=AnsibleJob.RESULT_SECRET_EXPOSURE)
 
     def run_governor(self):
         while not self.governor_stop_event.wait(10):
