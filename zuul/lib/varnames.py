@@ -30,6 +30,7 @@ def check_varnames(var):
         # sure that a job doesn't pass variables named zuul or nodepool.
         'zuul',
         'zuul_node',
+        'zuul_user_dir',
         'nodepool',
         'unsafe_vars',
         # Block some connection related variables so they cannot be
