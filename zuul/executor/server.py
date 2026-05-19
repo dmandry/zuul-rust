@@ -136,16 +136,6 @@ def _safe_unlink(path):
     return os.unlink(resolved)
 
 
-def _recursive_values(d):
-    for k, v in d.items():
-        if isinstance(v, dict):
-            yield from _recursive_values(v)
-        elif isinstance(v, list):
-            yield from v
-        else:
-            yield v
-
-
 class VerboseCommand(commandsocket.Command):
     name = 'verbose'
     help = 'Enable Ansible verbose mode'
@@ -758,6 +748,7 @@ class JobDirPlaybook(object):
         self.secrets_keys = set()
         self.secrets_dict = {}
         self.secrets_oidc = {}
+        self.secrets_values = []
         self.semaphores = []
         self.nesting_level = None
         self.cleanup = False
@@ -2797,7 +2788,9 @@ class AnsibleJob(object):
         for role in playbook['roles']:
             self.prepareRole(jobdir_playbook, role, args)
 
-        jobdir_playbook.secrets_dict, jobdir_playbook.secrets_oidc = \
+        (jobdir_playbook.secrets_dict,
+         jobdir_playbook.secrets_oidc,
+         jobdir_playbook.secrets_values) = \
             self.decryptSecrets(playbook['secrets'])
         secrets = self.mergeSecretVars(jobdir_playbook.secrets_dict,
                                        jobdir_playbook.secrets_oidc)
@@ -2826,11 +2819,14 @@ class AnsibleJob(object):
         :param dict secrets: The playbook secrets dictionary from the
             scheduler
 
-        :returns: Tuple of decrypted secrets dictionary and oidc dictionary
+        :returns: Tuple of decrypted secrets dictionary, oidc dictionary,
+                  and secret values of only the previously encrypted
+                  secrets
 
         """
         ret_secret_data = {}
         ret_secret_oidc = {}
+        ret_secret_values = []
         with self.executor_server.zk_context as ctx:
             blobstore = BlobStore(ctx)
             for secret_name, secret_index in secrets.items():
@@ -2841,26 +2837,29 @@ class AnsibleJob(object):
                 else:
                     frozen_secret = self.job.secrets[secret_index]
                 secret = zuul.model.Secret(secret_name, None)
-                decrypted_dict = yaml.encrypted_load(
+                encrypted_dict = yaml.encrypted_load(
                     frozen_secret['encrypted_data'])
-                if "secret_oidc" not in decrypted_dict:
+                if "secret_oidc" not in encrypted_dict:
                     # MODEL_API < 35
-                    secret.secret_data = decrypted_dict
+                    secret.secret_data = encrypted_dict
                 else:
-                    secret.secret_data = decrypted_dict['secret_data']
-                    secret.secret_oidc = decrypted_dict['secret_oidc']
+                    secret.secret_data = encrypted_dict['secret_data']
+                    secret.secret_oidc = encrypted_dict['secret_oidc']
 
                 if secret.secret_data:
                     private_secrets_key, public_secrets_key = \
                         self.executor_server.keystore.getProjectSecretsKeys(
                             frozen_secret['connection_name'],
                             frozen_secret['project_name'])
+                    ret_secret_values.extend(secret.collectEncryptedValues(
+                        private_secrets_key
+                    ))
                     secret = secret.decrypt(private_secrets_key)
                     ret_secret_data[secret_name] = secret.secret_data
                 else:
                     ret_secret_oidc[secret_name] = secret.secret_oidc
 
-        return ret_secret_data, ret_secret_oidc
+        return ret_secret_data, ret_secret_oidc, ret_secret_values
 
     def checkoutTrustedProject(self, project, branch, args):
         pi = self.jobdir.getTrustedProject(project.canonical_name,
@@ -3476,7 +3475,7 @@ class AnsibleJob(object):
         # For all playbooks, extract secret content
         values = []
         for jobdir_playbook in self.jobdir.all_playbooks:
-            values.extend(_recursive_values(jobdir_playbook.secrets_dict))
+            values.extend(jobdir_playbook.secrets_values)
         # Send secret content to logreceiver
         self.log_receiver.sendSecrets(values)
 
