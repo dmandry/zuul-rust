@@ -18,6 +18,14 @@ from zuul.exceptions import VariableNameError
 
 VARNAME_RE = re.compile(r'^[A-Za-z0-9_]+$')
 
+RESERVED_NAMES = {
+    'zuul',
+    'zuul_node',
+    'nodepool',
+    'unsafe_vars',
+    'zuul_user_dir',
+}
+
 
 def check_varnames(var):
     for varname in var.keys():
@@ -25,13 +33,9 @@ def check_varnames(var):
             raise VariableNameError(
                 "Variable names may only contain letters, "
                 "numbers, and underscores")
-    reserved_vars = [
-        # We block these in configloader, but block it here too to make
-        # sure that a job doesn't pass variables named zuul or nodepool.
-        'zuul',
-        'zuul_node',
-        'nodepool',
-        'unsafe_vars',
+    # We block RESERVED_NAMES in configloader, but block it here too
+    # to make sure that a job doesn't pass reserved variables.
+    reserved_vars = list(RESERVED_NAMES) + [
         # Block some connection related variables so they cannot be
         # overridden by jobs to bypass security mechanisms.
         'ansible_connection',

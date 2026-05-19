@@ -1517,6 +1517,20 @@ executor running the job is available:
       driver's documentation, e.g. the AWS driver's
       :ref:`aws-driver-node-properties`.
 
+.. var:: zuul_user_dir
+
+   This variable is equivalent to ``{{ ansible_user_dir }}`` on remote
+   nodes, but is set to ``{{ zuul.executor.work_root }}`` on the
+   executor (``localhost``).  It is recommended to use this variable
+   rather than `ansible_user_dir` in roles that are designed to work
+   either locally on the executor or on remote nodes.
+
+   .. note::
+
+      A future version of Zuul will separate the home directory and
+      work directory on the executor, so that roles that currently use
+      `ansible_user_dir` in both places will no longer work.
+
 .. var:: nodepool
 
    Information about each host from Nodepool is supplied in the

@@ -1363,11 +1363,11 @@ class ProjectTemplateParser(object):
             project_template.setImpliedBranchMatchers(branches)
 
         variables = conf.get('vars', {})
-        forbidden = {'zuul', 'zuul_node', 'nodepool', 'unsafe_vars'}
         if variables:
-            if set(variables.keys()).intersection(forbidden):
-                raise Exception("Variables named 'zuul', 'zuul_node', "
-                                "'nodepool', or 'unsafe_vars' "
+            if forbidden := set(variables.keys()).intersection(
+                    varnames.RESERVED_NAMES):
+                forbidden = ','.join(list(forbidden))
+                raise Exception(f"Variables named {forbidden} "
                                 "are not allowed.")
             project_template.variables = variables
 

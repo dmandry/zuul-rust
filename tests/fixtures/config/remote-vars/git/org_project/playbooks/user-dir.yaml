@@ -1,0 +1,17 @@
+- hosts: controller
+  tasks:
+    - debug:
+        var:
+          zuul_user_dir
+    - assert:
+        that:
+          - zuul_user_dir == '/home/zuul'
+
+- hosts: localhost
+  tasks:
+    - debug:
+        var:
+          zuul_user_dir
+    - assert:
+        that:
+          - zuul_user_dir is match('.*?/builds/.*?/work')
