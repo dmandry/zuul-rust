@@ -9909,6 +9909,89 @@ class TestJobOutput(AnsibleZuulTestCase):
         result = j[1]['plays'][0]['play']['name']
         self.assertIn(expected_str, result)
 
+    def test_job_output_redact_secrets(self):
+        self.executor_server.keep_jobdir = True
+        A = self.fake_gerrit.addFakeChange('org/project7', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        es = 'expose-secrets'
+        self.assertHistory([
+            dict(name=f'{es}-txt-ignore', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-json-ignore', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-txt-redact', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-json-redact', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-txt-fail', result='ABORTED', changes='1,1'),
+            dict(name=f'{es}-json-fail', result='ABORTED', changes='1,1'),
+        ], ordered=False)
+
+        # Check Ignore
+        job1 = self.getJobFromHistory(f'{es}-txt-ignore')
+        job2 = self.getJobFromHistory(f'{es}-json-ignore')
+        data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
+        self.assertEqual(3, len(data))
+        self.assertEqual('Username: test-username',
+                         data[1]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+        # This is a secret exposed
+        self.assertEqual('Password: test-password',
+                         data[2]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+
+        job_output = self._get_file(job1, 'work/logs/job-output.txt')
+        self.log.info(job_output)
+        self.assertIn("Job console starting", job_output)
+        self.assertIn("Username: test-username", job_output)
+        self.assertIn("Okay to expose this: test-password", job_output)
+        # This is a secret exposed
+        self.assertIn("Password: test-password", job_output)
+
+        # Check Redact
+        job1 = self.getJobFromHistory(f'{es}-txt-redact')
+        job2 = self.getJobFromHistory(f'{es}-json-redact')
+        data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
+        self.assertEqual(3, len(data))
+        self.assertEqual('Username: test-username',
+                         data[1]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+        # This is a redaction
+        self.assertEqual('[Zuul] Secret detected in output',
+                         data[2]['plays'][0]['play']['name'])
+
+        job_output = self._get_file(job1, 'work/logs/job-output.txt')
+        self.log.info(job_output)
+        self.assertIn("Job console starting", job_output)
+        self.assertIn("Username: test-username", job_output)
+        self.assertIn("Okay to expose this: test-password", job_output)
+        # This is a redaction
+        self.assertNotIn("Password:", job_output)
+        self.assertIn("[Zuul] Secret detected in output", job_output)
+
+        # We check the OIDC secret here
+        secrets = self._getSecrets(
+            f'{es}-txt-redact', 'playbooks'
+        )[0]
+        self.assertEqual(len(secrets), 2)
+        token = secrets['oidc_secret'].value
+        self.assertNotIn("OIDC:", job_output)
+        self.assertNotIn(token, job_output)
+
+        # Check Fail
+        job1 = self.getJobFromHistory(f'{es}-txt-fail')
+        job2 = self.getJobFromHistory(f'{es}-json-fail')
+        data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
+        self.assertEqual(2, len(data))
+        self.assertEqual('Username: test-username',
+                         data[1]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+
+        job_output = self._get_file(job1, 'work/logs/job-output.txt')
+        self.log.info(job_output)
+        self.assertIn("Job console starting", job_output)
+        self.assertIn("Username: test-username", job_output)
+        self.assertIn("Okay to expose this: test-password", job_output)
+        self.assertNotIn("Password:", job_output)
+
 
 class TestNoLog(AnsibleZuulTestCase):
     tenant_config_file = 'config/ansible-no-log/main.yaml'
