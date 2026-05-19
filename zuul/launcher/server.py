@@ -1761,8 +1761,6 @@ class Launcher:
         if request is not None:
             with trace.use_span(request._span):
                 node_span = self.tracer.start_span("ProviderNode")
-            request_args['tags'] = provider.getNodeTags(
-                self.system.system_id, label, node_uuid, provider, request)
             request_args['span_info'] = tracing.getSpanInfo(node_span)
             request_args['zuul_event_id'] = request.zuul_event_id
             request_args['request_time'] = request.request_time
@@ -1770,11 +1768,12 @@ class Launcher:
             assign_args['request_id'] = request.uuid
             assign_args['min_request_version'] = request.getZKVersion() + 1
             assign_args['tenant_name'] = request.tenant_name
-        else:
-            args['tags'] = provider.getNodeTags(
-                self.system.system_id, label, node_uuid)
         if not (label.slots and label.slots > 1):
             args.update(request_args)
+        # Tags should definitely be set on the main node regardless;
+        # they are unnecessary on subnodes.
+        args['tags'] = provider.getNodeTags(
+            self.system.system_id, label, node_uuid, request)
         node_class = provider.driver.getProviderNodeClass()
         node = node_class.new(ctx, **args)
         log.debug("Requested node %s", node)
