@@ -1978,10 +1978,10 @@ class Launcher:
             state = node.next_state
             log.debug("Marking node %s as %s", node, state)
             with self.createZKContext(node._lock, self.log) as ctx:
-                with node.activeContext(ctx):
-                    node.setState(state)
                 node.unassign(ctx)
                 node.clearNextState(ctx)
+                with node.activeContext(ctx):
+                    node.setState(state)
 
         # Mark outdated nodes w/o a request for cleanup when ...
         if not request and (
