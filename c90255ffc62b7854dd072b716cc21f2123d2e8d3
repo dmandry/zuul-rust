@@ -33,6 +33,159 @@
       "message": "recheck",
       "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "39ccfa81_ce4c3f5e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "Overall the shape of this looks about right. The question in the test case is not the reason for my -1. Instead the -1 is for the requested schema change and replacement of additional logging with FalseWithReason.\n\nEssentially I would try to avoid diverging behaviors with other event filters too much. This also helps keep the size of the diff more manageable.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "20499c8d_904ed3bc",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 137,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "Since we hold jobs in build above that should prevent additional triggers of the timer from enqueueing additional builds right? I ask because I wonder if we can check `if len(self.builds) \u003d\u003d 3` instead of using `\u003e\u003d`.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ef375139_83321aaa",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 141,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "See above",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b0ce931d_74262ff3",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 158,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "See above question about pipeline behavior while hold_jobs_in_build is true. Can we assert that the length here is 1?",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6f33923a_0d9577fc",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 162,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "See above question about pipeline behavior while hold_jobs_in_build is true. Can we assert that the length here is 2?",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0f098311_7c5b2613",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "I think that most of the added logging in this change may be a bit much. Looking at other event filters like GerritEventFilter it doesn\u0027t appear we log like this there either. Instead that filter uses `return FalseWithReason` to capture why things don\u0027t match. I would rewrite this portion of the change to do that instead and drop all of this additional logging.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a0cbb720_01514bd6",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 34,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "Do we need to rename this parameter? I think it makes the code slightly less readable as it is less clear that parse_context is a parameter to this function.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a13c5f91_4434e37c",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 36,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "Similarly to my comment in the matches() function I wonder if we need all of this additional logging here. I don\u0027t think other triggers are logging to this level of detail. Maybe we can avoid this unless it becomes problematic in the future?\n\nThis comment applies to the new self.log.debug statements below as well.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9f43b78a_146c93eb",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 69,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T16:19:33Z",
+      "side": 1,
+      "message": "This should accept `scalar_or_list(v.Any(ZUUL_REGEX, str))` to match other uses of regexes. This allows regexes to be negated for example or to provide a list of different valid regexes. Which might make a good update to the existing test case.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
