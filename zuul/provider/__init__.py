@@ -717,13 +717,12 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
         return label in self.labels
 
     def getNodeTags(self, system_id, label, node_uuid,
-                    provider=None, request=None):
+                    request=None):
         """Return the tags that should be stored with the node
 
         :param str system_id: The Zuul system uuid
         :param ProviderLabel label: The node label
         :param str node_uuid: The node uuid
-        :param Provider provider: The cloud provider or None
         :param NodesetRequest request: The node request or None
         """
         tags = dict()

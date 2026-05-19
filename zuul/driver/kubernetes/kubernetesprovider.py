@@ -339,9 +339,9 @@ class KubernetesProvider(BaseProvider, subclass_id='kubernetes'):
         pass
 
     def getNodeTags(self, system_id, label, node_uuid,
-                    provider=None, request=None):
+                    request=None):
         tags = super().getNodeTags(system_id, label, node_uuid,
-                                   provider, request)
+                                   request)
         # So that we can disambiguate requests for namespaces and pods
         # (both of which create namespaces).
         tags['zuul_kubernetes_kind'] = label.kind
