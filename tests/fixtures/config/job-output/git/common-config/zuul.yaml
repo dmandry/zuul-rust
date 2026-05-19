@@ -97,6 +97,37 @@
     files:
       - postsyntax
 
+- secret:
+    name: test-secret
+    data:
+      username: test-username
+      password: !encrypted/pkcs1-oaep |
+        BFhtdnm8uXx7kn79RFL/zJywmzLkT1GY78P3bOtp4WghUFWobkifSu7ZpaV4NeO0s71Y
+        Usi1wGZZL0LveZjUN0t6OU1VZKSG8R5Ly7urjaSo1pPVIq5Rtt/H7W14Lecd+cUeKb4j
+        oeusC9drN3AA8a4oykcVpt1wVqUnTbMGC9ARMCQP6eopcs1l7tzMseprW4RDNhIuz3CR
+        gd0QBMPl6VDoFgBPB8vxtJw+3m0rqBYZCLZgCXekqlny8s2s92nJMuUABbJOEcDRarzi
+        bDsSXsfJt1y+5n7yOURsC7lovMg4GF/vCl/0YMKjBO5bpv9EM5fToeKYyPGSKQoHOnCY
+        ceb3cAVcv5UawcCic8XjhEhp4K7WPdYf2HVAC/qtxhbpjTxG4U5Q/SoppOJ60WqEkQvb
+        Xs6n5Dvy7xmph6GWmU/bAv3eUK3pdD3xa2Ue1lHWz3U+rsYraI+AKYsMYx3RBlfAmCeC
+        1ve2BXPrqnOo7G8tnUvfdYPbK4Aakk0ds/AVqFHEZN+S6hRBmBjLaRFWZ3QSO1NjbBxW
+        naHKZYT7nkrJm8AMCgZU0ZArFLpaufKCeiK5ECSsDxic4FIsY1OkWT42qEUfL0Wd+150
+        AKGNZpPJnnP3QYY4W/MWcKH/zdO400+zWN52WevbSqZy90tqKDJrBkMl1ydqbuw1E4ZH
+        vIs=
+
+- job:
+    name: expose-secrets-txt
+    run: playbooks/expose-secrets-txt.yaml
+    secrets:
+      - name: test_secret
+        secret: test-secret
+
+- job:
+    name: expose-secrets-json
+    run: playbooks/expose-secrets-json.yaml
+    secrets:
+      - name: test_secret
+        secret: test-secret
+
 - project:
     name: org/project
     check:
@@ -138,3 +169,10 @@
         - pre-syntax
         - run-syntax
         - post-syntax
+
+- project:
+    name: org/project7
+    check:
+      jobs:
+        - expose-secrets-txt
+        - expose-secrets-json
