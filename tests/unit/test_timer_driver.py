@@ -13,8 +13,70 @@
 # under the License.
 
 import time
+import datetime
+import zoneinfo
 
-from tests.base import ZuulTestCase, iterate_timeout
+from zuul.driver.timer.crontrigger import ZuulCronTrigger
+
+from tests.base import BaseTestCase, ZuulTestCase, iterate_timeout
+
+
+class TestTimerTrigger(BaseTestCase):
+
+    def test_cron_trigger(self):
+        cron_args = dict(
+            minute='*',
+            hour='*',
+            day='*',
+            month='*',
+            day_of_week='*',
+            second='0',
+        )
+        jitter = 25
+        trigger = ZuulCronTrigger(jitter=jitter, **cron_args)
+        tz = zoneinfo.ZoneInfo("Etc/UTC")
+
+        # now is the scheduled time, we should run 25s in the future
+        now = datetime.datetime(2026, 5, 19, 10, 0, 0, tzinfo=tz)
+        expected = datetime.datetime(2026, 5, 19, 10, 0, 25, tzinfo=tz)
+
+        nf = trigger.get_next_fire_time(None, now)
+        self.assertEqual(expected, nf)
+
+        # now is 10s after the scheduled time,
+        # we should run 25s after scheduled
+        now = datetime.datetime(2026, 5, 19, 10, 0, 10, tzinfo=tz)
+        expected = datetime.datetime(2026, 5, 19, 10, 0, 25, tzinfo=tz)
+
+        nf = trigger.get_next_fire_time(None, now)
+        self.assertEqual(expected, nf)
+
+        # now is 2s before the scheduled time,
+        # we should run 25s after scheduled
+        now = datetime.datetime(2026, 5, 19, 9, 59, 58, tzinfo=tz)
+        expected = datetime.datetime(2026, 5, 19, 10, 0, 25, tzinfo=tz)
+
+        nf = trigger.get_next_fire_time(None, now)
+        self.assertEqual(expected, nf)
+
+        # Test with a too-large jitter value
+        jitter = 100
+        trigger = ZuulCronTrigger(jitter=jitter, **cron_args)
+
+        # Run 40s after scheduled since 100s backs up past the
+        # previous scheduled time
+        now = datetime.datetime(2026, 5, 19, 10, 0, 0, tzinfo=tz)
+        expected = datetime.datetime(2026, 5, 19, 10, 0, 40, tzinfo=tz)
+
+        nf = trigger.get_next_fire_time(None, now)
+        self.assertEqual(expected, nf)
+
+        # The next run; reset now to the next normally scheduled time
+        # and test that we run a full 2 minutes later (rather than 1
+        # minute later) because of our too-large jitter.
+        now = datetime.datetime(2026, 5, 19, 10, 1, 0, tzinfo=tz)
+        expected = datetime.datetime(2026, 5, 19, 10, 2, 40, tzinfo=tz)
+        nf = trigger.get_next_fire_time(nf, now)
 
 
 class TestTimerTwoTenants(ZuulTestCase):
