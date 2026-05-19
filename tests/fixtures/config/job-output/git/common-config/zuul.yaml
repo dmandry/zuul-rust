@@ -115,7 +115,12 @@
         vIs=
 
 - job:
+    name: expose-secrets-parent
+    pre-run: playbooks/expose-secrets-parent.yaml
+
+- job:
     name: expose-secrets-txt
+    parent: expose-secrets-parent
     run: playbooks/expose-secrets-txt.yaml
     secrets:
       - name: test_secret
@@ -123,6 +128,7 @@
 
 - job:
     name: expose-secrets-json
+    parent: expose-secrets-parent
     run:
       - playbooks/expose-secrets-json1.yaml
       - playbooks/expose-secrets-json2.yaml

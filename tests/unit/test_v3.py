@@ -9888,15 +9888,16 @@ class TestJobOutput(AnsibleZuulTestCase):
         job1 = self.getJobFromHistory('expose-secrets-txt')
         job2 = self.getJobFromHistory('expose-secrets-json')
         data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
-        self.assertEqual(1, len(data))
+        self.assertEqual(2, len(data))
         self.assertEqual('Username: test-username',
-                         data[0]['plays'][0]['tasks'][0]
+                         data[1]['plays'][0]['tasks'][0]
                          ['hosts']['test_node']['msg'])
 
         job_output = self._get_file(job1, 'work/logs/job-output.txt')
         self.log.info(job_output)
         self.assertIn("Job console starting", job_output)
         self.assertIn("Username: test-username", job_output)
+        self.assertIn("Okay to expose this: test-password", job_output)
         self.assertNotIn("Password:", job_output)
 
 

@@ -1353,6 +1353,9 @@ class AnsibleJob(object):
             # Remove backward compatibility handling
             max_attempts = self.arguments["max_attempts"]
         self.retry_limit = self.arguments["zuul"]["attempts"] >= max_attempts
+        # The accumulated secret data of the playbooks run thus far
+        # (for log reciever redaction)
+        self.secrets_values = set()
 
         # We don't set normal_vars until we load the include-vars
         # files after preparing repos.
@@ -1899,7 +1902,6 @@ class AnsibleJob(object):
         self._jobOutput("Preparing playbooks")
         # This prepares each playbook and the roles needed for each.
         self.preparePlaybooks(args)
-        self.prepareSecretRedaction()
         self.writeLoggingConfig()
         zuul_resources = self.prepareNodes(args)  # set self.host_list
         try:
@@ -3460,14 +3462,6 @@ class AnsibleJob(object):
             inventory_yaml.write(
                 yaml.ansible_unsafe_dump(inventory, default_flow_style=False))
 
-    def prepareSecretRedaction(self):
-        # For all playbooks, extract secret content
-        values = []
-        for jobdir_playbook in self.jobdir.all_playbooks:
-            values.extend(jobdir_playbook.secrets_values)
-        # Send secret content to logreceiver
-        self.log_receiver.sendSecrets(values)
-
     def writeLoggingConfig(self):
         self.log.debug("Writing logging config for job %s %s",
                        self.jobdir.job_output_file,
@@ -4085,6 +4079,11 @@ class AnsibleJob(object):
                            will_retry=None):
         if playbook.secrets_oidc:
             self._generateOidcTokens(playbook)
+
+        # Add the secrets from this playbook to the accumulated list
+        # of values and update the logreceiver
+        self.secrets_values |= set(playbook.secrets_values)
+        self.log_receiver.sendSecrets(list(self.secrets_values))
 
         if playbook.trusted or playbook.secrets_content:
             self.writeInventory(playbook, self.frozen_hostvars)
