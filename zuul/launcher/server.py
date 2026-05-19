@@ -1761,7 +1761,7 @@ class Launcher:
         if request is not None:
             with trace.use_span(request._span):
                 node_span = self.tracer.start_span("ProviderNode")
-            request_args['tags'] = provider.getNodeTags(
+            args['tags'] = provider.getNodeTags(
                 self.system.system_id, label, node_uuid, provider, request)
             request_args['span_info'] = tracing.getSpanInfo(node_span)
             request_args['zuul_event_id'] = request.zuul_event_id
