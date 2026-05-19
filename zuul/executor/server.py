@@ -3106,11 +3106,10 @@ class AnsibleJob(object):
 
         check_varnames(self.job.extra_variables)
 
-        zuul_vars = {}
         # Start with what the client supplied
         zuul_vars = args['zuul'].copy()
         # Overlay the zuul.resources we set in prepareNodes
-        zuul_vars.update({'resources': zuul_resources})
+        zuul_vars['resources'] = zuul_resources
 
         # Add in executor info
         zuul_vars['executor'] = dict(
@@ -3167,9 +3166,17 @@ class AnsibleJob(object):
                 ref['change_message'] = yaml.mark_strings_unsafe(
                     ref['change_message'])
 
+        out_vars = {
+            'zuul': zuul_vars,
+            'zuul_user_dir': (
+                "{{ inventory_hostname == 'localhost' and "
+                "zuul.executor.work_root or ansible_user_dir }}"
+            ),
+        }
+
         with open(self.jobdir.zuul_vars, 'w') as zuul_vars_yaml:
             zuul_vars_yaml.write(
-                yaml.ansible_unsafe_dump({'zuul': zuul_vars},
+                yaml.ansible_unsafe_dump(out_vars,
                                          default_flow_style=False))
 
         # Squash all and extra vars into localhost (it's not
