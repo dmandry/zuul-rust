@@ -68,10 +68,12 @@ class TestBubblewrap(testtools.TestCase):
         bwrap.check()
         context = bwrap.getExecutionContext()
         work_dir = tempfile.mkdtemp()
+        home_dir = tempfile.mkdtemp()
         ssh_agent = SshAgent()
         self.addCleanup(ssh_agent.stop)
         ssh_agent.start()
         po = context.getPopen(work_dir=work_dir,
+                              home_dir=home_dir,
                               ssh_auth_sock=ssh_agent.env['SSH_AUTH_SOCK'])
         self.assertTrue(po.fds[0] > 2)
         self.assertTrue(po.fds[1] > 2)
@@ -93,11 +95,13 @@ class TestBubblewrap(testtools.TestCase):
         bwrap.check()
         context = bwrap.getExecutionContext()
         work_dir = tempfile.mkdtemp()
+        home_dir = tempfile.mkdtemp()
         ansible_dir = tempfile.mkdtemp()
         ssh_agent = SshAgent()
         self.addCleanup(ssh_agent.stop)
         ssh_agent.start()
         po = context.getPopen(work_dir=work_dir,
+                              home_dir=home_dir,
                               ansible_dir=ansible_dir,
                               ssh_auth_sock=ssh_agent.env['SSH_AUTH_SOCK'])
         leak_time = 60
