@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "708a9516_859e9853",
+        "filename": "zuul/lib/varnames.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 33,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-19T23:16:25Z",
+      "side": 1,
+      "message": "Per the comment above should we update the list at https://opendev.org/zuul/zuul/src/branch/master/zuul/configloader.py#L1366 and https://opendev.org/zuul/zuul/src/branch/master/zuul/configloader.py#L1481 ? Note the second list is a subset of the first. It may need additional updates? Or maybe we should make a more global list and share it?",
+      "revId": "8e19e0d7860cb6e1e64073b7d662ec829deb633e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
