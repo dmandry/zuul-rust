@@ -1,0 +1,10 @@
+upgrade:
+  - |
+    The variable :var:`zuul_user_dir` is now available for use in
+    Ansible playbooks.  Roles that are designed to run either locally
+    on the executor or on remote nodes should use this variable
+    instead of ``ansible_user_dir``.  This variable will point to the
+    appropriate working directory under both circumstances.  A future
+    version of Zuul will separate the user's home and work directories
+    on the executor at which point ``ansible_user_dir`` will no longer
+    mean the same thing.

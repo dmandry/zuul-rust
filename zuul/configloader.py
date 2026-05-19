@@ -32,6 +32,7 @@ from zuul import change_matcher
 from zuul import model
 from zuul.connection import ReadOnlyBranchCacheError
 from zuul.lib import yamlutil as yaml
+from zuul.lib import varnames
 import zuul.manager.dependent
 import zuul.manager.independent
 import zuul.manager.supercedent
@@ -1363,11 +1364,11 @@ class ProjectTemplateParser(object):
             project_template.setImpliedBranchMatchers(branches)
 
         variables = conf.get('vars', {})
-        forbidden = {'zuul', 'zuul_node', 'nodepool', 'unsafe_vars'}
         if variables:
-            if set(variables.keys()).intersection(forbidden):
-                raise Exception("Variables named 'zuul', 'zuul_node', "
-                                "'nodepool', or 'unsafe_vars' "
+            if forbidden := set(variables.keys()).intersection(
+                    varnames.RESERVED_NAMES):
+                forbidden = ','.join(list(forbidden))
+                raise Exception(f"Variables named {forbidden} "
                                 "are not allowed.")
             project_template.variables = variables
 
@@ -1478,11 +1479,12 @@ class ProjectParser(object):
         project_config.queue_name = conf.get('queue', None)
 
         variables = conf.get('vars', {})
-        forbidden = {'zuul', 'nodepool', 'unsafe_vars'}
         if variables:
-            if set(variables.keys()).intersection(forbidden):
-                raise Exception("Variables named 'zuul', 'nodepool', "
-                                "or 'unsafe_vars' are not allowed.")
+            if forbidden := set(variables.keys()).intersection(
+                    varnames.RESERVED_NAMES):
+                forbidden = ','.join(list(forbidden))
+                raise Exception(f"Variables named {forbidden} "
+                                "are not allowed.")
             project_config.variables = variables
 
         return project_config
