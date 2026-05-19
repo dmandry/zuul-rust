@@ -123,7 +123,9 @@
 
 - job:
     name: expose-secrets-json
-    run: playbooks/expose-secrets-json.yaml
+    run:
+      - playbooks/expose-secrets-json1.yaml
+      - playbooks/expose-secrets-json2.yaml
     secrets:
       - name: test_secret
         secret: test-secret
