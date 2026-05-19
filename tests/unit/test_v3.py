@@ -9874,6 +9874,28 @@ class TestJobOutput(AnsibleZuulTestCase):
         result = j[1]['plays'][0]['play']['name']
         self.assertIn(expected_str, result)
 
+    def test_job_output_redact_secrets(self):
+        self.executor_server.keep_jobdir = True
+        A = self.fake_gerrit.addFakeChange('org/project7', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='expose-secrets-txt', result='ABORTED', changes='1,1'),
+            dict(name='expose-secrets-json', result='ABORTED', changes='1,1'),
+        ], ordered=False)
+
+        job1 = self.getJobFromHistory('expose-secrets-txt')
+        job2 = self.getJobFromHistory('expose-secrets-json')
+        data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
+        self.assertEqual([], data)
+
+        job_output = self._get_file(job1, 'work/logs/job-output.txt')
+        self.log.info(job_output)
+        self.assertIn("Job console starting", job_output)
+        self.assertNotIn("Username:", job_output)
+        self.assertNotIn("Password:", job_output)
+
 
 class TestNoLog(AnsibleZuulTestCase):
     tenant_config_file = 'config/ansible-no-log/main.yaml'
