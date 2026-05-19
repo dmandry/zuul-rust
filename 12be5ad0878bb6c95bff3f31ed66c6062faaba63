@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "33127c9f_7f249dc7",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 39140
+      },
+      "writtenOn": "2026-05-19T20:50:28Z",
+      "side": 1,
+      "message": "nice implementation and handling of jitter \u003e interval scenario",
+      "revId": "12be5ad0878bb6c95bff3f31ed66c6062faaba63",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
