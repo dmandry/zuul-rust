@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0078420a_f56bd2e3",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 11,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-05-19T10:06:45Z",
+      "side": 1,
+      "message": "nit: launchers",
+      "range": {
+        "startLine": 11,
+        "startChar": 42,
+        "endLine": 11,
+        "endChar": 52
+      },
+      "revId": "60cda62ea8ecaa76ef06979e0fab1f12a8dff9bd",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ba146990_854880a8",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2178,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-05-19T10:06:45Z",
+      "side": 1,
+      "message": "Would it make sense to add a test for this specific error condition?",
+      "revId": "60cda62ea8ecaa76ef06979e0fab1f12a8dff9bd",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
