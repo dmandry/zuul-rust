@@ -55,6 +55,11 @@ class TimerDriver(Driver, TriggerInterface):
         self.project_update_locks = defaultdict(threading.Lock)
         self.stop_event = threading.Event()
         self.stopped = False
+        # Serialize reconfigure() and stop() to prevent a TOCTOU race
+        # where reconfigure() checks self.stopped (False), then stop()
+        # sets stopped=True and clears self.apsched, then reconfigure()
+        # creates an orphaned BackgroundScheduler that is never shut down.
+        self._apsched_lock = threading.Lock()
 
     def registerScheduler(self, scheduler):
         self.sched = scheduler
@@ -97,14 +102,14 @@ class TimerDriver(Driver, TriggerInterface):
             self.log.debug("Timer election tenure ended")
 
     def reconfigure(self, tenant):
-        if self.stopped:
-            return
-        if not self.apsched:
-            # Handle possible reuse of the driver without connection objects.
-            self.log.debug("Starting apscheduler on reconfigure")
-            self.apsched = BackgroundScheduler()
-            self.apsched.start()
-        self._addJobs(tenant)
+        with self._apsched_lock:
+            if self.stopped:
+                return
+            if not self.apsched:
+                self.log.debug("Starting apscheduler on reconfigure")
+                self.apsched = BackgroundScheduler()
+                self.apsched.start()
+            self._addJobs(tenant)
 
     def _removeJobs(self, tenant, new_jobs):
         # Compare existing jobs to new jobs and remove any that should
@@ -296,13 +301,14 @@ class TimerDriver(Driver, TriggerInterface):
 
     def stop(self):
         self.log.debug("Stopping timer driver")
-        self.stopped = True
-        self.stop_event.set()
-        if self.apsched:
-            self.log.debug("Stopping apscheduler")
-            self.apsched.shutdown()
-            self.apsched = None
-            self.log.debug("Stopped apscheduler")
+        with self._apsched_lock:
+            self.stopped = True
+            self.stop_event.set()
+            if self.apsched:
+                self.log.debug("Stopping apscheduler")
+                self.apsched.shutdown()
+                self.apsched = None
+                self.log.debug("Stopped apscheduler")
         if self.election:
             self.log.debug("Stopping election")
             self.election.cancel()
