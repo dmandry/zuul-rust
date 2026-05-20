@@ -35,6 +35,7 @@
       include-vars: {final: true}
       dependencies: {final: true}
       failure-output: {final: true}
+      voting: {final: true}
 
 - job:
     name: final-job
@@ -102,6 +103,10 @@
 - job:
     name: test-failure-output
     failure-output: foo
+
+- job:
+    name: test-voting
+    voting: false
 
 - project:
     name: org/project1

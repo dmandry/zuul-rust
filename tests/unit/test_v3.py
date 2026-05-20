@@ -12521,6 +12521,7 @@ class TestAttributeControl(ZuulTestCase):
                 'include-vars',
                 'dependencies',
                 'failure-output',
+                'voting',
         ]:
             content = "- project: {check: {jobs: [test-%s]}}" % (attr,)
             file_dict = {'zuul.yaml': content}

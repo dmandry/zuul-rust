@@ -5563,9 +5563,9 @@ class Job(ConfigObject):
                 "be used for one")
 
         for k in self.context_attributes:
+            self._handleFinalControl(other, k)
             if (v := other._get(k)) is None:
                 continue
-            self._handleFinalControl(other, k)
             if other.override_control[k]:
                 setattr(self, k, v)
             else:

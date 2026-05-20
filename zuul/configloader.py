@@ -845,6 +845,13 @@ class JobParser(object):
                               'dependencies',
                               'failure-output',
                               'type',
+                              # Normally we don't include context
+                              # attributes since they are not affected
+                              # by "final", but we make an exception
+                              # here for "voting" so that users can
+                              # specify that a job must never be
+                              # non-voting.
+                              'voting',
                           ): {'final': True},
     }}
 
