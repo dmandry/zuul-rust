@@ -36,6 +36,9 @@
       dependencies: {final: true}
       failure-output: {final: true}
       voting: {final: true}
+      pre-run: {final: true}
+      run: {final: true}
+      post-run: {final: true}
 
 - job:
     name: final-job
@@ -107,6 +110,18 @@
 - job:
     name: test-voting
     voting: false
+
+- job:
+    name: test-pre-run
+    pre-run: playbooks/test.yaml
+
+- job:
+    name: test-run
+    run: playbooks/test.yaml
+
+- job:
+    name: test-post-run
+    post-run: playbooks/test.yaml
 
 - project:
     name: org/project1

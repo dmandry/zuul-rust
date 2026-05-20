@@ -12522,6 +12522,9 @@ class TestAttributeControl(ZuulTestCase):
                 'dependencies',
                 'failure-output',
                 'voting',
+                'pre-run',
+                'run',
+                'post-run',
         ]:
             content = "- project: {check: {jobs: [test-%s]}}" % (attr,)
             file_dict = {'zuul.yaml': content}
