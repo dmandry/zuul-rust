@@ -56,6 +56,24 @@
       },
       "revId": "c970e0074a63c028de584663c4e62672884f66bf",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "af46e6c6_7c0934f5",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1777,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-20T18:52:16Z",
+      "side": 1,
+      "message": "I think we can simplify this by moving getNodeTags out of the conditional, and putting it here so we only have one call site.\n\nWe can do that because getNodeTags can handle request being None.\n\nAlso, the provider argument to getNodeTags is redundant and unused, so we should just remove that argument.",
+      "parentUuid": "85028057_54cf53a4",
+      "revId": "c970e0074a63c028de584663c4e62672884f66bf",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
