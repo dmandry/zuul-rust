@@ -269,6 +269,9 @@ class BaseCloudDriverTest(ZuulTestCase):
         with self.createZKContext(None) as ctx:
             node = node_class.new(ctx, label=label_name,
                                   uuid='1234',
-                                  tags={'zuul_node_uuid': '1234'})
+                                  tags={
+                                      'zuul_system_id': 'decafbad',
+                                      'zuul_node_uuid': '1234'
+                                  })
             self._drive_state_machine(ctx, node, future_names, provider, True)
             self._drive_state_machine(ctx, node, future_names, provider, False)

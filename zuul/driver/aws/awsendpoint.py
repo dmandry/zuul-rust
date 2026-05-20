@@ -1961,6 +1961,10 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
         else:
             image_id = self._getImageId(image)
 
+        if "zuul_system_id" not in tags:
+            raise RuntimeError(
+                f"Can't create instance w/o Zuul system ID tag ({tags=})")
+
         if flavor.fleet:
             return self._createFleet(provider, label, flavor,
                                      image_id, tags, hostname,
