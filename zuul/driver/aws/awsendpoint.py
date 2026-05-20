@@ -576,6 +576,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
         super().__init__(zk_client, driver, connection, name, system_id)
         self.log = logging.getLogger(f"zuul.aws.{self.name}")
         self.region = region
+        self.invalid_instance_types = set()
 
         self.rate_limiter = RateLimiter(self.name,
                                         connection.rate)
@@ -1635,6 +1636,8 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
         return None
 
     def _getQuotaForInstanceType(self, instance_type, market_type_option):
+        if instance_type in self.invalid_instance_types:
+            return None
         try:
             itype = self._getInstanceType(instance_type)
             cores = itype['InstanceTypes'][0]['VCpuInfo']['DefaultCores']
@@ -1642,9 +1645,13 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             ram = itype['InstanceTypes'][0]['MemoryInfo']['SizeInMiB']
             code = self._getQuotaCodeForInstanceType(instance_type,
                                                      market_type_option)
-        except botocore.exceptions.ClientError:
-            self.log.warning("Error querying instance type: %s",
-                             instance_type)
+        except botocore.exceptions.ClientError as error:
+            if error.response['Error']['Code'] == 'InvalidInstanceType':
+                self.log.warning("Invalid instance type: %s", instance_type)
+                self.invalid_instance_types.add(instance_type)
+            else:
+                self.log.exception("Error querying instance type: %s",
+                                   instance_type)
             return None
         # We include cores to match the overall cores quota (which may
         # be set as a tenant resource limit), and include vCPUs for the
