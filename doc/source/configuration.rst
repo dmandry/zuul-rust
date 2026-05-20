@@ -1248,6 +1248,9 @@ sections of ``zuul.conf`` are used by the launcher:
       If this launcher should only be used for certain connections,
       specify them here as a comma separated string.
 
+   .. attr:: log_config
+
+      Path to log config file for the launcher process.
 
 Client
 ------
