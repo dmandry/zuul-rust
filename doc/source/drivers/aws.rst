@@ -65,6 +65,11 @@ The supported options in ``zuul.conf`` connections are:
       The path to a file containing a federated web identity token.
       Generally created by a cloud or Kubernetes environment.
 
+   .. attr:: endpoint_url
+
+      If set, this will override the endpoint URLs for all AWS
+      services.
+
    .. attr:: rate
       :default: 2
 

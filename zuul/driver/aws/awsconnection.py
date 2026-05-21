@@ -40,6 +40,8 @@ class AwsConnection(BaseConnection):
             'role_arn')
         self.web_identity_token_file = self.connection_config.get(
             'web_identity_token_file')
+        self.endpoint_url = self.connection_config.get(
+            'endpoint_url')
 
         self.profile = self.connection_config.get('profile')
         # Rate limit: requests/second
@@ -59,3 +61,5 @@ class AwsConnection(BaseConnection):
                 'role_arn', self.role_arn)
             self.web_identity_token_file = section.get(
                 'web_identity_token_file', self.web_identity_token_file)
+            self.endpoint_url = section.get(
+                'endpoint_url', self.endpoint_url)
