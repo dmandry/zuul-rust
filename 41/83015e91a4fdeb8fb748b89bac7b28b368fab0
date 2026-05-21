@@ -1,0 +1,11 @@
+Code-Review+1: François Magimel <magimel.francois@gmail.com>
+Code-Review+2: Simon Westphahl <simon.westphahl@bmw.de>
+Workflow+1: Simon Westphahl <simon.westphahl@bmw.de>
+Verified+2: Zuul
+Code-Review+2: James E. Blair <jim@acmegating.com>
+Submitted-by: Zuul
+Submitted-at: Thu, 21 May 2026 18:44:43 +0000
+Reviewed-on: https://review.opendev.org/c/zuul/zuul/+/921868
+Comments-Total: 2
+Project: zuul/zuul
+Branch: refs/heads/master
