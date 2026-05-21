@@ -148,7 +148,7 @@ class LabelNodeMapping:
             self.label_to_nodes[label].pop(node.uuid, None)
 
     def getNodesForLabel(self, label):
-        return self.label_to_nodes[label].values()
+        return list(self.label_to_nodes[label].values())
 
 
 class DeleteJob:
