@@ -901,7 +901,7 @@ class PipelineManager(metaclass=ABCMeta):
         sccs = [s for s in strongly_connected_components(dependency_graph)
                 if len(s) > 1]
         if debug:
-            log.debug("Strongly connected components (cyles): %s", sccs)
+            log.debug("Strongly connected components (cycles): %s", sccs)
         for scc in sccs:
             if change in scc:
                 if debug:
