@@ -16,6 +16,23 @@
       "message": "recheck\nNo reason for test_finger_gateway to fail.",
       "revId": "4183015e91a4fdeb8fb748b89bac7b28b368fab0",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "79034e33_e2bce88c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 2
+      },
+      "writtenOn": "2026-05-21T16:46:54Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "4183015e91a4fdeb8fb748b89bac7b28b368fab0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
