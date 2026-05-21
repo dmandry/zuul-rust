@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "eac5dfd3_2d9b2bd0",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-21T21:26:01Z",
+      "side": 1,
+      "message": "Since you bring it up: I\u0027m somewhat resistant to this idea (we can examine things on a case-by-case basis).  But in general, I do think that the \"label-defaults\" section should really be exactly that: the *default* values that are supplied if something else is not.  That\u0027s exactly the old behavior here for tags, it\u0027s just not what you want.  :)\n\nI do agree that it makes sense for tags in particular to behave this way, as it\u0027s a pretty sensible concept to accumulate tags as we increase specificity.\n\nIf we decide that other attributes need more control, then I think we may want to look at override-control or something similar.  We may want to change the name from \"-defaults\" if we don\u0027t think they should be default values (for example, if we think that they should be \"global\" values instead).",
+      "revId": "635355c3318c30bbbb96571e6be27bc3cdfca9a1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "b9f021ef_4eb75022",
@@ -14,6 +31,23 @@
       "writtenOn": "2026-05-07T08:23:29Z",
       "side": 1,
       "message": "recheck",
+      "revId": "635355c3318c30bbbb96571e6be27bc3cdfca9a1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e56d6121_ab206121",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1971,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-21T21:26:01Z",
+      "side": 1,
+      "message": "Since we add k to obj above, both of these could run.  It\u0027s probably harmless in this case, but this could probably be an else if for clarity?",
       "revId": "635355c3318c30bbbb96571e6be27bc3cdfca9a1",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
