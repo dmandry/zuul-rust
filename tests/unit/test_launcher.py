@@ -3896,6 +3896,11 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         else:
             self.assertTrue(False, "one of the subnodes must be assigned")
 
+        # Verify that the slot host is tagged correctly.
+        system_id = self.launcher.system.system_id
+        self.assertEqual(system_id, main.tags.get('zuul_system_id'))
+        self.assertEqual(main.uuid, main.tags.get('zuul_node_uuid'))
+
         with sub1.locked(ctx):
             with sub1.activeContext(ctx):
                 sub1.assign(ctx, request_id="dne", tenant_name="test")
