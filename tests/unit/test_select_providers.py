@@ -81,6 +81,7 @@ class TestSelectProviders(LauncherBaseTestCase):
             job_uuid=uuid.uuid4().hex,
             job_name="foobar",
             labels=labels,
+            template_config=[{} for _ in labels],
             priority=100,
             request_time=time.time(),
             zuul_event_id=uuid.uuid4().hex,

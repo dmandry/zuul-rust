@@ -550,9 +550,18 @@ class NodeSetParser(object):
         self.schema = self.getSchema(False)
         self.anon_schema = self.getSchema(True)
 
+    def _getTemplateConfigSchema(self):
+        schema = {}
+        for conn in self.pcontext.connections.getProviderConnections():
+            for k, v in conn.driver.getTemplateConfigSchema().items():
+                schema[vs.Optional(k)] = v
+
+        return schema
+
     def getSchema(self, anonymous=False):
         node = {vs.Required('name'): to_list(str),
                 vs.Required('label'): str,
+                'template-config': self._getTemplateConfigSchema(),
                 }
 
         group = {vs.Required('name'): str,
@@ -618,6 +627,9 @@ class NodeSetParser(object):
                 if name in node_names:
                     raise DuplicateNodeError(name, conf_node['name'])
             node = model.Node(as_list(conf_node['name']), conf_node['label'])
+            if 'template-config' in conf_node:
+                for k, v in conf_node['template-config'].items():
+                    node.template_config[k.replace('-', '_')] = v
             ns.addNode(node)
             for name in as_list(conf_node['name']):
                 node_names.add(name)
@@ -2332,6 +2344,8 @@ class TenantParser(object):
         parsed_config = self._loadTenantParsedConfig(
             abide, tenant, pcontext)
 
+        self._resolveProviderTemplates(parsed_config)
+
         tenant.layout = self._parseLayout(
             tenant, parsed_config, pcontext, layout_uuid)
 
@@ -2759,6 +2773,10 @@ class TenantParser(object):
 
         extra_config_files = abide.getExtraConfigFiles(project.name)
         extra_config_dirs = abide.getExtraConfigDirs(project.name)
+        provider_dirs = []
+        for conn in self.connections.getProviderConnections():
+            provider_dirs.extend(
+                conn.driver.getFileDiscoveryDirs(tpc))
         if not self.merger:
             err = Exception(
                 "Configuration files missing from cache. "
@@ -2771,7 +2789,8 @@ class TenantParser(object):
             project.name, branch,
             files=(['zuul.yaml', '.zuul.yaml'] +
                    list(extra_config_files)),
-            dirs=['zuul.d', '.zuul.d'] + list(extra_config_dirs))
+            dirs=(['zuul.d', '.zuul.d'] + list(extra_config_dirs)
+                  + provider_dirs))
         self.log.debug("Submitting cat job %s for %s %s %s" % (
             job, project.source.connection.connection_name,
             project.name, branch))
@@ -2910,6 +2929,31 @@ class TenantParser(object):
                         branch_config, trusted=False)
 
         return parsed_config
+
+    def _resolveProviderTemplates(self, parsed_config, files=None):
+        """Resolve template content for all nodesets via driver hooks."""
+        nodesets = list(parsed_config.nodesets)
+        for job in parsed_config.jobs:
+            if isinstance(job.nodeset, model.NodeSet):
+                nodesets.append(job.nodeset)
+
+        for ns in nodesets:
+            if not ns.source_context:
+                continue
+            sc = ns.source_context
+            if files is not None:
+                files_cache = files
+            else:
+                files_cache = (
+                    self.unparsed_config_cache.getFilesCache(
+                        sc.project_canonical_name, sc.branch))
+            for node in ns.getNodes():
+                if not node.template_config:
+                    continue
+                for conn in self.connections.getProviderConnections():
+                    conn.driver.resolveTemplateConfig(
+                        node, ns, parsed_config, files_cache,
+                        sc)
 
     def addProjectBranchConfig(self, parse_context, parsed_config,
                                tenant, tpc, branch_config, trusted):
@@ -3771,6 +3815,8 @@ class ConfigLoader(object):
             self._loadDynamicProjectData(abide, config, project, files,
                                          additional_project_branches,
                                          False, item, pcontext)
+
+        self.tenant_parser._resolveProviderTemplates(config, files)
 
         layout = model.Layout(tenant, item.layout_uuid)
         log.debug("Created layout id %s", layout.uuid)
