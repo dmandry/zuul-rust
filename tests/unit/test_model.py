@@ -1649,6 +1649,57 @@ class TestRef(BaseTestCase):
         self.assertFalse(branch1.equals(tag1))
 
 
+class TestTemplateConfig(BaseTestCase):
+    def test_todict_fromdict_preserves_template_config(self):
+        # Node with empty template_config
+        node = model.Node(['controller'], 'my-label')
+        d = node.toDict(internal_attributes=True)
+        self.assertEqual(d['template_config'], {})
+
+        # Node with populated template_config
+        node.template_config = {
+            'template_path': 'templates/my_tpl.yaml',
+            'template_content': 'foo: bar',
+        }
+        d = node.toDict(internal_attributes=True)
+        self.assertEqual(d['template_config'], {
+            'template_path': 'templates/my_tpl.yaml',
+            'template_content': 'foo: bar',
+        })
+        restored = model.Node.fromDict(d)
+        self.assertEqual(restored.template_config, {
+            'template_path': 'templates/my_tpl.yaml',
+            'template_content': 'foo: bar',
+        })
+
+        # NodeSet round-trip
+        ns = model.NodeSet('test-nodeset')
+        ns.addNode(node)
+        d = ns.toDict()
+        restored_ns = model.NodeSet.fromDict(d)
+        restored_node = restored_ns.getNodes()[0]
+        self.assertEqual(restored_node.template_config, {
+            'template_path': 'templates/my_tpl.yaml',
+            'template_content': 'foo: bar',
+        })
+
+    def test_nodeset_copy_preserves_template_config(self):
+        ns = model.NodeSet('test-nodeset')
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = {
+            'template_path': 'templates/my_tpl.yaml',
+        }
+        ns.addNode(node)
+        copied = ns.copy()
+        copied_node = copied.getNodes()[0]
+        self.assertEqual(copied_node.template_config, {
+            'template_path': 'templates/my_tpl.yaml',
+        })
+        # Verify it's a copy, not the same dict
+        copied_node.template_config['extra'] = 'value'
+        self.assertNotIn('extra', node.template_config)
+
+
 class TestSourceContext(BaseTestCase):
     def setUp(self):
         super().setUp()
