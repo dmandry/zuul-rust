@@ -376,3 +376,44 @@ class ProviderInterface(object, metaclass=abc.ABCMeta):
         This method is required by the interface.
         """
         pass
+
+    def getTemplateConfigSchema(self):
+        """Get voluptuous schema keys for this driver's template-config.
+
+        This method is optional.
+
+        :returns: A dict of voluptuous schema keys.
+        :rtype: dict
+        """
+        return {}
+
+    def getProjectConfigKeys(self):
+        """Get additional tenant project config keys for this driver.
+
+        This method is optional.
+
+        :returns: A dict of key names to voluptuous validators.
+        :rtype: dict
+        """
+        return {}
+
+    def getFileDiscoveryDirs(self, tenant_project_config):
+        """Get additional dirs to fetch from git for this driver.
+
+        This method is optional.
+
+        :returns: A list of directory paths.
+        :rtype: list
+        """
+        return []
+
+    def resolveTemplateConfig(self, node, parsed_config,
+                              files_cache, source_context):
+        """Resolve and validate template content at config-load time.
+
+        This method is optional.
+
+        On validation failure, append a ConfigurationError to
+        parsed_config.nodeset_errors.
+        """
+        pass

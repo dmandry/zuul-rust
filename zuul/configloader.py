@@ -550,9 +550,19 @@ class NodeSetParser(object):
         self.schema = self.getSchema(False)
         self.anon_schema = self.getSchema(True)
 
+    def _getTemplateConfigSchema(self):
+        schema = {}
+        for conn in self.pcontext.connections.getProviderConnections():
+            for k, v in conn.driver.getTemplateConfigSchema().items():
+                schema[vs.Optional(k)] = v
+
+        return schema
+
     def getSchema(self, anonymous=False):
+        template_config = self._getTemplateConfigSchema()
         node = {vs.Required('name'): to_list(str),
                 vs.Required('label'): str,
+                'template-config': template_config,
                 }
 
         group = {vs.Required('name'): str,
@@ -618,6 +628,10 @@ class NodeSetParser(object):
                 if name in node_names:
                     raise DuplicateNodeError(name, conf_node['name'])
             node = model.Node(as_list(conf_node['name']), conf_node['label'])
+            if 'template-config' in conf_node:
+                # Convert hyphenated keys to underscored
+                for key, value in conf_node['template-config'].items():
+                    node.template_config[key.replace('-', '_')] = value
             ns.addNode(node)
             for name in as_list(conf_node['name']):
                 node_names.add(name)

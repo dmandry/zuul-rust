@@ -253,7 +253,7 @@ class StaticProvider(BaseProvider, subclass_id='static'):
     def getEndpointLimits(self):
         return QuotaInformation(default=math.inf)
 
-    def getQuotaForLabel(self, label):
+    def getQuotaForLabel(self, label, **kwargs):
         return QuotaInformation(instances=1)
 
     def refreshQuotaForLabel(self, label, update):
