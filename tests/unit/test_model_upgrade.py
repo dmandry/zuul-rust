@@ -289,6 +289,41 @@ class TestModelUpgrade(ZuulTestCase):
         branches2 = connection2.getProjectBranches(project2, tenant2)
         self.assertEqual(['master'], branches2)
 
+    @model_version(37)
+    @simple_layout('layouts/simple.yaml')
+    def test_model_upgrade_37_38(self):
+        component_registry = ComponentRegistry(self.zk_client)
+        self.assertEqual(component_registry.model_api, 37)
+
+        A = self.fake_gerrit.addFakeChange(
+            'org/project', "master", "A")
+        self.fake_gerrit.addEvent(
+            A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='check-job', result='SUCCESS',
+                 changes='1,1'),
+        ])
+
+        self.model_test_component_info.model_api = 38
+
+        for _ in iterate_timeout(
+                30, "model api to update"):
+            if component_registry.model_api == 38:
+                break
+
+        B = self.fake_gerrit.addFakeChange(
+            'org/project', "master", "B")
+        self.fake_gerrit.addEvent(
+            B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='check-job', result='SUCCESS',
+                 changes='1,1'),
+            dict(name='check-job', result='SUCCESS',
+                 changes='2,1'),
+        ])
+
 
 class TestModel36BackwardsCompat(ZuulTestCase):
     scheduler_count = 1
