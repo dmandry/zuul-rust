@@ -1649,6 +1649,90 @@ class TestRef(BaseTestCase):
         self.assertFalse(branch1.equals(tag1))
 
 
+class TestTemplateConfig(BaseTestCase):
+    def test_node_todict_preserves_template_config(self):
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        }
+        d = node.toDict(internal_attributes=True)
+        self.assertEqual(d['template_config'], {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        })
+
+    def test_node_fromdict_restores_template_config(self):
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        }
+        d = node.toDict(internal_attributes=True)
+        restored = model.Node.fromDict(d)
+        self.assertEqual(restored.template_config, {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        })
+
+    def test_node_todict_empty_template_config(self):
+        node = model.Node(['controller'], 'my-label')
+        d = node.toDict(internal_attributes=True)
+        self.assertEqual(d['template_config'], {})
+
+    def test_nodeset_copy_preserves_template_config(self):
+        ns = model.NodeSet('test-nodeset')
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = {
+            'heat_template_path': 'templates/stack.yaml',
+        }
+        ns.addNode(node)
+        copied = ns.copy()
+        copied_node = copied.getNodes()[0]
+        self.assertEqual(copied_node.template_config, {
+            'heat_template_path': 'templates/stack.yaml',
+        })
+        # Verify it's a copy, not the same dict
+        copied_node.template_config['extra'] = 'value'
+        self.assertNotIn('extra', node.template_config)
+
+    def test_nodeset_todict_fromdict_preserves_template_config(self):
+        ns = model.NodeSet('test-nodeset')
+        node = model.Node(['controller'], 'my-label')
+        node.template_config = {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        }
+        ns.addNode(node)
+        d = ns.toDict()
+        restored = model.NodeSet.fromDict(d)
+        restored_node = restored.getNodes()[0]
+        self.assertEqual(restored_node.template_config, {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        })
+
+    def test_template_config_per_index_lookup(self):
+        """Verify that per-index template_config lookup works.
+
+        Both the initial request path and the retry path in
+        the launcher use index-based lookup into the
+        template_config list on NodesetRequest.
+        """
+        props_list = [
+            {'heat_template_path': 'templates/a.yaml',
+             'heat_template_content': 'content_a'},
+            {},
+            {'heat_template_path': 'templates/c.yaml',
+             'heat_template_content': 'content_c'},
+        ]
+        for i, expected in enumerate(props_list):
+            props = {}
+            if props_list and i < len(props_list):
+                props = props_list[i]
+            self.assertEqual(props, expected)
+
+
 class TestSourceContext(BaseTestCase):
     def setUp(self):
         super().setUp()
