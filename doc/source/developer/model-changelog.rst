@@ -264,3 +264,10 @@ Version 37
 :Prior Zuul version: 14.0.0
 :Description: Upgrade to per-project branch cache.
               Affects schedulers and web.
+
+Version 38
+----------
+:Prior Zuul version: 14.0.0
+:Description: Add template_config to NodesetRequest for passing template
+              configuration from the scheduler to the launcher.
+              Affects schedulers and launchers.
