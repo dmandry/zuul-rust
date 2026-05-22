@@ -786,7 +786,7 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
         """
         return model.QuotaInformation(default=math.inf)
 
-    def getQuotaForLabel(self, label):
+    def getQuotaForLabel(self, label, **kwargs):
         """Return information about the quota used for a label
 
         The default implementation returns a simple QuotaInformation
@@ -795,6 +795,9 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
 
         :param ProviderLabel label: A config object describing
             a label for an instance.
+        :param kwargs: Optional keyword arguments. May include:
+            - template_config (dict): Template configuration for
+              orchestration drivers (e.g. Heat templates, parameters).
 
         :returns: A :py:class:`QuotaInformation` object.
         """
