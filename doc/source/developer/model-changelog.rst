@@ -270,3 +270,10 @@ Version 38
 :Prior Zuul version: 14.2.0
 :Description: Add secret_exposure to FrozenJob.
               Affects schedulers and executors.
+
+Version 39
+----------
+:Prior Zuul version: 14.2.0
+:Description: Add template_config to NodesetRequest for passing template
+              configuration from the scheduler to the launcher.
+              Affects schedulers and launchers.
