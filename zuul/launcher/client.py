@@ -53,7 +53,9 @@ class LauncherClient:
     def requestNodeset(self, item, job, priority, relative_priority,
                        preferred_provider, pipeline_run_id):
         log = get_annotated_logger(self.log, item.event)
-        labels = [n.label for n in job.nodeset.getNodes()]
+        nodes = job.nodeset.getNodes()
+        labels = [n.label for n in nodes]
+        template_config = [n.template_config for n in nodes]
 
         buildset = item.current_build_set
         image_names = getattr(item.event, "image_names", None)
@@ -82,6 +84,7 @@ class LauncherClient:
                 job_uuid=job.uuid,
                 job_name=job.name,
                 labels=labels,
+                template_config=template_config,
                 priority=priority,
                 _relative_priority=relative_priority,
                 request_time=request_time,

@@ -87,6 +87,7 @@ from zuul.driver.pagure import PagureDriver
 from zuul.driver.gitlab import GitlabDriver
 from zuul.driver.gerrit import GerritDriver
 from zuul.driver.elasticsearch import ElasticsearchDriver
+from zuul.driver import ProviderInterface
 from zuul.driver.aws import AwsDriver
 from zuul.driver.azure import AzureDriver
 from zuul.driver.openstack import OpenstackDriver
@@ -133,6 +134,8 @@ import opentelemetry.sdk.trace.export
 KEEP_TEMPDIRS = bool(os.environ.get('KEEP_TEMPDIRS', False))
 SCHEDULER_COUNT = int(os.environ.get('ZUUL_SCHEDULER_COUNT', 1))
 ZOOKEEPER_SESSION_TIMEOUT = 60
+
+_PROVIDER_DRIVERS = [cls() for cls in ProviderInterface.__subclasses__()]
 
 
 def skipIfMultiScheduler(reason=None):
@@ -2816,6 +2819,35 @@ class ZuulTestCase(BaseTestCase):
                 config.set(section, k, v)
         return config
 
+    def _collectDriverTemplateFiles(self, nodeset_conf, layout_path,
+                                    files, template_dirs, kw=None):
+        for node_conf in zuul.configloader.as_list(
+                nodeset_conf.get('nodes', [])):
+            tc = node_conf.get('template-config', {})
+            if not tc:
+                continue
+            for driver in _PROVIDER_DRIVERS:
+                schema = driver.getTemplateConfigSchema()
+                if not schema:
+                    continue
+                for key, validator in schema.items():
+                    if validator is not str:
+                        continue
+                    path_val = tc.get(key)
+                    if not path_val:
+                        continue
+                    tpl_dir = os.path.dirname(path_val)
+                    if tpl_dir:
+                        template_dirs.add(tpl_dir)
+                    tpl_fixture = os.path.join(
+                        os.path.dirname(layout_path),
+                        os.path.basename(path_val))
+                    if os.path.exists(tpl_fixture):
+                        with open(tpl_fixture) as tf:
+                            content = tf.read()
+                            files[path_val] = (
+                                content.format(**kw) if kw else content)
+
     def setupSimpleLayout(self, config):
         # If the test method has been decorated with a simple_layout,
         # use that instead of the class tenant_config_file.  Set up a
@@ -2827,6 +2859,8 @@ class ZuulTestCase(BaseTestCase):
         path, driver, replace = self.test_config.simple_layout
 
         files = {}
+        template_dirs = set()
+        kw = None
         path = os.path.join(FIXTURE_DIR, path)
         with open(path) as f:
             data = f.read()
@@ -2879,6 +2913,19 @@ class ZuulTestCase(BaseTestCase):
                 for fn in zuul.configloader.as_list(
                         item['job'].get('post-run', [])):
                     files['%s' % fn] = ''
+            if 'nodeset' in item:
+                self._collectDriverTemplateFiles(
+                    item['nodeset'], path, files, template_dirs, kw)
+
+        if template_dirs and self.test_config.enable_nodepool:
+            for prov_driver in _PROVIDER_DRIVERS:
+                project_config = prov_driver.getProjectConfigForTemplateDirs(
+                    template_dirs)
+                if not project_config:
+                    continue
+                for cp in config_projects:
+                    if isinstance(cp, dict) and 'org/common-config' in cp:
+                        cp['org/common-config'].update(project_config)
 
         root = os.path.join(self.test_root, "config")
         if not os.path.exists(root):
@@ -4164,7 +4211,7 @@ class ZuulTestCase(BaseTestCase):
                 break
 
     def requestNodes(self, labels, tenant="tenant-one", pipeline="check",
-                     provider=None, timeout=10):
+                     provider=None, timeout=10, template_config=None):
         result_queue = PipelineResultEventQueue(
             self.zk_client, tenant, pipeline)
 
@@ -4186,6 +4233,7 @@ class ZuulTestCase(BaseTestCase):
                     job_uuid=uuid.uuid4().hex,
                     job_name="foobar",
                     labels=labels,
+                    template_config=template_config or [],
                     priority=100,
                     request_time=time.time(),
                     zuul_event_id=uuid.uuid4().hex,

@@ -3044,6 +3044,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             quota=QuotaInformation(),
             image_upload_uuid=None,
             reuse=False,
+            template_config={},
             # This is provided to the job verbatim
             node_properties={},
             # Attributes that are not serialized
@@ -3274,6 +3275,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             resources=None,
             slot=self.slot,
             reuse=self.reuse,
+            template_config=self.template_config,
             node_properties=self.node_properties,
         )
         if not serialize_node:
