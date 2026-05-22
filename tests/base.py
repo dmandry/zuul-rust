@@ -4109,7 +4109,7 @@ class ZuulTestCase(BaseTestCase):
                 break
 
     def requestNodes(self, labels, tenant="tenant-one", pipeline="check",
-                     provider=None, timeout=10):
+                     provider=None, timeout=10, template_config=None):
         result_queue = PipelineResultEventQueue(
             self.zk_client, tenant, pipeline)
 
@@ -4123,8 +4123,7 @@ class ZuulTestCase(BaseTestCase):
             # Lock the pipeline, so we can grab the result event
             with (self.scheds.first.sched.run_handler_lock,
                   pipeline_lock(self.zk_client, tenant, pipeline)):
-                request = model.NodesetRequest.new(
-                    ctx,
+                kwargs = dict(
                     tenant_name=tenant,
                     pipeline_name="check",
                     buildset_uuid=uuid.uuid4().hex,
@@ -4137,6 +4136,9 @@ class ZuulTestCase(BaseTestCase):
                     span_info=None,
                     preferred_provider=provider,
                 )
+                if template_config is not None:
+                    kwargs['template_config'] = template_config
+                request = model.NodesetRequest.new(ctx, **kwargs)
                 if timeout:
                     for _ in iterate_timeout(
                             timeout, "nodeset request to be fulfilled"):
