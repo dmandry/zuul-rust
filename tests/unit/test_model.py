@@ -1732,6 +1732,24 @@ class TestTemplateConfig(BaseTestCase):
                 props = props_list[i]
             self.assertEqual(props, expected)
 
+    def test_provider_node_template_config(self):
+        """Verify ProviderNode has template_config.
+
+        Ensures the attribute exists and is exposed via getNodeData
+        so it is serialized to ZK and copied to the executor Node.
+        """
+        pnode = model.ProviderNode()
+        self.assertEqual(pnode.template_config, {})
+        pnode._set(template_config={
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        })
+        data = pnode.getNodeData()
+        self.assertEqual(data['template_config'], {
+            'heat_template_path': 'templates/stack.yaml',
+            'heat_template_content': 'heat_template_version: ...',
+        })
+
 
 class TestSourceContext(BaseTestCase):
     def setUp(self):
