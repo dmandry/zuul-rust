@@ -2257,6 +2257,7 @@ class Node(ConfigObject):
         self.tenant_name = None
         self.requestor = None
         self.reuse = False
+        self.template_config = {}
         self.node_properties = {}
 
     @property
@@ -2299,6 +2300,7 @@ class Node(ConfigObject):
             d['name'] = self.name[0]
             d['aliases'] = list(self.name[1:])
             d['label'] = self.label
+            d['template_config'] = self.template_config
         return d
 
     def updateFromDict(self, data):
@@ -2418,7 +2420,9 @@ class NodeSet(ConfigObject):
     def copy(self):
         n = NodeSet(self.name)
         for name, node in self.nodes.items():
-            n.addNode(Node(node.name, node.label))
+            new_node = Node(node.name, node.label)
+            new_node.template_config = node.template_config.copy()
+            n.addNode(new_node)
         for name, group in self.groups.items():
             n.addGroup(Group(group.name, group.nodes[:]))
         for alt in self.alternatives:
@@ -2712,6 +2716,7 @@ class NodesetRequest(zkobject.LockableZKObject):
             job_uuid="",
             job_name="",
             labels=[],
+            template_config=[],
             priority=0,
             request_time=time.time(),
             zuul_event_id="",
@@ -2840,6 +2845,9 @@ class NodesetRequest(zkobject.LockableZKObject):
             _relative_priority=self.relative_priority,
             hash_key=self.hash_key,
         )
+        # MODEL_API: > 38
+        if COMPONENT_REGISTRY.model_api >= 38:
+            data['template_config'] = self.template_config
         return json.dumps(data, sort_keys=True).encode("utf-8")
 
     def deserialize(self, raw, context, extra=None):
@@ -2848,7 +2856,13 @@ class NodesetRequest(zkobject.LockableZKObject):
                 self._revision.refresh(context)
             except NoNodeError:
                 pass
-        return super().deserialize(raw, context, extra)
+        data = super().deserialize(raw, context, extra)
+        # MODEL_API: > 38
+        data.setdefault('template_config', [])
+        # Pad to match labels length for requests serialized without it
+        while len(data['template_config']) < len(data.get('labels', [])):
+            data['template_config'].append({})
+        return data
 
     def __repr__(self):
         return (f"<NodesetRequest uuid={self.uuid}, state={self.state},"
