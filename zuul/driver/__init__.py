@@ -376,3 +376,61 @@ class ProviderInterface(object, metaclass=abc.ABCMeta):
         This method is required by the interface.
         """
         pass
+
+    def getTemplateConfigSchema(self):
+        """Get voluptuous schema keys for this driver's template-config.
+
+        This method is optional.
+
+        :returns: A dict of voluptuous schema keys.
+        :rtype: dict
+        """
+        return {}
+
+    def getProjectConfigKeys(self):
+        """Get additional tenant project config keys for this driver.
+
+        This method is optional.
+
+        :returns: A dict of key names to voluptuous validators.
+        :rtype: dict
+        """
+        return {}
+
+    def getFileDiscoveryDirs(self, tenant_project_config):
+        """Get additional dirs to fetch from git for this driver.
+
+        This method is optional.
+
+        :returns: A list of directory paths.
+        :rtype: list
+        """
+        return []
+
+    def getProjectConfigForTemplateDirs(self, dirs):
+        """Inverse of getFileDiscoveryDirs: produce project config from dirs.
+
+        This method is optional.
+
+        :arg set dirs: Set of directory paths.
+        :returns: A dict of project config entries.
+        :rtype: dict
+        """
+        return {}
+
+    def resolveTemplateConfig(self, node, nodeset, parsed_config,
+                              files_cache, source_context):
+        """Resolve and validate template content at config-load time.
+
+        This method is optional.
+
+        :arg Node node: The node whose template_config to resolve.
+        :arg NodeSet nodeset: The nodeset containing the node.
+        :arg ParsedConfig parsed_config: Accumulator for errors.
+        :arg files_cache: File cache (dict-like or dynamic files obj).
+        :arg SourceContext source_context: The source context.
+
+        On validation failure, append a ConfigurationError to
+        parsed_config.nodeset_errors.
+        """
+        pass
