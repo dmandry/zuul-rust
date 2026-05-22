@@ -1517,7 +1517,9 @@ class Launcher:
                     if not bool(request.provider_node_data):
                         try:
                             has_quota = self.doesProviderHaveQuotaForLabel(
-                                request.tenant_name, provider, label, messages)
+                                request.tenant_name, provider, label,
+                                messages,
+                                template_config=request.template_config[i])
                         except Exception:
                             self.log.exception(
                                 "Error checking quota for label %s "
@@ -1534,7 +1536,8 @@ class Launcher:
                             return
                     self._emitMessages(log, messages)
                     node = self._requestNode(
-                        label, request, provider, log, ctx)
+                        label, request, provider, log, ctx,
+                        template_config=request.template_config[i])
                     log.debug("Requested node %s", node.uuid)
                 request.addProviderNode(node)
             if request.provider_node_data:
@@ -1637,7 +1640,8 @@ class Launcher:
                 try:
                     if not self.doesProviderHaveQuotaForLabel(
                             request.tenant_name, provider, label, messages,
-                            include_usage=False):
+                            include_usage=False,
+                            template_config=request.template_config[i]):
                         continue
                 except Exception:
                     self.log.exception(
@@ -1745,9 +1749,10 @@ class Launcher:
                     ctx, node, node.State.DEREGISTER, self.log)
 
     def _requestNode(self, label, request, provider, log, ctx,
-                     static_node=None):
+                     static_node=None, template_config=None):
         image = provider.images[label.image]
-        label_quota = provider.getQuotaForLabel(label)
+        label_quota = provider.getQuotaForLabel(
+            label, template_config=template_config)
         endpoint_name = provider.getEndpoint().name
         if static_node:
             node_uuid = static_node.node_id
@@ -1789,6 +1794,7 @@ class Launcher:
             # informational purposes (the actual decision about reuse will
             # happen later).
             reuse=label.reuse,
+            template_config=template_config or {},
         )
 
         # Save a copy of the args here since nothing below should be
@@ -1895,7 +1901,8 @@ class Launcher:
                                 new_node = node
                             else:
                                 new_node = self._requestNode(
-                                    label, request, provider, log, ctx)
+                                    label, request, provider, log, ctx,
+                                    template_config=request.template_config[i])
                         if new_node is node:
                             continue
                         requested_nodes[i] = new_node
@@ -3328,7 +3335,8 @@ class Launcher:
         return False
 
     def doesProviderHaveQuotaForLabel(self, tenant_name, provider, label,
-                                      messages, include_usage=True):
+                                      messages, include_usage=True,
+                                      template_config=None):
         if include_usage:
             # When include_usage is True, we include requested nodes here
             # because this is called to decide whether to add a new request
@@ -3352,7 +3360,8 @@ class Launcher:
             total.min(provider_limits)
             messages.append(f"Provider {provider} limits: {total}")
 
-        label_quota = provider.getQuotaForLabel(label)
+        label_quota = provider.getQuotaForLabel(
+            label, template_config=template_config)
         total.subtract(label_quota)
         messages.append(
             f"Label {label} required quota: {label_quota}")
