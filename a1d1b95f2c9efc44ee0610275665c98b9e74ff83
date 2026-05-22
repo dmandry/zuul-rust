@@ -16,6 +16,24 @@
       "message": "We should go ahead and write this as:\n\n  A :ref:`regular expression \u003cregex\u003e` (or list of regular expressions) \n\nSo we get the cross-reference to the regex documentation, since that is it\u0027s own particular kind of yaml configuration.\n\nAlso, we generally try to avoid the second person.  And finally, \"such as\" reads better than \"like\".  So all together I\u0027d suggest:\n\nA :ref:`regular expression \u003cregex\u003e` (or list of regular\nexpressions) which describe to which branches this `project`\nstanza should apply.  A partial match\nis treated as a valid match, so care must be taken when specifying\nbranch names that are partial matches of other branch names\n(e.g., `main` matches `maint`).  A full match such as \n`^main$` may be specified to avoid ambiguity.",
       "revId": "a1d1b95f2c9efc44ee0610275665c98b9e74ff83",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4362e256_1fa85309",
+        "filename": "doc/source/config/project.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 91,
+      "author": {
+        "id": 37112
+      },
+      "writtenOn": "2026-05-22T07:14:29Z",
+      "side": 1,
+      "message": "Thanks, updated accordingly",
+      "parentUuid": "91b38d7a_2bab7562",
+      "revId": "a1d1b95f2c9efc44ee0610275665c98b9e74ff83",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
