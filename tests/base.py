@@ -4109,7 +4109,7 @@ class ZuulTestCase(BaseTestCase):
                 break
 
     def requestNodes(self, labels, tenant="tenant-one", pipeline="check",
-                     provider=None, timeout=10):
+                     provider=None, timeout=10, template_config=None):
         result_queue = PipelineResultEventQueue(
             self.zk_client, tenant, pipeline)
 
@@ -4131,6 +4131,7 @@ class ZuulTestCase(BaseTestCase):
                     job_uuid=uuid.uuid4().hex,
                     job_name="foobar",
                     labels=labels,
+                    template_config=template_config or [],
                     priority=100,
                     request_time=time.time(),
                     zuul_event_id=uuid.uuid4().hex,
