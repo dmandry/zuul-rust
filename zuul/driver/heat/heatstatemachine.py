@@ -242,6 +242,12 @@ class HeatCreateStateMachine(statemachine.StateMachine):
         # as Ansible variables via nodepool.node_properties.heat_stack_outputs
         self.node.node_properties['heat_stack_outputs'] = outputs
 
+        # If the template provides a zuul_via_nodes output, copy it into
+        # node_properties so the executor can build ProxyJump inventory
+        # entries for via-nodes declared in the nodeset.
+        if 'zuul_via_nodes' in outputs:
+            self.node.node_properties['via_nodes'] = outputs['zuul_via_nodes']
+
         # Remove template content from template_config now that the stack
         # has been created; it can be large and is not needed by the executor.
         self.node.template_config.pop('heat_template_content', None)

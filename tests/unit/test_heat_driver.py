@@ -1970,6 +1970,39 @@ class TestHeatStateMachines(BaseTestCase):
         self.assertEqual(node.node_properties['heat_stack_outputs'],
                          {'bastion_ip': '192.168.1.1'})
 
+    def test_update_node_via_nodes_populated_from_output(self):
+        """Test that zuul_via_nodes output is copied to node_properties."""
+        via_nodes_value = {
+            'worker': {'host': '192.168.1.10', 'user': 'zuul', 'port': 22},
+        }
+        endpoint, node, log, sm = self._make_create_sm()
+        self._setup_complete_stack(endpoint, outputs=[
+            {'output_key': 'bastion_ip', 'output_value': '10.0.0.5'},
+            {'output_key': 'zuul_via_nodes', 'output_value': via_nodes_value},
+        ])
+        sm.state = sm.COMPLETE
+        sm.stack_id = 'stack-123'
+
+        sm.advance()
+
+        self.assertTrue(sm.complete)
+        self.assertIn('via_nodes', node.node_properties)
+        self.assertEqual(node.node_properties['via_nodes'], via_nodes_value)
+
+    def test_update_node_via_nodes_absent_when_no_output(self):
+        """Test that via_nodes is not set when zuul_via_nodes absent."""
+        endpoint, node, log, sm = self._make_create_sm()
+        self._setup_complete_stack(endpoint, outputs=[
+            {'output_key': 'bastion_ip', 'output_value': '10.0.0.5'},
+        ])
+        sm.state = sm.COMPLETE
+        sm.stack_id = 'stack-123'
+
+        sm.advance()
+
+        self.assertTrue(sm.complete)
+        self.assertNotIn('via_nodes', node.node_properties)
+
     def test_delete_advance_start_to_submit(self):
         """Test delete state machine advances from START to SUBMIT."""
         endpoint, node, log, sm = self._make_delete_sm()

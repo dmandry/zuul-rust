@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    Nodesets may now declare nodes that are reached via another node in
+    the same nodeset using the ``via`` attribute.  Via-nodes appear in
+    the Ansible inventory and connect through their gateway node using
+    SSH ProxyJump.  The Heat driver supports this via the
+    ``zuul_via_nodes`` stack output.
