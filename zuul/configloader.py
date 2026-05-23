@@ -54,6 +54,8 @@ from zuul.exceptions import (
     HeatTemplateSecurityError,
     MultipleProjectConfigurations,
     NodeFromGroupNotFoundError,
+    NodeViaChainError,
+    NodeViaNotFoundError,
     PipelineNotPermittedError,
     ProjectNotFoundError,
     RegexDeprecation,
@@ -560,7 +562,8 @@ class NodeSetParser(object):
             vs.Optional('heat-parameters'): dict,
         }
         node = {vs.Required('name'): to_list(str),
-                vs.Required('label'): str,
+                'label': str,
+                'via': str,
                 'template-config': template_config,
                 }
 
@@ -619,6 +622,8 @@ class NodeSetParser(object):
         ns.start_mark = conf.get('_start_mark')
         node_names = set()
         group_names = set()
+        nodeset_str = ('the nodeset' if (self.anonymous or 'name' not in conf)
+                       else 'the nodeset "%s"' % conf['name'])
 
         for conf_node in as_list(conf['nodes']):
             if "localhost" in as_list(conf_node['name']):
@@ -626,7 +631,26 @@ class NodeSetParser(object):
             for name in as_list(conf_node['name']):
                 if name in node_names:
                     raise DuplicateNodeError(name, conf_node['name'])
-            node = model.Node(as_list(conf_node['name']), conf_node['label'])
+
+            has_label = 'label' in conf_node
+            has_via = 'via' in conf_node
+            if has_label and has_via:
+                raise vs.Invalid(
+                    'Node "%s" must not specify both "label" and "via"'
+                    % conf_node['name'])
+            if not has_label and not has_via:
+                raise vs.Invalid(
+                    'Node "%s" must specify either "label" or "via"'
+                    % conf_node['name'])
+            if has_via and 'template-config' in conf_node:
+                raise vs.Invalid(
+                    'Node "%s" with "via" must not specify "template-config"'
+                    % conf_node['name'])
+
+            node = model.Node(as_list(conf_node['name']),
+                              conf_node.get('label'))
+            if has_via:
+                node.via = conf_node['via']
             if 'template-config' in conf_node:
                 # Convert hyphenated keys to underscored
                 for key, value in conf_node['template-config'].items():
@@ -634,18 +658,32 @@ class NodeSetParser(object):
             ns.addNode(node)
             for name in as_list(conf_node['name']):
                 node_names.add(name)
+
+        # Validate via references after all nodes are loaded
+        via_targets = set()
+        for node in ns.getNodes():
+            if node.via is not None:
+                for name in node.name:
+                    if node.via not in node_names:
+                        raise NodeViaNotFoundError(
+                            nodeset_str, name, node.via)
+                via_targets.add(node.via)
+
+        # Disallow chaining: a gateway node must not itself carry via
+        for node in ns.getNodes():
+            if node.via is not None:
+                for name in node.name:
+                    if name in via_targets:
+                        raise NodeViaChainError(nodeset_str, name)
+
         for conf_group in as_list(conf.get('groups', [])):
             if "localhost" in conf_group['name']:
                 raise Exception("Groups named 'localhost' are not allowed.")
             for node_name in as_list(conf_group['nodes']):
                 if node_name not in node_names:
-                    nodeset_str = 'the nodeset' if self.anonymous else \
-                        'the nodeset "%s"' % conf['name']
                     raise NodeFromGroupNotFoundError(nodeset_str, node_name,
                                                      conf_group['name'])
             if conf_group['name'] in group_names:
-                nodeset_str = 'the nodeset' if self.anonymous else \
-                    'the nodeset "%s"' % conf['name']
                 raise DuplicateGroupError(nodeset_str, conf_group['name'])
             group = model.Group(conf_group['name'],
                                 as_list(conf_group['nodes']))

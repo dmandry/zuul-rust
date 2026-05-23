@@ -304,6 +304,30 @@ class DuplicateGroupError(ConfigurationSyntaxError):
         super(DuplicateGroupError, self).__init__(message)
 
 
+class NodeViaNotFoundError(ConfigurationSyntaxError):
+    zuul_error_name = 'Via Node Not Found'
+
+    def __init__(self, nodeset, node, via):
+        message = textwrap.dedent("""\
+        In {nodeset} the node "{node}" has via "{via}" which is not
+        defined in the nodeset.""")
+        message = textwrap.fill(message.format(nodeset=nodeset,
+                                               node=node, via=via))
+        super(NodeViaNotFoundError, self).__init__(message)
+
+
+class NodeViaChainError(ConfigurationSyntaxError):
+    zuul_error_name = 'Via Node Chain'
+
+    def __init__(self, nodeset, node):
+        message = textwrap.dedent("""\
+        In {nodeset} the node "{node}" is targeted by a "via" attribute
+        and may not itself carry a "via" attribute (chaining is not
+        allowed).""")
+        message = textwrap.fill(message.format(nodeset=nodeset, node=node))
+        super(NodeViaChainError, self).__init__(message)
+
+
 class ReporterJobNotPermittedError(ConfigurationSyntaxError):
     zuul_error_name = 'Reporter Job Not Permitted'
 
