@@ -37,8 +37,11 @@ from tests.base import (
 from zuul.executor.sensors.startingbuilds import StartingBuildsSensor
 from zuul.executor.sensors.process import ProcessSensor
 from zuul.executor.sensors.ram import RAMSensor
-from zuul.executor.server import squash_variables
-from zuul.model import NodeSet, Group
+from zuul.executor.server import (
+    AnsibleJob, ExecutorError, ViaNodeUnreachableError, squash_variables,
+    make_setup_inventory_dict, make_inventory_dict,
+)
+from zuul.model import Node, NodeSet, Group
 
 
 class ExecutorReposMixin:
@@ -1834,3 +1837,350 @@ class TestExecutorHomedir(AnsibleZuulTestCase):
         self.assertEqual(A.reported, 1)
         self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
         self.assertIn('Symlink detected', A.messages[0])
+
+
+class TestGetHostListViaNodes(BaseTestCase):
+    """Unit tests for _getViaNodeHostEntries via-node inventory building."""
+
+    def _make_ansible_job(self, nodeset):
+        job_obj = object.__new__(AnsibleJob)
+        job_obj.nodeset = nodeset
+        job_obj.normal_vars = {}
+        executor_server = mock.MagicMock()
+        executor_server.default_username = 'zuul'
+        job_obj.executor_server = executor_server
+        job = mock.MagicMock()
+        job.group_variables = {}
+        job.host_variables = {}
+        job_obj.job = job
+        jobdir = mock.MagicMock()
+        jobdir.known_hosts = '/fake/known_hosts'
+        job_obj.jobdir = jobdir
+        return job_obj
+
+    def _make_gateway_node(self, name, interface_ip, via_nodes_map,
+                           username=None):
+        node = Node([name], 'gateway-label')
+        node.interface_ip = interface_ip
+        node.username = username
+        node.connection_type = 'ssh'
+        node.connection_port = 22
+        node.host_keys = ['fake-key']
+        node.az = 'az1'
+        node.cloud = 'fake-cloud'
+        node.provider = 'fake-provider'
+        node.region = 'fake-region'
+        node.host_id = None
+        node.slot = None
+        node.public_ipv4 = interface_ip
+        node.private_ipv4 = None
+        node.public_ipv6 = None
+        node.private_ipv6 = None
+        node.reuse = False
+        node.resources = None
+        node.node_properties = {'via_nodes': via_nodes_map}
+        return node
+
+    def _make_nodeset_with_via(self, via_node_name, gateway_name):
+        ns = NodeSet('test-ns')
+        gw = Node([gateway_name], 'gateway-label')
+        ns.addNode(gw)
+        via = Node([via_node_name], None)
+        via.via = gateway_name
+        ns.addNode(via)
+        return ns
+
+    def _call(self, job_obj, gateway):
+        return AnsibleJob._getViaNodeHostEntries(job_obj, [gateway])
+
+    def test_via_node_default_entry(self):
+        """A basic via-node entry has expected defaults for all fields."""
+        ns = self._make_nodeset_with_via('internal', 'bastion')
+        job_obj = self._make_ansible_job(ns)
+        gateway = self._make_gateway_node(
+            'bastion', '10.0.0.1',
+            {'internal': {'host': '192.168.1.10'}})
+
+        entries = self._call(job_obj, gateway)
+
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertTrue(entry['is_via_node'])
+        self.assertEqual(entry['host_keys'], [])
+        self.assertEqual(entry['via_host'], '192.168.1.10')
+        self.assertEqual(entry['via_port'], 22)
+        self.assertEqual(entry['via_proxy_jump'], 'zuul@10.0.0.1')
+        hv = entry['host_vars']
+        self.assertEqual(hv['ansible_host'], '192.168.1.10')
+        self.assertEqual(hv['ansible_python_interpreter'], 'auto')
+        self.assertNotIn('ansible_shell_type', hv)
+        args = hv['ansible_ssh_common_args']
+        self.assertIn('ProxyCommand', args)
+        self.assertIn('-l zuul', args)
+        self.assertIn('10.0.0.1', args)
+        self.assertIn('/fake/known_hosts', args)
+
+    def test_via_node_overrides(self):
+        """Optional fields in via_nodes_map override defaults."""
+        cases = [
+            ('python_path', {'host': '192.168.1.10',
+                             'python_path': '/usr/bin/python3'},
+             'ansible_python_interpreter', '/usr/bin/python3'),
+            ('shell_type', {'host': '192.168.1.10', 'shell_type': 'cmd'},
+             'ansible_shell_type', 'cmd'),
+        ]
+        for label, via_map, hv_key, expected in cases:
+            with self.subTest(label):
+                ns = self._make_nodeset_with_via('internal', 'bastion')
+                job_obj = self._make_ansible_job(ns)
+                gateway = self._make_gateway_node(
+                    'bastion', '10.0.0.1', {'internal': via_map})
+                entry = self._call(job_obj, gateway)[0]
+                self.assertEqual(entry['host_vars'][hv_key], expected)
+
+    def test_proxy_command_username(self):
+        """Gateway username (or default) appears in ProxyCommand."""
+        cases = [
+            ('explicit', 'gw-user', 'gw-user'),
+            ('default_fallback', None, 'zuul'),
+        ]
+        for label, gw_username, expected_user in cases:
+            with self.subTest(label):
+                ns = self._make_nodeset_with_via('internal', 'bastion')
+                job_obj = self._make_ansible_job(ns)
+                gateway = self._make_gateway_node(
+                    'bastion', '10.0.0.1',
+                    {'internal': {'host': '192.168.1.10'}},
+                    username=gw_username)
+                entry = self._call(job_obj, gateway)[0]
+                args = entry['host_vars']['ansible_ssh_common_args']
+                self.assertIn(expected_user, args)
+                self.assertIn('10.0.0.1', args)
+
+    def test_keyscan_fields_custom_port_and_username(self):
+        """via_port and via_proxy_jump reflect entry port and gateway user."""
+        ns = self._make_nodeset_with_via('internal', 'bastion')
+        job_obj = self._make_ansible_job(ns)
+        gateway = self._make_gateway_node(
+            'bastion', '10.0.0.1',
+            {'internal': {'host': '192.168.1.10', 'port': 2222}},
+            username='ubuntu')
+
+        entry = self._call(job_obj, gateway)[0]
+
+        self.assertEqual(entry['via_port'], 2222)
+        self.assertEqual(entry['via_proxy_jump'], 'ubuntu@10.0.0.1')
+
+    def test_missing_via_nodes_data_raises(self):
+        """ExecutorError raised when via_nodes key or entry is missing."""
+        cases = [
+            ('no_via_nodes_key', {}),
+            ('no_entry_for_name', {'other': {'host': '192.168.1.99'}}),
+        ]
+        for label, via_nodes_map in cases:
+            with self.subTest(label):
+                ns = self._make_nodeset_with_via('internal', 'bastion')
+                job_obj = self._make_ansible_job(ns)
+                gateway = self._make_gateway_node(
+                    'bastion', '10.0.0.1', via_nodes_map)
+                self.assertRaises(
+                    ExecutorError,
+                    AnsibleJob._getViaNodeHostEntries, job_obj, [gateway])
+
+
+class TestInventoryDictViaNodesGroup(BaseTestCase):
+    """Unit tests for zuul_via_nodes group in both make_setup_inventory_dict
+    and make_inventory_dict."""
+
+    def _make_nodes(self, names, is_via_node=False):
+        return [dict(name=n, host_vars={}, host_keys=[],
+                     is_via_node=is_via_node) for n in names]
+
+    def _make_hostvars(self, names):
+        hv = {n: {'ansible_connection': 'ssh'} for n in names}
+        hv['localhost'] = {}
+        return hv
+
+    def _make_nodeset(self, node_names):
+        ns = NodeSet('test-ns')
+        for name in node_names:
+            ns.addNode(Node([name], 'some-label'))
+        return ns
+
+    def _call_both(self, nodes, hostvars, node_names):
+        ns = self._make_nodeset(node_names)
+        return [
+            ('setup', make_setup_inventory_dict(nodes, hostvars)),
+            ('full', make_inventory_dict(nodes, ns, hostvars, set())),
+        ]
+
+    def test_no_via_nodes_empty_group(self):
+        """zuul_via_nodes group is present but empty when no via-nodes."""
+        nodes = self._make_nodes(['bastion'])
+        hostvars = self._make_hostvars(['bastion'])
+        for label, inv in self._call_both(nodes, hostvars, ['bastion']):
+            with self.subTest(label):
+                self.assertIn('zuul_via_nodes', inv['all']['children'])
+                self.assertEqual(
+                    inv['all']['children']['zuul_via_nodes']['hosts'], {})
+
+    def test_via_nodes_group_membership(self):
+        """Via-node in group; gateway not in group."""
+        nodes = (self._make_nodes(['bastion'])
+                 + self._make_nodes(['internal'], is_via_node=True))
+        hostvars = self._make_hostvars(['bastion', 'internal'])
+        for label, inv in self._call_both(nodes, hostvars,
+                                          ['bastion', 'internal']):
+            with self.subTest(label):
+                group = inv['all']['children']['zuul_via_nodes']['hosts']
+                self.assertIn('internal', group)
+                self.assertNotIn('bastion', group)
+
+    def test_via_node_also_in_all_hosts(self):
+        """Via-node appears in all.hosts as well as the group."""
+        nodes = (self._make_nodes(['bastion'])
+                 + self._make_nodes(['internal'], is_via_node=True))
+        hostvars = self._make_hostvars(['bastion', 'internal'])
+        for label, inv in self._call_both(nodes, hostvars,
+                                          ['bastion', 'internal']):
+            with self.subTest(label):
+                self.assertIn('internal', inv['all']['hosts'])
+
+    def test_blacklisted_connection_excluded(self):
+        """Hosts with blacklisted connection types are excluded from all."""
+        nodes = self._make_nodes(['kube-pod'])
+        hostvars = {'kube-pod': {'ansible_connection': 'kubectl'}}
+        inv = make_setup_inventory_dict(nodes, hostvars)
+        self.assertNotIn('kube-pod', inv['all']['hosts'])
+
+    def test_zuul_unreachable_still_present(self):
+        """zuul_unreachable group is unaffected by the via-nodes addition."""
+        nodes = self._make_nodes(['bastion'])
+        hostvars = self._make_hostvars(['bastion'])
+        ns = self._make_nodeset(['bastion'])
+        inv = make_inventory_dict(nodes, ns, hostvars, {'bastion'})
+        self.assertIn('zuul_unreachable', inv['all']['children'])
+        self.assertIn('bastion',
+                      inv['all']['children']['zuul_unreachable']['hosts'])
+
+
+class TestPrepareViaNodes(BaseTestCase):
+    """Unit tests for the prepareViaNodes method."""
+
+    def _make_job(self, host_list):
+        job_obj = object.__new__(AnsibleJob)
+        job_obj.host_list = host_list
+        job_obj.jobdir = mock.MagicMock()
+        job_obj.jobdir.job_output_file = '/dev/null'
+        return job_obj
+
+    def test_no_via_nodes_skips_keyscan(self):
+        """prepareViaNodes returns without scanning when no via-nodes exist."""
+        job_obj = self._make_job([{'name': 'bastion', 'is_via_node': False}])
+        with mock.patch.object(job_obj, '_keyscanViaNodes') as mock_ks:
+            job_obj.prepareViaNodes()
+        mock_ks.assert_not_called()
+
+    def test_via_nodes_keyscan_success(self):
+        """prepareViaNodes writes to job output and returns on success."""
+        host_list = [
+            {'name': 'bastion', 'is_via_node': False},
+            {'name': 'internal', 'is_via_node': True,
+             'via_host': '192.168.1.10', 'via_port': 22,
+             'via_proxy_jump': 'zuul@10.0.0.1'},
+        ]
+        job_obj = self._make_job(host_list)
+        with mock.patch('zuul.executor.server._safe_open',
+                        mock.mock_open()):
+            with mock.patch.object(job_obj, '_keyscanViaNodes',
+                                   return_value=True):
+                job_obj.prepareViaNodes()  # must not raise
+
+    def test_via_nodes_keyscan_timeout_raises(self):
+        """prepareViaNodes raises ViaNodeUnreachableError on timeout."""
+        host_list = [
+            {'name': 'internal', 'is_via_node': True,
+             'via_host': '192.168.1.10', 'via_port': 22,
+             'via_proxy_jump': 'zuul@10.0.0.1'},
+        ]
+        job_obj = self._make_job(host_list)
+        with mock.patch('zuul.executor.server._safe_open',
+                        mock.mock_open()):
+            with mock.patch.object(job_obj, '_keyscanViaNodes',
+                                   return_value=False):
+                self.assertRaises(ViaNodeUnreachableError,
+                                  job_obj.prepareViaNodes)
+
+
+class TestKeyscanViaNode(BaseTestCase):
+    """Unit tests for the _keyscanViaNode method."""
+
+    def _make_job(self):
+        import tempfile
+        job_obj = object.__new__(AnsibleJob)
+        job_obj.log = mock.MagicMock()
+        job_obj.ssh_agent = mock.MagicMock()
+        job_obj.ssh_agent.env = {'SSH_AUTH_SOCK': '/tmp/fake.sock'}
+        job_obj.jobdir = mock.MagicMock()
+        self._known_hosts = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.known_hosts', delete=False)
+        self._known_hosts.close()
+        job_obj.jobdir.known_hosts = self._known_hosts.name
+        return job_obj
+
+    def test_success_writes_key_to_known_hosts(self):
+        """On success the key is appended to known_hosts and True returned."""
+        job_obj = self._make_job()
+        fake_key = '192.168.1.10 ssh-ed25519 AAAAC3Nz...'
+        proc = mock.MagicMock()
+        proc.stdout = fake_key
+        proc.stderr = ''
+        with mock.patch('zuul.executor.server.subprocess.run',
+                        return_value=proc):
+            ok, err = job_obj._keyscanViaNode(
+                '192.168.1.10', 22, 'zuul@10.0.0.1')
+        self.assertTrue(ok)
+        self.assertEqual(err, '')
+        with open(job_obj.jobdir.known_hosts) as f:
+            self.assertIn(fake_key, f.read())
+
+    def test_success_custom_port_in_command(self):
+        """Port != 22 adds -p to the ssh-keyscan command on the gateway."""
+        job_obj = self._make_job()
+        proc = mock.MagicMock()
+        proc.stdout = '192.168.1.10 ssh-ed25519 AAAAC3Nz...'
+        proc.stderr = ''
+        with mock.patch('zuul.executor.server.subprocess.run',
+                        return_value=proc) as mock_run:
+            job_obj._keyscanViaNode('192.168.1.10', 2222, 'zuul@10.0.0.1')
+        cmd = mock_run.call_args[0][0]
+        keyscan_cmd = cmd[-1]
+        self.assertIn('-p 2222', keyscan_cmd)
+        self.assertNotIn('-p', cmd[-1].replace('-p 2222', ''))
+
+    def test_no_keys_returns_stderr(self):
+        """Empty stdout returns (False, stderr) and nothing written."""
+        job_obj = self._make_job()
+        proc = mock.MagicMock()
+        proc.stdout = ''
+        proc.stderr = 'Permission denied (publickey).'
+        with mock.patch('zuul.executor.server.subprocess.run',
+                        return_value=proc):
+            ok, err = job_obj._keyscanViaNode(
+                '192.168.1.10', 22, 'zuul@10.0.0.1')
+        self.assertFalse(ok)
+        self.assertEqual(err, 'Permission denied (publickey).')
+        with open(job_obj.jobdir.known_hosts) as f:
+            self.assertEqual(f.read(), '')
+
+    def test_subprocess_timeout_returns_error(self):
+        """SubprocessTimeoutExpired returns (False, error string)."""
+        import subprocess
+        job_obj = self._make_job()
+        with mock.patch('zuul.executor.server.subprocess.run',
+                        side_effect=subprocess.TimeoutExpired(
+                            cmd='ssh', timeout=25)):
+            ok, err = job_obj._keyscanViaNode(
+                '192.168.1.10', 22, 'zuul@10.0.0.1')
+        self.assertFalse(ok)
+        self.assertIn('timed out', err)

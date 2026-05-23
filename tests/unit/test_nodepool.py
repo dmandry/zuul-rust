@@ -174,3 +174,20 @@ class TestNodepool(TestNodepoolBase):
         self.assertEqual(request1.state, 'fulfilled')
         self.assertEqual(request2.state, 'fulfilled')
         self.assertTrue(request2.state_time < request1.state_time)
+
+    def test_requestNodes_excludes_via_node_label(self):
+        """requestNodes must not include the via-node's label in the
+        node request."""
+        nodeset = model.NodeSet()
+        nodeset.addNode(model.Node(['bastion'], 'bastion-label'))
+        via = model.Node(['internal'], None)
+        via.via = 'bastion'
+        nodeset.addNode(via)
+        job = model.Job('testjob')
+        job.uuid = uuid.uuid4().hex
+        job.nodeset = nodeset
+
+        request = self.nodepool.requestNodes(
+            "test-uuid", job, "tenant", "pipeline", "provider", 0, 0)
+
+        self.assertEqual(request.labels, ['bastion-label'])

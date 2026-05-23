@@ -1929,6 +1929,54 @@ The group name `zuul_unreachable` is reserved by zuul and will
 automatically override any similarly named group defined by the
 nodeset.
 
+Zuul also automatically creates a group named `zuul_via_nodes`.  It
+is always present, and contains all hosts that are reached via another
+node (see :ref:`nodeset` for the ``via`` attribute).  When the nodeset
+has no via nodes the group is empty.  Job playbooks can use this group
+to target via nodes exclusively or to exclude them:
+
+.. code-block:: yaml
+
+   # Target only via-nodes
+   - hosts: zuul_via_nodes
+     tasks:
+       - ...
+
+   # Skip via-nodes
+   - hosts: all:!zuul_via_nodes
+     tasks:
+       - ...
+
+The group name `zuul_via_nodes` is reserved by Zuul and will
+automatically override any similarly named group defined by the
+nodeset.
+
+.. note::
+
+   Via-nodes are accessed from the executor through an SSH proxy hop
+   (ProxyCommand) via the gateway node.  Some Zuul base-job roles that
+   transfer files or run git operations from the executor directly to
+   each node — most notably ``prepare-workspace-git`` — cannot reach
+   via-nodes this way, because the role's ``repo_sync`` module opens a
+   ``git+ssh://`` connection directly to ``ansible_host`` and has no
+   knowledge of the SSH proxy configuration in the Ansible inventory.
+
+   Jobs that use such roles should exclude via-nodes using
+   ``all:!zuul_via_nodes`` and arrange for the workspace to be set up
+   on via-nodes by other means (for example, by running a sync task
+   via the gateway node once the workspace is ready on the gateway).
+   A typical pre-run playbook structure looks like:
+
+   .. code-block:: yaml
+
+      - hosts: all
+        roles:
+          - add-build-sshkey
+
+      - hosts: all:!zuul_via_nodes
+        roles:
+          - prepare-workspace-git
+
 Build Status
 ------------
 
