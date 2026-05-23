@@ -193,7 +193,7 @@ class Nodepool(object):
     def requestNodes(self, build_set_uuid, job, tenant_name, pipeline_name,
                      provider, priority, relative_priority, event=None):
         log = get_annotated_logger(self.log, event)
-        labels = [n.label for n in job.nodeset.getNodes()]
+        labels = [n.label for n in job.nodeset.getNodes() if not n.via]
         if event:
             event_id = event.zuul_event_id
         else:

@@ -103,6 +103,42 @@ Connection details for ``internal`` (host, user, port, etc.) are
 supplied by the gateway node at runtime through the
 ``node_properties.via_nodes`` mapping on the gateway node.
 
+Via nodes are not independently allocated — only the gateway node
+consumes a label slot.  However, via nodes appear in the Ansible
+inventory exactly like regular nodes, including group membership.
+Zuul connects to them via ``ssh`` using an ``ansible_ssh_common_args``
+setting that passes ``-o ProxyJump=<gateway-user>@<gateway-ip>``
+through the gateway.
+
+All via nodes in a job are also automatically added to the
+``zuul_via_nodes`` inventory group.  See :ref:`build_status` for
+details and usage examples.
+
+The ``node_properties.via_nodes`` dict on the gateway node is keyed
+by the via-node name and each entry may contain:
+
+``host`` (required)
+  IP address or hostname of the via node, as seen from the gateway.
+
+``user``
+  SSH user for the via node.  Defaults to the executor's
+  ``default_username`` setting.
+
+``port``
+  SSH port for the via node.  Defaults to 22.
+
+``python_path``
+  Path to Python on the via node for Ansible.  Defaults to
+  ``auto`` (Ansible auto-detection).
+
+``shell_type``
+  Ansible shell type for the via node (e.g. ``cmd`` for Windows).
+  When absent, no ``ansible_shell_type`` is set.
+
+Node providers must populate ``node_properties.via_nodes`` on the
+gateway node.  See the Heat driver documentation for how to do this
+using the ``zuul_via_nodes`` stack output.
+
 Constraints on via nodes:
 
 * A node must have either ``label`` or ``via``, not both.

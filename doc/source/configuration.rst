@@ -692,6 +692,16 @@ The following sections of ``zuul.conf`` are used by the executor:
       Timeout of the ansible setup playbook in seconds that runs before
       the first playbook of the job.
 
+   .. attr:: ansible_via_node_keyscan_timeout
+      :default: 300
+
+      Maximum time in seconds to wait for via-nodes to become reachable
+      via SSH keyscan.  Via-nodes are not independently probed by the
+      launcher before the nodeset is fulfilled, so they may still be
+      booting when the gateway node is ready.  The executor retries
+      ``ssh-keyscan`` through the gateway (ProxyJump) until all via-node
+      host keys have been collected or this timeout is exhausted.
+
    .. attr:: disk_limit_per_job
       :default: 250
 

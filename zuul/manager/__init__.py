@@ -1219,7 +1219,9 @@ class PipelineManager(metaclass=ABCMeta):
     def _useNodepoolFallback(self, log, job):
         if not self.tenant.use_nodepool:
             return False
-        labels = {n.label for n in job.nodeset.getNodes()}
+        # Via-nodes are not independently allocated; exclude them here
+        # (see LauncherClient.requestNodeset).
+        labels = {n.label for n in job.nodeset.getNodes() if not n.via}
         for provider in self.tenant.layout.providers.values():
             labels -= set(provider.labels.keys())
             if not labels:

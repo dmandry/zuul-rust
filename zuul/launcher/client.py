@@ -53,8 +53,12 @@ class LauncherClient:
                        preferred_provider):
         log = get_annotated_logger(self.log, item.event)
         nodes = job.nodeset.getNodes()
-        labels = [n.label for n in nodes]
-        template_config = [n.template_config for n in nodes]
+        # Via-nodes (node.via is set) are not independently allocated;
+        # their connection details are supplied by their gateway node at
+        # executor inventory-build time.  Exclude them from both lists
+        # since labels[i] and template_config[i] must remain in sync.
+        labels = [n.label for n in nodes if not n.via]
+        template_config = [n.template_config for n in nodes if not n.via]
 
         buildset = item.current_build_set
         parent_span = tracing.restoreSpan(buildset.span_info)
@@ -144,8 +148,12 @@ class LauncherClient:
         log.debug("Accepting nodeset for request %s", request)
         try:
             with self.createZKContext(None, self.log) as ctx:
+                # Via-nodes are not allocated by the provider; exclude
+                # them so that node_ids and nodeset nodes remain in sync.
+                allocated_nodes = [n for n in nodeset.getNodes()
+                                   if not n.via]
                 for node_id, node in zip(
-                    request.nodes, nodeset.getNodes()
+                    request.nodes, allocated_nodes
                 ):
                     provider_node = ProviderNode.fromZK(
                         ctx, path=ProviderNode._getPath(node_id))
@@ -167,6 +175,10 @@ class LauncherClient:
         log = get_annotated_logger(self.log, zuul_event_id)
         log.info("Setting nodeset %s in use", nodeset)
         for node in nodeset.getNodes():
+            # Via-nodes have no provider node; only allocated nodes
+            # are transitioned to in-use state.
+            if node.via:
+                continue
             provider_node = getattr(node, "_provider_node", None)
             if not provider_node:
                 raise Exception("No associated provider node for %s", node)
