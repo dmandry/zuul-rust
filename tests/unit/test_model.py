@@ -1752,6 +1752,58 @@ class TestTemplateConfig(BaseTestCase):
         })
 
 
+class TestViaNodes(BaseTestCase):
+    def test_node_via_default_is_none(self):
+        node = model.Node(['bastion'], 'my-label')
+        self.assertIsNone(node.via)
+
+    def test_node_todict_includes_via(self):
+        node = model.Node(['worker'], 'worker-label')
+        node.via = 'bastion'
+        d = node.toDict(internal_attributes=True)
+        self.assertEqual(d['via'], 'bastion')
+
+    def test_node_todict_via_none(self):
+        node = model.Node(['worker'], 'worker-label')
+        d = node.toDict(internal_attributes=True)
+        self.assertIsNone(d['via'])
+
+    def test_node_fromdict_restores_via(self):
+        node = model.Node(['worker'], 'worker-label')
+        node.via = 'bastion'
+        d = node.toDict(internal_attributes=True)
+        restored = model.Node.fromDict(d)
+        self.assertEqual(restored.via, 'bastion')
+
+    def test_node_fromdict_restores_via_none(self):
+        node = model.Node(['bastion'], 'bastion-label')
+        d = node.toDict(internal_attributes=True)
+        restored = model.Node.fromDict(d)
+        self.assertIsNone(restored.via)
+
+    def test_nodeset_copy_preserves_via(self):
+        ns = model.NodeSet('test-nodeset')
+        gateway = model.Node(['bastion'], 'bastion-label')
+        worker = model.Node(['worker'], 'worker-label')
+        worker.via = 'bastion'
+        ns.addNode(gateway)
+        ns.addNode(worker)
+        copied = ns.copy()
+        copied_nodes = {n.name[0]: n for n in copied.getNodes()}
+        self.assertIsNone(copied_nodes['bastion'].via)
+        self.assertEqual(copied_nodes['worker'].via, 'bastion')
+
+    def test_nodeset_copy_via_is_independent(self):
+        """Mutating via on the copy does not affect the original."""
+        ns = model.NodeSet('test-nodeset')
+        worker = model.Node(['worker'], 'worker-label')
+        worker.via = 'bastion'
+        ns.addNode(worker)
+        copied = ns.copy()
+        copied.getNodes()[0].via = 'other'
+        self.assertEqual(ns.getNodes()[0].via, 'bastion')
+
+
 class TestSourceContext(BaseTestCase):
     def setUp(self):
         super().setUp()
