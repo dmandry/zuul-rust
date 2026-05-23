@@ -1701,6 +1701,71 @@ class TestHeatStateMachines(BaseTestCase):
         self.assertEqual(node.node_properties['heat_stack_outputs'],
                          {'bastion_ip': '192.168.1.1'})
 
+    def test_update_node_via_nodes_populated_from_output(self):
+        """Test that zuul_via_nodes output is copied to node_properties."""
+        endpoint = Mock()
+        stack = Mock()
+        stack.id = 'stack-123'
+        stack.status = 'CREATE_COMPLETE'
+        via_nodes_value = {
+            'worker': {'host': '192.168.1.10', 'user': 'zuul', 'port': 22},
+        }
+        stack.outputs = [
+            {'output_key': 'bastion_ip', 'output_value': '10.0.0.5'},
+            {'output_key': 'zuul_via_nodes', 'output_value': via_nodes_value},
+        ]
+        endpoint._getStack = Mock(return_value=stack)
+        instance = Mock()
+        endpoint._getInstance = Mock(return_value=instance)
+        node = Mock()
+        node.create_state = {}
+        node.quota = QuotaInformation(stacks=1)
+        node.template_config = {}
+        node.node_properties = {}
+        log = Mock()
+
+        sm = self.HeatCreateStateMachine(
+            endpoint, node, 'test-stack', 'template: {}',
+            {}, {}, 600, log)
+        sm.state = sm.COMPLETE
+        sm.stack_id = 'stack-123'
+
+        sm.advance()
+
+        self.assertTrue(sm.complete)
+        self.assertIn('via_nodes', node.node_properties)
+        self.assertEqual(node.node_properties['via_nodes'], via_nodes_value)
+
+    def test_update_node_via_nodes_absent_when_no_output(self):
+        """Test that via_nodes is not set when zuul_via_nodes absent."""
+        endpoint = Mock()
+        stack = Mock()
+        stack.id = 'stack-123'
+        stack.status = 'CREATE_COMPLETE'
+        stack.outputs = [
+            {'output_key': 'bastion_ip', 'output_value': '10.0.0.5'},
+        ]
+        endpoint._getStack = Mock(return_value=stack)
+        instance = Mock()
+        endpoint._getInstance = Mock(return_value=instance)
+        node = Mock()
+        node.create_state = {}
+        node.quota = QuotaInformation(stacks=1)
+        node.template_config = {}
+        node.node_properties = {}
+        log = Mock()
+
+        sm = self.HeatCreateStateMachine(
+            endpoint, node, 'test-stack', 'template: {}',
+            {}, {}, 600, log)
+        sm.state = sm.COMPLETE
+        sm.stack_id = 'stack-123'
+
+        sm.advance()
+
+        self.assertTrue(sm.complete)
+        self.assertNotIn('via_nodes', node.node_properties)
+
     def test_delete_advance_start_to_submit(self):
         """Test delete state machine advances from START to SUBMIT."""
         endpoint = Mock()
