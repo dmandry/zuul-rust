@@ -76,6 +76,42 @@ would receive `fast-label` nodes if a provider was able to supply
 them, otherwise it would receive `slow-label` nodes.  A Nodeset may
 specify nodes and groups, or alternative nodesets, but not both.
 
+Via nodes
+---------
+
+A nodeset may declare *via nodes* — nodes that are not independently
+allocated by the node provider but are instead reached through another
+node in the same nodeset (the *gateway node*).  Via nodes appear in
+the Ansible inventory and are connected through their gateway node
+using SSH ProxyJump.
+
+.. code-block:: yaml
+
+   - nodeset:
+       name: bastion-set
+       nodes:
+         - name: bastion
+           label: bastion-label
+           template-config:
+             heat_template_path: ci/heat/bastion.yaml
+         - name: internal
+           via: bastion
+
+In this example, ``bastion`` is allocated by the provider and
+``internal`` is reached through ``bastion`` via SSH ProxyJump.
+Connection details for ``internal`` (host, user, port, etc.) are
+supplied by the gateway node at runtime through the
+``node_properties.via_nodes`` mapping on the gateway node.
+
+Constraints on via nodes:
+
+* A node must have either ``label`` or ``via``, not both.
+* A via node may not carry ``template-config``.
+* The ``via`` value must name another node declared in the same
+  nodeset.
+* A gateway node (a node referenced by another node's ``via``) may not
+  itself carry a ``via`` attribute (chaining is not allowed).
+
 .. attr:: nodeset
 
    A Nodeset requires two attributes:
@@ -105,10 +141,21 @@ specify nodes and groups, or alternative nodesets, but not both.
          the Ansible inventory will share a common ansible_host address.
 
       .. attr:: label
-         :required:
 
-         The label for the node.  Zuul will request a node with
-         this label.
+         The label for the node.  Zuul will request a node with this
+         label.  Required unless :attr:`nodeset.nodes.via` is set;
+         mutually exclusive with ``via``.
+
+      .. attr:: via
+
+         The name of another node in the same nodeset through which
+         this node is reached.  When set, the node is not independently
+         allocated by the provider; instead, Zuul connects to it via
+         SSH ProxyJump through the named gateway node.  The gateway
+         node must carry a ``label`` (not ``via``), and chaining (a
+         via node as the gateway of another via node) is not allowed.
+         Mutually exclusive with :attr:`nodeset.nodes.label` and
+         ``template-config``.
 
    .. attr:: groups
 

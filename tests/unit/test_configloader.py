@@ -25,9 +25,14 @@ from zuul import configloader
 from zuul.lib.ansible import AnsibleManager
 from zuul.configloader import (
     AuthorizationRuleParser, AuthorizationRoleParser,
-    ConfigLoader, safe_load_yaml
+    ConfigLoader, NodeSetParser, safe_load_yaml
 )
-from zuul.exceptions import AuthZRoleNotFoundError, AuthZRuleNotFoundError
+from zuul.exceptions import (
+    AuthZRoleNotFoundError,
+    AuthZRuleNotFoundError,
+    NodeViaChainError,
+    NodeViaNotFoundError,
+)
 from zuul.model import Abide, MergeRequest, SourceContext
 from zuul.model_api import MODEL_API
 from zuul.zk.components import COMPONENT_REGISTRY
@@ -2138,3 +2143,110 @@ class TestResolveHeatTemplates(BaseTestCase):
                          'template-a')
         self.assertEqual(node_b.template_config['heat_template_content'],
                          'template-b')
+
+
+class TestNodeSetViaNodes(BaseTestCase):
+    """Unit tests for the NodeSetParser via-node feature."""
+
+    def setUp(self):
+        super().setUp()
+        self.parser = NodeSetParser(pcontext=None)
+
+    def _parse(self, conf):
+        """Parse a nodeset conf dict directly via loadNodeset."""
+        return self.parser.loadNodeset(conf)
+
+    def test_valid_via_node(self):
+        """A nodeset with a gateway + via node loads correctly."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {'name': 'bastion', 'label': 'bastion-label'},
+                {'name': 'internal', 'via': 'bastion'},
+            ],
+        }
+        ns = self._parse(conf)
+        nodes = {n.name[0]: n for n in ns.getNodes()}
+        self.assertIsNone(nodes['bastion'].via)
+        self.assertEqual(nodes['internal'].via, 'bastion')
+        self.assertEqual(nodes['bastion'].label, 'bastion-label')
+        self.assertIsNone(nodes['internal'].label)
+
+    def test_via_node_with_template_config(self):
+        """A gateway node may carry template-config."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {
+                    'name': 'bastion',
+                    'label': 'bastion-label',
+                    'template-config': {'heat_template_path': 'ci/heat.yaml'},
+                },
+                {'name': 'internal', 'via': 'bastion'},
+            ],
+        }
+        ns = self._parse(conf)
+        nodes = {n.name[0]: n for n in ns.getNodes()}
+        self.assertIn('heat_template_path',
+                      nodes['bastion'].template_config)
+
+    def test_error_node_has_neither_label_nor_via(self):
+        """A node without label or via raises vs.Invalid."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {'name': 'node1'},
+            ],
+        }
+        self.assertRaises(vs.Invalid, self._parse, conf)
+
+    def test_error_node_has_both_label_and_via(self):
+        """A node with both label and via raises vs.Invalid."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {'name': 'bastion', 'label': 'bastion-label'},
+                {'name': 'internal', 'label': 'some-label', 'via': 'bastion'},
+            ],
+        }
+        self.assertRaises(vs.Invalid, self._parse, conf)
+
+    def test_error_via_node_has_template_config(self):
+        """A via node carrying template-config raises vs.Invalid."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {'name': 'bastion', 'label': 'bastion-label'},
+                {
+                    'name': 'internal',
+                    'via': 'bastion',
+                    'template-config': {'heat_template_path': 'ci/heat.yaml'},
+                },
+            ],
+        }
+        self.assertRaises(vs.Invalid, self._parse, conf)
+
+    def test_error_via_references_unknown_node(self):
+        """A via value referencing a non-existent node raises
+        NodeViaNotFoundError."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {'name': 'bastion', 'label': 'bastion-label'},
+                {'name': 'internal', 'via': 'nonexistent'},
+            ],
+        }
+        self.assertRaises(NodeViaNotFoundError, self._parse, conf)
+
+    def test_error_chained_via(self):
+        """Chaining via nodes (via-node as gateway) raises
+        NodeViaChainError."""
+        conf = {
+            'name': 'test-ns',
+            'nodes': [
+                {'name': 'bastion', 'label': 'bastion-label'},
+                {'name': 'middle', 'via': 'bastion'},
+                {'name': 'inner', 'via': 'middle'},
+            ],
+        }
+        self.assertRaises(NodeViaChainError, self._parse, conf)
