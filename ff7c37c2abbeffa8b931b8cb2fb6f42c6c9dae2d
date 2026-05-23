@@ -56,6 +56,30 @@
       },
       "revId": "ff7c37c2abbeffa8b931b8cb2fb6f42c6c9dae2d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c87f09bf_5b0d7317",
+        "filename": "doc/source/config/pipeline.rst",
+        "patchSetId": 3
+      },
+      "lineNbr": 345,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-23T17:21:12Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "81ffcb36_9f1eb37d",
+      "range": {
+        "startLine": 345,
+        "startChar": 24,
+        "endLine": 345,
+        "endChar": 27
+      },
+      "revId": "ff7c37c2abbeffa8b931b8cb2fb6f42c6c9dae2d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
