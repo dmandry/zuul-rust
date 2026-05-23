@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e0ba833a_ac101286",
+        "filename": "tests/fakegithub.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 262,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-23T17:29:52Z",
+      "side": 1,
+      "message": "I guess the self.draft flag isn\u0027t sent in the event for converting between a draft and ready for review (it isn\u0027t part of the datastructure below).",
+      "revId": "21a988bbeeed7eed42b1011d754de4b4db955b6b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
