@@ -2244,6 +2244,7 @@ class Node(ConfigObject):
         self.reuse = False
         self.template_config = {}
         self.node_properties = {}
+        self.via = None
 
     @property
     def state(self):
@@ -2286,6 +2287,7 @@ class Node(ConfigObject):
             d['aliases'] = list(self.name[1:])
             d['label'] = self.label
             d['template_config'] = self.template_config
+            d['via'] = self.via
         return d
 
     def updateFromDict(self, data):
@@ -2407,6 +2409,7 @@ class NodeSet(ConfigObject):
         for name, node in self.nodes.items():
             new_node = Node(node.name, node.label)
             new_node.template_config = node.template_config.copy()
+            new_node.via = node.via
             n.addNode(new_node)
         for name, group in self.groups.items():
             n.addGroup(Group(group.name, group.nodes[:]))
