@@ -1,0 +1,12 @@
+---
+features:
+  - |
+    Nodesets may now declare nodes that are reached via another node in
+    the same nodeset using the ``via`` attribute.  Via-nodes appear in
+    the Ansible inventory and connect through their gateway node using
+    SSH ProxyJump.
+
+    A ``zuul_via_nodes`` group is automatically added to every job
+    inventory containing all via-node hosts.  Job playbooks can target
+    via-nodes exclusively with ``hosts: zuul_via_nodes``, or exclude
+    them with ``hosts: all,!zuul_via_nodes``.

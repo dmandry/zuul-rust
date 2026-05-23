@@ -31,6 +31,7 @@ from zuul import model
 import zuul.driver.aws.awsendpoint
 from zuul.launcher.client import LauncherClient
 import zuul.launcher.server
+from zuul.manager.independent import IndependentPipelineManager
 from zuul.zk.event_queues import PipelineResultEventQueue
 from zuul.zk.launcher import RequestCache
 from zuul.zk.locks import pipeline_lock
@@ -46,6 +47,7 @@ import moto.ec2.responses.instances
 import boto3
 
 from tests.base import (
+    BaseTestCase,
     ResponsesFixture,
     AnsibleZuulTestCase,
     ZuulTestCase,
@@ -4557,3 +4559,139 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 main.refresh(ctx)
             except NoNodeError:
                 break
+
+
+class TestLauncherClientViaNodes(BaseTestCase):
+    """Unit tests for LauncherClient via-node filtering."""
+
+    def _make_client(self):
+        client = object.__new__(LauncherClient)
+        client.log = logging.getLogger("zuul.test.LauncherClient")
+        client.component_info = None
+        client.zk_client = mock.MagicMock()
+        client.stop_event = mock.MagicMock()
+        return client
+
+    def _make_nodeset(self):
+        """Return a NodeSet with one gateway node and one via-node."""
+        ns = model.NodeSet('test-ns')
+        gw = model.Node(['bastion'], 'bastion-label')
+        gw.template_config = {'heat_template_path': 'ci/heat.yaml'}
+        ns.addNode(gw)
+        via = model.Node(['internal'], None)
+        via.via = 'bastion'
+        ns.addNode(via)
+        return ns
+
+    def _make_job(self, nodeset):
+        job = mock.MagicMock()
+        job.nodeset = nodeset
+        return job
+
+    def _make_item(self):
+        item = mock.MagicMock()
+        item.manager.tenant.name = 'test-tenant'
+        item.manager.pipeline.name = 'test-pipeline'
+        item.current_build_set.uuid = 'buildset-uuid'
+        item.current_build_set.span_info = None
+        item.event.zuul_event_id = 'event-id'
+        item.event.image_names = None
+        item.event.image_upload_uuid = None
+        return item
+
+    def _call_requestNodeset(self, client, job):
+        item = self._make_item()
+        captured = {}
+
+        def fake_new(ctx, **kwargs):
+            captured.update(kwargs)
+            return mock.MagicMock()
+
+        ctx_mgr = mock.MagicMock()
+        ctx_mgr.__enter__ = mock.Mock(return_value=mock.MagicMock())
+        ctx_mgr.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch.object(client, 'createZKContext',
+                               return_value=ctx_mgr), \
+             mock.patch('zuul.launcher.client.NodesetRequest.new',
+                        side_effect=fake_new), \
+             mock.patch('zuul.launcher.client.tracing.restoreSpan'), \
+             mock.patch('zuul.launcher.client.tracing.getSpanInfo'), \
+             mock.patch('zuul.launcher.client.trace'):
+            client.requestNodeset(item, job, 100, 0, None)
+
+        return captured
+
+    def test_requestNodeset_excludes_via_node_label(self):
+        """requestNodeset must not send the via-node's label to the
+        launcher."""
+        client = self._make_client()
+        ns = self._make_nodeset()
+        captured = self._call_requestNodeset(client, self._make_job(ns))
+
+        self.assertIn('labels', captured)
+        self.assertEqual(captured['labels'], ['bastion-label'])
+
+    def test_requestNodeset_excludes_via_node_template_config(self):
+        """template_config must stay in sync with labels — via-node entry
+        must be absent."""
+        client = self._make_client()
+        ns = self._make_nodeset()
+        captured = self._call_requestNodeset(client, self._make_job(ns))
+
+        self.assertIn('template_config', captured)
+        self.assertEqual(len(captured['template_config']), 1)
+        self.assertIn('heat_template_path', captured['template_config'][0])
+
+    def test_useNodeset_skips_via_node(self):
+        """useNodeset must not raise when a nodeset contains a via-node
+        (which has no _provider_node)."""
+        client = self._make_client()
+        ns = self._make_nodeset()
+
+        # Give the gateway node a fake provider node
+        gw_node = ns.getNodes()[0]
+        provider_node = mock.MagicMock()
+        provider_node.hasLock.return_value = True
+        provider_node.state = model.ProviderNode.State.READY
+        gw_node._provider_node = provider_node
+
+        ctx_mgr = mock.MagicMock()
+        ctx_mgr.__enter__ = mock.Mock(return_value=mock.MagicMock())
+        ctx_mgr.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch.object(client, 'createZKContext',
+                               return_value=ctx_mgr):
+            # Must not raise despite the via-node having no _provider_node
+            client.useNodeset(ns)
+
+
+class TestViaNodeNodepoolFallback(TestLauncherClientViaNodes):
+    """Tests for scheduler-side via-node allocation routing."""
+
+    def _make_manager(self, provider_labels):
+        manager = object.__new__(IndependentPipelineManager)
+        manager.log = logging.getLogger("zuul.test.PipelineManager")
+        manager.tenant = mock.MagicMock()
+        manager.tenant.use_nodepool = True
+        provider = mock.MagicMock()
+        provider.labels = provider_labels
+        manager.tenant.layout.providers = {'heat-provider': provider}
+        return manager
+
+    def test_useNodepoolFallback_ignores_via_node(self):
+        """Via-nodes must not trigger nodepool fallback when the gateway
+        label is provided by a launcher provider."""
+        manager = self._make_manager({'bastion-label': mock.MagicMock()})
+        job = self._make_job(self._make_nodeset())
+
+        self.assertFalse(
+            manager._useNodepoolFallback(manager.log, job))
+
+    def test_useNodepoolFallback_falls_back_for_unknown_label(self):
+        """Nodepool fallback is still used when a real label is missing."""
+        manager = self._make_manager({})
+        job = self._make_job(self._make_nodeset())
+
+        self.assertTrue(
+            manager._useNodepoolFallback(manager.log, job))
