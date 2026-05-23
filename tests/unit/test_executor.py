@@ -37,8 +37,12 @@ from tests.base import (
 from zuul.executor.sensors.startingbuilds import StartingBuildsSensor
 from zuul.executor.sensors.process import ProcessSensor
 from zuul.executor.sensors.ram import RAMSensor
-from zuul.executor.server import squash_variables
-from zuul.model import NodeSet, Group
+from zuul.executor.server import (
+    squash_variables,
+    make_setup_inventory_dict,
+    make_inventory_dict,
+)
+from zuul.model import Node, NodeSet, Group
 
 
 class ExecutorReposMixin:
@@ -1834,3 +1838,79 @@ class TestExecutorHomedir(AnsibleZuulTestCase):
         self.assertEqual(A.reported, 1)
         self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
         self.assertIn('Symlink detected', A.messages[0])
+
+
+class TestInventoryDictViaNodesGroup(BaseTestCase):
+    """Unit tests for zuul_via_nodes group in both make_setup_inventory_dict
+    and make_inventory_dict."""
+
+    def _make_nodes(self, names, is_via_node=False):
+        return [dict(name=n, host_vars={}, host_keys=[],
+                     is_via_node=is_via_node) for n in names]
+
+    def _make_hostvars(self, names):
+        hv = {n: {'ansible_connection': 'ssh'} for n in names}
+        hv['localhost'] = {}
+        return hv
+
+    def _make_nodeset(self, node_names):
+        ns = NodeSet('test-ns')
+        for name in node_names:
+            ns.addNode(Node([name], 'some-label'))
+        return ns
+
+    def _call_both(self, nodes, hostvars, node_names):
+        ns = self._make_nodeset(node_names)
+        return [
+            ('setup', make_setup_inventory_dict(nodes, hostvars)),
+            ('full', make_inventory_dict(nodes, ns, hostvars, set())),
+        ]
+
+    def test_no_via_nodes_empty_group(self):
+        """zuul_via_nodes group is present but empty when no via-nodes."""
+        nodes = self._make_nodes(['bastion'])
+        hostvars = self._make_hostvars(['bastion'])
+        for label, inv in self._call_both(nodes, hostvars, ['bastion']):
+            with self.subTest(label):
+                self.assertIn('zuul_via_nodes', inv['all']['children'])
+                self.assertEqual(
+                    inv['all']['children']['zuul_via_nodes']['hosts'], {})
+
+    def test_via_nodes_group_membership(self):
+        """Via-node in group; gateway not in group."""
+        nodes = (self._make_nodes(['bastion'])
+                 + self._make_nodes(['internal'], is_via_node=True))
+        hostvars = self._make_hostvars(['bastion', 'internal'])
+        for label, inv in self._call_both(nodes, hostvars,
+                                          ['bastion', 'internal']):
+            with self.subTest(label):
+                group = inv['all']['children']['zuul_via_nodes']['hosts']
+                self.assertIn('internal', group)
+                self.assertNotIn('bastion', group)
+
+    def test_via_node_also_in_all_hosts(self):
+        """Via-node appears in all.hosts as well as the group."""
+        nodes = (self._make_nodes(['bastion'])
+                 + self._make_nodes(['internal'], is_via_node=True))
+        hostvars = self._make_hostvars(['bastion', 'internal'])
+        for label, inv in self._call_both(nodes, hostvars,
+                                          ['bastion', 'internal']):
+            with self.subTest(label):
+                self.assertIn('internal', inv['all']['hosts'])
+
+    def test_blacklisted_connection_excluded(self):
+        """Hosts with blacklisted connection types are excluded from all."""
+        nodes = self._make_nodes(['kube-pod'])
+        hostvars = {'kube-pod': {'ansible_connection': 'kubectl'}}
+        inv = make_setup_inventory_dict(nodes, hostvars)
+        self.assertNotIn('kube-pod', inv['all']['hosts'])
+
+    def test_zuul_unreachable_still_present(self):
+        """zuul_unreachable group is unaffected by the via-nodes addition."""
+        nodes = self._make_nodes(['bastion'])
+        hostvars = self._make_hostvars(['bastion'])
+        ns = self._make_nodeset(['bastion'])
+        inv = make_inventory_dict(nodes, ns, hostvars, {'bastion'})
+        self.assertIn('zuul_unreachable', inv['all']['children'])
+        self.assertIn('bastion',
+                      inv['all']['children']['zuul_unreachable']['hosts'])

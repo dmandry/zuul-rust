@@ -188,6 +188,15 @@ class ExecutorError(Exception):
     pass
 
 
+class ViaNodeUnreachableError(Exception):
+    """A via-node could not be reached through its gateway
+
+    Raised when the ssh-keyscan retry loop times out before all
+    via-nodes become reachable.  The build should be rescheduled.
+    """
+    pass
+
+
 class RoleNotFoundError(ExecutorError):
     pass
 
@@ -996,9 +1005,19 @@ def make_setup_inventory_dict(nodes, hostvars):
             continue
         hosts[node['name']] = hostvars[node['name']]
 
+    via_hosts = {}
+    for node in nodes:
+        if node.get('is_via_node') and node['name'] in hosts:
+            via_hosts[node['name']] = None
+
     inventory = {
         'all': {
             'hosts': hosts,
+            'children': {
+                'zuul_via_nodes': {
+                    'hosts': via_hosts,
+                },
+            },
         }
     }
 
@@ -1053,6 +1072,14 @@ def make_inventory_dict(nodes, nodeset, hostvars, unreachable_nodes,
     inventory['all']['children'].update({
         'zuul_unreachable': {
             'hosts': {n: None for n in unreachable_nodes}
+        }})
+
+    via_hosts = {node['name']: None
+                 for node in nodes if node.get('is_via_node')
+                 and node['name'] in hosts}
+    inventory['all']['children'].update({
+        'zuul_via_nodes': {
+            'hosts': via_hosts,
         }})
 
     return inventory
@@ -1314,6 +1341,12 @@ class AnsibleJob(object):
             self._send_aborted()
         except ExecutorError as e:
             result_data = dict(result='ERROR', error_detail=e.args[0])
+            self.log.debug("Sending result: %s", result_data)
+            self.executor_server.completeBuild(self.build_request, result_data)
+        except ViaNodeUnreachableError as e:
+            result_data = dict(result=None, error_detail=str(e),
+                               warnings=[], unreachable=True,
+                               data={}, secret_data={})
             self.log.debug("Sending result: %s", result_data)
             self.executor_server.completeBuild(self.build_request, result_data)
         except Exception:
@@ -1735,6 +1768,7 @@ class AnsibleJob(object):
                 raise ExecutorError(str(e))
             self.writeDebugInventory()
             self.writeRepoStateFile(repos)
+            self.prepareViaNodes()
 
             # Early abort if abort requested
             if self.aborted:
@@ -2489,7 +2523,222 @@ class AnsibleJob(object):
                     name=name,
                     host_vars=host_vars,
                     host_keys=host_keys))
+
+        hosts.extend(self._getViaNodeHostEntries(nodes))
         return hosts
+
+    def _keyscanViaNodes(self, via_node_entries):
+        """Keyscan all via-nodes through their gateways, retrying until ready.
+
+        Iterates over *via_node_entries*, calling :meth:`_keyscanViaNode` for
+        each host.  Entries that are not yet reachable are retried every 5s
+        until all succeed or ``ansible_via_node_keyscan_timeout`` is exhausted.
+
+        :param via_node_entries: List of host-entry dicts (from
+            :meth:`_getViaNodeHostEntries`) for all via-nodes in the job.
+        :returns: True when all host keys have been added to known_hosts,
+            False on timeout.
+        """
+        via_deadline = (time.monotonic()
+                        + self.executor_server.via_node_keyscan_timeout)
+        pending = list(via_node_entries)
+        last_error = ''
+        while pending:
+            if time.monotonic() >= via_deadline:
+                self.log.error(
+                    "Timed out waiting for via-node SSH keys after %ss%s",
+                    self.executor_server.via_node_keyscan_timeout,
+                    '; last error: %s' % last_error if last_error else '')
+                return False
+            still_pending = []
+            for host_entry in pending:
+                ok, err = self._keyscanViaNode(
+                    host_entry['via_host'],
+                    host_entry['via_port'],
+                    host_entry['via_proxy_jump'])
+                if ok:
+                    self.log.debug("Via-node %s keyscanned successfully",
+                                   host_entry['name'])
+                else:
+                    if err:
+                        last_error = err
+                    still_pending.append(host_entry)
+            pending = still_pending
+            if pending:
+                self.log.debug(
+                    "Via-nodes not yet ready for keyscan: %s, retrying in 5s",
+                    [h['name'] for h in pending])
+                time.sleep(5)
+        return True
+
+    def _keyscanViaNode(self, host, port, proxy_jump):
+        """SSH-keyscan a via-node through its gateway and update known_hosts.
+
+        SSHes into the gateway (proxy_jump) and runs ssh-keyscan from there
+        so that the via-node's host key is added to the job's known_hosts
+        file before Ansible tries to connect.
+
+        :param host: IP address or hostname of the via-node.
+        :param port: SSH port of the via-node.
+        :param proxy_jump: ``user@host`` string for the gateway.
+        :returns: ``(True, '')`` on success, ``(False, error)`` on failure
+            where *error* is a human-readable description of the failure.
+        """
+        keyscan_cmd = 'ssh-keyscan -T 10'
+        if port != 22:
+            keyscan_cmd += ' -p %d' % port
+        keyscan_cmd += ' %s' % host
+
+        cmd = ['ssh',
+               '-o', 'BatchMode=yes',
+               '-o', 'StrictHostKeyChecking=no',
+               '-o', 'UserKnownHostsFile=/dev/null',
+               '-o', 'ConnectTimeout=10',
+               proxy_jump,
+               keyscan_cmd]
+
+        env = {k: v for k, v in os.environ.items()
+               if not k.startswith('ZUUL_')}
+        env.update(self.ssh_agent.env)
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=25,
+                env=env,
+            )
+        except subprocess.TimeoutExpired:
+            err = 'ssh-keyscan on gateway timed out'
+            self.log.debug(
+                "ssh-keyscan timed out for via-node %s (proxy: %s)",
+                host, proxy_jump)
+            return False, err
+
+        keys = proc.stdout.strip()
+        if not keys:
+            err = proc.stderr.strip() or 'no keys returned'
+            self.log.debug(
+                "ssh-keyscan returned no keys for via-node %s"
+                " (proxy: %s, stderr: %s)",
+                host, proxy_jump, err)
+            return False, err
+        with open(self.jobdir.known_hosts, 'a') as kh:
+            kh.write(keys + '\n')
+        return True, ''
+
+    def _getViaNodeHostEntries(self, nodes):
+        """Build inventory host entries for via-nodes in the nodeset.
+
+        Via-nodes are not directly allocated; they are reached through a
+        gateway node using SSH ProxyJump.  Connection details come from
+        the gateway node's node_properties['via_nodes'] dict, keyed by
+        the via-node name.
+
+        :param nodes: List of allocated provider nodes for this job.
+        :returns: A list of host-entry dicts in the same format as
+            :meth:`getHostList`.
+        """
+        allocated_by_name = {}
+        for node in nodes:
+            for name in node.name:
+                allocated_by_name[name] = node
+
+        entries = []
+        for nodeset_node in self.nodeset.getNodes():
+            if not nodeset_node.via:
+                continue
+            via_node_name = nodeset_node.name[0]
+            gateway_node = allocated_by_name.get(nodeset_node.via)
+            if not gateway_node:
+                raise ExecutorError(
+                    "Via-node %s references gateway %s which is not in the "
+                    "allocated node set" % (via_node_name, nodeset_node.via))
+            via_nodes = gateway_node.node_properties.get('via_nodes', {})
+            entry = via_nodes.get(via_node_name)
+            if entry is None:
+                raise ExecutorError(
+                    "Gateway node %s does not provide via_nodes entry for %s"
+                    % (nodeset_node.via, via_node_name))
+
+            gateway_user = (gateway_node.username
+                            or self.executor_server.default_username)
+            proxy_cmd = (
+                "ssh"
+                " -o BatchMode=yes"
+                " -o UserKnownHostsFile=%s"
+                " -l %s"
+                " -W [%%h]:%%p"
+                " %s" % (self.jobdir.known_hosts,
+                         gateway_user,
+                         gateway_node.interface_ip)
+            )
+            host_vars = dict(
+                ansible_host=entry['host'],
+                ansible_user=entry.get(
+                    'user', self.executor_server.default_username),
+                ansible_port=entry.get('port', 22),
+                ansible_connection='ssh',
+                ansible_ssh_common_args=(
+                    '-o "ProxyCommand=%s"' % proxy_cmd
+                ),
+                nodepool=dict(
+                    label=gateway_node.label,
+                    az=gateway_node.az,
+                    cloud=gateway_node.cloud,
+                    provider=gateway_node.provider,
+                    region=gateway_node.region,
+                    host_id=gateway_node.host_id,
+                    external_id=getattr(gateway_node, 'external_id', None),
+                    slot=gateway_node.slot,
+                    interface_ip=entry['host'],
+                    public_ipv4=None,
+                    private_ipv4=None,
+                    public_ipv6=None,
+                    private_ipv6=None,
+                    node_properties=gateway_node.node_properties,
+                ),
+                zuul_node=dict(
+                    uuid=getattr(gateway_node, 'uuid', None),
+                    label=gateway_node.label,
+                    az=gateway_node.az,
+                    cloud=gateway_node.cloud,
+                    provider=gateway_node.provider,
+                    region=gateway_node.region,
+                    host_id=gateway_node.host_id,
+                    external_id=getattr(gateway_node, 'external_id', None),
+                    slot=gateway_node.slot,
+                    interface_ip=entry['host'],
+                    public_ipv4=None,
+                    private_ipv4=None,
+                    public_ipv6=None,
+                    private_ipv6=None,
+                    reuse=gateway_node.reuse,
+                    node_properties=gateway_node.node_properties,
+                ),
+            )
+
+            api = 'ansible_python_interpreter'
+            if (api not in self.normal_vars and
+                not is_group_var_set(
+                    api, via_node_name, self.nodeset, self.job)):
+                host_vars.setdefault(api, entry.get('python_path', 'auto'))
+
+            if 'shell_type' in entry:
+                host_vars['ansible_shell_type'] = entry['shell_type']
+
+            entries.append(dict(
+                name=via_node_name,
+                host_vars=host_vars,
+                host_keys=[],
+                is_via_node=True,
+                via_host=entry['host'],
+                via_port=entry.get('port', 22),
+                via_proxy_jump='%s@%s' % (
+                    gateway_user, gateway_node.interface_ip)))
+
+        return entries
 
     def findPlaybook(self, path, trusted=False):
         if os.path.exists(path):
@@ -3010,6 +3259,10 @@ class AnsibleJob(object):
         # The zuul.resources ansible variable
         zuul_resources = {}
         for node in self.nodeset.getNodes():
+            if node.via:
+                # Via-nodes are not independently allocated; their inventory
+                # entry is built later in getHostList from gateway node data.
+                continue
             if node.connection_type in (
                     'namespace', 'project', 'kubectl'):
                 # TODO: decrypt resource data using scheduler key
@@ -3251,6 +3504,32 @@ class AnsibleJob(object):
             os.unlink(self.jobdir.job_unreachable_file)
         except Exception:
             self.log.exception("Error unlinking unreachable host file")
+
+    def prepareViaNodes(self):
+        """SSH-keyscan all via-nodes before running any playbooks.
+
+        Via-nodes are not independently probed by the launcher before the
+        nodeset is fulfilled, so they may still be booting when the gateway
+        is ready.  This method runs ssh-keyscan through the ProxyJump gateway
+        in a retry loop until every via-node's host key has been added to the
+        job's known_hosts file.
+
+        :raises ViaNodeUnreachableError: if any via-node is unreachable within
+            the configured timeout.
+        """
+        via_node_entries = [h for h in self.host_list if h.get('is_via_node')]
+
+        if not via_node_entries:
+            return
+
+        with _safe_open(self.jobdir.job_output_file, 'a') as job_output:
+            job_output.write(
+                "{now} | Scanning SSH host keys for via-nodes: "
+                "{nodes}\n".format(
+                    now=datetime.datetime.now(),
+                    nodes=sorted(h['name'] for h in via_node_entries)))
+        if not self._keyscanViaNodes(via_node_entries):
+            raise ViaNodeUnreachableError("Via-node unreachable")
 
     def writeDebugInventory(self):
         # This file is unused by Zuul, but the base jobs copy it to logs
@@ -4135,6 +4414,9 @@ class ExecutorServer(BaseMergeServer):
                                                   'disk_limit_per_job', 250))
         self.setup_timeout = int(get_default(self.config, 'executor',
                                              'ansible_setup_timeout', 60))
+        self.via_node_keyscan_timeout = int(get_default(
+            self.config, 'executor',
+            'ansible_via_node_keyscan_timeout', 300))
         self.zone = get_default(self.config, 'executor', 'zone')
         self.allow_unzoned = get_default(self.config, 'executor',
                                          'allow_unzoned', False)
