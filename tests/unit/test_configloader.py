@@ -24,7 +24,10 @@ from zuul.configloader import (
     AuthorizationRuleParser, AuthorizationRoleParser,
     ConfigLoader, safe_load_yaml
 )
-from zuul.exceptions import AuthZRoleNotFoundError, AuthZRuleNotFoundError
+from zuul.exceptions import (
+    AuthZRoleNotFoundError,
+    AuthZRuleNotFoundError,
+)
 from zuul.model import Abide, MergeRequest, SourceContext
 from zuul.zk.locks import tenant_read_lock
 
@@ -2104,3 +2107,133 @@ class TestResolveHeatTemplates(ZuulTestCase):
             'tenant-one').layout
         self.assertEqual(1, len(layout.loading_errors))
         self.assertIn('not found', layout.loading_errors[0].error)
+
+
+class TestNodeSetViaNodes(ZuulTestCase):
+
+    @simple_layout('layouts/via-nodes-valid.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '\n'.join([
+                           '      - name: bastion',
+                           '        label: bastion-label',
+                           '      - name: internal',
+                           '        via: bastion',
+                       ]),
+                   })
+    def test_valid_via_node(self):
+        """A nodeset with a gateway + via node loads correctly."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        ns = layout.nodesets['test-ns']
+        nodes = {n.name[0]: n for n in ns.getNodes()}
+        self.assertIsNone(nodes['bastion'].via)
+        self.assertEqual('bastion', nodes['internal'].via)
+        self.assertEqual('bastion-label', nodes['bastion'].label)
+        self.assertIsNone(nodes['internal'].label)
+
+    @simple_layout('layouts/via-nodes-valid.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '\n'.join([
+                           '      - name: bastion',
+                           '        label: bastion-label',
+                           '        template-config:',
+                           '          heat-template-path: ci/heat.yaml',
+                           '      - name: internal',
+                           '        via: bastion',
+                       ]),
+                   })
+    def test_via_node_with_template_config(self):
+        """A gateway node may carry template-config."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        ns = layout.nodesets['test-ns']
+        nodes = {n.name[0]: n for n in ns.getNodes()}
+        self.assertIn('heat_template_path',
+                      nodes['bastion'].template_config)
+
+    @simple_layout('layouts/via-nodes-error.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '      - name: node1',
+                   })
+    def test_error_node_has_neither_label_nor_via(self):
+        """A node without label or via produces a loading error."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertTrue(len(layout.loading_errors) >= 1)
+        self.assertIn('must specify either "label" or "via"',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/via-nodes-error.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '\n'.join([
+                           '      - name: bastion',
+                           '        label: bastion-label',
+                           '      - name: internal',
+                           '        label: some-label',
+                           '        via: bastion',
+                       ]),
+                   })
+    def test_error_node_has_both_label_and_via(self):
+        """A node with both label and via produces a loading error."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertTrue(len(layout.loading_errors) >= 1)
+        self.assertIn('must not specify both "label" and "via"',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/via-nodes-error.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '\n'.join([
+                           '      - name: bastion',
+                           '        label: bastion-label',
+                           '      - name: internal',
+                           '        via: bastion',
+                           '        template-config:',
+                           '          heat-template-path: ci/heat.yaml',
+                       ]),
+                   })
+    def test_error_via_node_has_template_config(self):
+        """A via node carrying template-config produces a loading error."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertTrue(len(layout.loading_errors) >= 1)
+        self.assertIn('must not specify "template-config"',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/via-nodes-error.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '\n'.join([
+                           '      - name: bastion',
+                           '        label: bastion-label',
+                           '      - name: internal',
+                           '        via: nonexistent',
+                       ]),
+                   })
+    def test_error_via_references_unknown_node(self):
+        """A via referencing a non-existent node produces a loading error."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertTrue(len(layout.loading_errors) >= 1)
+        self.assertIn('not defined in the nodeset',
+                      layout.loading_errors[0].error)
+
+    @simple_layout('layouts/via-nodes-error.yaml',
+                   replace=lambda _: {
+                       'nodeset_nodes': '\n'.join([
+                           '      - name: bastion',
+                           '        label: bastion-label',
+                           '      - name: middle',
+                           '        via: bastion',
+                           '      - name: inner',
+                           '        via: middle',
+                       ]),
+                   })
+    def test_error_chained_via(self):
+        """Chaining via nodes produces a loading error."""
+        layout = self.scheds.first.sched.abide.tenants.get(
+            'tenant-one').layout
+        self.assertTrue(len(layout.loading_errors) >= 1)
+        # Normalize whitespace: textwrap.fill() in the exception may
+        # wrap "chaining is not allowed" across lines.
+        self.assertIn('chaining is not allowed',
+                      ' '.join(layout.loading_errors[0].error.split()))
