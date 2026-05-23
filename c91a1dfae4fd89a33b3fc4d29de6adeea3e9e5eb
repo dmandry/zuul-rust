@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "742a5f61_78253315",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-23T17:22:12Z",
+      "side": 1,
+      "message": "I don\u0027t know why my previous vote didn\u0027t carry over. The diff for this change doesn\u0027t seem to have changed. Only the parent changed.",
+      "revId": "c91a1dfae4fd89a33b3fc4d29de6adeea3e9e5eb",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
