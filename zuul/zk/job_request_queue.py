@@ -160,9 +160,9 @@ class JobRequestCache(ZuulTreeCache):
             if len(parts) < 3:
                 return
             if exists:
-                request.lock_contenders += 1
+                request.lock_contenders.add(parts[2])
             else:
-                request.lock_contenders -= 1
+                request.lock_contenders.discard(parts[2])
             request.is_locked = bool(request.lock_contenders)
 
     def objectFromRaw(self, key, data, stat):
