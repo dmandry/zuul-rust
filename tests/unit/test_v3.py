@@ -3282,6 +3282,30 @@ class TestInRepoConfig(ZuulTestCase):
         self.assertEqual(30, build.job.timeout)
         self.assertEqual(30, build.job.pre_timeout)
 
+    def test_secret_exposure(self):
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: parent
+                secret-exposure: fail
+            - job:
+                name: project-test1
+                parent: parent
+                secret-exposure: redact
+                run: playbooks/project-test1.yaml
+            - project:
+                check:
+                  jobs: ['project-test1']
+            """)
+        file_dict = {'.zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1)
+        self.assertHistory([])
+        self.assertIn('Unable to reset secret-exposure', A.messages[0])
+
 
 class TestInRepoConfigSOS(ZuulTestCase):
     config_file = 'zuul-connections-gerrit-and-github.conf'
