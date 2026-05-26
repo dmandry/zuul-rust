@@ -828,6 +828,7 @@ class JobParser(object):
                       'failure-output': override_list(str),
                       'image-build-name': str,
                       'type': vs.Any('regular', 'initializer', 'reporter'),
+                      'secret-exposure': vs.Any('ignore', 'redact', 'fail'),
                       'attribute-control': {
                           vs.Any(
                               'requires',
@@ -887,6 +888,7 @@ class JobParser(object):
         'deduplicate',
         'image-build-name',
         'type',
+        'secret-exposure',
     ]
 
     attr_control_job_attr_map = {

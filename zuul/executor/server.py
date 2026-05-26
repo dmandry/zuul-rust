@@ -558,7 +558,7 @@ class LogReceiver:
     TYPE_SECRETS = 3
     TYPE_SYNC = 4
 
-    def __init__(self, zuul_event_id, build, jobdir, stop_conn):
+    def __init__(self, zuul_event_id, build, jobdir, stop_conn, behavior):
         self.jobdir = jobdir
         self.build = build
         self.log = get_annotated_logger(
@@ -572,6 +572,7 @@ class LogReceiver:
         self.job_output_file = None
         self.stop_conn = stop_conn
         self.secrets = []
+        self.behavior = behavior
 
     def start(self):
         self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
@@ -586,21 +587,38 @@ class LogReceiver:
         for secret in self.secrets:
             if secret in message:
                 self.log.error("Secret detected in output")
-                # TODO: stop job
                 return True
 
     def _addLineToJobOutput(self, message):
         # Only used within the subprocess
-        if self._containsSecrets(message):
-            return
+        stop = False
+        if self.behavior != 'ignore':
+            if self._containsSecrets(message):
+                message = "[Zuul] Secret detected in output"
+                if self.behavior == 'fail':
+                    stop = True
         output = self.job_output_file
         output.write(message + '\n')
         output.flush()
+        if stop:
+            self._stopJob()
+            return
 
     def _addPlaybookToJson(self, message):
         # Only used within the subprocess
-        if self._containsSecrets(message):
-            return
+        stop = False
+        if self.behavior != 'ignore':
+            if self._containsSecrets(message):
+                try:
+                    message = self._makeFakePlaybook(
+                        message,
+                        "[Zuul] Secret detected in output"
+                    )
+                except Exception:
+                    self.log.exception("Error creating fake playbook")
+                    return
+                if self.behavior == 'fail':
+                    stop = True
         output = self.json_output_file
         file_len = output.seek(0, os.SEEK_END)
         # Remove three bytes to eat the trailing newline written by the
@@ -612,6 +630,21 @@ class LogReceiver:
         output.write(message)
         output.write('\n]\n')
         output.flush()
+        if stop:
+            self._stopJob()
+            return
+
+    def _makeFakePlaybook(self, data, message):
+        playbook_info = json.loads(data)
+        playbook_info['plays'] = [{
+            'play': {
+                'name': message
+            },
+            'tasks': []
+        }]
+        data = json.dumps(playbook_info,
+                          indent=4, sort_keys=True, separators=(',', ': '))
+        return data
 
     def _setSecrets(self, message):
         self.secrets = json.loads(message)
@@ -1486,6 +1519,7 @@ class AnsibleJob(object):
                 build=self.build_request.uuid,
                 jobdir=self.jobdir,
                 stop_conn=self.executor_server.stop_worker_parent_conn,
+                behavior=self.job.secret_exposure,
             )
             self.log_receiver.start()
 
