@@ -4014,6 +4014,7 @@ class FrozenJob(zkobject.ZKObject):
                   'image_build_name',
                   'include_vars',
                   'type',
+                  'secret_exposure',
                   )
 
     job_data_attributes = ('artifact_data',
@@ -4203,6 +4204,9 @@ class FrozenJob(zkobject.ZKObject):
         # MODEL_API <= 36
         data.setdefault('include_projects', None)
         data.setdefault('exclude_projects', None)
+
+        # MODEL_API <= 38
+        data.setdefault('secret_exposure', 'ignore')
 
         for job_data_key in self.job_data_attributes:
             job_data = data.pop(job_data_key, None)
@@ -4511,6 +4515,7 @@ class Job(ConfigObject):
         d['failure_output'] = self.failure_output
         d['image_build_name'] = self.image_build_name
         d['type'] = self.type
+        d['secret_exposure'] = self.secret_exposure
         d['include_vars'] = list(map(lambda x: x.toDict(), self.include_vars))
         if self.isBase():
             d['parent'] = None
@@ -4600,6 +4605,7 @@ class Job(ConfigObject):
             failure_output=(),
             image_build_name=None,
             type='regular',
+            secret_exposure='ignore',
         )
 
         override_control = defaultdict(lambda: True)
@@ -5435,7 +5441,7 @@ class Job(ConfigObject):
                                  'required_projects', 'include_projects',
                                  'exclude_projects', 'allowed_projects',
                                  'semaphores', 'failure_output',
-                                 'include_vars']):
+                                 'include_vars', 'secret_exposure']):
                     setattr(self, k, other._get(k))
 
         # Don't set final above so that we don't trip an error halfway
@@ -5482,6 +5488,16 @@ class Job(ConfigObject):
 
         # Freeze the nodeset
         self.nodeset = self.getNodeset(layout)
+
+        # Once set, the secret-exposure setting may not be changed
+        if secret_exposure := other._get('secret_exposure'):
+            if (self._get('secret_exposure') and
+                secret_exposure != self._get('secret_exposure')):
+                raise JobConfigurationError(
+                    "Unable to reset secret-exposure attribute of job"
+                    " %s by job %s" % (
+                        repr(self), repr(other)))
+            self.secret_exposure = secret_exposure
 
         # Pass secrets to parents
         secrets_for_parents = [s for s in other.secrets if s.pass_to_parent]
