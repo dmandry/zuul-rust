@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ad1cf6e6_f58dbafe",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 35224
+      },
+      "writtenOn": "2026-05-26T17:52:59Z",
+      "side": 1,
+      "message": "The API does not need to be stable. A specific version of a driver can easily support multiple versions of Zuul.\n\nIt is the responsibility of driver maintainers to update/improve their drivers for each new release of Zuul and to publish the matrix compatibility.\n\nThis change is trivial, but makes it possible for us to separate the source code for our specific driver from the source code for Zuul.\n\nBut I understand your worry. Thank you for the review.",
+      "revId": "de0e4f0a35ab8ae0a40c8388d2d61ecb638eb19b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
