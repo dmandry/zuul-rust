@@ -3282,6 +3282,30 @@ class TestInRepoConfig(ZuulTestCase):
         self.assertEqual(30, build.job.timeout)
         self.assertEqual(30, build.job.pre_timeout)
 
+    def test_secret_exposure(self):
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: parent
+                secret-exposure: fail
+            - job:
+                name: project-test1
+                parent: parent
+                secret-exposure: redact
+                run: playbooks/project-test1.yaml
+            - project:
+                check:
+                  jobs: ['project-test1']
+            """)
+        file_dict = {'.zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1)
+        self.assertHistory([])
+        self.assertIn('Unable to reset secret-exposure', A.messages[0])
+
 
 class TestInRepoConfigSOS(ZuulTestCase):
     config_file = 'zuul-connections-gerrit-and-github.conf'
@@ -9880,13 +9904,61 @@ class TestJobOutput(AnsibleZuulTestCase):
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
+        es = 'expose-secrets'
         self.assertHistory([
-            dict(name='expose-secrets-txt', result='ABORTED', changes='1,1'),
-            dict(name='expose-secrets-json', result='ABORTED', changes='1,1'),
+            dict(name=f'{es}-txt-ignore', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-json-ignore', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-txt-redact', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-json-redact', result='SUCCESS', changes='1,1'),
+            dict(name=f'{es}-txt-fail', result='ABORTED', changes='1,1'),
+            dict(name=f'{es}-json-fail', result='ABORTED', changes='1,1'),
         ], ordered=False)
 
-        job1 = self.getJobFromHistory('expose-secrets-txt')
-        job2 = self.getJobFromHistory('expose-secrets-json')
+        # Check Ignore
+        job1 = self.getJobFromHistory(f'{es}-txt-ignore')
+        job2 = self.getJobFromHistory(f'{es}-json-ignore')
+        data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
+        self.assertEqual(3, len(data))
+        self.assertEqual('Username: test-username',
+                         data[1]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+        # This is a secret exposed
+        self.assertEqual('Password: test-password',
+                         data[2]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+
+        job_output = self._get_file(job1, 'work/logs/job-output.txt')
+        self.log.info(job_output)
+        self.assertIn("Job console starting", job_output)
+        self.assertIn("Username: test-username", job_output)
+        self.assertIn("Okay to expose this: test-password", job_output)
+        # This is a secret exposed
+        self.assertIn("Password: test-password", job_output)
+
+        # Check Redact
+        job1 = self.getJobFromHistory(f'{es}-txt-redact')
+        job2 = self.getJobFromHistory(f'{es}-json-redact')
+        data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
+        self.assertEqual(3, len(data))
+        self.assertEqual('Username: test-username',
+                         data[1]['plays'][0]['tasks'][0]
+                         ['hosts']['test_node']['msg'])
+        # This is a redaction
+        self.assertEqual('[Zuul] Secret detected in output',
+                         data[2]['plays'][0]['play']['name'])
+
+        job_output = self._get_file(job1, 'work/logs/job-output.txt')
+        self.log.info(job_output)
+        self.assertIn("Job console starting", job_output)
+        self.assertIn("Username: test-username", job_output)
+        self.assertIn("Okay to expose this: test-password", job_output)
+        # This is a redaction
+        self.assertNotIn("Password:", job_output)
+        self.assertIn("[Zuul] Secret detected in output", job_output)
+
+        # Check Fail
+        job1 = self.getJobFromHistory(f'{es}-txt-fail')
+        job2 = self.getJobFromHistory(f'{es}-json-fail')
         data = json.loads(self._get_file(job2, 'work/logs/job-output.json'))
         self.assertEqual(2, len(data))
         self.assertEqual('Username: test-username',
