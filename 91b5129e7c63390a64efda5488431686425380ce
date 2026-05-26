@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "28e810dd_47460a1a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 35224
+      },
+      "writtenOn": "2026-05-26T11:11:12Z",
+      "side": 1,
+      "message": "You seem to be the most active people on this project, please feel free to remove yourself from the review if you\u0027re not the right person for the job and I apologize in advance.",
+      "revId": "91b5129e7c63390a64efda5488431686425380ce",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
