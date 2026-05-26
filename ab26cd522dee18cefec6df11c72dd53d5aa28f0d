@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1ea8202e_7ab31fcc",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 7
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Thank you for addressing my previous comments. I noticed on spot where the token is still listed as optional in the release notes. I think if we fix that then I am +2 on the change.",
+      "revId": "ab26cd522dee18cefec6df11c72dd53d5aa28f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "278699d7_08f2ad9e",
+        "filename": "releasenotes/notes/gerrit-webhook-event-source-ce0a6669931bbd6f.yaml",
+        "patchSetId": 7
+      },
+      "lineNbr": 11,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "This token was changed to be required and updating the release note here was missed.",
+      "range": {
+        "startLine": 11,
+        "startChar": 16,
+        "endLine": 11,
+        "endChar": 63
+      },
+      "revId": "ab26cd522dee18cefec6df11c72dd53d5aa28f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

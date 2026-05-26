@@ -75,6 +75,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "f1714bec_f978a37d",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 403,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "60a3b513_4561062d",
+      "range": {
+        "startLine": 403,
+        "startChar": 0,
+        "endLine": 403,
+        "endChar": 41
+      },
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "9e112063_76321e60",
@@ -88,6 +112,24 @@
       "writtenOn": "2026-05-12T17:09:53Z",
       "side": 1,
       "message": "I\u0027m not sure this should be optional. There is a trust relationship between zuul and its git repos. I\u0027m worried that being able to spoof events on those repos may lead to unintended consequences.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4a8c47e4_4853215d",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 416,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "9e112063_76321e60",
       "revId": "26cd8f19347452f61234404915db70d4d167491c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -109,6 +151,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d0775702_e1e96b9d",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 429,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "0885ecab_f6893046",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "ed32873d_6560df3c",
@@ -126,6 +186,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "e296c0ab_e1e09091",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 6
+      },
+      "lineNbr": 434,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "ed32873d_6560df3c",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "7514ecfe_a8201e63",
@@ -139,6 +217,24 @@
       "writtenOn": "2026-05-12T17:09:53Z",
       "side": 1,
       "message": "Small nit. It looks like stream events is enabled by default then subsequent configuration can override that value. To ensure that we\u0027re not accidentally using stream events to process events we may want to explicitly disable stream events here. Or check that the event originated from the webhooks somehow in the test case?",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f21df680_521b17d1",
+        "filename": "tests/fixtures/zuul-gerrit-webhook.conf",
+        "patchSetId": 6
+      },
+      "lineNbr": 28,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7514ecfe_a8201e63",
       "revId": "26cd8f19347452f61234404915db70d4d167491c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -177,6 +273,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "9902b76d_7c48c8ff",
+        "filename": "tests/unit/test_gerrit_webhook.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 107,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "849db84e_df5b0ed0",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "d6c31649_02e5bf95",
@@ -190,6 +304,24 @@
       "writtenOn": "2026-05-12T17:09:53Z",
       "side": 1,
       "message": "Will this logger by used by cherrpy? It doesn\u0027t look like we use it here and BaseWebController doesn\u0027t log anything either?\n\nAlternatively, there may be some things we do want to log? Like the event type? or even the entire event at debug level? I\u0027m not sure if we get that from cherrypy already, but I think the stream events handler does log like that at a debug level.",
+      "revId": "26cd8f19347452f61234404915db70d4d167491c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8da5d6df_73aadb1d",
+        "filename": "zuul/driver/gerrit/gerritconnection.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 627,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:40:20Z",
+      "side": 1,
+      "message": "Logging was added in the latest patchset so this logger is now used.",
+      "parentUuid": "d6c31649_02e5bf95",
       "revId": "26cd8f19347452f61234404915db70d4d167491c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
