@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1361157f_4e77ef1f",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:49:06Z",
+      "side": 0,
+      "message": "Can we keep this comment above line 64 on the new side of the diff?",
+      "revId": "ab10875070ff5e6fccdf82daf2769164efcc628d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

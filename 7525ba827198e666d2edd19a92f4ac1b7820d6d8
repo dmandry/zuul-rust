@@ -16,6 +16,40 @@
       "message": "recheck",
       "revId": "7525ba827198e666d2edd19a92f4ac1b7820d6d8",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a24b0705_e7f75888",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 5
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:49:06Z",
+      "side": 1,
+      "message": "This looks much better. The -1 is for the comment that was removed in timermodel.py that should be kept. I also left a question about a sleep that was left in the test case. I\u0027m open to keeping that if it is necessary.",
+      "revId": "7525ba827198e666d2edd19a92f4ac1b7820d6d8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2c8f83e4_4804ecd2",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 166,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-26T20:49:06Z",
+      "side": 1,
+      "message": "Is this sleep necessary? I think waitUntilSettled may busy wait?",
+      "revId": "7525ba827198e666d2edd19a92f4ac1b7820d6d8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
