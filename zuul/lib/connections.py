@@ -13,6 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import importlib.metadata
 import logging
 import re
 from collections import OrderedDict
@@ -79,6 +80,29 @@ class ConnectionRegistry(object):
         self.registerDriver(zuul.driver.openstack.OpenstackDriver())
         self.registerDriver(zuul.driver.static.StaticDriver())
         self.registerDriver(zuul.driver.kubernetes.KubernetesDriver())
+
+        self._registerExtraDrivers()
+
+    def _registerExtraDrivers(self):
+        for ep in importlib.metadata.entry_points(group="zuul.drivers"):
+            try:
+                driver_cls = ep.load()
+            except (ImportError, AttributeError) as exc:
+                raise Exception(
+                    f"Unable to load Zuul driver {ep.name!r}"
+                    f" ({ep.value}): {exc}",
+                )
+
+            if not issubclass(driver_cls, zuul.driver.Driver):
+                def cls_name(cls):
+                    return f"{cls.__module__}.{cls.__name__}"
+
+                raise Exception(
+                    f"Zuul driver {cls_name(driver_cls)!r} must be"
+                    f" a subclass of {cls_name(zuul.driver.Driver)!r}",
+                )
+
+            self.registerDriver(driver_cls())
 
     def registerDriver(self, driver):
         if driver.name in self.drivers:
