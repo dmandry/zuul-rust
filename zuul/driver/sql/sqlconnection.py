@@ -206,7 +206,7 @@ class DatabaseSession(object):
         # are few, it is better to not include it.  We include the hint
         # regardless of whether job_name is specified (optimizing for
         # the more common case).
-        if not (change or uuid):
+        if not (change or ref or uuid):
             q = q.with_hint(build_table, 'USE INDEX (PRIMARY)', 'mysql')
             q = q.with_hint(build_table, 'USE INDEX (PRIMARY)', 'mariadb')
 
@@ -470,7 +470,7 @@ class DatabaseSession(object):
             group_by(self.connection.buildSetModel.id)
 
         # See note above about the hint.
-        if not (change or uuid):
+        if not (change or ref or uuid):
             q = q.with_hint(buildset_table, 'USE INDEX (PRIMARY)', 'mysql')
             q = q.with_hint(buildset_table, 'USE INDEX (PRIMARY)', 'mariadb')
             q = q.with_hint(buildset_ref_table, 'USE INDEX (PRIMARY)',
