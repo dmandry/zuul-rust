@@ -535,6 +535,30 @@ Here is an example of two job definitions:
          ssh_key:
            key: decrypted-secret-key-data
 
+   .. attr:: secret-exposure
+      :default: ignore
+
+      Zuul can monitor the output of a build in real time and detect if
+      one of the Zuul secrets has been exposed in either the build's
+      streaming log or JSON log.  It does not scan every output or log
+      file, so its effectiveness is limited, but it may detect some
+      common methods of accidental exposure.
+
+      .. value:: ignore
+
+         The default is not to scan for secrets in build output.
+
+      .. value:: redact
+
+         The line containing the secret is replaced with a message
+         indicating a secret would have been exposed.  In the JSON
+         output, the entire playbook is replaced with a message.
+
+      .. value:: fail
+
+         In addition to the actions in `redact`, the build is failed
+         and aborted immediately.
+
    .. attr:: nodeset
 
       The nodes which should be supplied to the job.  This parameter
