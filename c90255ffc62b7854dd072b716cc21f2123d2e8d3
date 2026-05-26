@@ -69,6 +69,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "61c4076c_38f95d9b",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 137,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "The timer can keep firing between the wait loop and the assertions, making \u003e\u003d checks unreliable. Fixed by stopping the timer immediately after the wait loop (commitConfigUpdate to no-timer.yaml + waitUntilSettled()) before any assertions. This prevents new builds from racing with the checks.",
+      "parentUuid": "20499c8d_904ed3bc",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "ef375139_83321aaa",
@@ -82,6 +100,24 @@
       "writtenOn": "2026-05-19T16:19:33Z",
       "side": 1,
       "message": "See above",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "77c1b966_fa424a7d",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 141,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "The timer can keep firing between the wait loop and the assertions, making \u003e\u003d checks unreliable. Fixed by stopping the timer immediately after the wait loop (commitConfigUpdate to no-timer.yaml + waitUntilSettled()) before any assertions. This prevents new builds from racing with the checks.",
+      "parentUuid": "ef375139_83321aaa",
       "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -103,6 +139,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "5217603e_61fd38a4",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 158,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "Refactored the assertions to use assertIn/assertNotIn on the set of triggered branches, which is more meaningful than checking raw counts. Each build\u0027s job name is also verified with assertEqual against the expected pipeline job. This makes the test intent clearer and more precise.",
+      "parentUuid": "b0ce931d_74262ff3",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "6f33923a_0d9577fc",
@@ -116,6 +170,24 @@
       "writtenOn": "2026-05-19T16:19:33Z",
       "side": 1,
       "message": "See above question about pipeline behavior while hold_jobs_in_build is true. Can we assert that the length here is 2?",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a83880bc_7ac4eb27",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 162,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "Refactored the assertions to use assertIn/assertNotIn on the set of triggered branches, which is more meaningful than checking raw counts. Each build\u0027s job name is also verified with assertEqual against the expected pipeline job. This makes the test intent clearer and more precise.",
+      "parentUuid": "6f33923a_0d9577fc",
       "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -137,6 +209,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "7c4254fd_1a6695b6",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "Done. Replaced all log.debug() + return False instances in matches() with FalseWithReason(...), consistent with GerritEventFilter and GitHubEventFilter. Also removed the self.log attribute and import logging since they are no longer needed.",
+      "parentUuid": "0f098311_7c5b2613",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "a0cbb720_01514bd6",
@@ -150,6 +240,24 @@
       "writtenOn": "2026-05-19T16:19:33Z",
       "side": 1,
       "message": "Do we need to rename this parameter? I think it makes the code slightly less readable as it is less clear that parse_context is a parameter to this function.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3faa4207_af63a86e",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 34,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "Removed the pcontext \u003d parse_context alias. Using the original parameter name parse_context directly is clearer and more consistent with how other trigger implementations (e.g. GerritTrigger, GitHubTrigger) reference it — no renaming needed there either. The alias added an extra indirection without any readability benefit.",
+      "parentUuid": "a0cbb720_01514bd6",
       "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -171,6 +279,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "724978de_9291e609",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 36,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "Agreed, it was too noisy for a normal code path. Removed all debug log statements from getEventFilters. Also dropped self.log from __init__ and import logging since nothing uses them anymore",
+      "parentUuid": "a13c5f91_4434e37c",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "9f43b78a_146c93eb",
@@ -184,6 +310,24 @@
       "writtenOn": "2026-05-19T16:19:33Z",
       "side": 1,
       "message": "This should accept `scalar_or_list(v.Any(ZUUL_REGEX, str))` to match other uses of regexes. This allows regexes to be negated for example or to provide a list of different valid regexes. Which might make a good update to the existing test case.",
+      "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "bf112375_c04b7f36",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 69,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-05-26T10:57:34Z",
+      "side": 1,
+      "message": "Updated the schema to scalar_or_list(v.Any(ZUUL_REGEX, str)), consistent with how other drivers (e.g. GitHub, Gerrit) handle branch fields. This allows both plain strings and regex patterns.",
+      "parentUuid": "9f43b78a_146c93eb",
       "revId": "c90255ffc62b7854dd072b716cc21f2123d2e8d3",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
