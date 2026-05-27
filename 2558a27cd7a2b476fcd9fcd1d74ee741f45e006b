@@ -1,0 +1,90 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "97a83a27_79f21df8",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-05-27T21:06:41Z",
+      "side": 1,
+      "message": "I think this needs more work, see comments.",
+      "revId": "2558a27cd7a2b476fcd9fcd1d74ee741f45e006b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "29b23b09_f0ae31ef",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 297,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-05-27T21:06:41Z",
+      "side": 1,
+      "message": "Let\u0027s not leave commented code. Either remove these, or complete the work?",
+      "range": {
+        "startLine": 292,
+        "startChar": 0,
+        "endLine": 297,
+        "endChar": 49
+      },
+      "revId": "2558a27cd7a2b476fcd9fcd1d74ee741f45e006b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "887a6eaf_dbf492ae",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 509,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-05-27T21:06:41Z",
+      "side": 1,
+      "message": "This could (should?) be re-written to follow the pattern used in _event_push above. e.g set up base_repo and use that to set project name.",
+      "range": {
+        "startLine": 509,
+        "startChar": 8,
+        "endLine": 509,
+        "endChar": 22
+      },
+      "revId": "2558a27cd7a2b476fcd9fcd1d74ee741f45e006b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "cb207b6a_ce38d396",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 512,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-05-27T21:06:41Z",
+      "side": 1,
+      "message": "May want to use the same wording as in L417 above?\nOr possibly update L417 to include \"action for\" at L417, it is more accurate.",
+      "range": {
+        "startLine": 512,
+        "startChar": 24,
+        "endLine": 512,
+        "endChar": 45
+      },
+      "revId": "2558a27cd7a2b476fcd9fcd1d74ee741f45e006b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
