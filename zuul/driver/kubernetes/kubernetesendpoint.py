@@ -123,6 +123,12 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
         # Pod and namespace names are the same
         self.node.kubernetes_connection['pod'] = self.namespace
         self.node.kubernetes_connection['containers'] = self.containers
+        # Supported in kubernetes package >= 28.1
+        self.node.kubernetes_connection['tls-server-name'] = getattr(
+            self.endpoint.core_client.api_client.configuration,
+            'tls_server_name',
+            None,
+        )
 
     def advance(self):
         if self.state == self.START:

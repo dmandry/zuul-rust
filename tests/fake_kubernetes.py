@@ -35,6 +35,7 @@ class FakeCoreClient:
             class configuration:
                 host = "http://localhost:8080"
                 verify_ssl = False
+                tls_server_name = "127.0.0.1"
         self.api_client = FakeApi()
 
     def list_namespace(self):
