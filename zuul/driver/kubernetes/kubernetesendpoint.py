@@ -119,6 +119,8 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             self.endpoint.core_client.api_client.configuration.host
         self.node.kubernetes_connection['skiptls'] =\
             not self.endpoint.core_client.api_client.configuration.verify_ssl
+        self.node.kubernetes_connection['tls-server-name'] =\
+            self.endpoint.core_client.api_client.configuration.tls_server_name
         self.node.kubernetes_connection['namespace'] = self.namespace
         # Pod and namespace names are the same
         self.node.kubernetes_connection['pod'] = self.namespace
