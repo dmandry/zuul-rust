@@ -89,12 +89,12 @@ pipeline.
    .. attr:: branches
 
       A :ref:`regular expression <regex>` (or list of regular
-      expressions) which describe to which branches this project
+      expressions) which describe to which branches this `project`
       stanza should apply. A partial match
       is treated as a valid match, so care must be taken when specifying
       branch names that are partial matches of other branch names
-      (e.g., `main`` matches `maint`). A full match such as
-      `^main$`` may be specified to avoid ambiguity.
+      (e.g., `main` matches `maint`). A full match such as
+      `^main$` may be specified to avoid ambiguity.
 
       If omitted on a `project` stanza within an
       :term:`untrusted-project` that is configuring its own project,
