@@ -39,6 +39,30 @@
       },
       "revId": "ab26cd522dee18cefec6df11c72dd53d5aa28f0d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3a168681_64d1e1a5",
+        "filename": "releasenotes/notes/gerrit-webhook-event-source-ce0a6669931bbd6f.yaml",
+        "patchSetId": 7
+      },
+      "lineNbr": 11,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-28T16:09:43Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "278699d7_08f2ad9e",
+      "range": {
+        "startLine": 11,
+        "startChar": 16,
+        "endLine": 11,
+        "endChar": 63
+      },
+      "revId": "ab26cd522dee18cefec6df11c72dd53d5aa28f0d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
