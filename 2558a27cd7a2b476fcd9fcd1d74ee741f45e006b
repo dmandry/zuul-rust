@@ -20,6 +20,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "1507b215_45a6e441",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 7186
+      },
+      "writtenOn": "2026-05-28T07:11:22Z",
+      "side": 1,
+      "message": "I\u0027m putting this as WF-1 as it indeed needs more work as it is. I\u0027ve also based this work on observing one time that tagging a github repo only trigger a \"release\" webhook call, but I cannot confirm whether this is an expected behavior or a one-time exception happening in specific conditions.\n\nMoreover, this initial approach of \"converting\" the release event call into a tag push might feel hacky (especially if it can happen that the tag push AND the release trigger two independent webhook calls that would then trigger the same pipeline(s) twice incorrectly) - it may be preferable to instead create a new github trigger event for pipelines that\u0027d match release webhook calls. Before I get to this potential rework I\u0027d appreciate feedback and guidance from the community.",
+      "revId": "2558a27cd7a2b476fcd9fcd1d74ee741f45e006b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "29b23b09_f0ae31ef",
         "filename": "tests/unit/test_github_driver.py",
         "patchSetId": 4
