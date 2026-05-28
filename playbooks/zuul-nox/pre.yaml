@@ -27,3 +27,13 @@
     - name: Start Zookeeper
       command: eatmydata /opt/zookeeper/bin/zkServer.sh start
       become: true
+    # This is for the bubblewrap cgroup setup test
+    - name: Update cgroup perms
+      args:
+        executable: /bin/bash
+      shell: |
+        CG=$(cat /proc/self/cgroup)
+        CG=/sys/fs/cgroup/${CG:4}
+        sudo chown {{ ansible_user }}:{{ ansible_user }} $CG
+        sudo chown {{ ansible_user }}:{{ ansible_user }} $CG/cgroup.procs
+        sudo chown {{ ansible_user }}:{{ ansible_user }} $CG/cgroup.subtree_control
