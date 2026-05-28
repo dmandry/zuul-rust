@@ -1140,6 +1140,38 @@ paths:
       summary: ''
       tags:
       - tenant
+  /api/tenant/{tenant_name}/project/{project_name}/freeze-pipeline:
+    post:
+      operationId: project_freeze_pipeline
+      parameters:
+      - in: path
+        name: tenant_name
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: project_name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ref:
+                  type: string
+                pipeline:
+                  type: string
+      responses:
+        '200':
+          description: Response not yet documented
+      summary: ''
+      tags:
+      - tenant
   /api/tenant/{tenant_name}/pipeline/{pipeline_name}/project/{project_name}/branch/{branch_name}/freeze-job/{job_name}:
     get:
       operationId: project_freeze_job
@@ -1327,8 +1359,26 @@ paths:
       tags:
       - tenant
   /api/tenant/{tenant_name}/project/{project_name}/enqueue:
-    get:
+    post:
       operationId: enqueue
+      requestBody:
+        description: ''
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pipeline:
+                  type: string
+                ref:
+                  type: string
+                oldrev:
+                  type: string
+                newrev:
+                  type: string
+                parameters:
+                  type: object
       parameters:
       - in: path
         name: tenant_name
