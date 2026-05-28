@@ -1702,7 +1702,14 @@ sensitive data must be provided to dependent jobs, the ``secret_data``
 attribute may be used instead, and the data will be provided via the
 same mechanism as job secrets, where the data are not written to disk
 in the work directory.  Care must still be taken to avoid displaying
-or storing sensitive data within the job.  For example:
+or storing sensitive data within the job.
+
+If a job is configured with :attr:`job.secret-exposure` to redact or
+fail if a secret is exposed, any data returned using ``secret_data``
+will be automatically included in the list of secrets that Zuul
+searches for, starting with the next playbook.
+
+For example:
 
 .. code-block:: yaml
 
@@ -1902,6 +1909,36 @@ For example the following would skip retrying the build:
         data:
           zuul:
             retry: false
+
+Adding redactions
+~~~~~~~~~~~~~~~~~
+
+If a job is configured with :attr:`job.secret-exposure` to redact or
+fail if a secret is exposed, the job may add additional confidental
+data for the detection system to use.  This may be useful for jobs
+that generate or obtain a token from an external source.  Confidential
+data may be registered with Zuul at the end of the playbook where it
+was obtained using *zuul_return*.  Zuul will search for it as it does
+other secrets beginning with the next playbook (but not the playbook
+that registers the data).
+
+Any secrets in secret_data are automatically added and do not need to
+be explicitly registered.
+
+For example:
+
+.. code-block:: yaml
+
+  tasks:
+    - zuul_return:
+        data:
+          zuul:
+            redactions:
+              - my_secret_token
+
+If *zuul_return* is invoked multiple times (e.g., via multiple
+playbooks), then the elements of **zuul.redactions** from each
+invocation will be appended.
 
 .. _build_status:
 

@@ -16,6 +16,7 @@ import urllib.parse
 
 from zuul.ansible.schema import (
     artifact_schema,
+    redaction_schema,
     warning_schema,
 )
 
@@ -67,3 +68,15 @@ def get_warnings_from_result_data(result_data, logger=None):
         if logger:
             logger.debug("Result data did not pass warnings schema "
                          "validation: %s", result_data)
+
+
+def pop_redactions_from_result_data(result_data, logger=None):
+    # This method removes the redactions so we don't keep them around
+    # longer than necessary and accidentally leak them.
+    if validate_schema(result_data, redaction_schema):
+        return result_data.get('zuul', {}).pop('redactions', [])
+    else:
+        if logger:
+            # We do not log the redaction values
+            logger.debug("Result data did not pass redactions schema "
+                         "validation")
