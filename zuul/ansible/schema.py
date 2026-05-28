@@ -40,5 +40,15 @@ warning_data = {
     vs.Extra: object,
 }
 
+redaction_data = {
+    'zuul': {
+        'log_url': str,
+        'redactions': [str],
+        vs.Extra: object,
+    },
+    vs.Extra: object,
+}
+
 artifact_schema = vs.Schema(artifact_data)
 warning_schema = vs.Schema(warning_data)
+redaction_schema = vs.Schema(redaction_data)
