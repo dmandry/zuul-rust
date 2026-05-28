@@ -46,7 +46,10 @@ from opentelemetry import trace
 
 from zuul.exceptions import VariableNameError
 from zuul.lib.ansible import AnsibleManager
-from zuul.lib.result_data import get_warnings_from_result_data
+from zuul.lib.result_data import (
+    get_warnings_from_result_data,
+    pop_redactions_from_result_data,
+)
 from zuul.lib import yamlutil as yaml
 from zuul.lib.config import get_default
 from zuul.lib.logutil import get_annotated_logger
@@ -134,6 +137,16 @@ def _safe_unlink(path):
     if (resolved := str(pathlib.Path(path).resolve())) != path:
         raise PathTraversalError(f"Symlink detected {path} -> {resolved}")
     return os.unlink(resolved)
+
+
+def _recursive_values(d):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            yield from _recursive_values(v)
+        elif isinstance(v, list):
+            yield from v
+        else:
+            yield v
 
 
 class VerboseCommand(commandsocket.Command):
@@ -1981,6 +1994,8 @@ class AnsibleJob(object):
             self.jobdir.setup_playbook)
 
         data, secret_data = self.getResultData()
+        # Don't send redactions back
+        pop_redactions_from_result_data(data, logger=self.log)
         self.mapLines(args, data, item_commit, self.warnings)
         self.warnings.extend(get_warnings_from_result_data(
             data, logger=self.log))
@@ -4276,9 +4291,18 @@ class AnsibleJob(object):
                 phase=phase or 'unknown')
 
         self.emitPlaybookBanner(playbook, 'END', phase, result=result)
+
         # Make sure the log receiver has finished writing logs for
         # this playbook.
         self.log_receiver.sync()
+
+        data, secret_data = self.getResultData()
+        redactions = pop_redactions_from_result_data(data, logger=self.log)
+        if redactions:
+            self.secrets_values |= set(redactions)
+        for value in _recursive_values(secret_data):
+            self.secrets_values.add(value)
+
         return result, code
 
     def addPlaybookToJson(self, playbook, phase, index, message, start, end):
