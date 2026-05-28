@@ -20,6 +20,176 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "67364f2a_e659fe5d",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 149,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "This should be removed, see below.",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c9666010_5048d5ad",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 409,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "Remove the sentence \"For most installations\".",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3be56430_fc2be5f4",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 414,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "This is renddant, we can just use the presence of webhook_token instead.  That\u0027s how the other gerrit connection backends work.",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9ec0a25c_40f36e19",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 430,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "Is this the complete set of events that makes sense?  Do users have any discretion when selecting these?",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0c4ab548_344000fa",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 445,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "I think this note should be removed.  Everything about it is deprecated.",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2b803c41_48cc7152",
+        "filename": "doc/source/drivers/gerrit.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 460,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "What\u0027s going on here, this doesn\u0027t look like documentation.  But it doesn\u0027t matter because this should be removed (see above).",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1ba90760_e503cc34",
+        "filename": "releasenotes/notes/gerrit-webhook-event-source-ce0a6669931bbd6f.yaml",
+        "patchSetId": 8
+      },
+      "lineNbr": 22,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "Keep the first sentence, then link to the appropriate part of the documentation.  We don\u0027t need to document it a second time in the release notes.",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e1c9a016_2b47511c",
+        "filename": "tests/unit/test_gerrit_webhook.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 1,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "Thank you for keeping this header since it\u0027s based on Acme Gating code, but you should probably add your own copyright statement too.",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "829ef366_0d076f1a",
+        "filename": "tests/unit/test_gerrit_webhook.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 30,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "This entire class can be removed; everything it tests is covered below.",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ced1e0d9_90315da9",
+        "filename": "tests/unit/test_gerrit_webhook.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-05-28T16:40:29Z",
+      "side": 1,
+      "message": "How about a test of the max size?",
+      "revId": "6777b237af65d9e82f363611c5cef627034d1f25",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "afb09fd9_c14872ad",
         "filename": "zuul/driver/gerrit/gerritconnection.py",
         "patchSetId": 8
