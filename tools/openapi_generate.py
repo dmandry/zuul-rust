@@ -124,9 +124,11 @@ def generate_spec():
             methodspec['operationId'] = action
             methodspec['tags'] = ['tenant']
             methodspec['parameters'] = []
+            body_params = {}
 
             # All inputs should be in the method signature, so iterate
             # over that.
+            seen_params = set()
             for handler_param in inspect.signature(
                     handler).parameters.values():
                 paramspec = {}
@@ -155,7 +157,25 @@ def generate_spec():
                 if required:
                     paramspec['required'] = required
 
+                seen_params.add(handler_param.name)
                 methodspec['parameters'].append(paramspec)
+            for doc_param_name, doc_param in doc_params.items():
+                if doc_param_name not in seen_params:
+                    body_params[doc_param_name] = {
+                        'type': doc_param['type'],
+                    }
+            if body_params:
+                methodspec['requestBody'] = {
+                    'required': True,
+                    'content': {
+                        'application/json': {
+                            'schema': {
+                                'type': 'object',
+                                'properties': body_params,
+                            }
+                        }
+                    }
+                }
     return spec
 
 

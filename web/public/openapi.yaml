@@ -285,6 +285,10 @@ paths:
         schema:
           type: string
       - in: query
+        name: queue_item_uuid
+        schema:
+          type: string
+      - in: query
         name: voting
         schema:
           type: string
@@ -354,6 +358,8 @@ paths:
                     end_time:
                       type: string
                     error_detail:
+                      type: string
+                    execute_time:
                       type: string
                     final:
                       type: string
@@ -453,6 +459,8 @@ paths:
                           type: string
                         error_detail:
                           type: string
+                        execute_time:
+                          type: string
                         final:
                           type: string
                         held:
@@ -522,6 +530,8 @@ paths:
                     type: string
                   message:
                     type: string
+                  parameters:
+                    type: object
                   pipeline:
                     type: string
                   refs:
@@ -547,6 +557,8 @@ paths:
                       type: object
                     type: array
                   result:
+                    type: string
+                  user_id:
                     type: string
                   uuid:
                     type: string
@@ -599,6 +611,10 @@ paths:
         schema:
           type: string
       - in: query
+        name: queue_item_uuid
+        schema:
+          type: string
+      - in: query
         name: result
         schema:
           type: string
@@ -646,6 +662,8 @@ paths:
                       type: string
                     message:
                       type: string
+                    parameters:
+                      type: object
                     pipeline:
                       type: string
                     refs:
@@ -671,6 +689,8 @@ paths:
                         type: object
                       type: array
                     result:
+                      type: string
+                    user_id:
                       type: string
                     uuid:
                       type: string
@@ -807,6 +827,26 @@ paths:
       summary: ''
       tags:
       - tenant
+  /api/tenant/{tenant_name}/image-upload/{upload_id}/upload:
+    post:
+      operationId: image_upload_upload
+      parameters:
+      - in: path
+        name: tenant_name
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: upload_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Response not yet documented
+      summary: ''
+      tags:
+      - tenant
   /api/tenant/{tenant_name}/image-upload/{upload_id}/validate:
     post:
       operationId: image_upload_validate
@@ -897,6 +937,8 @@ paths:
                               description: The image upload
                               properties:
                                 artifact_uuid:
+                                  type: string
+                                build_uuid:
                                   type: string
                                 canonical_name:
                                   type: string
@@ -1140,38 +1182,6 @@ paths:
       summary: ''
       tags:
       - tenant
-  /api/tenant/{tenant_name}/project/{project_name}/freeze-pipeline:
-    post:
-      operationId: project_freeze_pipeline
-      parameters:
-      - in: path
-        name: tenant_name
-        required: true
-        schema:
-          type: string
-      - in: path
-        name: project_name
-        required: true
-        schema:
-          type: string
-      requestBody:
-        description: ''
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                ref:
-                  type: string
-                pipeline:
-                  type: string
-      responses:
-        '200':
-          description: Response not yet documented
-      summary: ''
-      tags:
-      - tenant
   /api/tenant/{tenant_name}/pipeline/{pipeline_name}/project/{project_name}/branch/{branch_name}/freeze-job/{job_name}:
     get:
       operationId: project_freeze_job
@@ -1339,7 +1349,7 @@ paths:
       tags:
       - tenant
   /api/tenant/{tenant_name}/project/{project_name}/dequeue:
-    get:
+    post:
       operationId: dequeue
       parameters:
       - in: path
@@ -1361,39 +1371,99 @@ paths:
   /api/tenant/{tenant_name}/project/{project_name}/enqueue:
     post:
       operationId: enqueue
+      parameters:
+      - description: The tenant name
+        in: path
+        name: tenant_name
+        required: true
+        schema:
+          type: string
+      - description: A project name
+        in: path
+        name: project_name
+        required: true
+        schema:
+          type: string
       requestBody:
-        description: ''
-        required: false
         content:
           application/json:
             schema:
+              properties:
+                change:
+                  type: string
+                newrev:
+                  type: string
+                oldrev:
+                  type: string
+                parameters:
+                  type: object
+                pipeline:
+                  type: string
+                ref:
+                  type: string
               type: object
+        required: true
+      responses:
+        '200':
+          description: Response not yet documented
+      summary: Enqueue a change or ref
+      tags:
+      - tenant
+  /api/tenant/{tenant_name}/project/{project_name}/freeze-pipeline:
+    post:
+      operationId: project_freeze_pipeline
+      parameters:
+      - description: The tenant name
+        in: path
+        name: tenant_name
+        required: true
+        schema:
+          type: string
+      - description: A project name
+        in: path
+        name: project_name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
               properties:
                 pipeline:
                   type: string
                 ref:
                   type: string
-                oldrev:
-                  type: string
-                newrev:
-                  type: string
-                parameters:
-                  type: object
-      parameters:
-      - in: path
-        name: tenant_name
+              type: object
         required: true
-        schema:
-          type: string
-      - in: path
-        name: project_name
-        required: true
-        schema:
-          type: string
       responses:
-        '200':
-          description: Response not yet documented
-      summary: ''
+        200:
+          content:
+            application/json:
+              schema:
+                properties:
+                  parameters:
+                    items:
+                      properties:
+                        default:
+                          type: string
+                        description:
+                          type: string
+                        name:
+                          type: string
+                        required:
+                          type: boolean
+                        type:
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                type: object
+          description: Returns the project pipeline config
+      summary: Freeze a project-pipeline config.
       tags:
       - tenant
   /api/tenant/{tenant_name}/projects:
@@ -1488,6 +1558,8 @@ paths:
                                     description: The image upload
                                     properties:
                                       artifact_uuid:
+                                        type: string
+                                      build_uuid:
                                         type: string
                                       canonical_name:
                                         type: string
@@ -1626,6 +1698,14 @@ paths:
           type: string
       - in: query
         name: event_type
+        schema:
+          type: string
+      - in: query
+        name: idx_min
+        schema:
+          type: string
+      - in: query
+        name: idx_max
         schema:
           type: string
       - in: query

@@ -1546,6 +1546,18 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['POST', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True, permission='enqueue')
     def enqueue(self, tenant_name, tenant, auth, project_name):
+        """
+        Enqueue a change or ref
+
+        :param str tenant_name: The tenant name
+        :param str project_name: A project name
+        :param str pipeline: A pipeline name
+        :param str change: A change ID
+        :param str ref: A ref name
+        :param str oldrev: The old git revision (if a ref)
+        :param str newrev: The new git revision (if a ref)
+        :param object parameters: Build parameters
+        """
         body = cherrypy.request.json
         if cherrypy.request.method != 'POST':
             raise cherrypy.HTTPError(405)
@@ -3177,8 +3189,6 @@ class ZuulWebAPI(object):
         Get a badge describing the result of the latest buildset found.
 
         :param str tenant_name: The tenant name
-        :param Tenant tenant: The tenant object
-        :param AuthInfo auth: The auth object
         :param str project: A project name
         :param str pipeline: A pipeline name
         :param str branch: A branch name
@@ -3434,7 +3444,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.save_params()
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
-    @cherrypy.tools.handle_options()
+    @cherrypy.tools.handle_options(allowed_methods=['POST'])
     @cherrypy.tools.check_tenant_auth()
     @openapi_response(
         code=200,
@@ -3444,6 +3454,14 @@ class ZuulWebAPI(object):
     )
     def project_freeze_pipeline(self, tenant_name, tenant, auth,
                                 project_name):
+        """
+        Freeze a project-pipeline config.
+
+        :param str tenant_name: The tenant name
+        :param str project_name: A project name
+        :param str ref: A git ref
+        :param str pipeline: A pipeline name
+        """
         body = cherrypy.request.json
         if 'ref' not in body:
             raise cherrypy.HTTPError(400, 'ref is required')
@@ -3686,16 +3704,21 @@ class ZuulWeb(object):
             route_map.connect(
                 'api',
                 '/api/tenant/{tenant_name}/project/{project_name:.*}/enqueue',
-                controller=api, action='enqueue')
+                controller=api,
+                conditions=dict(method=['POST']),
+                action='enqueue')
             route_map.connect(
                 'api',
                 '/api/tenant/{tenant_name}/project/{project_name:.*}/dequeue',
-                controller=api, action='dequeue')
+                controller=api,
+                conditions=dict(method=['POST']),
+                action='dequeue')
         route_map.connect(
             'api',
             '/api/tenant/{tenant_name}/project/{project_name:.*}'
             '/freeze-pipeline',
             controller=api,
+            conditions=dict(method=['POST']),
             action='project_freeze_pipeline',
         )
         route_map.connect('api',
