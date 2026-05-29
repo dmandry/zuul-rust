@@ -869,6 +869,57 @@ class TestExecutorApi(ZooKeeperBaseTestCase):
         self.assertEqual(2, len(lost_build_requests))
         self.assertEqual(b.path, lost_build_requests[0].path)
 
+    def test_lost_pause_build_disconnect(self):
+        # Test that a paused build deleted by the scheduler while the
+        # executor is disconnected from ZK triggers a DELETED event on
+        # reconnection, so the executor can clean up its job_workers.
+        event_queue = queue.Queue()
+
+        def eq_put(br, e):
+            event_queue.put((br, e))
+
+        # Create a standalone executor server with an event callback
+        executor_client = ZooKeeperClient(
+            self.zk_chroot_fixture.zk_hosts,
+            tls_cert=self.zk_chroot_fixture.zookeeper_cert,
+            tls_key=self.zk_chroot_fixture.zookeeper_key,
+            tls_ca=self.zk_chroot_fixture.zookeeper_ca,
+            timeout=ZOOKEEPER_SESSION_TIMEOUT,
+        )
+        executor_client.connect()
+        server = ExecutorApi(executor_client,
+                             build_event_callback=eq_put)
+        self.addCleanup(server.stop)
+
+        # Submit a new build
+        br = BuildRequest(
+            "A", None, None, "job", "job_uuid", "tenant", "pipeline", '1')
+        server.submit(br, {})
+        a_uuid = br.uuid
+        server.waitForSync()
+
+        # Mark the build as paused
+        a = self.getRequest(server, a_uuid)
+        server.lock(a)
+        a.state = BuildRequest.PAUSED
+        server.update(a)
+
+        self.log.debug("Disconnect executor")
+        server.client.client.stop()
+
+        # Scheduler deletes the build while executor is disconnected
+        self.zk_client.client.delete(br.path, recursive=True)
+
+        self.log.debug("Reconnect executor")
+        server.client.client.start()
+        server.waitForSync()
+
+        # The executor should receive a DELETED event for the paused
+        # build so it can clean up its job_workers.
+        (build_request, event) = event_queue.get(timeout=30)
+        self.assertEqual(build_request.uuid, a_uuid)
+        self.assertEqual(event, JobRequestEvent.DELETED)
+
     def test_lost_build_request_params(self):
         # Test cleaning up orphaned request parameters
         executor_api = ExecutorApi(self.zk_client)

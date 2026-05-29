@@ -143,7 +143,14 @@ class JobRequestCache(ZuulTreeCache):
                         if not request:
                             return
                         self.event_callback(request, job_event)
-            elif event.type == EventType.DELETED:
+            elif event.type == EventType.DELETED or (
+                    # After connection lost, DELETED events may be missed,
+                    # but we can interpret NONE event without a node the same.
+                    # This is to prevent the executor process from holding onto
+                    # builds that were removed while disconnected.
+                    # See the 'test_lost_pause_build_disconnect'
+                    event.type == EventType.NONE and not exists
+            ):
                 if len(parts) == 2:
                     request = self.getRequest(parts[1])
                     if not request:
