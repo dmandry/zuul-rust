@@ -869,6 +869,47 @@ class TestExecutorApi(ZooKeeperBaseTestCase):
         self.assertEqual(2, len(lost_build_requests))
         self.assertEqual(b.path, lost_build_requests[0].path)
 
+    def test_lost_pause_build_disconnect(self):
+        # Create a standalone executor server
+        executor_client = ZooKeeperClient(
+            self.zk_chroot_fixture.zk_hosts,
+            tls_cert=self.zk_chroot_fixture.zookeeper_cert,
+            tls_key=self.zk_chroot_fixture.zookeeper_key,
+            tls_ca=self.zk_chroot_fixture.zookeeper_ca,
+            timeout=ZOOKEEPER_SESSION_TIMEOUT,
+        )
+        executor_client.connect()
+        server = ExecutorApi(executor_client)
+        self.addCleanup(server.stop)
+
+        # Submit a new build
+        br = BuildRequest(
+            "A", None, None, "job", "job_uuid", "tenant", "pipeline", '1')
+        server.submit(br, {})
+        a_uuid = br.uuid
+        server.waitForSync()
+
+        # Mark the build as paused
+        a = self.getRequest(server, a_uuid)
+        server.lock(a)
+        a.state = BuildRequest.PAUSED
+        server.update(a)
+
+        self.log.debug("Disconnect executor")
+        server.client.client.stop()
+
+        # Delete the build
+        # self.zk_client.client.delete(br.path, recursive=True)
+
+        self.log.debug("Reconnect executor")
+        server.client.client.start()
+        server.waitForSync()
+        server.zone_queues[None].cache.ensureReady()
+
+        reqs = list(server.next())
+        self.log.debug("Executor reqs: %s", reqs)
+        self.assertEqual(reqs, [])
+
     def test_lost_build_request_params(self):
         # Test cleaning up orphaned request parameters
         executor_api = ExecutorApi(self.zk_client)
