@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5ee9f6fb_f2431578",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 6
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-05-30T16:53:58Z",
+      "side": 1,
+      "message": "Looks like ps6 was simply updating the sql migration to tie into another migration that landed before this one?",
+      "revId": "9a748ac7770da038b6829890e873a3ce3c935e60",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
