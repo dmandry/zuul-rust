@@ -45,5 +45,6 @@ Zuul includes the following provider drivers:
    aws
    azure
    kubernetes
+   heat
    openstack
    static
