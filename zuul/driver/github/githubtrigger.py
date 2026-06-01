@@ -146,10 +146,19 @@ def getNewSchema():
         vs.Required('event'): vs.Any('pull_request',
                                      'pull_request_review',
                                      'push',
-                                     'check_run'),
+                                     'check_run',
+                                     'release'),
         'require': githubsource.getRequireSchema(),
         'reject': githubsource.getRejectSchema(),
         'debug': bool,
+    })
+    # Release
+    # https://docs.github.com/en/webhooks/webhook-events-and-payloads#release
+    release_schema = base_schema.extend({
+        vs.Required('action'): scalar_or_list(vs.Any(
+            'created', 'deleted', 'edited', 'prereleased',
+            'published', 'released', 'unpublished',
+        ))
     })
 
     # Pull request
@@ -251,6 +260,8 @@ def getNewSchema():
             push_schema(data)
         elif event == 'check_run':
             check_run_schema(data)
+        elif event == 'release':
+            release_schema(data)
 
     return validate
 
@@ -261,7 +272,8 @@ def getSchema():
             scalar_or_list(vs.Any('pull_request',
                                   'pull_request_review',
                                   'push',
-                                  'check_run')),
+                                  'check_run',
+                                  'release')),
         'action': scalar_or_list(str),
         'branch': scalar_or_list(vs.Any(ZUUL_REGEX, str)),
         'ref': scalar_or_list(vs.Any(ZUUL_REGEX, str)),

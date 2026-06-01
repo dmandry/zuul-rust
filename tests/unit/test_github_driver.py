@@ -314,6 +314,53 @@ class TestGithubDriver(ZuulTestCase):
         self.assertEqual('SUCCESS',
                          self.getJobFromHistory('project-tag').result)
 
+    @simple_layout('layouts/release-github.yaml', driver='github')
+    def test_release_event(self):
+        self.executor_server.hold_jobs_in_build = True
+
+        self.create_branch('org/project', 'tagbranch')
+        files = {'README.txt': 'test'}
+        self.addCommitToRepo('org/project', 'test tag',
+                             files, branch='main', tag='v1.0.0')
+        path = os.path.join(self.upstream_root, 'org/project')
+        repo = git.Repo(path)
+        tag = repo.tags['v1.0.0']
+        sha = tag.commit.hexsha
+        del repo
+
+        # Notify zuul about the new branch to load the config
+        self.fake_github.emitEvent(
+            self.fake_github.getPushEvent(
+                'org/project',
+                ref='refs/heads/%s' % 'main'))
+        self.waitUntilSettled()
+
+        self.fake_github.emitEvent(
+            self.fake_github.getPushEvent('org/project', 'refs/tags/v1.0.0',
+                                          new_rev=sha))
+        self.waitUntilSettled()
+
+        # The tag push event should not trigger anything
+        self.assertEqual(0, len(self.builds))
+
+        # Now do a release
+        self.fake_github.emitEvent(
+            self.fake_github.getReleaseEvent(
+                'org/project',
+                action='released',
+                tag='v1.0.0')
+        )
+        self.waitUntilSettled()
+
+        build_params = self.builds[0].parameters
+        self.assertEqual('refs/tags/v1.0.0', build_params['zuul']['ref'])
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertEqual('SUCCESS',
+                         self.getJobFromHistory('project-release').result)
+
     @simple_layout('layouts/push-tag-github.yaml', driver='github')
     def test_push_event(self):
         self.executor_server.hold_jobs_in_build = True

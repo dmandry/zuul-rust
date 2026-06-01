@@ -309,6 +309,8 @@ the following options.
 
       .. value:: check_run
 
+      .. value:: release
+
    .. attr:: action
 
       A :value:`pipeline.trigger.<github source>.event.pull_request`
@@ -381,6 +383,38 @@ the following options.
       .. value:: completed
 
          A check run completed.
+
+      A :value:`pipeline.trigger.<github source>.event.release`
+      event will have associated action(s) to trigger from. The
+      supported actions are:
+
+      .. value:: created
+
+         A draft was saved, or a release or pre-release was published without previously being saved as a draft.
+
+      .. value:: deleted
+
+         A release, pre-release, or draft release was deleted.
+
+      .. value:: edited
+
+         The details of a release, pre-release, or draft release were edited
+
+      .. value:: prereleased
+
+         A release was created and identified as a pre-release.
+
+      .. value:: published
+
+         A release, pre-release, or draft of a release was published.
+
+      .. value:: released
+
+         A release was published, or a pre-release was changed to a release.
+
+      .. value:: unpublished
+
+         A release or pre-release was unpublished.
 
    .. attr:: branch
 

@@ -1616,6 +1616,21 @@ class FakeGithubConnection(githubconnection.GithubConnection):
         }
         return (name, data)
 
+    # partial mocking, see https://docs.github.com/en/rest/releases/releases?apiVersion=2026-03-10#get-a-release
+    def getReleaseEvent(self, project, action, tag):
+        name = 'release'
+        data = {
+            'action': action,
+            'release': {
+                'name': tag,
+                'tag_name': tag,
+            },
+            'repository': {
+                'full_name': project,
+            },
+        }
+        return (name, data)
+
     def getBranchProtectionRuleEvent(self, project, action):
         name = 'branch_protection_rule'
         data = {

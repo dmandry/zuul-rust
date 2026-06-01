@@ -1,0 +1,37 @@
+- pipeline:
+    name: post
+    manager: independent
+    trigger:
+      github:
+        - event: push
+          ref: ^refs/heads/master$
+
+- pipeline:
+    name: release
+    manager: independent
+    trigger:
+      github:
+        - event: release
+          action: released
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+
+- job:
+    name: project-post
+    run: playbooks/project-post.yaml
+
+- job:
+    name: project-release
+    run: playbooks/project-tag.yaml
+
+- project:
+    name: org/project
+    post:
+      jobs:
+        - project-post
+    release:
+      jobs:
+        - project-release

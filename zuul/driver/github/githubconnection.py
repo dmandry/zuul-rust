@@ -482,6 +482,24 @@ class GithubEventProcessor(object):
             self.log.debug("Finished post-processing event %s", event)
         self.events = events
 
+    def _event_release(self):
+        event = GithubTriggerEvent()
+        base_repo = self.body.get('repository')
+        event.project_name = base_repo.get('full_name')
+        event.action = self.body.get('action')
+
+        event.connection_name = self.connection.connection_name
+        event.trigger_name = 'github'
+
+        # we assume the associated ref to be available this way.
+        # alternatively the "commitish" could also be used.
+        tag = self.body.get('release', {}).get('tag_name')
+        event.ref = 'refs/tags/{0}'.format(tag)
+
+        self.connection.clearConnectionCacheOnBranchEvent(event)
+
+        return event
+
     def _event_push(self):
         base_repo = self.body.get('repository')
 

@@ -1,0 +1,4 @@
+---
+features:
+  - |
+    Github: add support for "release" events in Github pipelines' triggers.
