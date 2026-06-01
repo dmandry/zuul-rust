@@ -445,8 +445,90 @@ actually uses.
   to prevent it from appearing in stack show output.
 
 Templates must also output ``bastion_ip`` for Zuul connectivity.
+See `Multi-host SSH Access`_ below for complete template examples.
 
-Example template:
+Multi-host SSH Access
+---------------------
+
+Heat stacks often contain multiple instances — for example, a bastion
+(jump host) with a floating IP and one or more internal nodes on a
+private network.  There are two ways to reach internal nodes:
+
+* **Via nodes** (see `Via nodes in the inventory`_) — declare internal
+  nodes as ``via`` nodes in the nodeset.  The executor connects to them
+  through the bastion using SSH ProxyJump, authenticating with the
+  cloud keypair (``zuul_key_name``).  No ephemeral keypair is required.
+  This is the recommended approach when playbooks need to target
+  internal nodes directly.
+
+* **Ephemeral keypair** — inject a per-stack Ed25519 keypair via
+  cloud-init so the bastion can SSH to internal nodes directly.
+  See the template example below.
+
+Via nodes in the inventory
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When a nodeset contains nodes with a ``via`` attribute, those nodes are
+not allocated independently — only the gateway node consumes a label
+slot in the launcher.  After the gateway stack is created, the executor
+builds inventory entries for via-nodes using connection details supplied
+by the gateway's ``node_properties.via_nodes`` dict.
+
+The Heat driver populates ``node_properties.via_nodes`` automatically
+when the stack outputs include a ``zuul_via_nodes`` key.  The value must
+be a mapping from nodeset node name to a connection-details dict:
+
+.. code-block:: yaml
+
+   outputs:
+     bastion_ip:
+       value: { get_attr: [bastion_fip, floating_ip_address] }
+     zuul_via_nodes:
+       value:
+         worker:
+           host: { get_attr: [worker, first_address] }
+           user: zuul
+           port: 22
+           python_path: /usr/bin/python3
+
+Each entry may contain the following fields:
+
+``host`` *(required)*
+  The IP address or hostname used for SSH connections to the node.
+
+``user``
+  The SSH username.  Defaults to the executor's configured default
+  username when absent.
+
+``port``
+  The SSH port number.  Defaults to ``22`` when absent.
+
+``python_path``
+  Path to the Python interpreter on the node.  When absent, Ansible
+  auto-detection (``auto``) is used.
+
+``shell_type``
+  The shell type for Ansible (e.g. ``cmd``, ``powershell``).  Omit for
+  standard POSIX shells.
+
+Combine this with a nodeset that declares ``via`` nodes pointing to the
+gateway:
+
+.. code-block:: yaml
+
+   - nodeset:
+       name: heat-multinode
+       nodes:
+         - name: bastion
+           label: heat-lab
+           template-config:
+             heat-template-path: zuul.heat.d/multinode.yaml
+         - name: worker
+           via: bastion
+
+See :ref:`nodeset` for full ``via`` attribute documentation.
+
+Example template that exposes an internal node as a via-node:
 
 .. code-block:: yaml
 
@@ -455,24 +537,17 @@ Example template:
    parameters:
      zuul_key_name:
        type: string
-       description: Cloud keypair name injected by Zuul for executor access
+       description: Cloud keypair for executor access (bastion and via-nodes)
+     zuul_image:
+       type: string
+       description: Glance image for all nodes
+     zuul_external_network:
+       type: string
+       description: External network for floating IPs
      zuul_username:
        type: string
        default: zuul
-       description: Username injected by Zuul for SSH access
-     zuul_image:
-       type: string
-       description: Glance image for the bastion node
-     zuul_external_network:
-       type: string
-       description: External network for floating IPs (auto-discovered or configured)
-     zuul_ephemeral_public_key:
-       type: string
-       description: Ed25519 public key for internal node access
-     zuul_ephemeral_private_key:
-       type: string
-       hidden: true
-       description: Ed25519 private key for bastion to reach internal nodes
+       description: SSH username on all nodes
 
    resources:
      private_net:
@@ -500,6 +575,15 @@ Example template:
          networks:
            - port: { get_resource: bastion_port }
 
+     internal_node:
+       type: OS::Nova::Server
+       properties:
+         flavor: m1.small
+         image: { get_param: zuul_image }
+         key_name: { get_param: zuul_key_name }
+         networks:
+           - network: { get_resource: private_net }
+
      bastion_fip:
        type: OS::Neutron::FloatingIP
        properties:
@@ -509,25 +593,24 @@ Example template:
    outputs:
      bastion_ip:
        value: { get_attr: [bastion_fip, floating_ip_address] }
+     zuul_via_nodes:
+       value:
+         internal_node:
+           host: { get_attr: [internal_node, first_address] }
+           user: { get_param: zuul_username }
 
-Multi-host SSH Access
----------------------
+In this template:
 
-Heat stacks often contain multiple instances — for example, a bastion
-(jump host) that Zuul connects to and one or more internal nodes on a
-private network. The executor needs to reach the bastion via the cloud
-keypair (``zuul_key_name``), and the bastion needs to reach internal
-nodes via a separate, per-stack keypair.
-
-The Heat driver generates an ephemeral Ed25519 keypair for each stack
-and passes it as ``zuul_ephemeral_public_key`` and
-``zuul_ephemeral_private_key`` template parameters.  Use
-``OS::Heat::CloudConfig`` to distribute the keys via cloud-init:
-
-* The **bastion** receives the ephemeral private key via ``write_files``
-  so it can SSH to internal nodes.
-* **Internal nodes** receive the ephemeral public key via
-  ``ssh_authorized_keys`` so the bastion can connect.
+* Both the **bastion** and **internal_node** use ``zuul_key_name`` as
+  their ``key_name``.  The executor authenticates to via-nodes directly
+  via SSH ProxyJump (the bastion acts as a TCP tunnel only), so the
+  cloud keypair must be authorised on internal nodes.
+* No ephemeral keypair is declared — it is not needed for the
+  via-nodes connection method.
+* The ``zuul_via_nodes`` output maps the nodeset node name
+  ``internal_node`` to its private IP.  The Heat driver copies this
+  into ``node_properties.via_nodes`` on the gateway node after the
+  stack reaches ``CREATE_COMPLETE``.
 
 Example template with bastion and internal node:
 
@@ -660,8 +743,14 @@ Accessing Stack Outputs
 -----------------------
 
 All outputs defined in the Heat template are available to Ansible
-playbooks via ``nodepool.node_properties.heat_stack_outputs``.  For example,
-a template that outputs ``bastion_ip`` and ``internal_ips``:
+playbooks via ``nodepool.node_properties.heat_stack_outputs``.
+
+The ``zuul_via_nodes`` output, if present, is consumed by the driver to
+populate ``node_properties.via_nodes`` for ProxyJump inventory entries
+(see `Via nodes in the inventory`_ above).  It is still included in
+``heat_stack_outputs`` and is therefore accessible to playbooks as well.
+
+For example, a template that outputs ``bastion_ip`` and ``internal_ips``:
 
 .. code-block:: yaml
 
