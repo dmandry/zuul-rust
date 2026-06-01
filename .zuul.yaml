@@ -205,6 +205,8 @@
     name: zuul-quick-start
     parent: opendev-buildset-registry-consumer
     description: Run the commands in the Zuul tutorial quick-start documentation.
+    vars:
+      ensure_podman_rootless: true
     pre-run: playbooks/tutorial/pre.yaml
     run: playbooks/tutorial/run.yaml
     post-run: playbooks/tutorial/post.yaml
