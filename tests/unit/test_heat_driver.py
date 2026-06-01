@@ -425,3 +425,46 @@ resources:
             with self.assertRaises(ResourcePolicyViolation) as cm:
                 parser_no_policy.parse(template, validate_policy=False)
             self.assertIn(res_type, str(cm.exception))
+
+
+class TestHeatDriverViaNodes(BaseHeatDriverTest, BaseCloudDriverTest):
+    """Integration test verifying zuul_via_nodes output populates
+    node_properties['via_nodes'] through the full lifecycle."""
+
+    via_nodes_value = {
+        'worker': {'host': '192.168.1.10', 'user': 'zuul', 'port': 22},
+    }
+
+    def _makeFakeCloud(self, region):
+        super()._makeFakeCloud(region)
+        via_nodes = self.via_nodes_value
+
+        def _stack_outputs_with_via():
+            return [
+                {'output_key': 'bastion_ip',
+                 'output_value': '198.51.100.1'},
+                {'output_key': 'zuul_via_nodes',
+                 'output_value': via_nodes},
+            ]
+        self.fake_cloud[region]._stack_outputs = _stack_outputs_with_via
+
+    def _getTemplateConfig(self):
+        tpl_path = os.path.join(
+            FIXTURE_DIR, 'layouts', 'heat', 'test-stack.yaml')
+        with open(tpl_path) as f:
+            template_content = f.read()
+        return {'heat_template_content': template_content,
+                'heat_template_path': 'zuul.d/templates/test-stack.yaml'}
+
+    def _assertProviderNodeAttributes(self, pnode):
+        super()._assertProviderNodeAttributes(pnode)
+        self.assertIsNotNone(pnode.heat_stack_id)
+        self.assertEqual(
+            pnode.node_properties.get('via_nodes'),
+            self.via_nodes_value)
+
+    @simple_layout('layouts/heat/nodepool.yaml', enable_nodepool=True)
+    def test_heat_via_nodes_lifecycle(self):
+        self._test_node_lifecycle(
+            'heat-stack',
+            template_config=[self._getTemplateConfig()])
