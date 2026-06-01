@@ -353,6 +353,28 @@ configuration. Some examples of tenant definitions are:
             in-repo configuration for its own testing (which may not
             be relevant to other users of the project).
 
+         .. attr:: heat-template-dirs
+
+            A list of directories (relative to the repository root)
+            containing Heat Orchestration Templates.  During
+            configuration loading and at merge time, Zuul will fetch
+            all YAML files from these directories so that they are
+            available for nodeset ``heat-template-path`` references.
+
+            Because the templates are fetched from the **merged
+            commit** state, templates added or modified in a proposed
+            change are resolved correctly.
+
+            Directories should be listed without a trailing ``/``.
+            Example:
+
+            .. code-block:: yaml
+
+               heat-template-dirs:
+                 - zuul.heat.d
+
+            See :ref:`heat` for more details on Heat template usage.
+
          .. attr:: allow-reporter-jobs
             :type: bool
 
