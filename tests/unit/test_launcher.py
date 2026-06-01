@@ -46,6 +46,7 @@ import moto.ec2.responses.instances
 import boto3
 
 from tests.base import (
+    FIXTURE_DIR,
     ResponsesFixture,
     AnsibleZuulTestCase,
     ZuulTestCase,
@@ -56,6 +57,12 @@ from tests.base import (
     simple_layout,
 )
 from tests.fake_nodescan import NodescanFixture
+from tests.fake_openstack import (
+    FakeOpenstackCloud,
+    FakeHeatProviderEndpoint,
+)
+
+from zuul.driver.heat import HeatDriver
 
 
 class ImageMocksFixture(fixtures.Fixture):
@@ -4557,3 +4564,107 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 main.refresh(ctx)
             except NoNodeError:
                 break
+
+
+class TestLauncherViaNodes(ZuulTestCase):
+    """Integration tests for via-node handling in the launcher.
+
+    These tests verify that the launcher client correctly excludes
+    via-nodes from nodeset requests, that useNodeset handles via-nodes
+    without error, and that nodepool fallback evaluation ignores
+    via-nodes when checking label coverage against providers.
+    """
+    config_file = 'zuul-connections-nodepool.conf'
+
+    def setUp(self):
+        self.initTestConfig()
+        clouds_yaml = os.path.join(FIXTURE_DIR, 'clouds.yaml')
+        self.useFixture(
+            fixtures.EnvironmentVariable(
+                'OS_CLIENT_CONFIG_FILE', clouds_yaml))
+        self.fake_cloud = {}
+        self._makeFakeCloud(None)
+        self.patch(HeatDriver, '_endpoint_class', FakeHeatProviderEndpoint)
+        self.patch(FakeHeatProviderEndpoint, '_fake_cloud', self.fake_cloud)
+        super().setUp()
+
+    def _makeFakeCloud(self, region):
+        fake_cloud = FakeOpenstackCloud(region)
+        fake_cloud.max_instances = 100
+        fake_cloud.max_cores = 100
+        fake_cloud.max_ram = 1000000
+        fake_cloud.max_volumes = 100
+        fake_cloud.max_volume_gb = 100
+        self.fake_cloud[region] = fake_cloud
+
+        def _stack_outputs():
+            return [
+                {'output_key': 'bastion_ip',
+                 'output_value': '198.51.100.1'},
+                {'output_key': 'zuul_via_nodes',
+                 'output_value': {
+                     'internal': {'host': '192.168.1.10'},
+                 }},
+            ]
+        fake_cloud._stack_outputs = _stack_outputs
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_requestNodeset_excludes_via_node_label(self):
+        """Via-node labels are excluded from the launcher nodeset request."""
+        self.hold_nodeset_requests_in_queue = True
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        reqs = self.launcher.api.getNodesetRequests()
+        self.assertEqual(1, len(reqs))
+        # Only the allocated node (bastion / heat-stack) should appear;
+        # the via-node (internal) has no label and is excluded.
+        self.assertEqual(['heat-stack'], reqs[0].labels)
+
+        self.hold_nodeset_requests_in_queue = False
+        self.releaseNodesetRequests(*reqs)
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='check-job', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_useNodeset_skips_via_node(self):
+        """Builds with via-node nodesets complete without useNodeset errors.
+
+        LauncherClient.useNodeset skips nodes with via set (which have
+        no provider node) instead of raising an exception.
+        """
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='check-job', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_useNodepoolFallback_ignores_via_node(self):
+        """Nodepool fallback ignores via-nodes when checking label coverage.
+
+        The heat provider covers the heat-stack label.  Without the
+        via-node filter in _useNodepoolFallback, the via-node (which
+        has no label) would cause an incorrect fallback to nodepool.
+        A launcher nodeset request (not a nodepool request) proves the
+        fallback was correctly avoided.
+        """
+        self.hold_nodeset_requests_in_queue = True
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        reqs = self.launcher.api.getNodesetRequests()
+        self.assertEqual(1, len(reqs))
+        self.assertEqual(['heat-stack'], reqs[0].labels)
+
+        self.hold_nodeset_requests_in_queue = False
+        self.releaseNodesetRequests(*reqs)
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='check-job', result='SUCCESS', changes='1,1'),
+        ], ordered=False)

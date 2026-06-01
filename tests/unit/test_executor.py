@@ -23,6 +23,8 @@ import re
 import time
 from unittest import mock
 
+import fixtures
+
 from tests.base import (
     AnsibleZuulTestCase,
     BaseTestCase,
@@ -33,6 +35,10 @@ from tests.base import (
     okay_tracebacks,
     simple_layout,
 )
+from tests.fake_openstack import (
+    FakeOpenstackCloud,
+    FakeHeatProviderEndpoint,
+)
 
 from zuul.executor.sensors.startingbuilds import StartingBuildsSensor
 from zuul.executor.sensors.process import ProcessSensor
@@ -42,6 +48,7 @@ from zuul.executor.server import (
     make_setup_inventory_dict,
     make_inventory_dict,
 )
+from zuul.driver.heat import HeatDriver
 from zuul.model import Node, NodeSet, Group
 
 
@@ -1838,6 +1845,161 @@ class TestExecutorHomedir(AnsibleZuulTestCase):
         self.assertEqual(A.reported, 1)
         self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
         self.assertIn('Symlink detected', A.messages[0])
+
+
+class TestAnsibleJobViaNodes(AnsibleZuulTestCase):
+    """Integration tests for via-node handling in the executor.
+
+    These tests verify that the executor correctly builds host_list entries
+    for via-nodes and that builds with via-node nodesets complete
+    successfully through the Heat driver's launcher path.
+    """
+    config_file = 'zuul-connections-nodepool.conf'
+
+    _via_nodes_data = None
+
+    def _makeFakeCloud(self, region):
+        fake_cloud = FakeOpenstackCloud(region)
+        fake_cloud.max_instances = 100
+        fake_cloud.max_cores = 100
+        fake_cloud.max_ram = 1000000
+        fake_cloud.max_volumes = 100
+        fake_cloud.max_volume_gb = 100
+        self.fake_cloud[region] = fake_cloud
+
+        test = self
+
+        def _stack_outputs():
+            outputs = [
+                {'output_key': 'bastion_ip',
+                 'output_value': '198.51.100.1'},
+            ]
+            if test._via_nodes_data is not None:
+                outputs.append({
+                    'output_key': 'zuul_via_nodes',
+                    'output_value': test._via_nodes_data,
+                })
+            return outputs
+        fake_cloud._stack_outputs = _stack_outputs
+
+    def setUp(self):
+        self.initTestConfig()
+        clouds_yaml = os.path.join(FIXTURE_DIR, 'clouds.yaml')
+        self.useFixture(
+            fixtures.EnvironmentVariable(
+                'OS_CLIENT_CONFIG_FILE', clouds_yaml))
+        self.useFixture(fixtures.MonkeyPatch(
+            'zuul.launcher.server.NodescanRequest.FAKE', True))
+        self.fake_cloud = {}
+        self._makeFakeCloud(None)
+        self.patch(HeatDriver, '_endpoint_class', FakeHeatProviderEndpoint)
+        self.patch(FakeHeatProviderEndpoint, '_fake_cloud', self.fake_cloud)
+        super().setUp()
+        self.executor_server.via_node_keyscan_timeout = 10
+        self.executor_server._run_ansible = False
+
+    def _run_via_job(self):
+        """Submit a change and hold the build so we can inspect host_list."""
+        self.executor_server.hold_jobs_in_build = True
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        job = list(self.executor_server.job_workers.values())[0]
+        return A, job
+
+    def _get_via_entry(self, job, name='internal'):
+        for host in job.host_list:
+            if host.get('is_via_node') and host['name'] == name:
+                return host
+        return None
+
+    def _release(self):
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_via_node_host_list_defaults(self):
+        """Via-node entry has correct default fields in host_list."""
+        self._via_nodes_data = {'internal': {'host': '192.168.1.10'}}
+        A, job = self._run_via_job()
+
+        via_entries = [h for h in job.host_list if h.get('is_via_node')]
+        self.assertEqual(len(via_entries), 1)
+        entry = via_entries[0]
+        self.assertEqual(entry['name'], 'internal')
+        self.assertTrue(entry['is_via_node'])
+        self.assertEqual(entry['host_keys'], [])
+        self.assertEqual(entry['via_host'], '192.168.1.10')
+        self.assertEqual(entry['via_port'], 22)
+        self.assertIn('198.51.100.1', entry['via_proxy_jump'])
+        hv = entry['host_vars']
+        self.assertEqual(hv['ansible_host'], '192.168.1.10')
+        self.assertEqual(hv['ansible_connection'], 'ssh')
+        self.assertEqual(hv['ansible_python_interpreter'], 'auto')
+        self.assertNotIn('ansible_shell_type', hv)
+        args = hv['ansible_ssh_common_args']
+        self.assertIn('ProxyCommand', args)
+        self.assertIn('198.51.100.1', args)
+
+        self._release()
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_via_node_overrides(self):
+        """Optional via_nodes fields override host_list defaults."""
+        self._via_nodes_data = {
+            'internal': {
+                'host': '192.168.1.10',
+                'python_path': '/usr/bin/python3',
+                'shell_type': 'cmd',
+                'port': 2222,
+            },
+        }
+        A, job = self._run_via_job()
+
+        entry = self._get_via_entry(job)
+        self.assertEqual(
+            entry['host_vars']['ansible_python_interpreter'],
+            '/usr/bin/python3')
+        self.assertEqual(entry['host_vars']['ansible_shell_type'], 'cmd')
+        self.assertEqual(entry['via_port'], 2222)
+
+        self._release()
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_via_node_build_succeeds(self):
+        """Build with via-nodes completes successfully."""
+        self._via_nodes_data = {
+            'internal': {'host': '192.168.1.10'},
+        }
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1)
+        self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '1')
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_missing_via_nodes_data_fails_build(self):
+        """Build fails when gateway lacks via_nodes in node_properties."""
+        self._via_nodes_data = None
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1)
+        self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
+
+    @simple_layout('layouts/heat/via-nodes.yaml', enable_nodepool=True)
+    def test_via_node_keyscan_failure_fails_build(self):
+        """Build fails when via-node keyscan times out."""
+        self._via_nodes_data = {
+            'internal': {'host': '192.168.1.10'},
+        }
+        self.executor_server.via_keyscan_should_fail = True
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1)
+        self.assertEqual(A.patchsets[-1]['approvals'][0]['value'], '-1')
 
 
 class TestInventoryDictViaNodesGroup(BaseTestCase):

@@ -839,7 +839,9 @@ class RecordingAnsibleJob(zuul.executor.server.AnsibleJob):
         self.log.debug("hostlist %s", nodes)
         hosts = super(RecordingAnsibleJob, self).getHostList(args, nodes)
         for host in hosts:
-            if not host['host_vars'].get('ansible_connection'):
+            conn = host['host_vars'].get('ansible_connection')
+            if not conn or (host.get('is_via_node')
+                            and self.executor_server._run_ansible):
                 host['host_vars']['ansible_connection'] = 'local'
                 # Ansible will find our test venv python interpreter
                 # due to the "local" connection, but it won't be in
@@ -850,6 +852,11 @@ class RecordingAnsibleJob(zuul.executor.server.AnsibleJob):
                     host['host_vars']['ansible_python_interpreter'] =\
                         '/usr/bin/python3'
         return hosts
+
+    def _keyscanViaNode(self, host, port, proxy_jump):
+        if getattr(self.executor_server, 'via_keyscan_should_fail', False):
+            return False, 'simulated keyscan failure'
+        return True, ''
 
     def pause(self):
         build = self.executor_server.job_builds[self.build_request.uuid]
