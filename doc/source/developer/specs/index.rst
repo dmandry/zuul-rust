@@ -22,3 +22,4 @@ documentation instead.
    branch-assigned-queues
    web-rbac
    parameterized-builds
+   heat-driver
