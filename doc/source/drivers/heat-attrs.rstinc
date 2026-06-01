@@ -1,0 +1,284 @@
+.. attr:: section[heat]
+   :type: dict
+
+   The attributes available for configuring a Heat section. Sections define
+   the connection and detailed configuration that providers reference.
+
+   .. attr:: connection
+      :type: str
+      :required:
+
+      The name of the :ref:`connection <connections>` to use.
+
+   .. attr:: region
+      :type: str
+
+      Default OpenStack region for this section. Can be overridden at the
+      label level.
+
+   .. attr:: resource-limits
+      :type: dict
+
+      Global resource limits across all stacks for this provider.
+
+      .. attr:: stacks
+         :type: int
+
+         Maximum number of Heat stacks.
+
+      .. attr:: instances
+         :type: int
+
+         Total number of Nova instances across all stacks.
+
+      .. attr:: cores
+         :type: int
+
+         Total CPU cores across all stacks.
+
+      .. attr:: ram
+         :type: int
+
+         Total RAM in MiB across all stacks.
+
+      .. attr:: volumes
+         :type: int
+
+         Total Cinder volumes across all stacks.
+
+      .. attr:: volume-gb
+         :type: int
+
+         Total volume storage in GB across all stacks.
+
+      .. attr:: networks
+         :type: int
+
+         Total Neutron networks across all stacks.
+
+      .. attr:: routers
+         :type: int
+
+         Total Neutron routers across all stacks.
+
+      .. attr:: routers-with-external-gw
+         :type: int
+
+         Total routers with external gateway interfaces across all stacks.
+
+      .. attr:: floating-ips
+         :type: int
+
+         Total floating IPs across all stacks.
+
+   .. attr:: template-policy
+      :type: dict
+
+      Policy for controlling which Heat template features are permitted.
+      This includes allowed resource types and intrinsic functions.
+      Patterns are treated as Python regular expressions matched against
+      the full resource type or function name (using fullmatch semantics).
+      This enables flexible matching. If no policy is defined, all
+      resource types and intrinsic functions are allowed.
+
+      .. attr:: allowed-resource-types
+         :type: list
+
+         List of allowed Heat resource types. If specified, templates
+         may only use resource types that match at least one pattern.
+         Each entry is a Python regular expression:
+
+         - Exact match: ``OS::Nova::Server``
+         - Prefix match: ``^OS::Nova::.*`` (all Nova resources)
+         - Complex: ``^OS::(Nova::(?!KeyPair$)|Neutron::(?!RBACPolicy$)|Cinder)::.*``
+         - Negative lookahead: ``^(?!OS::Keystone::).*``
+           (allow everything except Keystone resources)
+
+      .. attr:: allowed-intrinsic-functions
+         :type: list
+
+         List of allowed HOT intrinsic functions. If specified, templates
+         may only use intrinsic functions that match at least one pattern.
+         Each entry is a Python regular expression matched against the
+         function name.
+
+         HOT intrinsic functions include: ``get_attr``, ``get_file``,
+         ``get_param``, ``get_resource``, ``list_join``, ``list_concat``,
+         ``digest``, ``repeat``, ``resource_facade``, ``str_replace``,
+         ``str_replace_strict``, ``str_split``, ``map_merge``,
+         ``map_replace``, ``yaql``, ``if``, ``contains``, ``equals``,
+         ``not``, ``and``, ``or``, ``filter``, ``make_url``.
+
+         If no list is specified, all intrinsic functions are allowed.
+
+         Examples:
+
+         - Allow only basic functions: ``^(get_param|get_resource|get_attr)$``
+         - Allow everything except ``yaql``: ``^(?!yaql$).*``
+
+   .. attr:: labels
+      :type: list
+
+      .. attr:: region
+         :type: str
+
+         OpenStack region where Heat stacks should be created. If omitted,
+         uses the default region from the cloud configuration.
+
+      .. attr:: flavor
+         :type: str
+
+         Flavor name for this label.
+
+      .. attr:: image
+         :type: str
+
+         Image name for this label.
+
+      .. attr:: external-network
+         :type: str
+
+         The name or ID of the external network for floating IPs.
+         Passed to the Heat template as the ``zuul_external_network``
+         parameter.  If omitted, the driver auto-discovers the first
+         external IPv4 network from Neutron.
+
+      .. attr:: key-name
+         :type: str
+
+         The name of a keypair that will be used when booting the node.
+
+      .. attr:: host-key-checking
+         :type: bool
+         :default: true
+
+         Whether to validate SSH host keys. When true, this helps ensure
+         that nodes are ready to receive SSH connections before they are
+         used.
+
+   .. attr:: flavors
+      :type: list
+
+      .. note::
+
+         In the Heat driver, flavors define **per-stack resource budgets**
+         (upper limits on what a single stack may consume), not instance
+         sizing.  Unlike the OpenStack driver where a flavor specifies a
+         Nova flavor name that determines the node's resource cost, Heat
+         flavors set maximum allowable resource consumption per stack.  The
+         actual resource cost is determined by parsing the Heat template at
+         request time.
+
+      .. attr:: name
+         :type: str
+         :required:
+
+         Flavor name.
+
+      .. attr:: max-instances
+         :type: int
+
+         Maximum instances per stack using this flavor.
+
+      .. attr:: max-cores
+         :type: int
+
+         Maximum CPU cores per stack.
+
+      .. attr:: max-ram
+         :type: int
+
+         Maximum RAM (MB) per stack.
+
+      .. attr:: max-volumes
+         :type: int
+
+         Maximum volumes per stack.
+
+      .. attr:: max-volume-gb
+         :type: int
+
+         Maximum volume storage (GB) per stack.
+
+      .. attr:: max-networks
+         :type: int
+
+         Maximum networks per stack.
+
+      .. attr:: max-routers
+         :type: int
+
+         Maximum routers per stack.
+
+      .. attr:: max-routers-with-external-gw
+         :type: int
+
+         Maximum routers with external gateways per stack.
+
+      .. attr:: max-floating-ips
+         :type: int
+
+         Maximum floating IPs per stack.
+
+   .. attr:: images
+      :type: list
+
+      .. attr:: name
+         :type: str
+         :required:
+
+         Image name used in label configuration.
+
+      .. attr:: type
+         :type: str
+         :required:
+
+         The type of image. Must be ``cloud`` (an image that already
+         exists in the provider).
+
+      .. attr:: image-id
+         :type: str
+
+         The Glance image ID or name for the bastion node.  This is
+         passed to the Heat template as the ``zuul_image`` parameter.
+
+.. attr:: provider[heat]
+   :type: dict
+
+   The attributes available for configuring a Heat provider. Providers
+   reference a section and specify which labels to expose.
+
+   .. attr:: section
+      :type: str
+      :required:
+
+      The name of the section to inherit configuration from.
+
+   .. attr:: stack-create-timeout
+      :type: int
+      :default: 600
+
+      Maximum time in seconds to wait for a Heat stack to reach
+      CREATE_COMPLETE status. If stack creation exceeds this timeout,
+      the node request will fail.
+
+      Default: 600 (10 minutes)
+
+   .. attr:: resource-limits
+      :type: dict
+
+      Provider-specific resource limits that override or supplement the
+      section's limits. See :attr:`section[heat].resource-limits` for
+      available attributes.
+
+   .. attr:: template-policy
+      :type: dict
+
+      Provider-specific template policy. See
+      :attr:`section[heat].template-policy` for available attributes.
+
+   .. attr:: labels
+      :type: list
+
+      List of label names to expose through this provider. Labels must be
+      defined in the referenced section.
