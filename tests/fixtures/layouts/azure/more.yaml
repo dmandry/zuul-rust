@@ -119,6 +119,7 @@
     images:
       - name: debian
         ephemeral-disk: true
+        ephemeral-disk-placement: NvmeDisk
         username: foobar
         generate-password: true
         image-reference:

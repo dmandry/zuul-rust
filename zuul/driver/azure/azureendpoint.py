@@ -686,6 +686,9 @@ class AzureProviderEndpoint(BaseProviderEndpoint):
                 # for the VM based on the SKU.
                 # https://learn.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks#placement-options-for-ephemeral-os-disks
             }
+            if label.ephemeral_disk_placement:
+                placement = label.ephemeral_disk_placement
+                os_disk['diffDiskSettings']['placement'] = placement
 
         # Begin network config
         # There are two parameters for IP addresses: SKU and

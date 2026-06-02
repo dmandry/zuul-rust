@@ -127,6 +127,11 @@ _DEFAULT_SERVER_LOGGING_CONFIG = {
             'handlers': ['console'],
             'level': 'WARNING',
         },
+        # TODO(ckulla): to be removed
+        'azul': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
     },
     'root': {'handlers': []},
 }
