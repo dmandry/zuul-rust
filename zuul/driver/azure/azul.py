@@ -323,7 +323,7 @@ class AzureCloud:
             self,
             providerId='Microsoft.Compute',
             resource='virtualMachines',
-            apiVersion='2023-03-01')
+            apiVersion='2025-11-01')
         self.resource_group_disks = AzureGroupedProviderCRUD(
             self,
             providerId='Microsoft.Compute',
