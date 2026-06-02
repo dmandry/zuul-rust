@@ -144,6 +144,7 @@ class TestAzureDriver(BaseAzureDriverTest, BaseCloudDriverTest):
         self.assertIn('diffDiskSettings', osDisk)
         self.assertIn('option', osDisk['diffDiskSettings'])
         self.assertEqual(osDisk['diffDiskSettings']['option'], 'Local')
+        self.assertEqual(osDisk['diffDiskSettings']['placement'], 'NvmeDisk')
 
         self.assertEqual(
             vm_request['properties']['osProfile']['adminUsername'],
