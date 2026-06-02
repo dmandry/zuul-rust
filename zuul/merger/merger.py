@@ -302,7 +302,7 @@ class Repo(object):
                         ref_to_fetch += ':refs/zuul/fetch'
                     repo.git.fetch(remote, ref_to_fetch,
                                    kill_after_timeout=self.git_timeout, f=True,
-                                   **kwargs)
+                                   no_recurse_submodules=True, **kwargs)
                 return True
             except Exception as e:
                 if attempt < self.retry_attempts:
