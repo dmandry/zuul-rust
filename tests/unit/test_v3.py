@@ -15,6 +15,7 @@
 
 import base64
 import copy
+import getpass
 import io
 import json
 import jwt
@@ -38,6 +39,7 @@ import git
 import paramiko
 
 import zuul.configloader
+from zuul.driver import bubblewrap
 from zuul.lib import yamlutil as yaml
 from zuul.model import MergeRequest, SEVERITY_WARNING
 from zuul.zk.blob_store import BlobStore
@@ -9952,6 +9954,14 @@ class TestJobOutput(AnsibleZuulTestCase):
         self.assertIn(expected_str, result)
 
     def test_job_output_redact_secrets(self):
+        # If we can test cgroups, exercise the cgroup code path in
+        # this test
+        if os.environ.get("ZUUL_TEST_CGROUPS", None):
+            user = getpass.getuser()
+            memory_limit = '2G'
+            cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
+            self.executor_server.execution_wrapper.setCgroupManager(
+                cgroup_manager)
         self.executor_server.keep_jobdir = True
         self.executor_server._new_result_behavior = True
         A = self.fake_gerrit.addFakeChange('org/project7', 'master', 'A')

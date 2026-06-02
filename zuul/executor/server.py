@@ -587,9 +587,11 @@ class LogReceiver:
         self.secrets = []
         self.behavior = behavior
 
-    def start(self):
+    def start(self, cgroup_manager):
         self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
         self.proc.start()
+        if cgroup_manager:
+            cgroup_manager.moveToBuildGroup(self.proc.pid)
         # Wait for the child to send None to tell us it's started up
         self.parent_conn.recv()
 
@@ -1542,7 +1544,8 @@ class AnsibleJob(object):
                 stop_conn=self.executor_server.stop_worker_parent_conn,
                 behavior=self.job.secret_exposure,
             )
-            self.log_receiver.start()
+            self.log_receiver.start(
+                self.executor_server.execution_wrapper.cgroup_manager)
 
             self.lockNodes()
             self._execute()
