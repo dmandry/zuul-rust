@@ -122,6 +122,7 @@ class AzureProviderImage(BaseProviderImage):
                 The size of the operating system disk, in GiB.
                 """,
             ): Nullable(int),
+            # TODO(ckulla): This should probably be turned into a dict providing the placement as an attribute
             Optional(
                 'ephemeral-disk',
                 doc="""\
@@ -129,6 +130,13 @@ class AzureProviderImage(BaseProviderImage):
                 instead of a managed disk.
                 """,
             ): Nullable(bool),
+            Optional(
+                'ephemeral-disk-placement',
+                doc="""\
+                Specifies the disk placement. Supported values are CacheDisk, ResourceDisk or
+                NvmeDisk. If not set, Azure will select the placement automatically.
+                """,
+            ): Nullable(str),
             Optional(
                 'generate-password',
                 doc="""\
