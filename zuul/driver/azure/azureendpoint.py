@@ -231,12 +231,12 @@ class AzureCreateStateMachine(statemachine.StateMachine):
             if self.public_ipv4:
                 self.public_ipv4 = self.endpoint._refresh(
                     self.public_ipv4, force=True)
-                if 'ipAddress' not in self.public_ipv4['properties']:
+                if 'ipAddress' not in self.public_ipv4.get('properties', {}):
                     all_found = False
             if self.public_ipv6:
                 self.public_ipv6 = self.endpoint._refresh(
                     self.public_ipv6, force=True)
-                if 'ipAddress' not in self.public_ipv6['properties']:
+                if 'ipAddress' not in self.public_ipv6.get('properties', {}):
                     all_found = False
             if all_found:
                 self.state = self.COMPLETE
