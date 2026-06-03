@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ce5d7208_7bded845",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 9311
+      },
+      "writtenOn": "2026-06-03T12:51:17Z",
+      "side": 1,
+      "message": "Thank you Harald for initiating this spec. I left an initial comment about storing template config in untrusted project which I think needs to be addressed upfront.\n\nFor example the spec says that the \"get_file\" function is not supported, but can it be disabled? (e.g. to prevent leaking ~/.config/openstack/clouds.yaml from the launcher process)",
+      "revId": "51621215202706f44b633d938003ad02ea30f4ec",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "99d41729_1d2f762d",
+        "filename": "doc/source/developer/specs/heat-driver.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 154,
+      "author": {
+        "id": 9311
+      },
+      "writtenOn": "2026-06-03T12:51:17Z",
+      "side": 1,
+      "message": "Considering the heat stack are going to be stored in untrusted-projects, it might be good to document the security implication of applying a malicious template. I presume the created resources are well scoped and isolated inside the openstack tenant, but I can\u0027t tell if Heat is designed and equiped to handle such untrusted templates to be applied inside a single tenant.\n\nFor example https://docs.openstack.org/heat/latest/template_guide/openstack.html#OS::Nova::KeyPair-props-opt has a \"save_private_key\", couldn\u0027t that be used to mutate an existing key?",
+      "revId": "51621215202706f44b633d938003ad02ea30f4ec",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
