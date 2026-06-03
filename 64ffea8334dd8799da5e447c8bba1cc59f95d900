@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "38d0749f_cbd89bc8",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-03T07:34:13Z",
+      "side": 1,
+      "message": "LGTM",
+      "revId": "64ffea8334dd8799da5e447c8bba1cc59f95d900",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "73514d14_34ea9ed2",
+        "filename": "zuul/driver/azure/azureendpoint.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 775,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-03T07:34:13Z",
+      "side": 1,
+      "message": "just a note, the `replace(\u0027-\u0027, \u0027_\u0027)` happens in zuul/lib/voluputil.py",
+      "revId": "64ffea8334dd8799da5e447c8bba1cc59f95d900",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
