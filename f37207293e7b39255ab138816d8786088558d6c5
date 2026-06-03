@@ -33,6 +33,23 @@
       "message": "@jim@acmegating.com I\u0027m not sure what is causing this latest CI test failure of `tests.unit.test_launcher.TestLauncher.test_failed_node_reassignment`. It passes for me locally",
       "revId": "f37207293e7b39255ab138816d8786088558d6c5",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "db54eb8b_b9d67547",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 31625
+      },
+      "writtenOn": "2026-06-03T21:32:07Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "f37207293e7b39255ab138816d8786088558d6c5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
