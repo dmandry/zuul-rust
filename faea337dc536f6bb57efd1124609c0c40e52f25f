@@ -33,6 +33,23 @@
       "message": "recheck docs build pkg_resources problems were hit that should be fixed now",
       "revId": "faea337dc536f6bb57efd1124609c0c40e52f25f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "af2a31c9_22023835",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 8
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 2
+      },
+      "writtenOn": "2026-06-03T16:09:10Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "faea337dc536f6bb57efd1124609c0c40e52f25f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
