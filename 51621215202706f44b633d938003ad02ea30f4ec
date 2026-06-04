@@ -20,6 +20,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "41e5354e_d2fba140",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-04T12:52:43Z",
+      "side": 1,
+      "message": "Thanks Tristan! This is good feedback! I have updated the spec with a Security section.\n\nRegarding `get_file`, in openstacksdk\u0027s `create_stack(template\u003d\u003cstring\u003e)` the `files` parameter defaults to empty. Would have to use helper `read_env_and_templates(template_file\u003d\u003cpath\u003e)` to load and pass file content to the service. So I do not think that leak would have been possible. Nevertheless I updated the spec to do parsing when loading config and raise an error early. Block any `get_file` use in template at config load!\n\nI also identified a couple of other things, `deletion_policy` and `external_id` ...\n\nIn the updated spec I also extended policy to include control of intrinsic function use in templates.",
+      "parentUuid": "ce5d7208_7bded845",
+      "revId": "51621215202706f44b633d938003ad02ea30f4ec",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "99d41729_1d2f762d",
         "filename": "doc/source/developer/specs/heat-driver.rst",
         "patchSetId": 2
@@ -31,6 +49,24 @@
       "writtenOn": "2026-06-03T12:51:17Z",
       "side": 1,
       "message": "Considering the heat stack are going to be stored in untrusted-projects, it might be good to document the security implication of applying a malicious template. I presume the created resources are well scoped and isolated inside the openstack tenant, but I can\u0027t tell if Heat is designed and equiped to handle such untrusted templates to be applied inside a single tenant.\n\nFor example https://docs.openstack.org/heat/latest/template_guide/openstack.html#OS::Nova::KeyPair-props-opt has a \"save_private_key\", couldn\u0027t that be used to mutate an existing key?",
+      "revId": "51621215202706f44b633d938003ad02ea30f4ec",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9115378e_3b831759",
+        "filename": "doc/source/developer/specs/heat-driver.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 154,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-04T12:52:43Z",
+      "side": 1,
+      "message": "Good catch, `OS::Nova::KeyPair` is potentially risky - the constructs are there for the zuul operator to block it via policy. And it **should be blocked** unless the users are trusted.\n\nI put in the following in the updated spec\u0027s Security section:\n\n\u003e The driver documentation will highlight resource types and \n\u003e intrinsic functions with security implications to help\n\u003e operators make informed decisions when configuring their\n\u003e allow-lists.  For example ``OS::Neutron::RBACPolicy``,\n\u003e ``OS::Nova::KeyPair``, ``yaql``, and ``make_url``.\n\nI also plan to change the examples in doc that use KeyPair for the ephemeral \"per-node\" keys, they can be passed directly via cloud_config instead of creating a keypair.",
+      "parentUuid": "99d41729_1d2f762d",
       "revId": "51621215202706f44b633d938003ad02ea30f4ec",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
