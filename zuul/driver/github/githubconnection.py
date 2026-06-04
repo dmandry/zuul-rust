@@ -532,6 +532,10 @@ class GithubEventProcessor(object):
             event.action = 'edited'
             if 'body' in self.body.get('changes', {}):
                 event.body_edited = True
+        elif action == 'converted_to_draft':
+            event.action = action
+        elif action == 'ready_for_review':
+            event.action = action
         else:
             return None
 

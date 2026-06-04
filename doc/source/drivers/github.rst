@@ -343,6 +343,14 @@ the following options.
 
          Label removed from pull request.
 
+      .. value:: converted_to_draft
+
+         The pull request was converted to a draft.
+
+      .. value:: ready_for_review
+
+         The pull request was marked as ready for review (not a draft).
+
       .. value:: status
 
          Status set on commit. The syntax is ``user:status:value``.

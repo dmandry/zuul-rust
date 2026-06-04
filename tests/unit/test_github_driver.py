@@ -396,6 +396,22 @@ class TestGithubDriver(ZuulTestCase):
         self.assertEqual('project-labels', self.history[0].name)
         self.assertEqual(['tests passed'], A.labels)
 
+    @simple_layout('layouts/github-draft.yaml', driver='github')
+    def test_draft(self):
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
+        self.fake_github.emitEvent(A.convertToDraft())
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS'),
+        ], ordered=False)
+
+        self.fake_github.emitEvent(A.readyForReview())
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS'),
+            dict(name='test-job', result='SUCCESS'),
+        ], ordered=False)
+
     @simple_layout('layouts/reviews-github.yaml', driver='github')
     def test_reviews(self):
         A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')

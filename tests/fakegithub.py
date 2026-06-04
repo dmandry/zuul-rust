@@ -249,6 +249,37 @@ class FakeGithubPullRequest:
         }
         return (name, data)
 
+    def convertToDraft(self):
+        self.draft = True
+        return self._getDraftEvent('converted_to_draft')
+
+    def readyForReview(self):
+        self.draft = False
+        return self._getDraftEvent('ready_for_review')
+
+    def _getDraftEvent(self, action):
+        name = 'pull_request'
+        data = {
+            'action': action,
+            'pull_request': {
+                'number': self.number,
+                'updated_at': self.updated_at,
+                'base': {
+                    'ref': self.branch,
+                    'repo': {
+                        'full_name': self.project
+                    }
+                },
+                'head': {
+                    'sha': self.head_sha
+                }
+            },
+            'sender': {
+                'login': 'ghuser'
+            }
+        }
+        return (name, data)
+
     def editBody(self, body):
         old_body = self.body
         self.body = body
