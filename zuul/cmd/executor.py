@@ -62,6 +62,9 @@ class Executor(zuul.cmd.ZuulDaemonApp):
             os.close(pipe_write)
             import zuul.lib.log_streamer
 
+            self.setup_logging('executor', 'log_config')
+            self.log = logging.getLogger("zuul.Executor")
+
             self.log.info("Starting log streamer")
             streamer = zuul.lib.log_streamer.LogStreamer(
                 '::', self.finger_port, self.job_dir)
@@ -110,16 +113,6 @@ class Executor(zuul.cmd.ZuulDaemonApp):
         if user:
             self.dropPrivs(user)
 
-        self.setup_logging('executor', 'log_config')
-        self.log = logging.getLogger("zuul.Executor")
-
-        self.configure_connections(sources=True)
-
-        # Check bwrap after dropping privileges
-        self.connections.drivers['bubblewrap'].setCgroupManager(
-            cgroup_manager)
-        self.connections.drivers['bubblewrap'].check()
-
         if self.config.has_option('executor', 'job_dir'):
             self.job_dir = os.path.expanduser(
                 self.config.get('executor', 'job_dir'))
@@ -137,7 +130,19 @@ class Executor(zuul.cmd.ZuulDaemonApp):
                         zuul.executor.server.DEFAULT_FINGER_PORT)
         )
 
+        # This forks, so minimize setup before this point.  Do not set
+        # up logging since some log handlers may start threads.
         self.start_log_streamer()
+
+        self.setup_logging('executor', 'log_config')
+        self.log = logging.getLogger("zuul.Executor")
+
+        self.configure_connections(sources=True)
+
+        # Check bwrap after dropping privileges
+        self.connections.drivers['bubblewrap'].setCgroupManager(
+            cgroup_manager)
+        self.connections.drivers['bubblewrap'].check()
 
         ExecutorServer = zuul.executor.server.ExecutorServer
         self.executor = ExecutorServer(self.config,
