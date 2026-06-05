@@ -1639,6 +1639,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             else:
                 message = change.title
         change.message = message
+        change.body = change.pr.get("body")
         change.body_text = change.pr.get("body_text")
 
         # Note(tobiash): The updated_at timestamp is a moving target that is

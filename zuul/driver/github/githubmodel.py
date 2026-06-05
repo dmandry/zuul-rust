@@ -33,6 +33,7 @@ class PullRequest(Change):
         self.pr = None
         self.updated_at = None
         self.title = None
+        self.body = None
         self.body_text = None
         self.reviews = []
         self.files = []
@@ -74,6 +75,7 @@ class PullRequest(Change):
             "pr": self.pr,
             "updated_at": self.updated_at,
             "title": self.title,
+            "body": self.body,
             "body_text": self.body_text,
             "reviews": list(self.reviews),
             "labels": self.labels,
@@ -93,6 +95,7 @@ class PullRequest(Change):
         self.pr = data.get("pr")
         self.updated_at = data.get("updated_at")
         self.title = data.get("title")
+        self.body = data.get("body")
         self.body_text = data.get("body_text")
         self.reviews = data.get("reviews", [])
         self.labels = data.get("labels", [])

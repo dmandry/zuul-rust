@@ -785,8 +785,8 @@ class TestGithubDriver(ZuulTestCase):
         # pipeline merges the pull request on success
         A = self.fake_github.openFakePullRequest('org/project', 'master',
                                                  'PR title',
-                                                 body='I shouldnt be seen',
-                                                 body_text='PR body')
+                                                 body='PR body',
+                                                 body_text='I shouldnt be seen')
         self.fake_github.emitEvent(A.getCommentAddedEvent('merge me'))
         self.waitUntilSettled()
         self.assertTrue(A.is_merged)
@@ -1585,7 +1585,7 @@ class TestGithubDriver(ZuulTestCase):
 
         pr_description = "PR description"
         A = self.fake_github.openFakePullRequest('org/project', 'master', 'A',
-                                                 body_text=pr_description)
+                                                 body=pr_description)
         self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
         self.waitUntilSettled()
 
@@ -1606,6 +1606,69 @@ class TestGithubDriver(ZuulTestCase):
         # Assert that we won't duplicate the PR title in the merge
         # message description.
         self.assertEqual(A.merge_message, pr_description)
+
+    @simple_layout('layouts/gate-github-squash-merge.yaml', driver='github')
+    def test_squash_merge_preserves_markdown(self):
+        """
+        Tests that when squash-merging, the raw Markdown body of the PR
+        is preserved verbatim in the resulting commit message rather
+        than being replaced by the rendered (Markdown-stripped) text.
+        """
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project('org/project')
+        repo._set_branch_protection(
+            'master', contexts=['tenant-one/check', 'tenant-one/gate'])
+
+        # Body containing common Markdown constructs that GitHub's
+        # ``body_text`` representation strips.
+        markdown_body = (
+            "## Summary\n"
+            "\n"
+            "1. First item\n"
+            "   - nested bullet\n"
+            "2. Second item with *emphasis* and **strong**\n"
+            "\n"
+            "```python\n"
+            "print('hello')\n"
+            "```\n"
+            "\n"
+            "> A blockquote\n"
+        )
+        # ``body_text`` is what GitHub returns with Markdown stripped;
+        # the reporter must NOT use it.
+        rendered_body = (
+            "Summary\n"
+            "\n"
+            "First item\n"
+            "nested bullet\n"
+            "Second item with emphasis and strong\n"
+            "\n"
+            "print('hello')\n"
+            "\n"
+            "A blockquote\n"
+        )
+        A = self.fake_github.openFakePullRequest(
+            'org/project', 'master', 'A',
+            body=markdown_body, body_text=rendered_body)
+        self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+
+        repo = github.repo_from_project('org/project')
+        repo.create_status(A.head_sha, 'success', 'example.com', 'description',
+                           'tenant-one/check')
+
+        self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+
+        self.assertEqual(2, len(self.history))
+
+        merges = [report for report in self.fake_github.github_data.reports
+                  if report[2] == 'merge']
+        assert (len(merges) == 1 and merges[0][3] == 'squash')
+
+        # The squash commit message must contain the raw Markdown
+        # verbatim and must not contain the stripped representation.
+        self.assertEqual(A.merge_message, markdown_body)
 
     @simple_layout('layouts/basic-github.yaml', driver='github')
     @okay_tracebacks('AttributeError')
@@ -3120,8 +3183,8 @@ class TestGithubDriverEnterprise(ZuulGithubAppTestCase):
         # pipeline merges the pull request on success
         A = self.fake_github.openFakePullRequest('org/project', 'master',
                                                  'PR title',
-                                                 body='I shouldnt be seen',
-                                                 body_text='PR body')
+                                                 body='PR body',
+                                                 body_text='I shouldnt be seen')
 
         self.fake_github.emitEvent(A.getCommentAddedEvent('merge me'))
         self.waitUntilSettled()
@@ -3219,8 +3282,8 @@ class TestGithubDriverEnterpriseCache(ZuulGithubAppTestCase):
         # pipeline merges the pull request on success
         A = self.fake_github.openFakePullRequest('org/project', 'master',
                                                  'PR title',
-                                                 body='I shouldnt be seen',
-                                                 body_text='PR body')
+                                                 body='PR body',
+                                                 body_text='I shouldnt be seen')
 
         A.addReview('user', 'APPROVED')
         self.fake_github.emitEvent(A.getCommentAddedEvent('merge me'))

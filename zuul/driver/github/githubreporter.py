@@ -369,8 +369,12 @@ class GithubReporter(BaseReporter):
         if merge_mode != model.MERGER_SQUASH_MERGE:
             if change.title:
                 message.append(change.title)
-        if change.body_text:
-            message.append(change.body_text)
+        # Use the raw Markdown body of the PR rather than ``body_text``
+        # (which is the rendered-to-plain-text representation returned
+        # by GitHub and strips Markdown formatting such as headers,
+        # list markers, code fences, emphasis and blockquotes).
+        if change.body:
+            message.append(change.body)
         merge_message = "\n\n".join(message)
 
         if change.reviews:

@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    The GitHub driver now preserves the raw Markdown body of a pull
+    request when constructing the commit message for a squash merge.
+    Previously the rendered (Markdown-stripped) representation of the
+    pull request body was used, which removed headers, list markers,
+    code fences, emphasis markers and blockquotes from the commit
+    message produced on the target branch.
