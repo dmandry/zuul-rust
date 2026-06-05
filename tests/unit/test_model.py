@@ -395,6 +395,11 @@ class TestJob(BaseTestCase):
                                     skip_file_matcher=False,
                                     redact_secrets_and_keys=False)
 
+    # This isn't used much anymore now that the blob size is set very
+    # small (essentially all secrets are likely to be put into the
+    # blob store).  Patch it to a larger size here so we can keep the
+    # code ready and relevant for future use if needed.
+    @mock.patch("zuul.model.Job.SECRET_BLOB_SIZE", 1024)
     def test_job_deduplicate_secrets(self):
         # Verify that in a job with two secrets with the same name on
         # different playbooks (achieved by inheritance) the secrets
