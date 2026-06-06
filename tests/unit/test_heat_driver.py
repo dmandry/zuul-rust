@@ -250,6 +250,36 @@ class TestHeatDriverIntegration(BaseHeatDriverTest, BaseCloudDriverTest):
                 break
             time.sleep(1)
 
+    @simple_layout(
+        'layouts/heat/nodepool-multi-provider.yaml', enable_nodepool=True)
+    @okay_tracebacks('TemplatePolicyViolation')
+    def test_heat_multi_provider_policy_filtering(self):
+        """Test that provider selection filters by template policy.
+
+        Two providers serve the same label 'heat-stack':
+        - heat-strict: allows only OS::Nova::Server resources
+        - heat-permissive: allows OS::Nova::* and OS::Neutron::* (except RBAC)
+
+        The test template uses Neutron resource types, so heat-strict must be
+        excluded via policy violation and the request must land on
+        heat-permissive.
+        """
+        self.waitForLauncherLayoutSync()
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(
+            ['heat-stack'],
+            template_config=[self._getTemplateConfig()])
+        self.assertEqual(request.state, model.NodesetRequest.State.FULFILLED)
+        self.assertEqual(len(request.nodes), 1)
+
+        node = model.ProviderNode.fromZK(
+            ctx, path=model.ProviderNode._getPath(request.nodes[0]))
+        self.assertIn('heat-permissive', node.provider)
+        self.assertNotIn('heat-strict', node.provider)
+
+        request.delete(ctx)
+        self.waitUntilSettled()
+
     def _test_heat_state_machines(self, label_name, provider_name,
                                   node_class, future_names,
                                   template_config):
