@@ -1870,6 +1870,8 @@ class ZuulWebAPI(object):
             'job': '/api/tenant/{tenant}/job/{job_name}',
             'projects': '/api/tenant/{tenant}/projects',
             'project': '/api/tenant/{tenant}/project/{project:.*}',
+            'project_freeze_pipeline': '/api/tenant/{tenant}/project/'
+                                       '{project:.*}/freeze-pipeline',
             'project_freeze_jobs': '/api/tenant/{tenant}/pipeline/{pipeline}/'
                                    'project/{project:.*}/branch/{branch:.*}/'
                                    'freeze-jobs',
