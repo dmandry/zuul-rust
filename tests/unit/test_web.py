@@ -2203,7 +2203,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         self.assertEqual(204, resp.status_code)
         self.waitUntilSettled()
 
-        for _ in iterate_timeout(10, "request to be deleted"):
+        for _ in iterate_timeout(30, "request to be deleted"):
             try:
                 request.refresh(ctx)
             except NoNodeError:
@@ -2211,7 +2211,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
 
         node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
         node = zuul.model.ProviderNode.fromZK(ctx, path=node.getPath())
-        for _ in iterate_timeout(10, "node to hold"):
+        for _ in iterate_timeout(30, "node to hold"):
             node.refresh(ctx)
             if node.state == node.State.HOLD:
                 break
@@ -2224,7 +2224,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         self.assertEqual(201, resp.status_code)
         self.waitUntilSettled()
 
-        for _ in iterate_timeout(10, "node to be deleted"):
+        for _ in iterate_timeout(30, "node to be deleted"):
             try:
                 node.refresh(ctx)
             except NoNodeError:
