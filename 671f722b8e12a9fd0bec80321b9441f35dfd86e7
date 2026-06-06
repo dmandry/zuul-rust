@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2559a89e_440fc99c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-06T16:12:26Z",
+      "side": 1,
+      "message": "I marked the two unresolved comments done. I think the added security section covers it.\n\nAlso added new paragraph related to multi-provider policy filtering.",
+      "revId": "671f722b8e12a9fd0bec80321b9441f35dfd86e7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
