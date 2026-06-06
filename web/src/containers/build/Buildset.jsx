@@ -16,6 +16,7 @@ import React, { useState } from 'react'
 import PropTypes from 'prop-types'
 import { connect, useDispatch } from 'react-redux'
 import { Link } from 'react-router-dom'
+import { JSONTree } from 'react-json-tree'
 import {
   Button,
   CodeBlock,
@@ -31,6 +32,7 @@ import {
   ModalVariant,
 } from '@patternfly/react-core'
 import {
+  CodeIcon,
   CodeBranchIcon,
   OutlinedCommentDotsIcon,
   FingerprintIcon,
@@ -219,7 +221,7 @@ function Buildset({ buildset, timezone, tenant, user, preferences }) {
     setShowEnqueueModal(false)
     if (ref.change === null) {
       enqueue_ref(tenant.apiPrefix, ref.project, buildset.pipeline,
-                  ref.ref, ref.oldrev, ref.newrev)
+                  ref.ref, ref.oldrev, ref.newrev, buildset.parameters)
         .then(() => {
           dispatch(addNotification(
             {
@@ -343,9 +345,34 @@ function Buildset({ buildset, timezone, tenant, user, preferences }) {
                   <span>
                     <strong>UUID </strong> {buildset.uuid} <br />
                     <strong>Event ID </strong> {buildset.event_id} <br />
+                    {buildset.user_id && (
+                      <>
+                        <strong>User ID </strong> {buildset.user_id} <br />
+                      </>
+                    )}
                   </span>
                 }
               />
+              {buildset.parameters && (
+                <IconProperty
+                  WrapElement={ListItem}
+                  icon={<CodeIcon />}
+                  value={
+                    <>
+                      <strong>Parameters </strong>
+                      <span style={{whiteSpace: 'pre-wrap'}}>
+                        <JSONTree
+                          data={buildset.parameters}
+                          hideRoot={true}
+                          sortObjectKeys={true}
+                          theme="default"
+                          invertTheme={!preferences.darkMode}
+                          shouldExpandNodeInitially={() => true}
+                        />
+                      </span>
+                    </>
+                  }
+                />)}
             </List>
           </FlexItem>
         </Flex>
