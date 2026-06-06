@@ -299,6 +299,16 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
       :attr:`pipeline.require`, this can ensure that pipeline
       requirements are exhaustive.
 
+   .. attr:: allow-parameters
+      :default: false
+
+      If this is set to `true` then projects will be permitted to
+      specify parameters via :attr:`project.<pipeline>.parameters`
+      that should be supplied when enqueing changes to this pipeline.
+      The only way to specify parameters currently is via the web
+      interface or API, so this setting is generally only useful for
+      pipelines that are triggered manually.
+
    .. attr:: supercedes
 
       The name of a pipeline, or a list of names, that this pipeline
