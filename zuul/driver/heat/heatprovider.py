@@ -526,6 +526,22 @@ class HeatProvider(BaseProvider, subclass_id='heat'):
         """
         return HeatProviderLabel(label_config, provider_config)
 
+    def checkTemplatePolicy(self, template_config):
+        """Check template_config passes the provider template policy.
+
+        Raises TemplatePolicyViolation if the template violates the
+        provider's configured template-policy.
+
+        :param dict template_config: Template configuration dict, may
+            contain 'heat_template_content' and 'heat_parameters'.
+        :raises TemplatePolicyViolation: If the template violates policy.
+        """
+        template_policy = getattr(self, 'template_policy', {})
+        if not template_policy:
+            return
+        template_content = template_config['heat_template_content']
+        validatePolicy(template_policy, template_content)
+
     def getEndpoint(self):
         """Get the Heat endpoint for this provider.
 
