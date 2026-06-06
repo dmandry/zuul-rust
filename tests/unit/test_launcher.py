@@ -191,6 +191,7 @@ class LauncherBaseTestCase(ZuulTestCase):
 
     def setUp(self):
         self.initTestConfig()
+        self.patch(zuul.driver.aws.awsendpoint, 'CACHE_TTL', 1)
 
         # Patch moto describe_instances as it isn't terribly threadsafe
         orig_describe_instances = \
