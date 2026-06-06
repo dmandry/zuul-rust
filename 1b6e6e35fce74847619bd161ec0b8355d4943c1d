@@ -1,0 +1,61 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4b81111e_d406821f",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 16,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:46:05Z",
+      "side": 1,
+      "message": "One thing to note is that each of these Gerrit connection threads appears to have a run() method that catches all exceptions, will delay on an error, then restart the processing for the connection. This makes changing these threads to daemon threads safe as they should be very robust to early exits.",
+      "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "345ce3d2_c989f283",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:46:05Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fb99c2f3_a06f0fa3",
+        "filename": "zuul/cmd/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 108,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:46:05Z",
+      "side": 1,
+      "message": "I guess we don\u0027t need to log anything explicitly here about shutting down to to a failed connection load() as the exception will bubble up further and eventually get logged?",
+      "range": {
+        "startLine": 108,
+        "startChar": 16,
+        "endLine": 108,
+        "endChar": 21
+      },
+      "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
