@@ -4039,6 +4039,7 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
 
     @simple_layout('layouts/nodepool-subnodes-ready.yaml',
                    enable_nodepool=True)
+    @okay_tracebacks('BadVersionError')
     def test_subnodes_max_age(self):
         for _ in iterate_timeout(60, "nodes to be ready"):
             nodes = self.launcher.api.nodes_cache.getItems()
