@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "154445d3_e4b628a8",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:37:01Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "d649b56ef7ce3deace175c78ebd2880a58b39c79",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "16320d64_a145c93c",
+        "filename": "zuul/cmd/executor.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 66,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:37:01Z",
+      "side": 1,
+      "message": "Is it worth using a different logger name here to better differentiate between each side of the fork that just happened?  The two self.log calls below probably make it distinct enough as is. But if we add more logging later the distinction may be useful? Consider this a nit.",
+      "range": {
+        "startLine": 66,
+        "startChar": 42,
+        "endLine": 66,
+        "endChar": 55
+      },
+      "revId": "d649b56ef7ce3deace175c78ebd2880a58b39c79",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
