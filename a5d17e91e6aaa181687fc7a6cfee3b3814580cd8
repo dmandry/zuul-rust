@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9813254a_87d3a9d2",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:32:41Z",
+      "side": 1,
+      "message": "It is interesting that we are theorizing a similar issue may affect some OpenStack clouds leading to the `\u0027\u0027` empty string ipv6 addresses for instances. Maybe we can apply a similar check and state machine delay there as well?",
+      "revId": "a5d17e91e6aaa181687fc7a6cfee3b3814580cd8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
