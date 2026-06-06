@@ -11852,19 +11852,27 @@ class TestMaxDeps(ZuulTestCase):
         self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
+        # Release the merge job but keep test jobs held in build so we
+        # can confirm they've started before adding change C.
+        self.executor_server.release('project-merge')
+        self.waitUntilSettled()
+
+        # Verify that test jobs have been dispatched and are running.
+        self.assertEqual(len(self.builds), 2)
+
         # Increase the number of dependencies for B by adding a
         # change with the same topic (dependencies-by-topic is enabled).
         # With this C should not be enqueued and A is removed.
         C = self.fake_gerrit.addFakeChange('org/project4', 'master', 'C',
                                            topic='test-topic')
         self.fake_gerrit.addEvent(C.getPatchsetCreatedEvent(1))
-
-        self.executor_server.hold_jobs_in_build = True
         self.executor_server.release()
         self.waitUntilSettled()
 
         self.assertHistory([
             dict(name='project-merge', result='SUCCESS', changes='1,1 2,1'),
+            dict(name='project-test1', result='ABORTED', changes='1,1 2,1'),
+            dict(name='project-test2', result='ABORTED', changes='1,1 2,1'),
         ], ordered=False)
 
 
