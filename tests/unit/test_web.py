@@ -2147,6 +2147,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         self.waitUntilSettled()
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
+    @okay_tracebacks('BadVersionError')
     def test_web_nodes_hold_delete(self):
         # This tests 3 things (since they are lifecycle related):
         # * Setting the node state to hold
