@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f3ea3ec1_2184c10f",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 6
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-06T16:30:32Z",
+      "side": 1,
+      "message": "recheck I did not approve this because it seems like the followup change to fix the race condition corvus found is something we would want to land at the same time and I think I may be the only reviewer of that change at the moment.",
+      "revId": "d07c049eea7824359bb10e8fe4cb0e0857575146",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
