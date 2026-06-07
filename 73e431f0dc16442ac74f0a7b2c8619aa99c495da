@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "d861feb0_ad9fa508",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-07T00:26:33Z",
+      "side": 1,
+      "message": "This is most likely invalid fix, I found https://opendev.org/zuul/zuul/src/branch/master/tests/base.py#L2537 - which set CACHE_TTL to 0.1 ... puzzling, I see the \"deleting instance\" state machine step taking 10.06-10.08 seconds from several historic CI run\u0027s and CACHE_TTL is the thing that jumped out...\n\n```\n\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\ntest_web_nodes_hold_delete - TIMEOUT_DELETE failures - \"deleting instance\" duration\n\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\u003d\n\nLog ID  | Gerrit Change | Duration | \"start → deleting instance\" timestamp      | \"deleting instance → complete\" timestamp\n--------|---------------|----------|--------------------------------------------|-----------------------------------------\n3c8ad   | 985726        | 10.083s  | 2026-06-06 18:10:20,240                    | 2026-06-06 18:10:30,323\n09a45   | 991899        | 10.076s  | 2026-06-05 18:26:55,684                    | 2026-06-05 18:27:05,760\n0bd68   | 991668        | 10.067s  | 2026-06-05 16:22:10,201                    | 2026-06-05 16:22:20,268\n531bc   | 990350        | 10.060s  | 2026-05-29 08:45:23,124                    | 2026-05-29 08:45:33,184\nf373e   | 989219        | 10.069s  | 2026-06-04 01:12:20,287                    | 2026-06-04 01:12:30,356\n```",
+      "revId": "73e431f0dc16442ac74f0a7b2c8619aa99c495da",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
