@@ -212,6 +212,26 @@ pipeline.
          does not alter committer information in the way that GitHub
          does in the repos that Zuul prepares for jobs).
 
+   .. attr:: allowed-merge-modes
+      :default: None
+
+      A list of merge modes that may be used with the `Merge-Mode:`
+      change message footer.
+
+      Some sources allow the merge mode for an individual change to be
+      supplied on the change itself.  Zuul supports this with the
+      `Merge-Mode:` change message footer.  If this setting is omitted
+      or set to the empty list, then users are not permitted to
+      specify the merge-mode for an individual change.  If this
+      setting contains a list, then users may include a `Merge-Mode:`
+      footer specifying one of the values in the list.
+
+      If a driver does not support this feature, or if the change
+      message header specifies a merge mode which is not allowed by
+      this setting, the change message header will be ignored.
+
+      The values are the same as :attr:`project.merge-mode`.
+
    .. attr:: vars
       :default: None
 

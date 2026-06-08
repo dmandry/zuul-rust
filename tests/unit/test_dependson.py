@@ -20,7 +20,7 @@
 
 import textwrap
 
-from zuul.lib.dependson import find_dependency_headers
+from zuul.lib.headers import find_dependency_headers
 
 from tests.base import BaseTestCase
 

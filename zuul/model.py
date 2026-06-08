@@ -59,6 +59,7 @@ from zuul.lib import tracing
 from zuul.lib import yamlutil as yaml
 from zuul.lib.capabilities import capabilities_registry
 from zuul.lib.config import get_default
+from zuul.lib.headers import find_merge_mode_headers
 from zuul.lib.jsonutil import json_dumps
 from zuul.lib.logutil import get_annotated_logger
 from zuul.lib.result_data import get_artifacts_from_result_data
@@ -7119,6 +7120,13 @@ class BuildSet(zkobject.ZKObject):
                     project.canonical_name
                 )
         if project_metadata:
+            if (project_metadata.allowed_merge_modes and
+                getattr(change, 'message', None)):
+                for merge_mode in find_merge_mode_headers(change.message):
+                    merge_mode = MERGER_MAP.get(merge_mode)
+                    if (merge_mode and
+                        merge_mode in project_metadata.allowed_merge_modes):
+                        return merge_mode
             return project_metadata.merge_mode
         return MERGER_MERGE_RESOLVE
 
@@ -9797,6 +9805,7 @@ class ProjectConfig(ConfigObject):
         # find the computed value from across all project config
         # stanzas.
         self.merge_mode = None
+        self.allowed_merge_modes = None
         self.default_branch = None
         self.queue_name = None
 
@@ -9888,10 +9897,14 @@ class ProjectConfig(ConfigObject):
         d['source_context'] = self.source_context.toDict()
         d['default_branch'] = self.default_branch
         if self.merge_mode:
-            d['merge_mode'] = list(filter(lambda x: x[1] == self.merge_mode,
-                                          MERGER_MAP.items()))[0][0]
+            d['merge_mode'] = get_merge_mode_name(self.merge_mode)
         else:
             d['merge_mode'] = None
+        if self.allowed_merge_modes:
+            d['allowed_merge_modes'] = list(map(get_merge_mode_name,
+                                                self.allowed_merge_modes))
+        else:
+            d['allowed_merge_modes'] = None
         d['is_template'] = self.is_template
         d['templates'] = self.templates
         d['queue_name'] = self.queue_name
@@ -9908,6 +9921,7 @@ class ProjectMetadata:
 
     def __init__(self):
         self.merge_mode = None
+        self.allowed_merge_modes = None
         self.default_branch = None
         self.is_template = False
         self.queue_name = None
@@ -9915,6 +9929,7 @@ class ProjectMetadata:
     def toDict(self):
         return {
             'merge_mode': self.merge_mode,
+            'allowed_merge_modes': self.allowed_merge_modes,
             'default_branch': self.default_branch,
             'is_template': self.is_template,
             'queue_name': self.queue_name,
@@ -9924,6 +9939,7 @@ class ProjectMetadata:
     def fromDict(cls, data):
         o = cls()
         o.merge_mode = data['merge_mode']
+        o.allowed_merge_modes = data.get('allowed_merge_modes')
         o.default_branch = data['default_branch']
         o.is_template = data.get('is_template', False)
         o.queue_name = data['queue_name']
@@ -10779,6 +10795,9 @@ class Layout(object):
         md = self.project_metadata[project_canonical_name]
         if md.merge_mode is None and project_config.merge_mode is not None:
             md.merge_mode = project_config.merge_mode
+        if (md.allowed_merge_modes is None and
+            project_config.allowed_merge_modes is not None):
+            md.allowed_merge_modes = project_config.allowed_merge_modes
         if (md.default_branch is None and
             project_config.default_branch is not None):
             md.default_branch = project_config.default_branch

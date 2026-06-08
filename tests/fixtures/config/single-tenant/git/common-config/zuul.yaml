@@ -138,6 +138,8 @@
 - project:
     name: org/project1
     queue: integrated
+    merge-mode: merge-resolve
+    allowed-merge-modes: ['merge', 'merge-resolve']
     check:
       jobs:
         - project-merge

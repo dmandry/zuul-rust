@@ -2523,6 +2523,9 @@ class ZuulWebAPI(object):
             return result
         md = md.toDict()
         md['merge_mode'] = model.get_merge_mode_name(md['merge_mode'])
+        if md['allowed_merge_modes']:
+            md['allowed_merge_modes'] = list(map(model.get_merge_mode_name,
+                                                 md['allowed_merge_modes']))
         result['metadata'] = md
         configs = tenant.layout.getAllProjectConfigs(project.canonical_name)
         for config_obj in configs:
