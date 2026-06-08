@@ -534,9 +534,9 @@ class ZKBranchCacheMixin:
             if (event.branch not in branches) and (protected):
                 update = True
             if update:
-                self.log.info("Project %s branch %s protected state "
-                              "changed to %s",
-                              project_name, event.branch, protected)
+                log = get_annotated_logger(self.log, event)
+                log.info("Project %s branch %s protected state changed to %s",
+                         project_name, event.branch, protected)
                 self._branch_cache.setProtected(
                     project_name, event.branch, protected)
                 event.branch_cache_ltime = self._branch_cache.ltime
