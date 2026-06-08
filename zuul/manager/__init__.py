@@ -22,7 +22,7 @@ from abc import ABCMeta, abstractmethod
 
 from zuul import exceptions
 from zuul import model
-from zuul.lib.dependson import find_dependency_headers
+from zuul.lib.headers import find_dependency_headers
 from zuul.lib.logutil import get_annotated_logger
 from zuul.lib.tarjan import strongly_connected_components
 import zuul.lib.tracing as tracing

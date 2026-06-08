@@ -1,4 +1,4 @@
-# Copyright 2023-2024 Acme Gating, LLC
+# Copyright 2023-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -1319,7 +1319,8 @@ class ProjectTemplateParser(object):
         self.pcontext = pcontext
         self.schema = self.getSchema()
         self.not_pipelines = ['name', 'description', 'templates',
-                              'merge-mode', 'default-branch', 'vars',
+                              'merge-mode', 'allowed-merge-modes',
+                              'default-branch', 'vars',
                               'queue', 'branches',
                               '_source_context', '_start_mark']
 
@@ -1453,15 +1454,18 @@ class ProjectParser(object):
             'parameters': to_list(parameter),
         }
 
+        merge_modes = vs.Any('merge', 'merge-resolve',
+                             'merge-recursive', 'merge-ort',
+                             'cherry-pick', 'squash-merge',
+                             'rebase')
         project = {
             'name': str,
             'description': str,
             'branches': to_list(vs.Any(ZUUL_REGEX, str)),
             'vars': ansible_vars_dict,
             'templates': [str],
-            'merge-mode': vs.Any('merge', 'merge-resolve',
-                                 'cherry-pick', 'squash-merge',
-                                 'rebase'),
+            'merge-mode': merge_modes,
+            'allowed-merge-modes': to_list(merge_modes),
             'default-branch': str,
             'queue': str,
             str: pipeline_contents,
@@ -1517,6 +1521,11 @@ class ProjectParser(object):
         mode = conf.get('merge-mode')
         if mode is not None:
             project_config.merge_mode = model.MERGER_MAP[mode]
+        allowed_modes = conf.get('allowed-merge-modes')
+        if allowed_modes is not None:
+            project_config.allowed_merge_modes = [
+                model.MERGER_MAP[m] for m in as_list(allowed_modes)
+            ]
 
         default_branch = conf.get('default-branch')
         project_config.default_branch = default_branch
@@ -3358,15 +3367,35 @@ class TenantParser(object):
                     project.connection_name, None, None)
                 with parse_context.errorContext(
                         source_context=source_context):
-                    if project_metadata.merge_mode not in tpc.merge_modes:
-                        mode = model.get_merge_mode_name(
-                            project_metadata.merge_mode)
-                        allowed_modes = list(map(model.get_merge_mode_name,
-                                                 tpc.merge_modes))
-                        err = Exception(f'Merge mode {mode} not supported '
-                                        f'by project {project_name}. '
-                                        f'Supported modes: {allowed_modes}.')
-                        parse_context.accumulator.addError(err)
+                    self._validateMergeModes(
+                        parse_context, project_name,
+                        project_metadata, tpc)
+
+    def _validateMergeModes(self, parse_context, project_name,
+                            project_metadata, tpc):
+        if project_metadata.merge_mode not in tpc.merge_modes:
+            mode = model.get_merge_mode_name(
+                project_metadata.merge_mode)
+            supported_modes = list(map(model.get_merge_mode_name,
+                                       tpc.merge_modes))
+            err = Exception(f'Merge mode {mode} not supported '
+                            f'by project {project_name}. '
+                            f'Supported modes: {supported_modes}.')
+            parse_context.accumulator.addError(err)
+        if project_metadata.allowed_merge_modes:
+            # None or [] have the same effect: override
+            # not allowed
+            for allowed_mode in project_metadata.\
+                    allowed_merge_modes:
+                if allowed_mode not in tpc.merge_modes:
+                    mode = model.get_merge_mode_name(allowed_mode)
+                    supported_modes = list(
+                        map(model.get_merge_mode_name,
+                            tpc.merge_modes))
+                    err = Exception(f'Merge mode {mode} not supported '
+                                    f'by project {project_name}. '
+                                    f'Supported modes: {supported_modes}.')
+                    parse_context.accumulator.addError(err)
 
     def _parseLayout(self, tenant, data, parse_context, layout_uuid=None):
         # Don't call this method from dynamic reconfiguration because
