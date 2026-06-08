@@ -1,5 +1,5 @@
 # Copyright 2015 GoodData
-# Copyright 2024 Acme Gating, LLC
+# Copyright 2024-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -1606,6 +1606,77 @@ class TestGithubDriver(ZuulTestCase):
         # Assert that we won't duplicate the PR title in the merge
         # message description.
         self.assertEqual(A.merge_message, pr_description)
+
+    @simple_layout('layouts/github-allowed-merge-modes.yaml', driver='github')
+    def test_merge_method_header(self):
+        # Test overriding the merge method with a header
+        self.executor_server.keep_jobdir = True
+        self.executor_server.hold_jobs_in_build = True
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project('org/project')
+        repo._set_branch_protection(
+            'master', contexts=['tenant-one/check', 'tenant-one/gate'])
+
+        msg = "Merge-Mode: merge"
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A',
+                                                 body=msg)
+
+        repo.create_status(A.head_sha, 'success', 'example.com', 'description',
+                           'tenant-one/check')
+
+        # Create a second commit on master to verify behavior
+        self.create_commit('org/project', message="Test rebase commit")
+
+        self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+
+        build = self.builds[-1]
+        path = os.path.join(build.jobdir.src_root, 'github.com/org/project')
+        repo = git.Repo(path)
+        repo_messages = [c.message.strip() for c in repo.iter_commits()]
+        repo_messages.reverse()
+        expected = [
+            'initial commit',
+            'initial commit',  # simple_layout adds a second "initial commit"
+            'A-1',
+            'Test rebase commit',
+            "Merge 'refs/pull/1/head'",
+        ]
+        self.assertEqual(expected, repo_messages)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        # the change should have entered the gate
+        self.assertEqual(2, len(self.history))
+
+        # now check if the merge was done via merge instead of rebase
+        merges = [report for report in self.fake_github.github_data.reports
+                  if report[2] == 'merge']
+        self.assertEqual(1, len(merges))
+        self.assertEqual('merge', merges[0][3])
+
+    @simple_layout('layouts/github-allowed-merge-modes.yaml', driver='github')
+    def test_merge_method_header_syntax(self):
+        # Test configuring incompatible allowed-merge-modes
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project('org/project')
+        repo._repodata['allow_merge_commit'] = False
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        loading_errors = tenant.layout.loading_errors
+        self.assertEqual(
+            len(tenant.layout.loading_errors), 2,
+            "An error should have been stored")
+        self.assertIn(
+            "merge not supported",
+            str(loading_errors[0].error))
+        self.assertIn(
+            "merge-ort not supported",
+            str(loading_errors[1].error))
 
     @simple_layout('layouts/basic-github.yaml', driver='github')
     @okay_tracebacks('AttributeError')

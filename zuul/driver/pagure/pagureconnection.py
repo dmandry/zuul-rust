@@ -32,7 +32,7 @@ from zuul.lib.logutil import get_annotated_logger
 from zuul.web.handler import BaseWebController
 from zuul.model import Ref, Branch, Tag
 from zuul.lib import tracing
-from zuul.lib import dependson
+from zuul.lib.headers import find_dependency_headers
 from zuul.zk.branch_cache import BranchCache, BranchFlag, BranchInfo
 from zuul.zk.change_cache import (
     AbstractChangeCache,
@@ -841,7 +841,7 @@ class PagureConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         # for now, let's workaround using the local change cache !
         changes_dependencies = []
         for cached_change in self._change_cache:
-            for dep_header in dependson.find_dependency_headers(
+            for dep_header in find_dependency_headers(
                     cached_change.message):
                 if change.url in dep_header:
                     changes_dependencies.append(cached_change)

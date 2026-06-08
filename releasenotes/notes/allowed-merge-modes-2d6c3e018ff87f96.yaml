@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    The :attr:`project.allowed-merge-modes` configuration attribute
+    has been added to allow users to specify the merge mode for an
+    individual change using a `Merge-Mode:` change message header.

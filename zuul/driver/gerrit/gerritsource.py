@@ -25,7 +25,7 @@ from zuul.driver.util import (
     scalar_or_list,
     ZUUL_REGEX,
 )
-from zuul.lib.dependson import find_dependency_headers
+from zuul.lib.headers import find_dependency_headers
 from zuul.zk.change_cache import ChangeKey
 
 
