@@ -941,6 +941,7 @@ class TestWeb(BaseTestWeb):
                     'is_template': False,
                     'default_branch': 'master',
                     'merge_mode': 'merge-resolve',
+                    'allowed_merge_modes': ['merge', 'merge-resolve'],
                     'queue_name': 'integrated',
                 },
                 'configs': [{
@@ -951,7 +952,8 @@ class TestWeb(BaseTestWeb):
                     'templates': [],
                     'default_branch': None,
                     'queue_name': 'integrated',
-                    'merge_mode': None,
+                    'merge_mode': 'merge-resolve',
+                    'allowed_merge_modes': ['merge', 'merge-resolve'],
                     'pipelines': [{
                         'name': 'check',
                         'jobs': jobs,
