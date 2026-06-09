@@ -4942,7 +4942,7 @@ class Job(ConfigObject):
             new_projects.add(p)
         if unknown_projects:
             raise ProjectNotFoundError(unknown_projects)
-        return new_projects
+        return list(new_projects)
 
     def _resolveIncludeProjects(self, layout):
         if self.include_projects is None:
