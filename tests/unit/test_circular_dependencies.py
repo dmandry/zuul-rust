@@ -3437,6 +3437,57 @@ class TestGerritCircularDependencies(ZuulTestCase):
     def test_job_deduplication_check_semaphore_resources_first(self):
         self._test_job_deduplication_check_semaphore()
 
+    @gerrit_config(submit_whole_topic=True)
+    def test_topic_reenqueue(self):
+        # When we remove a bundle due to a new patchset, we re-enqueue
+        # all of the old changes in case the topic has split.  Make
+        # sure that if we have multiple new patchsets, we don't
+        # re-enqueue old patchsets.
+        self.executor_server.hold_jobs_in_build = True
+
+        A = self.fake_gerrit.addFakeChange('org/project1', "master", "A",
+                                           topic='test-topic')
+        B = self.fake_gerrit.addFakeChange('org/project2', "master", "B",
+                                           topic='test-topic')
+
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        A.addPatchset()
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(2))
+        B.addPatchset()
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(2))
+        self.waitUntilSettled()
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name="project1-job", result="ABORTED", changes="2,1 1,1"),
+            dict(name="project2-job", result="ABORTED", changes="2,1 1,1"),
+            dict(name="project-vars-job", result="ABORTED", changes="2,1 1,1"),
+
+            dict(name="project1-job", result="SUCCESS", changes="2,2 1,2"),
+            dict(name="project2-job", result="SUCCESS", changes="2,2 1,2"),
+            dict(name="project-vars-job", result="SUCCESS", changes="2,2 1,2"),
+        ], ordered=False)
+
+        self.assertEqual(len(A.patchsets[-1]["approvals"]), 1)
+        self.assertEqual(A.patchsets[-1]["approvals"][0]["type"], "Verified")
+        self.assertEqual(A.patchsets[-1]["approvals"][0]["value"], "1")
+
+        self.assertEqual(len(B.patchsets[-1]["approvals"]), 1)
+        self.assertEqual(B.patchsets[-1]["approvals"][0]["type"], "Verified")
+        self.assertEqual(B.patchsets[-1]["approvals"][0]["value"], "1")
+
+        # Make sure our only message is success (no merge errors)
+        self.assertEqual(len(A.messages), 1)
+        self.assertIn("Build succeeded", A.messages[-1])
+        self.assertEqual(len(B.messages), 1)
+        self.assertIn("Build succeeded", B.messages[-1])
+
     # End check tests
 
     @gerrit_config(submit_whole_topic=True)

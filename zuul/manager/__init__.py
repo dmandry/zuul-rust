@@ -504,6 +504,16 @@ class PipelineManager(metaclass=ABCMeta):
                     return item, item_change
         return None, None
 
+    def findNewVersionOfChangeAlreadyInQueue(self, change):
+        # Return the item and the old version of the change
+        for item in self.state.getAllItems():
+            if not item.live:
+                continue
+            for item_change in item.changes:
+                if item_change.isUpdateOf(change):
+                    return item, item_change
+        return None, None
+
     def removeOldVersionsOfChange(self, change, event):
         if not self.pipeline.dequeue_on_new_patchset:
             return
