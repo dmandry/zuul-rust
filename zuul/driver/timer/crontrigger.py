@@ -23,7 +23,26 @@ class ZuulCronTrigger(CronTrigger):
         super().__init__(*args, **kw)
 
     def get_next_fire_time(self, previous_fire_time, now):
-        next_time = super().get_next_fire_time(previous_fire_time, now)
+        next_time = None
+        if previous_fire_time is None and self._zuul_jitter:
+            # In case we're called between one of our scheduled times
+            # and the adjusted time with jitter, subtract jitter from
+            # now to make sure that we don't end up skipping the
+            # current fire time.  In particular, this can happen on
+            # startup.  This should normally be safe to run all the
+            # time, but we only perform this adjustment on startup
+            # because if a user sets a too-large jitter value (ie,
+            # larger than the interval), this would cause us to run
+            # more often.  The behavior in this case isn't really
+            # defined, but this implementation tries to be as sensible
+            # as possible in that case.
+            adjusted_now = now - datetime.timedelta(
+                seconds=self._zuul_jitter)
+            next_time = super().get_next_fire_time(
+                previous_fire_time, adjusted_now)
+
+        if next_time is None:
+            next_time = super().get_next_fire_time(previous_fire_time, now)
         if self._zuul_jitter:
             next_time = next_time + datetime.timedelta(
                 seconds=self._zuul_jitter)
