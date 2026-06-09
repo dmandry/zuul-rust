@@ -1078,6 +1078,78 @@ class TestExecutorApi(ZooKeeperBaseTestCase):
         self.assertEqual(2, len(lost_build_requests))
         self.assertEqual(b.path, lost_build_requests[0].path)
 
+    def test_lost_build_requests_disconnect(self):
+        # Test that lostBuildRequests() returns unlocked running build
+        # requests after a disconnect.
+
+        # We disconnect both the scheduler and executor to exercise
+        # the cache-resync process in case both components encounter
+        # connection problems.
+        executor_api = ExecutorApi(self.zk_client)
+        self.addCleanup(executor_api.stop)
+
+        br = BuildRequest(
+            "A", "zone", None, "job", "job_uuid", "tenant", "pipeline", '1')
+        executor_api.submit(br, {})
+        a_uuid = br.uuid
+
+        executor_api.waitForSync()
+        a = self.getRequest(executor_api, a_uuid)
+
+        self.second_zk_client = ZooKeeperClient(
+            self.zk_chroot_fixture.zk_hosts,
+            tls_cert=self.zk_chroot_fixture.zookeeper_cert,
+            tls_key=self.zk_chroot_fixture.zookeeper_key,
+            tls_ca=self.zk_chroot_fixture.zookeeper_ca,
+            timeout=ZOOKEEPER_SESSION_TIMEOUT,
+        )
+        self.addCleanup(self.second_zk_client.disconnect)
+        self.second_zk_client.connect()
+
+        second_executor_api = ExecutorApi(self.second_zk_client)
+        second_a = self.getRequest(second_executor_api, a_uuid)
+
+        # Lock the build on the simulated executor
+        second_executor_api.lock(second_a)
+        second_a.state = BuildRequest.RUNNING
+        second_executor_api.update(second_a)
+        executor_api.waitForSync()
+
+        self.log.debug("Disconnect simulated scheduler")
+        self.zk_client.client.stop()
+
+        for _ in iterate_timeout(30, "cache to be not ready"):
+            if not (executor_api.zone_queues[None].cache._ready.isSet() or
+                    executor_api.zone_queues['zone'].cache._ready.isSet()):
+                break
+
+        self.log.debug("Reconned simulated scheduler")
+        self.zk_client.client.start()
+
+        executor_api.zone_queues[None].cache.ensureReady()
+        executor_api.zone_queues['zone'].cache.ensureReady()
+
+        self.log.debug("Disconnect simulated executor")
+        self.second_zk_client.client.stop()
+        for _ in iterate_timeout(30, "cache to be not ready"):
+            if not (second_executor_api.zone_queues[
+                    None].cache._ready.isSet() or
+                    second_executor_api.zone_queues[
+                        'zone'].cache._ready.isSet()):
+                break
+
+        self.log.debug("Reconnect simulated executor")
+        self.second_zk_client.client.start()
+        second_executor_api.zone_queues[None].cache.ensureReady()
+        second_executor_api.zone_queues['zone'].cache.ensureReady()
+
+        # The lost_builds method should only return builds which are running or
+        # paused, but not locked by any executor, in this case build b and e.
+        lost_build_requests = list(executor_api.lostRequests())
+
+        self.assertEqual(1, len(lost_build_requests))
+        self.assertEqual(a.path, lost_build_requests[0].path)
+
     def test_lost_build_request_params(self):
         # Test cleaning up orphaned request parameters
         executor_api = ExecutorApi(self.zk_client)
@@ -1196,8 +1268,8 @@ class TestExecutorApi(ZooKeeperBaseTestCase):
             r2 = self.getRequest(client, a.uuid)
             if (r1.is_locked and
                 r2.is_locked and
-                r1.lock_contenders == 2 and
-                r2.lock_contenders == 2):
+                len(r1.lock_contenders) == 2 and
+                len(r2.lock_contenders) == 2):
                 break
 
         # Should see no pending requests
@@ -1216,7 +1288,7 @@ class TestExecutorApi(ZooKeeperBaseTestCase):
         for _ in iterate_timeout(30, "lock to propagate"):
             r1 = self.getRequest(server, a.uuid)
             r2 = self.getRequest(client, a.uuid)
-            if r1.lock_contenders == r2.lock_contenders == 1:
+            if len(r1.lock_contenders) == len(r2.lock_contenders) == 1:
                 break
 
         # Release client lock
