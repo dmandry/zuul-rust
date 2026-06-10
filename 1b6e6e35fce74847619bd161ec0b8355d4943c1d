@@ -73,6 +73,24 @@
       },
       "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5ed41ffc_f2a05a91",
+        "filename": "zuul/cmd/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 108,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-10T14:08:38Z",
+      "side": 1,
+      "message": "This won\u0027t be explicitly logged, but the traceback will appear on the console and cause the program to exit.\n\nIf you think we need more explicit logging there, then I would probably put the previous 20 lines or so in a try/except block to catch any of those errors.  But up to this point I think we were considering this to be early program initialization and have not been guaranteeing logging.",
+      "parentUuid": "fb99c2f3_a06f0fa3",
+      "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
