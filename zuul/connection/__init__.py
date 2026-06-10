@@ -520,26 +520,30 @@ class ZKBranchCacheMixin:
             required_flags = self._getProjectBranchesRequiredFlags(
                 exclude_unprotected=True, exclude_locked=False)
 
-            branches = self._branch_cache.getProjectBranches(
-                project_name, required_flags, default=None)
+            branches = None
+            try:
+                branches = self._branch_cache.getProjectBranches(
+                    project_name, required_flags)
+                if not branches:
+                    branches = []
+            except LookupError:
+                pass
 
-            if not branches:
-                branches = []
+            if branches is not None:
+                branches = [b.name for b in branches]
 
-            branches = [b.name for b in branches]
-
-            update = False
-            if (event.branch in branches) and (not protected):
-                update = True
-            if (event.branch not in branches) and (protected):
-                update = True
-            if update:
-                self.log.info("Project %s branch %s protected state "
-                              "changed to %s",
-                              project_name, event.branch, protected)
-                self._branch_cache.setProtected(
-                    project_name, event.branch, protected)
-                event.branch_cache_ltime = self._branch_cache.ltime
+                update = False
+                if (event.branch in branches) and (not protected):
+                    update = True
+                if (event.branch not in branches) and (protected):
+                    update = True
+                if update:
+                    self.log.info("Project %s branch %s protected state "
+                                  "changed to %s",
+                                  project_name, event.branch, protected)
+                    self._branch_cache.setProtected(
+                        project_name, event.branch, protected)
+                    event.branch_cache_ltime = self._branch_cache.ltime
 
             event.branch_protected = protected
         else:
