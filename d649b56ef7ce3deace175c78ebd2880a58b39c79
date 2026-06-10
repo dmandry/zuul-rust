@@ -39,6 +39,24 @@
       },
       "revId": "d649b56ef7ce3deace175c78ebd2880a58b39c79",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9cd252f9_3a548aae",
+        "filename": "zuul/cmd/executor.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 66,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-10T14:00:18Z",
+      "side": 1,
+      "message": "The actual streamer has its own logger name, so I think this is fine for what it is.",
+      "parentUuid": "16320d64_a145c93c",
+      "revId": "d649b56ef7ce3deace175c78ebd2880a58b39c79",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
