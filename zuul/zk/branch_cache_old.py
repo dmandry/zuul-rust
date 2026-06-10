@@ -202,8 +202,9 @@ class BranchCacheOld:
         :param any default:
             Optional default value to return if no cache entry exits.
 
-        :returns: The list of branch names, or None if there was
-            an error when fetching the branches.
+        :returns: A dictionary of {branch_name: BranchInfo} objects,
+            or None if there was an error when fetching the branches.
+
         """
         if self.ltime < min_ltime:
             with (zk_locked(self.rlock),
@@ -232,7 +233,7 @@ class BranchCacheOld:
             return return_default(default, project_name)
 
         # We have the necessary info for this filtering.
-        return list(project_info.branches.values())
+        return project_info.branches
 
     def setProjectBranches(self, project_name,
                            valid_flags, branch_infos):
