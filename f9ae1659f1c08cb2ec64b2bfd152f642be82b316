@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "aeeabeb3_77deceda",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 539,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-10T17:21:36Z",
+      "side": 1,
+      "message": "Two things:\n\n1) Assuming this is right:\n\ngetProjectBranches takes a {name: BranchInfo} dictionary, and returns only the values.  Here we loop over those values to find the one with a matching name.\n\nMaybe we should add a method to return the actual dict, and just do a lookup here.\n\nThat could be a performance boost for projects with, say, 20k branches.\n\n2) Is this right?\n\nIf the branch is known, but previously unprotected and now protected, the old code will do this:\n\n* Get a list of project branches\n* That list does not include our branch\n* Set update\u003dTrue in the second clause\n* Set the protected flag to true on the branch in the cache\n\nThe new code ignores that case, so, I think the case \"known branch transitions from unprotected to protected\" is not handled.\n\nI think the tests are showing that this is the case.",
+      "revId": "f9ae1659f1c08cb2ec64b2bfd152f642be82b316",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
