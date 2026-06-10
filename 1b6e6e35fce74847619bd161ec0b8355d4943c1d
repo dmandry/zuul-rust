@@ -91,6 +91,30 @@
       "parentUuid": "fb99c2f3_a06f0fa3",
       "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "96e307a2_9df9fc0f",
+        "filename": "zuul/cmd/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 108,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-10T23:09:03Z",
+      "side": 1,
+      "message": "Ok, that makes sense to me. We\u0027ll be going to container runtime logs rather than Zuul application logs. Which is fine when debugging startup problems.\n\nAlso, this isn\u0027t a regression as previously there was no try except blog so we\u0027d raise directly and get the same behavior.",
+      "parentUuid": "5ed41ffc_f2a05a91",
+      "range": {
+        "startLine": 108,
+        "startChar": 16,
+        "endLine": 108,
+        "endChar": 21
+      },
+      "revId": "1b6e6e35fce74847619bd161ec0b8355d4943c1d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
