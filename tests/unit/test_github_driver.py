@@ -1716,6 +1716,24 @@ class TestGithubDriver(ZuulTestCase):
         self.assertIn("can not be merged due to: draft state",
                       B.comments[0])
 
+    @simple_layout('layouts/basic-github.yaml', driver='github')
+    def test_pr_event_branch_protection(self):
+        # Test that we do not try to update the protected status of a
+        # project when we don't have exclude_unprotected_branches set.
+        github = self.fake_github.getGithubClient()
+        github.addProjectByName('org/project')
+        repo = github.repo_from_project('org/project')
+        repo._set_branch_protection('master', True)
+
+        with (mock.patch(
+                "zuul.zk.branch_cache_new.BranchCacheNew.setProtected")
+              as cache_mock):
+            A = self.fake_github.openFakePullRequest(
+                'org/project', 'master', 'A')
+            self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+            self.waitUntilSettled()
+            cache_mock.assert_not_called()
+
 
 class TestMultiGithubDriver(ZuulTestCase):
     config_file = 'zuul-multi-github.conf'
@@ -2029,6 +2047,28 @@ class TestGithubUnprotectedBranches(ZuulTestCase):
 
         self.assertEqual(1, len(self.history))
 
+    def test_pr_event_foreign_project(self):
+        # Test that we do not try to update the protected status of a
+        # project that is not in any tenant config.
+        self.init_repo("org/new-project")
+        files = {'README': ''}
+        self.addCommitToRepo("org/new-project", 'Initial commit',
+                             files=files, tag='init')
+
+        github = self.fake_github.getGithubClient()
+        github.addProjectByName('org/new-project')
+        repo = github.repo_from_project('org/new-project')
+        repo._set_branch_protection('master', True)
+
+        with (mock.patch(
+                "zuul.zk.branch_cache_new.BranchCacheNew.setProtected")
+              as cache_mock):
+            A = self.fake_github.openFakePullRequest(
+                'org/new-project', 'master', 'A')
+            self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+            self.waitUntilSettled()
+            cache_mock.assert_not_called()
+
     def _test_push_event_reconfigure(self, project, branch,
                                      expect_reconfigure=False,
                                      old_sha=None, new_sha=None,
@@ -2158,6 +2198,29 @@ class TestGithubUnprotectedBranches(ZuulTestCase):
         new_layout = tenant.layout.uuid
         self.assertNotEqual(new_layout, prev_layout)
         prev_layout = new_layout
+
+    @okay_tracebacks('No branches for project')
+    def test_branch_protection_rule_update_foreign_project(self):
+        # Test the branch_protection_rule event from a project not in
+        # any tenant config
+        self.init_repo("org/new-project")
+        files = {'README': ''}
+        self.addCommitToRepo("org/new-project", 'Initial commit',
+                             files=files, tag='init')
+
+        github = self.fake_github.getGithubClient()
+        github.addProjectByName('org/new-project')
+        repo = github.repo_from_project('org/new-project')
+        repo._set_branch_protection('master', True)
+
+        with (mock.patch(
+                "zuul.zk.branch_cache_new.BranchCacheNew.setProtected")
+              as cache_mock):
+            self.fake_github.emitEvent(
+                self.fake_github.getBranchProtectionRuleEvent(
+                    'org/new-project', 'created'))
+            self.waitUntilSettled()
+            cache_mock.assert_not_called()
 
 
 class TestGithubLockedBranches(ZuulTestCase):

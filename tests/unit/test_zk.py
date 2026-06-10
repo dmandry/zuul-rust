@@ -2442,12 +2442,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertEqual(
             sorted([bi.name for bi in
                     cache.getProjectBranches('project1', protected_flags)
+                    .values()
                     if bi.protected is True]),
             [bi.name for bi in test_data['project1']['protected']]
         )
         self.assertRaises(
             LookupError,
-            lambda: cache.getProjectBranches('project1', all_flags),
+            lambda: cache.getProjectBranches('project1', all_flags).values(),
         )
 
         cache.setProjectBranches('project1', all_flags,
@@ -2455,12 +2456,15 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertEqual(
             sorted([bi.name for bi in
                     cache.getProjectBranches('project1', protected_flags)
+                    .values()
                     if bi.protected is True]),
             [bi.name for bi in test_data['project1']['protected']]
         )
         self.assertEqual(
             sorted([bi.name for bi in
-                    cache.getProjectBranches('project1', all_flags)]),
+                    cache.getProjectBranches('project1', all_flags)
+                    .values()
+                    ]),
             [bi.name for bi in test_data['project1']['all']]
         )
 
@@ -2494,11 +2498,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
 
         self.assertRaises(
             LookupError,
-            lambda: cache.getProjectBranches('project1', protected_flags)
+            lambda: cache.getProjectBranches(
+                'project1', protected_flags).values()
         )
         self.assertRaises(
             LookupError,
-            lambda: cache.getProjectBranches('project1', all_flags)
+            lambda: cache.getProjectBranches(
+                'project1', all_flags).values()
         )
 
         # Test the other order; all followed by protected-only
@@ -2506,11 +2512,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
                                  test_data['project1']['all'])
         self.assertRaises(
             LookupError,
-            lambda: cache.getProjectBranches('project1', protected_flags)
+            lambda: cache.getProjectBranches(
+                'project1', protected_flags).values()
         )
         self.assertEqual(
             sorted([bi.name for bi in
-                    cache.getProjectBranches('project1', all_flags)]),
+                    cache.getProjectBranches(
+                        'project1', all_flags).values()]),
             [bi.name for bi in test_data['project1']['all']]
         )
 
@@ -2519,12 +2527,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertEqual(
             sorted([bi.name for bi in
                     cache.getProjectBranches('project1', protected_flags)
+                    .values()
                     if bi.protected is True]),
             [bi.name for bi in test_data['project1']['protected']]
         )
         self.assertEqual(
             sorted([bi.name for bi in
-                    cache.getProjectBranches('project1', all_flags)]),
+                    cache.getProjectBranches('project1', all_flags).values()]),
             [bi.name for bi in test_data['project1']['all']]
         )
 
@@ -2573,12 +2582,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertEqual(
             sorted([bi.name for bi in
                     cache.getProjectBranches('project1', protected_flags)
+                    .values()
                     if bi.protected is True]),
             [bi.name for bi in data1['project1']['protected']]
         )
         self.assertEqual(
             sorted([bi.name for bi in
-                    cache.getProjectBranches('project1', all_flags)]),
+                    cache.getProjectBranches('project1', all_flags).values()]),
             [bi.name for bi in data1['project1']['all']]
         )
 
@@ -2587,12 +2597,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertEqual(
             sorted([bi.name for bi in
                     cache.getProjectBranches('project1', protected_flags)
+                    .values()
                     if bi.protected is True]),
             [bi.name for bi in data2['project1']['protected']]
         )
         self.assertEqual(
             sorted([bi.name for bi in
-                    cache.getProjectBranches('project1', all_flags)]),
+                    cache.getProjectBranches('project1', all_flags).values()]),
             [bi.name for bi in data2['project1']['all']]
         )
 
@@ -2601,12 +2612,13 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertEqual(
             sorted([bi.name for bi in
                     cache.getProjectBranches('project1', protected_flags)
+                    .values()
                     if bi.protected is True]),
             [bi.name for bi in data1['project1']['protected']]
         )
         self.assertEqual(
             sorted([bi.name for bi in
-                    cache.getProjectBranches('project1', all_flags)]),
+                    cache.getProjectBranches('project1', all_flags).values()]),
             [bi.name for bi in data1['project1']['all']]
         )
 
@@ -2616,7 +2628,7 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         cache = BranchCache(self.zk_client, conn, self.component_registry)
         self.assertRaises(
             LookupError,
-            lambda: cache.getProjectBranches('project1', True)
+            lambda: cache.getProjectBranches('project1', True).values()
         )
         self.assertIsNone(
             cache.getProjectBranches('project1', True, default=None)
