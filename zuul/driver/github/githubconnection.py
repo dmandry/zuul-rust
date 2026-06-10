@@ -680,7 +680,7 @@ class GithubEventProcessor(object):
         if cached_branches is None:
             raise RuntimeError(f"No branches for project {project_name}")
         else:
-            cached_branches = [b.name for b in cached_branches
+            cached_branches = [b.name for b in cached_branches.values()
                                if b.protected is True]
         old_protected_branches = set(cached_branches)
 
@@ -697,7 +697,8 @@ class GithubEventProcessor(object):
             self.connection._branch_cache.getProjectBranches(
                 project_name, BranchFlag.PROTECTED)
         new_protected_branches = set(
-            [b.name for b in new_protected_branches if b.protected is True])
+            [b.name for b in new_protected_branches.values()
+             if b.protected is True])
 
         newly_protected = new_protected_branches - old_protected_branches
         newly_unprotected = old_protected_branches - new_protected_branches

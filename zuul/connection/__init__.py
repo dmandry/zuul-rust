@@ -335,8 +335,10 @@ class ZKBranchCacheMixin:
                 branches = self._branch_cache.getProjectBranches(
                     project.name, required_flags, min_ltime)
                 if branches is not None:
-                    branches = [b.name for b in self._filterProjectBranches(
-                        branches, exclude_unprotected, exclude_locked)]
+                    branches = [b.name for b in
+                                self._filterProjectBranches(
+                                    branches.values(), exclude_unprotected,
+                                    exclude_locked)]
             except LookupError:
                 if self.read_only:
                     # A scheduler hasn't attempted to fetch them yet
@@ -523,23 +525,16 @@ class ZKBranchCacheMixin:
             branches = self._branch_cache.getProjectBranches(
                 project_name, required_flags, default=None)
 
-            if not branches:
-                branches = []
-
-            branches = [b.name for b in branches]
-
-            update = False
-            if (event.branch in branches) and (not protected):
-                update = True
-            if (event.branch not in branches) and (protected):
-                update = True
-            if update:
-                self.log.info("Project %s branch %s protected state "
-                              "changed to %s",
-                              project_name, event.branch, protected)
-                self._branch_cache.setProtected(
-                    project_name, event.branch, protected)
-                event.branch_cache_ltime = self._branch_cache.ltime
+            if branches is not None:
+                if ((branch_info := branches.get(event.branch)) is None or
+                        branch_info.protected != protected):
+                    log = get_annotated_logger(self.log, event)
+                    log.info("Project %s branch %s protected state "
+                             "changed to %s",
+                             project_name, event.branch, protected)
+                    self._branch_cache.setProtected(
+                        project_name, event.branch, protected)
+                    event.branch_cache_ltime = self._branch_cache.ltime
 
             event.branch_protected = protected
         else:
