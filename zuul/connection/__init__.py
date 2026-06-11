@@ -522,19 +522,12 @@ class ZKBranchCacheMixin:
             required_flags = self._getProjectBranchesRequiredFlags(
                 exclude_unprotected=True, exclude_locked=False)
 
-            have_project_info = False
-            branch_info = None
-            try:
-                branches = self._branch_cache.getProjectBranches(
-                    project_name, required_flags)
-                have_project_info = True
-                branch_info = branches.get(event.branch)
-            except LookupError:
-                pass
+            branches = self._branch_cache.getProjectBranches(
+                project_name, required_flags, default=None)
 
-            if have_project_info:
-                if (branch_info is None or
-                    branch_info.protected != protected):
+            if branches is not None:
+                if ((branch_info := branches.get(event.branch)) is None or
+                        branch_info.protected != protected):
                     log = get_annotated_logger(self.log, event)
                     log.info("Project %s branch %s protected state "
                              "changed to %s",
