@@ -88,6 +88,24 @@
       "parentUuid": "de34c431_86282774",
       "revId": "34ffdff527261eb30a6379120342cfa093d09538",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bedd29f8_44d06d93",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-11T16:05:37Z",
+      "side": 1,
+      "message": "Actually, I think that last bit is not correct.  If we don\u0027t have exclude_unprotected_branches set, then we will raise LookupError.  We only return None on a failed query, not an incomplete query.  So we don\u0027t need to make the change you suggest to handle that case.\n\nThat means the only difference is the case where there the query failed.  I still agree that it probably doesn\u0027t matter either way (it\u0027s a failed query, something is not going to work right no matter what).  But I\u0027m not sure the argument to treat them the same is quite as strong.",
+      "parentUuid": "a8c1fb99_0049e27c",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
