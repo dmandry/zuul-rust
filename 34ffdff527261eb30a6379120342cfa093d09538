@@ -106,6 +106,24 @@
       "parentUuid": "a8c1fb99_0049e27c",
       "revId": "34ffdff527261eb30a6379120342cfa093d09538",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7c2ca130_cd06ee43",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-11T16:09:45Z",
+      "side": 1,
+      "message": "PS3 includes a test for the case where exclude_unprotected_branches is not set; that passes with this change.  But if we still want to treat both cases the same, we can squash the followup.",
+      "parentUuid": "bedd29f8_44d06d93",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
