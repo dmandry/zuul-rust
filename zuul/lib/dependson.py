@@ -27,3 +27,24 @@ def find_dependency_headers(message):
             continue
         dependencies.append(match.strip())
     return dependencies
+
+
+def expand_dependencies(description, ref_map, baseurl):
+    """Expand shorthand Depends-On values to full URLs.
+
+    :param str description: Raw description text.
+    :param dict ref_map: Mapping of shorthand text to href.
+    :param str baseurl: Base URL to prepend to relative hrefs.
+    :return: The description with shorthand values expanded.
+    :rtype: str
+    """
+    def _replace(match):
+        value = match.group(1).strip()
+        if '://' in value or value not in ref_map:
+            return match.group(0)
+        href = ref_map[value]
+        if href.startswith('/'):
+            href = baseurl + href
+        return match.group(0).replace(value, href)
+
+    return DEPENDS_ON_RE.sub(_replace, description)

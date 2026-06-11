@@ -64,7 +64,8 @@ class GitlabWebServer(object):
             branch_re = re.compile(r'.+/projects/(?P<project>.+)/'
                                    r'repository/branches/(?P<branch>.+)$')
             mr_re = re.compile(r'.+/projects/(?P<project>.+)/'
-                               r'merge_requests/(?P<mr>\d+)$')
+                               r'merge_requests/(?P<mr>\d+)'
+                               r'(\?render_html=true)?$')
             mr_approvals_re = re.compile(
                 r'.+/projects/(?P<project>.+)/'
                 r'merge_requests/(?P<mr>\d+)/approvals$')
@@ -170,6 +171,7 @@ class GitlabWebServer(object):
                     'title': mr.subject,
                     'state': mr.state,
                     'description': mr.description,
+                    'description_html': mr.description_html,
                     'author': {
                         'name': 'Administrator',
                         'username': 'admin'
@@ -358,11 +360,12 @@ class FakeGitlabConnection(gitlabconnection.GitlabConnection):
 
     def openFakeMergeRequest(self, project,
                              branch, title, description='', files=[],
-                             base_sha=None):
+                             base_sha=None, description_html=None):
         self.mr_number += 1
         merge_request = FakeGitlabMergeRequest(
             self, self.mr_number, project, branch, title, self.upstream_root,
-            files=files, description=description, base_sha=base_sha)
+            files=files, description=description, base_sha=base_sha,
+            description_html=description_html)
         self.merge_requests.setdefault(
             project, {})[str(self.mr_number)] = merge_request
         return merge_request
@@ -464,7 +467,7 @@ class FakeGitlabMergeRequest(object):
 
     def __init__(self, gitlab, number, project, branch,
                  subject, upstream_root, files=[], description='',
-                 base_sha=None):
+                 base_sha=None, description_html=None):
         self.source_hostname = gitlab.canonical_hostname
         self.gitlab_server = gitlab.server
         self.number = number
@@ -472,6 +475,7 @@ class FakeGitlabMergeRequest(object):
         self.branch = branch
         self.subject = subject
         self.description = description
+        self.description_html = description_html
         self.upstream_root = upstream_root
         self.number_of_commits = 0
         self.created_at = datetime.datetime.now(datetime.timezone.utc)

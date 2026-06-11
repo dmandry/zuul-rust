@@ -574,28 +574,35 @@ class TestGitlabDriver(ZuulTestCase):
     @simple_layout('layouts/crd-gitlab.yaml', driver='gitlab')
     def test_crd_independent(self):
 
-        # Create a change in project1 that a project2 change will depend on
+        # Create changes in project1 that a project2 change will depend on
+        # A via full URL, B via GitLab shorthand reference
         A = self.fake_gitlab.openFakeMergeRequest(
             'org/project1', 'master', 'A')
-
-        # Create a commit in B that sets the dependency on A
-        msg = "Depends-On: %s" % A.url
         B = self.fake_gitlab.openFakeMergeRequest(
-            'org/project2', 'master', 'B', description=msg)
+            'org/project1', 'master', 'B')
 
-        # Make an event to re-use
-        self.fake_gitlab.emitEvent(B.getMergeRequestOpenedEvent())
+        shorthand = "org/project1!%s" % B.number
+        msg = "Depends-On: %s\nDepends-On: %s" % (A.url, shorthand)
+        description_html = (
+            '<p>Depends-On: <a href="%s">%s</a>\n'
+            'Depends-On: <a href="/org/project1/-/merge_requests/%s"'
+            ' data-original="%s">%s</a></p>'
+            % (A.url, A.url, B.number, shorthand, shorthand)
+        )
+        C = self.fake_gitlab.openFakeMergeRequest(
+            'org/project2', 'master', 'C',
+            description=msg,
+            description_html=description_html)
+
+        self.fake_gitlab.emitEvent(C.getMergeRequestOpenedEvent())
         self.waitUntilSettled()
 
-        # The changes for the job from project2 should include the project1
-        # MR content
         changes = self.getJobFromHistory(
             'project2-test', 'org/project2').changes
 
-        self.assertEqual(changes, "%s,%s %s,%s" % (A.number,
-                                                   A.sha,
-                                                   B.number,
-                                                   B.sha))
+        self.assertIn("%s,%s" % (A.number, A.sha), changes)
+        self.assertIn("%s,%s" % (B.number, B.sha), changes)
+        self.assertIn("%s,%s" % (C.number, C.sha), changes)
 
         # There should be no more changes in the queue
         tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
