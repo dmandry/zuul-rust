@@ -70,6 +70,24 @@
       "parentUuid": "d1528bff_5c61bdbe",
       "revId": "34ffdff527261eb30a6379120342cfa093d09538",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a8c1fb99_0049e27c",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-11T15:38:05Z",
+      "side": 1,
+      "message": "Okay, I think we can say that we don\u0027t value the case where the query hasn\u0027t been completed yet.  I agree it\u0027s probably not that important.  The race condition still holds, but even if we did keep the support that we have now, since there is no coordination between the events that drive this method and those that would trigger retries of the queries, we still can\u0027t guarantee that this would set the correct value.\n\nIn addition, I agree that the case with not having exclude_unprotected_branches set may cause multiple writes.  The two of these together convince me that we should go with the approach you recommend and skip setting this in all of those cases.\n\nWe should probably add a test for that last case.",
+      "parentUuid": "de34c431_86282774",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
