@@ -34,6 +34,24 @@
       "parentUuid": "8c1aa35a_9bc2d411",
       "revId": "34ffdff527261eb30a6379120342cfa093d09538",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d1528bff_5c61bdbe",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-06-11T13:32:45Z",
+      "side": 1,
+      "message": "\u003e The other cases where we return None are when we did try to query the project or branches and one of those queries failed. In those cases, we actually can go ahead and set the protected flag if we know it -- setProtected will create missing ProjectInfo and BranchInfo objects.\n\nI\u0027m just not sure setting the protected flag makes sense in that case. As long as we haven\u0027t re-queried the branches successfully and cleared the failed flags this information would be useless and not accessible. But a successful query will most likely also fetch the required \"protected\" information anyways.\n\nIn addition this looks like it would even lead to a similar constant update of the protected flag as is the case when we never queried the required flags for that branch.",
+      "parentUuid": "8fed8bf4_9d78d104",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
