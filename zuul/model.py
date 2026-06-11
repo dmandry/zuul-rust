@@ -42,12 +42,13 @@ from zuul import change_matcher
 from zuul.exceptions import (
     SEVERITY_ERROR,
     SEVERITY_WARNING,
-    OIDCIssuerNotAllowedError,
+    BaseJobNotPermittedError,
     LabelForbiddenError,
+    LabelNotFoundError,
     MaxOIDCTTLError,
     MaxTimeoutError,
-    LabelNotFoundError,
     NodesetNotFoundError,
+    OIDCIssuerNotAllowedError,
     PreTimeoutExceedsTimeoutError,
     ProjectNotFoundError,
     ProjectNotPermittedError,
@@ -9677,6 +9678,7 @@ class TenantProjectConfig(object):
         # to configure
         self.configure_projects = None
         self.allow_reporter_jobs = None
+        self.allow_base_jobs = None
 
     def canConfigureProject(self, other_tpc, validation_only=False):
         if self.trusted:
@@ -9693,6 +9695,13 @@ class TenantProjectConfig(object):
                 if r.fullmatch(name):
                     return True
         return False
+
+    def canDefineBaseJobs(self):
+        if not self.trusted:
+            return False
+        if self.allow_base_jobs is False:
+            return False
+        return True
 
     def isAlwaysDynamicBranch(self, branch):
         if self.always_dynamic_branches is None:
@@ -10552,10 +10561,10 @@ class Layout(object):
             job.post_timeout > self.tenant.max_job_timeout):
             raise MaxTimeoutError(job, self.tenant)
 
-        if job.isBase() and not self.tenant.isTrusted(
-                job.source_context.project_canonical_name):
-            raise Exception(
-                "Base jobs must be defined in config projects")
+        source_tpc = self.tenant.getTPC(
+            job.source_context.project_canonical_name)
+        if job.isBase() and not source_tpc.canDefineBaseJobs():
+            raise BaseJobNotPermittedError()
 
     def addJob(self, job):
         self._checkAddJob(job)

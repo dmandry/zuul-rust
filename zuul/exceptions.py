@@ -386,6 +386,17 @@ class ProjectNotPermittedError(ConfigurationSyntaxError):
         super(ProjectNotPermittedError, self).__init__(message)
 
 
+class BaseJobNotPermittedError(ConfigurationSyntaxError):
+    zuul_error_name = 'Base Job Not Permitted'
+
+    def __init__(self):
+        message = textwrap.dedent("""\
+        Base jobs may only be defined in config projects, and
+        only if permitted by the tenant configuration.""")
+        message = textwrap.fill(message)
+        super(BaseJobNotPermittedError, self).__init__(message)
+
+
 class AuthZRuleNotFoundError(ConfigurationSyntaxError):
     zuul_error_name = 'AuthZ Rule Not Found'
 

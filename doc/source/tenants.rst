@@ -139,8 +139,8 @@ configuration. Some examples of tenant definitions are:
 
       .. attr:: <project>
 
-         The config-projects have an additional config option that
-         may be specified optionally.
+         The config-projects have the following optional additional
+         config options:
 
          .. attr:: load-branch
             :default: master
@@ -148,6 +148,16 @@ configuration. Some examples of tenant definitions are:
             Define which branch is loaded from a config project. By
             default config projects load Zuul configuration only
             from the master branch.
+
+         .. attr:: allow-base-jobs
+            :type: bool
+            :default: true
+
+            Set to ``false`` to disallow base job definitions in this
+            project.  Base jobs are typically critical for the
+            security of the entire Zuul system.  This setting permits
+            the use of config-projects for features (such as pipeline
+            definition) without the ability to define base jobs.
 
    .. attr:: untrusted-projects
 

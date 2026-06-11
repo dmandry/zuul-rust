@@ -8353,7 +8353,29 @@ class TestBaseJobs(ZuulTestCase):
         self.assertEqual(A.reported, 1,
                          "A should report failure")
         self.assertEqual(A.patchsets[0]['approvals'][0]['value'], "-1")
-        self.assertIn('Base jobs must be defined in config projects',
+        self.assertIn('Base jobs may only be defined',
+                      A.messages[0])
+        self.assertHistory([])
+
+    def test_disallowed_base_job(self):
+        # Test that we can disable configuring base jobs even in
+        # config-projects
+        in_repo_conf = textwrap.dedent(
+            """
+            - job:
+                name: fail-base
+                parent: null
+            """)
+
+        file_dict = {'.zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('extra-config', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1,
+                         "A should report failure")
+        self.assertEqual(A.patchsets[0]['approvals'][0]['value'], "-1")
+        self.assertIn('Base jobs may only be defined',
                       A.messages[0])
         self.assertHistory([])
 

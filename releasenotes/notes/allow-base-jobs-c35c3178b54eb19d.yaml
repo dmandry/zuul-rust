@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    The :attr:`tenant.config-projects.<project>.allow-base-jobs`
+    tenant configuration attribute has been added.  This facilitates
+    the configuration of a tenant with the ability to use all of the
+    aspects of a config-project other than defining base jobs when the
+    definition of a base job may be critical for system-wide security.

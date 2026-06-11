@@ -5,5 +5,7 @@
       gerrit:
         config-projects:
           - common-config
+          - extra-config:
+              allow-base-jobs: false
         untrusted-projects:
           - org/project
