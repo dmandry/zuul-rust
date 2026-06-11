@@ -20,7 +20,7 @@
 
 import textwrap
 
-from zuul.lib.dependson import find_dependency_headers
+from zuul.lib.dependson import find_dependency_headers, expand_dependencies
 
 from tests.base import BaseTestCase
 
@@ -45,3 +45,33 @@ class TestDependsOnParsing(BaseTestCase):
                               'https://this.is.a.url/2',
                               'https://this.is.a.url/3',
                               'https://this.is.a.url/4'])
+
+    def test_expand_dependencies(self):
+        """Test expand_dependencies substitution logic.
+
+        Verifies three scenarios in a single description:
+        - A full URL Depends-On is left unchanged.
+        - A shorthand ref present in ref_map is expanded to a
+          full URL using baseurl + href.
+        - A shorthand ref not in ref_map is left unchanged.
+        """
+        description = textwrap.dedent('''\
+        Review text
+
+        Depends-On: https://gitlab.example.com/org/project/-/merge_requests/1
+        Depends-On: org/project!2
+        Depends-On: org/other!999
+        ''')
+        ref_map = {
+            'org/project!2': '/org/project/-/merge_requests/2',
+        }
+        result = expand_dependencies(
+            description, ref_map, 'https://gitlab.example.com')
+        expected = textwrap.dedent('''\
+        Review text
+
+        Depends-On: https://gitlab.example.com/org/project/-/merge_requests/1
+        Depends-On: https://gitlab.example.com/org/project/-/merge_requests/2
+        Depends-On: org/other!999
+        ''')
+        self.assertEqual(result, expected)

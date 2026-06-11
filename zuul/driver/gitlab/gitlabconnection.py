@@ -23,6 +23,7 @@ import uuid
 import re
 import requests
 import urllib3
+from html.parser import HTMLParser
 
 import dateutil.parser
 
@@ -35,6 +36,7 @@ from zuul.connection import (
 )
 from zuul.web.handler import BaseWebController
 from zuul.lib import tracing
+from zuul.lib.dependson import expand_dependencies
 from zuul.lib.http import ZuulHTTPAdapter
 from zuul.lib.logutil import get_annotated_logger
 from zuul.lib.config import any_to_bool
@@ -351,7 +353,7 @@ class GitlabAPIClient():
         attempts = 0
 
         def _get_mr():
-            path = "/projects/%s/merge_requests/%s" % (
+            path = "/projects/%s/merge_requests/%s?render_html=true" % (
                 quote_plus(project_name), number)
             resp = self.get(self.baseurl + path, zuul_event_id=zuul_event_id)
             self._manage_error(*resp, zuul_event_id=zuul_event_id)
@@ -514,6 +516,31 @@ class GitlabAPIClient():
                         zuul_event_id=zuul_event_id)
         self._manage_error(*resp, zuul_event_id=zuul_event_id)
         return resp[0]
+
+
+class _RefLinkMapper(HTMLParser):
+    """Parse GitLab rendered HTML to extract reference link mappings.
+
+    GitLab adds a ``data-original`` attribute to rendered reference
+    links containing the exact raw text the user typed (e.g.
+    ``org/project!123``).  This is an undocumented internal attribute
+    that could change; if it disappears, the parser will simply
+    produce an empty map and shorthand expansion will gracefully
+    degrade.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.ref_map = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'a':
+            return
+        attr_dict = dict(attrs)
+        original = attr_dict.get('data-original')
+        href = attr_dict.get('href')
+        if original and href:
+            self.ref_map[original] = href
 
 
 class GitlabConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
@@ -747,6 +774,32 @@ class GitlabConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             change = self._change_cache.get(change_key)
         return change
 
+    def _expandDependsOn(self, description, description_html):
+        """Expand shorthand Depends-On references to full URLs.
+
+        GitLab renders shorthand references (e.g. "org/project!123") as
+        <a> tags with a ``data-original`` attribute containing the raw
+        text and an ``href`` with the resolved path. Uses ``_RefLinkMapper``
+        to extract that mapping and substitute matching Depends-On values
+        with full URLs.
+
+        :param str description: Raw MR description text.
+        :param str description_html: GitLab HTML description, or None.
+        :return: The description with shorthand Depends-On values
+            expanded to full URLs.
+        :rtype: str
+        """
+        if not description_html:
+            return description
+
+        parser = _RefLinkMapper()
+        parser.feed(description_html)
+
+        if not parser.ref_map:
+            return description
+
+        return expand_dependencies(description, parser.ref_map, self.baseurl)
+
     def _updateChange(self, change, event, mr):
         log = get_annotated_logger(self.log, event)
         change.mr = mr
@@ -789,7 +842,10 @@ class GitlabConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         change.blocking_discussions_resolved = \
             change.mr.get('blocking_discussions_resolved', True)
         change.approved = change.mr['approved']
-        change.message = change.mr.get('description', "") or ""
+        change.message = self._expandDependsOn(
+            change.mr.get('description', "") or "",
+            change.mr.get('description_html'),
+        )
         change.labels = change.mr['labels']
         change.updated_at = int(dateutil.parser.parse(
             change.mr['updated_at']).timestamp())
