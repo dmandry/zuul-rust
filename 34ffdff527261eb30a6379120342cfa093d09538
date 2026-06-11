@@ -16,6 +16,24 @@
       "message": "I think we still need to check whether `branches` is `None` as it will not raise a lookup error when there is a cache hit but the failed flags are set. Otherwise we\u0027ll end up with an `AttributeError` in line 531.\n\nI also feel that keeping the `default\u003dNone` might improve the code flow a bit (not really a fan of the found-flag here) and also cover the mentioned fail-case where we don\u0027t get a `LookupError`. I was thinking about something like:\n\n```python\n            branches \u003d self._branch_cache.getProjectBranches(\n                project_name, required_flags, default\u003dNone)\n\n            if branches is not None:\n                if ((branch_info :\u003d branches.get(event.branch)) is None or\n                        branch_info.protected !\u003d protected):\n                    self.log.info(\"Project %s branch %s protected state \"\n                                  \"changed to %s\",\n                                  project_name, event.branch, protected)\n                    self._branch_cache.setProtected(\n                        project_name, event.branch, protected)\n                    event.branch_cache_ltime \u003d self._branch_cache.ltime\n```",
       "revId": "34ffdff527261eb30a6379120342cfa093d09538",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8fed8bf4_9d78d104",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-11T13:21:03Z",
+      "side": 1,
+      "message": "I agree we need to check if branches is None.  I also don\u0027t like have_project_info, but here\u0027s why I structured the code this way:\n\nThis attempts to ignore the case where we don\u0027t have a ProjectInfo (likely because it\u0027s not configured).  That\u0027s the main objective of the change.  It also handles the case where we don\u0027t have a BranchInfo because we have not yet queried it (I don\u0027t know exactly when that would be, perhaps if we receieve an event for one of these projects during initialization?  This one doesn\u0027t seem very important).  Those are the two cases that will raise LookupError if we omit the default argument.\n\nThe other cases where we return None are when we did try to query the project or branches and one of those queries failed.  In those cases, we actually can go ahead and set the protected flag if we know it -- setProtected will create missing ProjectInfo and BranchInfo objects.\n\nThat\u0027s what I was trying to accomplish, so my preference would still be to keep the ugly try/except but just fix line 531 with a guard against branches being None.",
+      "parentUuid": "8c1aa35a_9bc2d411",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
