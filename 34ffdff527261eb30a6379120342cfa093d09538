@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8c1aa35a_9bc2d411",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-06-11T05:57:38Z",
+      "side": 1,
+      "message": "I think we still need to check whether `branches` is `None` as it will not raise a lookup error when there is a cache hit but the failed flags are set. Otherwise we\u0027ll end up with an `AttributeError` in line 531.\n\nI also feel that keeping the `default\u003dNone` might improve the code flow a bit (not really a fan of the found-flag here) and also cover the mentioned fail-case where we don\u0027t get a `LookupError`. I was thinking about something like:\n\n```python\n            branches \u003d self._branch_cache.getProjectBranches(\n                project_name, required_flags, default\u003dNone)\n\n            if branches is not None:\n                if ((branch_info :\u003d branches.get(event.branch)) is None or\n                        branch_info.protected !\u003d protected):\n                    self.log.info(\"Project %s branch %s protected state \"\n                                  \"changed to %s\",\n                                  project_name, event.branch, protected)\n                    self._branch_cache.setProtected(\n                        project_name, event.branch, protected)\n                    event.branch_cache_ltime \u003d self._branch_cache.ltime\n```",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
