@@ -52,6 +52,24 @@
       "parentUuid": "8fed8bf4_9d78d104",
       "revId": "34ffdff527261eb30a6379120342cfa093d09538",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "de34c431_86282774",
+        "filename": "zuul/connection/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 528,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-06-11T13:51:20Z",
+      "side": 1,
+      "message": "I think the same is true for projects that where never queried with `PROTECTED` as a required flag. As the completed flags are a property of the `ProjectInfo` it looks like we will always get `branches\u003dNone` in `checkBranchCache()` and with that we also have a constant update of the protected flag.",
+      "parentUuid": "d1528bff_5c61bdbe",
+      "revId": "34ffdff527261eb30a6379120342cfa093d09538",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
