@@ -836,20 +836,22 @@ class TestGovernor(ZuulTestCase):
         # Set no cgroup limit
         ram_sensor = [x for x in self.executor_server.sensors
                       if isinstance(x, RAMSensor)][0]
-        ram_sensor.cgroup_stats_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'memory.stat.nolimit')
+        ram_sensor.CGROUP_SELF = os.path.join(
+            FIXTURE_DIR, 'cgroup', 'cgroup.self')
+        ram_sensor.CGROUP_ROOT = os.path.join(
+            FIXTURE_DIR, 'cgroup', 'memory.nolimit')
         self.executor_server.manageLoad()
         self.assertTrue(self.executor_server.accepting_work)
 
         # Set cgroup limit 5GiB and ram usage 20%
-        ram_sensor.cgroup_stats_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'memory.stat.ok')
+        ram_sensor.CGROUP_ROOT = os.path.join(
+            FIXTURE_DIR, 'cgroup', 'memory.ok')
         self.executor_server.manageLoad()
         self.assertTrue(self.executor_server.accepting_work)
 
         # Set cgroup limit 5GiB and ram usage 96%
-        ram_sensor.cgroup_stats_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'memory.stat.bad')
+        ram_sensor.CGROUP_ROOT = os.path.join(
+            FIXTURE_DIR, 'cgroup', 'memory.bad')
         self.executor_server.manageLoad()
         self.assertFalse(self.executor_server.accepting_work)
 
