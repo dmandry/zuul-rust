@@ -760,31 +760,76 @@ class Repo(object):
                     ops=None):
         log = get_annotated_logger(self.log, zuul_event_id)
         with self.createRepoObject(zuul_event_id) as repo:
-            args = [str(base)]
             ref = item['ref']
             self.fetch(ref, zuul_event_id=zuul_event_id)
             if ops is not None:
                 ops.append(zuul.model.MergeOp(
                     cmd=['git', 'fetch', 'origin', ref],
                     path=self.workspace_project_path))
-            log.debug("Rebasing %s with args %s", ref, args)
-            repo.git.checkout('FETCH_HEAD')
-            if ops is not None:
-                ops.append(zuul.model.MergeOp(
-                    cmd=['git', 'checkout', 'FETCH_HEAD'],
-                    path=self.workspace_project_path))
-            with repo.git.custom_environment(
-                    **self._getTimestampEnv(timestamp)):
-                try:
-                    repo.git.rebase(*args)
-                except Exception:
-                    repo.git.rebase(abort=True)
-                    raise
-            if ops is not None:
-                ops.append(zuul.model.MergeOp(
-                    cmd=['git', 'rebase', *args],
-                    path=self.workspace_project_path,
-                    timestamp=timestamp))
+
+            fetch_head = repo.commit("FETCH_HEAD")
+            if len(fetch_head.parents) > 1:
+                # This approximates what Gerrit does with a merge
+                # commit and the rebase submit strategy:
+                # 1) Merge the commit to get a tree object for the
+                #    resulting content
+                # 2) Create a new commit with the same parents as the
+                #    original merge commit except that the first
+                #    parent is replaced with the target branch
+                # 3) Checkout that resulting commit
+                with repo.git.custom_environment(
+                        **self._getTimestampEnv(timestamp)):
+                    args = [str(base), 'FETCH_HEAD']
+                    log.debug("Rebase-merge merge-tree %s with args %s",
+                              ref, args)
+                    tree_oid = repo.git.merge_tree(args)
+                    if ops is not None:
+                        ops.append(zuul.model.MergeOp(
+                            cmd=['git', 'merge_tree', *args],
+                            result='TREE_OID',
+                            path=self.workspace_project_path))
+
+                    args = ['-p', str(base)]
+                    for parent in fetch_head.parents[1:]:
+                        args.extend(['-p', str(parent)])
+                    args.extend(['-m', fetch_head.message])
+                    args.append(tree_oid)
+                    log.debug("Rebase-merge commit-tree with args %s", args)
+                    commit_oid = repo.git.commit_tree(args)
+                    if ops is not None:
+                        args[-1] = '$TREE_OID'
+                        ops.append(zuul.model.MergeOp(
+                            cmd=['git', 'commit_tree', *args],
+                            result='commit_oid',
+                            path=self.workspace_project_path))
+
+                    log.debug("Rebase-merge checkout %s", commit_oid)
+                    repo.git.checkout(commit_oid)
+                    if ops is not None:
+                        ops.append(zuul.model.MergeOp(
+                            cmd=['git', 'checkout', '$COMMIT_OID'],
+                            path=self.workspace_project_path))
+
+            else:
+                args = [str(base)]
+                log.debug("Rebasing %s with args %s", ref, args)
+                repo.git.checkout('FETCH_HEAD')
+                if ops is not None:
+                    ops.append(zuul.model.MergeOp(
+                        cmd=['git', 'checkout', 'FETCH_HEAD'],
+                        path=self.workspace_project_path))
+                with repo.git.custom_environment(
+                        **self._getTimestampEnv(timestamp)):
+                    try:
+                        repo.git.rebase(*args)
+                    except Exception:
+                        repo.git.rebase(abort=True)
+                        raise
+                if ops is not None:
+                    ops.append(zuul.model.MergeOp(
+                        cmd=['git', 'rebase', *args],
+                        path=self.workspace_project_path,
+                        timestamp=timestamp))
             return repo.head.commit.hexsha
 
     def cherryPick(self, ref, zuul_event_id=None, timestamp=None, ops=None):

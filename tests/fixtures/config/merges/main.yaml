@@ -9,4 +9,4 @@
           - org/project-merge
           - org/project-merge-branches
           - org/project-merge-resolve
-
+          - org/project-rebase

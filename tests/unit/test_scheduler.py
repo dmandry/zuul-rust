@@ -8236,6 +8236,49 @@ class TestSchedulerMerges(ZuulTestCase):
         self.executor_server.release()
         self.waitUntilSettled()
 
+    def test_project_merge_mode_rebase_branch_merge(self):
+        "Test that branches can be merged together in rebase mode"
+        self.create_branch('org/project-rebase', 'mp')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project-rebase', 'mp'))
+        self.waitUntilSettled()
+
+        path = os.path.join(self.upstream_root, 'org/project-rebase')
+        repo = git.Repo(path)
+        master_sha = repo.heads.master.commit.hexsha
+        mp_sha = repo.heads.mp.commit.hexsha
+
+        self.executor_server.hold_jobs_in_build = True
+        M = self.fake_gerrit.addFakeChange(
+            'org/project-rebase', 'master', 'M',
+            merge_files={'foo': 'bar'},
+            merge_parents=[
+                master_sha,
+                mp_sha,
+            ])
+        M.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(M.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        build = self.builds[-1]
+        self.assertEqual(build.parameters['zuul']['branch'], 'master')
+        path = os.path.join(build.jobdir.src_root, 'review.example.com',
+                            "org/project-rebase")
+        repo = git.Repo(path)
+        repo_messages = [c.message.strip() for c in repo.iter_commits()]
+        repo_messages.reverse()
+        correct_messages = [
+            'initial commit',
+            'add content from fixture',
+            'mp commit',
+            'M-1']
+        self.assertEqual(correct_messages, repo_messages)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
     def test_merge_branch(self):
         "Test that the right commits are on alternate branches"
         self.create_branch('org/project-merge-branches', 'mp')
