@@ -1461,7 +1461,7 @@ class ProjectParser(object):
             'templates': [str],
             'merge-mode': vs.Any('merge', 'merge-resolve',
                                  'cherry-pick', 'squash-merge',
-                                 'rebase'),
+                                 'rebase', 'rebase-first-parent'),
             'default-branch': str,
             'queue': str,
             str: pipeline_contents,
