@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    The :value:`project.merge-mode.rebase-first-parent` merge mode has
+    been added.  It corresponds to the Gerrit rebase submit
+    strategies.  Projects using those submit strategies in Gerrit should
+    set their `merge-mode` to the new value.
