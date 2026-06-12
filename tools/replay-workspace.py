@@ -1,4 +1,4 @@
-# Copyright 2024 Acme Gating, LLC
+# Copyright 2024, 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -42,14 +42,30 @@ class Workspace:
         self.path = path
         self.log = logging.getLogger('workspace')
 
-    def run(self, cmd, cwd, timestamp=None, level=logging.INFO):
+    def run(self, cmd, cwd, timestamp=None, vardict=None,
+            result=None, level=logging.INFO):
+        if vardict is None:
+            vardict = {}
+        # Perform any variable replacements requested
+        new_cmd = []
+        for token in cmd:
+            if token.startswith('$'):
+                token = vardict.get(token[1:], token)
+            new_cmd.append(token)
         self.log.log(level, 'Run: "%s"', ' '.join(cmd))
         env = self.env
         if timestamp:
             env = env.copy()
             env['GIT_COMMITTER_DATE'] = str(int(timestamp)) + '+0000'
             env['GIT_AUTHOR_DATE'] = str(int(timestamp)) + '+0000'
-        subprocess.run(cmd, cwd=cwd, env=env, check=True)
+        if result:
+            capture_output = True
+        else:
+            capture_output = False
+        out = subprocess.run(cmd, cwd=cwd, env=env, check=True,
+                             capture_output=capture_output)
+        if result:
+            vardict[result] = out.strip()
 
     def load(self, fn):
         with open(fn) as f:
@@ -83,11 +99,15 @@ class Workspace:
                          cwd=path, level=logging.DEBUG)
 
     def replay(self):
+        vardict = {}
         for op in self.merge_ops:
             if 'cmd' in op:
                 self.run(op['cmd'],
                          cwd=os.path.join(self.path, op['path']),
-                         timestamp=op.get('timestamp'))
+                         timestamp=op.get('timestamp'),
+                         vardict=vardict,
+                         result=op.get('result'),
+                         )
             if 'comment' in op:
                 self.log.info(op['comment'])
 

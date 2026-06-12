@@ -212,6 +212,14 @@ pipeline.
          does not alter committer information in the way that GitHub
          does in the repos that Zuul prepares for jobs).
 
+      .. value:: rebase-first-parent
+
+         Rebases the change onto the branch; if the change is a merge
+         commit, the first parent is rebased onto the target branch
+         but is otherwise unchanged.  This is only supported by Gerrit
+         and maps to Gerrit's rebase submit strategies starting with
+         version 3.10.
+
    .. attr:: vars
       :default: None
 

@@ -1,5 +1,5 @@
 # Copyright 2012 Hewlett-Packard Development Company, L.P.
-# Copyright 2021-2022 Acme Gating, LLC
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -8231,6 +8231,49 @@ class TestSchedulerMerges(ZuulTestCase):
             'mp commit',
             'M-1']
         self.assertEqual(repo_messages, correct_messages)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+    def test_project_merge_mode_rebase_fp_branch_merge(self):
+        "Test that branches can be merged together in rebase-first-parent mode"
+        self.create_branch('org/project-rebase-fp', 'mp')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project-rebase-fp', 'mp'))
+        self.waitUntilSettled()
+
+        path = os.path.join(self.upstream_root, 'org/project-rebase-fp')
+        repo = git.Repo(path)
+        master_sha = repo.heads.master.commit.hexsha
+        mp_sha = repo.heads.mp.commit.hexsha
+
+        self.executor_server.hold_jobs_in_build = True
+        M = self.fake_gerrit.addFakeChange(
+            'org/project-rebase-fp', 'master', 'M',
+            merge_files={'foo': 'bar'},
+            merge_parents=[
+                master_sha,
+                mp_sha,
+            ])
+        M.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(M.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        build = self.builds[-1]
+        self.assertEqual(build.parameters['zuul']['branch'], 'master')
+        path = os.path.join(build.jobdir.src_root, 'review.example.com',
+                            "org/project-rebase-fp")
+        repo = git.Repo(path)
+        repo_messages = [c.message.strip() for c in repo.iter_commits()]
+        repo_messages.reverse()
+        correct_messages = [
+            'initial commit',
+            'add content from fixture',
+            'mp commit',
+            'M-1']
+        self.assertEqual(correct_messages, repo_messages)
 
         self.executor_server.hold_jobs_in_build = False
         self.executor_server.release()

@@ -1,5 +1,5 @@
 # Copyright 2012 Hewlett-Packard Development Company, L.P.
-# Copyright 2021-2025 Acme Gating, LLC
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -76,6 +76,7 @@ MERGER_SQUASH_MERGE = 4     # "git merge --squash"
 MERGER_REBASE = 5           # "git rebase"
 MERGER_MERGE_RECURSIVE = 6  # "git merge -s recursive"
 MERGER_MERGE_ORT = 7        # "git merge -s ort"
+MERGER_REBASE_FIRST_PARENT = 8  # gerrit-style: update first parent only
 
 MERGER_MAP = {
     'merge': MERGER_MERGE,
@@ -85,6 +86,7 @@ MERGER_MAP = {
     'cherry-pick': MERGER_CHERRY_PICK,
     'squash-merge': MERGER_SQUASH_MERGE,
     'rebase': MERGER_REBASE,
+    'rebase-first-parent': MERGER_REBASE_FIRST_PARENT,
 }
 ALL_MERGE_MODES = list(MERGER_MAP.values())
 
@@ -252,17 +254,19 @@ class QueryCache:
 
 
 class MergeOp:
-    def __init__(self, cmd=None, timestamp=None, comment=None, path=None):
+    def __init__(self, cmd=None, timestamp=None, comment=None, path=None,
+                 result=None):
         """A class representing a merge operation, returned by the merger to
         tell the user what was done."""
         self.cmd = cmd
         self.timestamp = timestamp
         self.comment = comment
         self.path = path
+        self.result = result
 
     def toDict(self):
         ret = {}
-        for k in ['cmd', 'timestamp', 'comment', 'path']:
+        for k in ['cmd', 'timestamp', 'comment', 'path', 'result']:
             v = getattr(self, k)
             if v is not None:
                 ret[k] = v
