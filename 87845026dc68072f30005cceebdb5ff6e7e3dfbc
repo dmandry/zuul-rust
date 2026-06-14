@@ -16,6 +16,29 @@
       "message": "Looks good",
       "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "437afd79_e6d0ae62",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 3374,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-14T20:12:07Z",
+      "side": 1,
+      "message": "nit: This method is doing the \"same\" twice. I think you could build a \"modes to check\" set containing both project_metadata.merge_mode and the allowed_merge_modes, then use set difference. `unsupported \u003d _to_check - set(tpc.merge_modes)`. Only if unsupported is true you build supported_modes and add the error.",
+      "range": {
+        "startLine": 3374,
+        "startChar": 8,
+        "endLine": 3374,
+        "endChar": 27
+      },
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
