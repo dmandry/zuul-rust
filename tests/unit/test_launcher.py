@@ -4005,6 +4005,8 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         sub2 = nodes[2]
         ctx = self.createZKContext(None)
 
+        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
+
         sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
         with sub1.locked(ctx):
             sub1.updateAttributes(ctx, state_time=0)
@@ -4055,6 +4057,8 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         sub1 = nodes[1]
         sub2 = nodes[2]
         ctx = self.createZKContext(None)
+
+        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
 
         sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
         with sub1.locked(ctx):
