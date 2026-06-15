@@ -1,0 +1,136 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "551242f6_c014d697",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 64,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-15T22:02:56Z",
+      "side": 1,
+      "message": "nit: `capture_output \u003d True if result else False` or `capture_output \u003d bool(result)`",
+      "range": {
+        "startLine": 61,
+        "startChar": 8,
+        "endLine": 64,
+        "endChar": 34
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "15bb4bfc_f3459269",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 65,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-15T22:02:56Z",
+      "side": 1,
+      "message": "Should this be new_cmd? In L50 variable replacement happens on new_cmd?",
+      "range": {
+        "startLine": 65,
+        "startChar": 29,
+        "endLine": 65,
+        "endChar": 32
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a957f8ac_64a27682",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 68,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-15T22:02:56Z",
+      "side": 1,
+      "message": "subprocess.run returns CompletedProcess[1], I think you want out.stdout.decode().strip() here?\n\n[1] https://docs.python.org/3/library/subprocess.html#subprocess.CompletedProcess",
+      "range": {
+        "startLine": 68,
+        "startChar": 30,
+        "endLine": 68,
+        "endChar": 41
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a8bd07a2_1eabfe31",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 819,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-15T22:02:56Z",
+      "side": 1,
+      "message": "I think we want `merge-tree` here, for these commands to work when run with subprocess.run().",
+      "range": {
+        "startLine": 819,
+        "startChar": 41,
+        "endLine": 819,
+        "endChar": 51
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "08e43292_7f7f717d",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 833,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-15T22:02:56Z",
+      "side": 1,
+      "message": "ditto, \u0027commit-tree\u0027 ?",
+      "range": {
+        "startLine": 833,
+        "startChar": 41,
+        "endLine": 833,
+        "endChar": 52
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "19ad56b9_c39d4b1b",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 834,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-15T22:02:56Z",
+      "side": 1,
+      "message": "Should this be upparcase for replay to work?",
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
