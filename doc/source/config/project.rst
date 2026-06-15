@@ -84,7 +84,7 @@ pipeline.
       applied to this project.  If more than one template includes
       jobs for a given pipeline, they will be combined, as will any
       jobs specified in project-pipeline definitions on the project
-      itself.
+      itself.  It may not appear in a :ref:`project-template` definition.
 
    .. attr:: branches
 
@@ -344,7 +344,9 @@ A Project Template uses the same syntax as a :ref:`project`
 definition, however, in the case of a template, the
 :attr:`project.name` attribute does not refer to the name of a
 project, but rather names the template so that it can be referenced in
-a :ref:`project` definition.
+a :ref:`project` definition. Some :ref:`project` attributes are not
+valid within a Project Template definition, as indicated by their
+individual descriptions.
 
 Because Project Templates may be used outside of the projects where
 they are defined, they honor the implied branch :ref:`pragmas <pragma>`
