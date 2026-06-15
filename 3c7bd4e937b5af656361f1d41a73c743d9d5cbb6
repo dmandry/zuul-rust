@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d6f94e8b_6e5c1895",
+        "filename": "zuul/executor/sensors/ram.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 97,
+      "author": {
+        "id": 37112
+      },
+      "writtenOn": "2026-06-15T07:48:10Z",
+      "side": 1,
+      "message": "nit: This should read `{}%` (missing percentage), unrelated but could be corrected while working on this file.",
+      "range": {
+        "startLine": 97,
+        "startChar": 49,
+        "endLine": 97,
+        "endChar": 51
+      },
+      "revId": "3c7bd4e937b5af656361f1d41a73c743d9d5cbb6",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
