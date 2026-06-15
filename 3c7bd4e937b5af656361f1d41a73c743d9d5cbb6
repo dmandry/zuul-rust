@@ -22,6 +22,24 @@
       },
       "revId": "3c7bd4e937b5af656361f1d41a73c743d9d5cbb6",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "debc8a78_f6a5c365",
+        "filename": "zuul/executor/sensors/ram.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 97,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-15T16:43:54Z",
+      "side": 1,
+      "message": "Done!",
+      "parentUuid": "d6f94e8b_6e5c1895",
+      "revId": "3c7bd4e937b5af656361f1d41a73c743d9d5cbb6",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
