@@ -1,0 +1,17 @@
+---
+upgrade:
+  - |
+    The behavior of a single-branch project with
+    :attr:`tenant.untrusted-projects.<project>.always-dynamic-branches`
+    has changed.  Previously, if (after applying includes and
+    excludes) a project had only one permanent branch it was treated
+    as a single-branch project even if it also had
+    `always-dynamic-branches` set.  Now if a project has
+    `always-dynamic-branches` set, it will be treated as a
+    multi-branch project and therefore implied branch matchers are
+    enabled.
+
+    To retain the previous behavior (or explicitly choose a behavior)
+    the
+    :attr:`tenant.untrusted-projects.<project>.implied-branch-matchers`
+    tenant configuration option may be used.

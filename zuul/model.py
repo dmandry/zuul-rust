@@ -5215,6 +5215,12 @@ class Job(ConfigObject):
             if source_tpc.trusted:
                 return None
 
+            # If we have some always-dynamic-branches, then this is
+            # probably not a shared jobs repo, so we will use implied
+            # branches regardless of how many branches it has.
+            if source_tpc.always_dynamic_branches:
+                return self.implied_branch_matcher
+
             # If this project only has one branch, don't use implied
             # branch matchers.  This way central job repos can work.
             branches = tenant.getProjectBranches(
