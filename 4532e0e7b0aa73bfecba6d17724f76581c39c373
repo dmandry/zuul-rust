@@ -24,6 +24,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "cb38310b_a301e037",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 64,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T16:39:08Z",
+      "side": 1,
+      "message": "Stylistic choice to mirror line 67.",
+      "parentUuid": "551242f6_c014d697",
+      "range": {
+        "startLine": 61,
+        "startChar": 8,
+        "endLine": 64,
+        "endChar": 34
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "15bb4bfc_f3459269",
@@ -37,6 +61,30 @@
       "writtenOn": "2026-06-15T22:02:56Z",
       "side": 1,
       "message": "Should this be new_cmd? In L50 variable replacement happens on new_cmd?",
+      "range": {
+        "startLine": 65,
+        "startChar": 29,
+        "endLine": 65,
+        "endChar": 32
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "22f3b912_723416e6",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 65,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T16:39:08Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "15bb4bfc_f3459269",
       "range": {
         "startLine": 65,
         "startChar": 29,
@@ -70,6 +118,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "03334446_51846d61",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 68,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T16:39:08Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "a957f8ac_64a27682",
+      "range": {
+        "startLine": 68,
+        "startChar": 30,
+        "endLine": 68,
+        "endChar": 41
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "a8bd07a2_1eabfe31",
@@ -83,6 +155,30 @@
       "writtenOn": "2026-06-15T22:02:56Z",
       "side": 1,
       "message": "I think we want `merge-tree` here, for these commands to work when run with subprocess.run().",
+      "range": {
+        "startLine": 819,
+        "startChar": 41,
+        "endLine": 819,
+        "endChar": 51
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4c24e269_d56a89c9",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 819,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T16:39:08Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "a8bd07a2_1eabfe31",
       "range": {
         "startLine": 819,
         "startChar": 41,
@@ -116,6 +212,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "85152f80_5934e800",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 833,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T16:39:08Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "08e43292_7f7f717d",
+      "range": {
+        "startLine": 833,
+        "startChar": 41,
+        "endLine": 833,
+        "endChar": 52
+      },
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "19ad56b9_c39d4b1b",
@@ -129,6 +249,24 @@
       "writtenOn": "2026-06-15T22:02:56Z",
       "side": 1,
       "message": "Should this be upparcase for replay to work?",
+      "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8274a2a4_afe89d4c",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 834,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T16:39:08Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "19ad56b9_c39d4b1b",
       "revId": "4532e0e7b0aa73bfecba6d17724f76581c39c373",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
