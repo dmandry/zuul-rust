@@ -1002,6 +1002,28 @@ class TestMerger(ZuulTestCase):
         self.assertEqual(read_files[1]['files']['zuul.d/a.yaml'],
                          'a-in-project1')
 
+    def test_set_bulk_repo_state_empty_project(self):
+        """
+        Test that setBulkRepoState tolerates a project with no refs.
+        """
+        merger = self.executor_server.merger
+        process_worker = self.executor_server.process_worker
+
+        # Make sure the repo exists locally so getRepo() succeeds.
+        merger.updateRepo('gerrit', 'org/project')
+
+        # Simulate a project that has no refs
+        repo_state = {
+            'gerrit': {
+                'org/project': {},
+            },
+        }
+
+        # This should not raise an AttributeError
+        recent = merger.setBulkRepoState(
+            repo_state, 'dummy-event-id', process_worker)
+        self.assertEqual(recent, {})
+
     def test_merge_temp_refs(self):
         """
         Test that the merge updates local zuul refs in order to avoid
