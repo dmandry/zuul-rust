@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fix AttributeError in the executor when setBulkRepoState
+    encounters a repository with no branches. Previously this caused
+    the job to fail with "'NoneType' object has no attribute 'result'".
+    Empty repositories are now skipped during repo restoration.
