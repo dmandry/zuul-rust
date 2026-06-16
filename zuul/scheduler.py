@@ -1703,6 +1703,7 @@ class Scheduler(threading.Thread):
                     branch_cache_min_ltimes=branch_cache_min_ltimes)
                 tenant = self.abide.tenants[event.tenant_name]
                 reconfig_time = time.time()
+                log.debug("Starting tenant reconfiguration ZK writes for %s", event.tenant_name)
                 with self.createZKContext(lock, self.log) as ctx:
                     self._reconfigureTenant(ctx, min_ltimes,
                                             event.trigger_event_ltime,

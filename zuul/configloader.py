@@ -2311,6 +2311,7 @@ class TenantParser(object):
         parsed_config = self._loadTenantParsedConfig(
             abide, tenant, pcontext)
 
+        self.log.debug("Parsing layout for tenant %s", tenant.name)
         tenant.layout = self._parseLayout(
             tenant, parsed_config, pcontext, layout_uuid)
 
@@ -2323,6 +2324,7 @@ class TenantParser(object):
             # Only call the postConfig hook if we have a scheduler as this will
             # change data in ZooKeeper. In case we are in a zuul-web context,
             # we don't want to do that.
+            self.log.debug("Running post config for tenant %s", tenant.name)
             for manager in tenant.layout.pipeline_managers.values():
                 manager._postConfig()
 
