@@ -938,6 +938,11 @@ class GithubClientManager:
         self._installation_map_lock = threading.Lock()
         self.installation_map = {}
         self.installation_token_cache = {}
+        # Projects confirmed absent from all installations after a full prime.
+        # Avoids triggering a full installation re-fetch on every API call for
+        # repos that have been removed or are not covered by the GitHub App,
+        # which would rapidly exhaust the GitHub API rate limit.
+        self._unknown_projects = set()
 
         # The version of github enterprise stays None for github.com
         self._github_version = None
@@ -1049,7 +1054,7 @@ class GithubClientManager:
             installation_id = self.installation_map.get(project_name)
 
         if not installation_id:
-            if reprime:
+            if reprime and project_name not in self._unknown_projects:
                 # prime installation map and try again without refreshing
                 self._prime_installation_map()
                 return self.get_installation_key(project_name,
@@ -1062,6 +1067,8 @@ class GithubClientManager:
                 log_severity = self.log.error
             log_severity("No installation ID available for project %s",
                          project_name)
+            if project_name:
+                self._unknown_projects.add(project_name)
             return ''
 
         # Consider tokens outdated 5min before the actual expiry time
@@ -1170,6 +1177,9 @@ class GithubClientManager:
                         project_names = result.result()
                         for project_name in project_names:
                             self.installation_map[project_name] = inst_id
+                # Remove any previously unknown projects that are now found,
+                # so that repos added to the GitHub App get rediscovered.
+                self._unknown_projects -= set(self.installation_map.keys())
             finally:
                 self._installation_map_lock.release()
         else:
