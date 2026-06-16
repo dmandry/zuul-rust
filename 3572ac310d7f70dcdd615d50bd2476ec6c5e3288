@@ -103,6 +103,24 @@
       "message": "Looks good, few suggestions/questions:\n\n* May want to add a releasenote with a `fixes:` section.\n* May want to add another test for the recovery path?\n* Should the negative cache have some TTL? I am new to zuul codebase but afict just reinstalling GitHub App is not a guarantee for _prime_installation_map re-run? So something else must trigger, e.g. a restart or another project is added?",
       "revId": "3572ac310d7f70dcdd615d50bd2476ec6c5e3288",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d547599a_7bf6b705",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-16T20:31:14Z",
+      "side": 1,
+      "message": "oh, sorry. I see James already mentioned TTL.",
+      "parentUuid": "56fa3818_5eb01944",
+      "revId": "3572ac310d7f70dcdd615d50bd2476ec6c5e3288",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ],
   "submitRequirementResults": [
