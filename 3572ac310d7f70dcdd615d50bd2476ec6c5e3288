@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "e665c15f_de979b18",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T19:49:27Z",
+      "side": 1,
+      "message": "I think this may be somewhat specific to your installation, right?  If there\u0027s a 15k limit, then the amount of time it takes to exhaust that is probably dependent on the number of repos we\u0027re requesting.  The time spent queued also seems pretty specific.",
+      "revId": "3572ac310d7f70dcdd615d50bd2476ec6c5e3288",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "7f41bc6b_d7e63368",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 21,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-16T19:49:27Z",
+      "side": 1,
+      "message": "See my cover comment; I don\u0027t think it\u0027s entirely transparent.",
+      "revId": "3572ac310d7f70dcdd615d50bd2476ec6c5e3288",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
