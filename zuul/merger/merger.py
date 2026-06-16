@@ -1492,11 +1492,17 @@ class Merger(object):
             for project_name, refs in projects.items():
                 repo = self.getRepo(connection_name, project_name,
                                     zuul_event_id=zuul_event_id)
-                jobs.append(self._restoreRepoState(
+                job = self._restoreRepoState(
                     connection_name, project_name, repo,
                     repo_state, zuul_event_id,
                     process_worker=process_worker,
-                    do_async=True))
+                    do_async=True)
+                # _restoreRepoState returns None when there is no state
+                # to restore for a project (eg, a repository with no
+                # branches at all). Skip those so we don't try to call
+                # job.result() on None.
+                if job is not None:
+                    jobs.append(job)
         # While that's running, populate the recent table with what we
         # know each branch hexsha should be before any merge
         # operations.
