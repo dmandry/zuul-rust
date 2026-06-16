@@ -683,8 +683,14 @@ class LockableZKObjectMixin(abc.ABC):
     def releaseLock(self, context):
         if self._lock is None:
             return
-        self._lock.release()
+
+        # Set the lock to None first, so we are not racing other threads
+        # that manage to acquire the lock before we can update the _lock
+        # attribute.
+        lock = self._lock
         self._set(_lock=None)
+        lock.release()
+
         if self._deleted:
             # If we are releasing the lock after deleting the object,
             # also cleanup the lock path.
