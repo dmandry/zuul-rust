@@ -14,10 +14,10 @@
 
 import logging
 import math
-import pathlib
 import psutil
 
 from zuul.executor.sensors import SensorInterface
+from zuul.executor.sensors import cgrouputils
 from zuul.lib.config import get_default
 
 
@@ -36,26 +36,14 @@ class RAMSensor(SensorInterface):
         super().__init__(statsd, base_key)
         self.min_avail_mem = float(get_default(config, 'executor',
                                                'min_avail_mem', '5.0'))
-        if self._getCgroup() is None:
+        if cgrouputils.get_cgroup() is None:
             self.log.warning("cgroups v2 not available")
-
-    def _getCgroup(self):
-        with open(self.CGROUP_SELF) as f:
-            cgroup = f.read().strip()
-            if cgroup[:3] != "0::":
-                return None
-        return f'{self.CGROUP_ROOT}{cgroup[3:]}'
 
     def _getAvailMemPctCgroup(self):
         min_pct = 100.0
         min_limit = math.inf
 
-        cgroup = self._getCgroup()
-        if cgroup is None:
-            return min_pct, min_limit
-
-        path = pathlib.Path(cgroup)
-        while len(str(path)) >= len(self.CGROUP_ROOT):
+        for path in cgrouputils.walk_cgroups_tree():
             cur_path = f'{path}/memory.current'
             try:
                 with open(cur_path) as f:
@@ -78,7 +66,6 @@ class RAMSensor(SensorInterface):
             level_pct = 100.0 - usage / limit * 100
             min_pct = min(min_pct, level_pct)
             min_limit = min(min_limit, limit)
-            path = path.parent
 
         return min_pct, min_limit
 
