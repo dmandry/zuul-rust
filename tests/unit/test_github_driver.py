@@ -2925,6 +2925,45 @@ class TestGithubAppDriver(ZuulGithubAppTestCase):
         self.assertEqual("cancelled", aborted_check_run["conclusion"])
         self.assertEqual(0, len(aborted_check_run["actions"]))
 
+    @simple_layout("layouts/basic-github.yaml", driver="github")
+    def test_unknown_project_no_installation_reprime_loop(self):
+        """A removed/404 GitHub repo must not trigger a full installation
+        re-fetch on every API call.  After one failed prime the project should
+        be cached as unknown and subsequent lookups must skip repriming."""
+        mgr = self.fake_github._github_client_manager
+
+        prime_call_count = [0]
+        original_prime = mgr._prime_installation_map
+
+        def counting_prime():
+            prime_call_count[0] += 1
+            original_prime()
+
+        with mock.patch.object(mgr, '_prime_installation_map',
+                               side_effect=counting_prime):
+            # First call: project not in map → triggers one prime
+            result = mgr.get_installation_key('nonexistent-org/deleted-repo')
+            self.assertEqual('', result)
+            self.assertEqual(1, prime_call_count[0],
+                             "Expected exactly one prime on first unknown "
+                             "project lookup")
+
+            # Subsequent calls must NOT trigger more primes
+            for _ in range(5):
+                result = mgr.get_installation_key(
+                    'nonexistent-org/deleted-repo')
+                self.assertEqual('', result)
+            self.assertEqual(1, prime_call_count[0],
+                             "Unknown project should be cached; no further "
+                             "primes should occur")
+
+        # The project should be in the negative cache
+        self.assertIn('nonexistent-org/deleted-repo', mgr._unknown_projects)
+
+        # A project that IS known should still work normally
+        result = mgr.get_installation_key('org/project')
+        self.assertNotEqual('', result)
+
 
 class TestCheckRunAnnotations(ZuulGithubAppTestCase, AnsibleZuulTestCase):
     """We need Github app authentication and be able to run Ansible jobs"""
