@@ -96,6 +96,7 @@ class JobsList extends React.Component {
         if (job.variants) {
           for (let jobVariant of job.variants) {
             if (jobVariant.parent &&
+                jobVariant.parent !== job.name &&
                 parents.indexOf(jobVariant.parent) === -1) {
               parents.push(jobVariant.parent)
             }
