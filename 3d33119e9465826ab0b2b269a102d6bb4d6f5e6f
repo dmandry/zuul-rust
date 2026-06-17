@@ -16,6 +16,23 @@
       "message": "recheck\n\nLooks good, afict the failing tests are unrelated. Trying again ...",
       "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a5f0bf4e_fd10540c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-17T11:10:14Z",
+      "side": 1,
+      "message": "Looks like this depends on later version of git than the one in Jammy?\n2.38.0[1] introduced:\n\u003e \"git merge-tree\" learned a new mode where it takes two commits and computes a tree that would result in the merge commit, if the histories leading to these two commits were to be merged.\n\nJammy has git 2.34.x ...\n\n[1] https://github.com/git/git/blob/master/Documentation/RelNotes/2.38.0.adoc",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
