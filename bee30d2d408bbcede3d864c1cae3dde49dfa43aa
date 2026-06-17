@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4729ef2d_46dc17ed",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 1316,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-17T01:18:16Z",
+      "side": 1,
+      "message": "Do we want to use os.path.normpath() here? To normalize user provided paths, e.g. allow A//B or ./A/B in preserve-home-paths to be ok.",
+      "range": {
+        "startLine": 1316,
+        "startChar": 42,
+        "endLine": 1316,
+        "endChar": 59
+      },
+      "revId": "bee30d2d408bbcede3d864c1cae3dde49dfa43aa",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f01e757c_7d480e24",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 3415,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-17T01:18:16Z",
+      "side": 1,
+      "message": "I think `os.path.relpath(os.path.join(root, fn), self.jobdir.home)` would be cleaner than the slicing.",
+      "range": {
+        "startLine": 3415,
+        "startChar": 16,
+        "endLine": 3415,
+        "endChar": 74
+      },
+      "revId": "bee30d2d408bbcede3d864c1cae3dde49dfa43aa",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
