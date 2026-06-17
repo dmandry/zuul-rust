@@ -58,10 +58,12 @@ class UploadPlanner:
             if provider_image is None:
                 raise Exception(
                     f"Unable to find image {upload.canonical_name}")
-            metadata = {
-                'zuul_system_id': self.launcher.system.system_id,
-                'zuul_upload_uuid': upload.uuid,
-            }
+
+            metadata = provider.getUploadTags(
+                self.launcher.system.system_id,
+                provider_image,
+                upload.uuid,
+            )
             artifact = self.image_build_artifact
             image_name = f'{provider_image.name}-{upload.uuid}'
 

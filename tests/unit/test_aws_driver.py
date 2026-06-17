@@ -439,6 +439,16 @@ class TestAwsDriver(AwsBaseTest):
     )
     def test_aws_diskimage_snapshot(self):
         self._test_diskimage()
+        paginator = self.ec2_client.get_paginator('describe_snapshots')
+        snapshots = []
+        for page in paginator.paginate(OwnerIds=['self']):
+            snapshots.extend(page['Snapshots'])
+        for snapshot in snapshots:
+            tags = zuul.driver.aws.awsendpoint.tag_list_to_dict(
+                snapshot['Tags'])
+            if 'zuul_system_id' in tags:
+                break
+        self.assertEqual('bar', tags['foo'])
 
     @simple_layout('layouts/aws/nodepool-image-snapshot.yaml',
                    enable_nodepool=True)

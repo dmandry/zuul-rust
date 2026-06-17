@@ -756,12 +756,6 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
         flavors.sort(key=operator.itemgetter('ram', 'name'))
         return flavors
 
-    # This method is only used by the nodepool alien-image-list
-    # command and only works with the openstack driver.
-    def _listImages(self):
-        with Timer(self.log, 'API call list_images'):
-            return self._client.list_images()
-
     def _findFlavorByName(self, flavor_name):
         for f in self._listFlavors():
             if flavor_name in (f['name'], f['id']):

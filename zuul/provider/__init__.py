@@ -740,6 +740,21 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
         tags.update(fixed)
         return tags
 
+    def getUploadTags(self, system_id, image, upload_uuid):
+        """Return the tags that should be stored with the image
+
+        :param str system_id: The Zuul system uuid
+        :param ProviderImage image: The provider image
+        :param str upload_uuid: The upload uuid
+        """
+        tags = image.tags.copy()
+        fixed = {
+            'zuul_system_id': system_id,
+            'zuul_upload_uuid': upload_uuid,
+        }
+        tags.update(fixed)
+        return tags
+
     def getCreateStateMachine(self, node,
                               image_external_id,
                               log):
