@@ -248,15 +248,19 @@ class FakeOpenstackConnection:
             md5=md5,
             sha256=sha256,
             status='ACTIVE',
+            properties=meta,
         )
         self.cloud.images.append(image)
         return image
 
     def delete_image(self, name_or_id):
-        for x in self.cloud.servers:
+        for x in self.cloud.images:
             if x.id == name_or_id:
-                self.cloud.servers.remove(x)
+                self.cloud.images.remove(x)
                 return
+
+    def list_images(self):
+        return self.cloud.images
 
     def create_floating_ip(self, server, wait=None):
         args = dict(

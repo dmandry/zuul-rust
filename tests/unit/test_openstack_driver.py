@@ -148,6 +148,11 @@ class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
     )
     def test_openstack_diskimage(self):
         self._test_diskimage()
+        conn = self.fake_cloud[None]._getConnection()
+        props = conn.list_images()[0].properties
+        self.assertEqual('qcow2', props['disk_format'])
+        self.assertEqual('x86_64', props['hw_architecture'])
+        self.assertEqual('scsi', props['hw_disk_bus'])
 
     # Openstack-driver specific tests
 
