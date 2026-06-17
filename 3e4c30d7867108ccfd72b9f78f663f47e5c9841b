@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d6769338_65d9db56",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 508,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-17T11:55:14Z",
+      "side": 1,
+      "message": "nit: s/old/new/ ?",
+      "range": {
+        "startLine": 508,
+        "startChar": 34,
+        "endLine": 508,
+        "endChar": 37
+      },
+      "revId": "3e4c30d7867108ccfd72b9f78f663f47e5c9841b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
