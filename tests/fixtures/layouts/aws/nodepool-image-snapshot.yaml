@@ -67,6 +67,8 @@
         instance-type: t3.medium
     images:
       - name: debian-local
+        tags:
+          foo: bar
 
 - section:
     name: aws-us-east-1

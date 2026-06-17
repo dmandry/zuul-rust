@@ -63,11 +63,16 @@
       host-key-checking: false
       boot-timeout: 120
       key-name: zuul
+    image-defaults:
+      tags:
+        hw_disk_bus: 'scsi'
     flavors:
       - name: normal
         flavor-name: Fake Flavor
     images:
       - name: debian-local
+        tags:
+          hw_architecture: 'x86_64'
 
 - section:
     name: openstack
