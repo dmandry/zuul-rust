@@ -2424,6 +2424,7 @@ class TestGithubShaCache(BaseTestCase):
 class TestGithubAppDriver(ZuulGithubAppTestCase):
     """Inheriting from ZuulGithubAppTestCase will enable app authentication"""
     config_file = 'zuul-github-driver.conf'
+    tenant_config_file = 'config/multi-github/main.yaml'
     scheduler_count = 1
 
     @simple_layout("layouts/reporting-github.yaml", driver="github")
@@ -2925,45 +2926,6 @@ class TestGithubAppDriver(ZuulGithubAppTestCase):
         self.assertEqual("cancelled", aborted_check_run["conclusion"])
         self.assertEqual(0, len(aborted_check_run["actions"]))
 
-    @simple_layout("layouts/basic-github.yaml", driver="github")
-    def test_unknown_project_no_installation_reprime_loop(self):
-        """A removed/404 GitHub repo must not trigger a full installation
-        re-fetch on every API call.  After one failed prime the project should
-        be cached as unknown and subsequent lookups must skip repriming."""
-        mgr = self.fake_github._github_client_manager
-
-        prime_call_count = [0]
-        original_prime = mgr._prime_installation_map
-
-        def counting_prime():
-            prime_call_count[0] += 1
-            original_prime()
-
-        with mock.patch.object(mgr, '_prime_installation_map',
-                               side_effect=counting_prime):
-            # First call: project not in map → triggers one prime
-            result = mgr.get_installation_key('nonexistent-org/deleted-repo')
-            self.assertEqual('', result)
-            self.assertEqual(1, prime_call_count[0],
-                             "Expected exactly one prime on first unknown "
-                             "project lookup")
-
-            # Subsequent calls must NOT trigger more primes
-            for _ in range(5):
-                result = mgr.get_installation_key(
-                    'nonexistent-org/deleted-repo')
-                self.assertEqual('', result)
-            self.assertEqual(1, prime_call_count[0],
-                             "Unknown project should be cached; no further "
-                             "primes should occur")
-
-        # The project should be in the negative cache
-        self.assertIn('nonexistent-org/deleted-repo', mgr._unknown_projects)
-
-        # A project that IS known should still work normally
-        result = mgr.get_installation_key('org/project')
-        self.assertNotEqual('', result)
-
 
 class TestCheckRunAnnotations(ZuulGithubAppTestCase, AnsibleZuulTestCase):
     """We need Github app authentication and be able to run Ansible jobs"""
@@ -3453,3 +3415,35 @@ class TestGithubGraphQL(ZuulTestCase):
         self.assertTrue(result['protected'])
         self.assertTrue(result['requiresConversationResolution'])
         self.assertTrue(result['unresolvedConversations'])
+
+
+class TestGithubPrime(ZuulGithubAppTestCase):
+    config_file = 'zuul-github-driver.conf'
+    tenant_config_file = 'config/github-prime/main.yaml'
+    scheduler_count = 1
+
+    def test_unknown_project_no_installation_reprime(self):
+        # Test the negative installation map cache avoids re-priming
+        # multiple times in the case of a missing installation for a
+        # project.
+        mgr = self.fake_github._github_client_manager
+        # We prime twice at startup due to the base test internal
+        # reconfiguration
+        self.assertEqual(2, mgr._prime_installation_map_count)
+
+        # Remove a project from github (but not the tenant config)
+        self.fake_github.github_data.repos.pop(('org', 'project'))
+
+        # Add a new project to the tenant config and reconfigure to
+        # trigger the re-prime
+        self.newTenantConfig('config/github-prime/new-project.yaml')
+
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+        self.assertEqual(3, mgr._prime_installation_map_count)
+
+        # Make sure that if we reconfigure again, the negative cache
+        # prevents a re-prime
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+        self.assertEqual(3, mgr._prime_installation_map_count)

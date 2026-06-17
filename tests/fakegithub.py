@@ -1454,6 +1454,7 @@ class FakeGithubClientManager(GithubClientManager):
         self.record_clients = False
         self.recorded_clients = []
         self.github_data = None
+        self._prime_installation_map_count = 0
 
     def getGithubClient(self,
                         project_name=None,
@@ -1476,6 +1477,7 @@ class FakeGithubClientManager(GithubClientManager):
         return client
 
     def _prime_installation_map(self):
+        self._prime_installation_map_count += 1
         # Only valid if installed as a github app
         if not self.app_id:
             return

@@ -938,11 +938,9 @@ class GithubClientManager:
         self._installation_map_lock = threading.Lock()
         self.installation_map = {}
         self.installation_token_cache = {}
-        # Projects confirmed absent from all installations after a full prime.
-        # Avoids triggering a full installation re-fetch on every API call for
-        # repos that have been removed or are not covered by the GitHub App,
-        # which would rapidly exhaust the GitHub API rate limit.
-        # TTL of 30 minutes allows self-healing when a project is added to the
+        # Projects confirmed absent from all installations after a
+        # full prime to avoid continuous re-priming.  TTL of 30
+        # minutes allows self-healing when a project is added to the
         # tenant config before its GitHub App installation is created.
         self._unknown_projects = cachetools.TTLCache(maxsize=1024, ttl=1800)
 
