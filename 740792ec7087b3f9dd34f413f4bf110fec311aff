@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "797cdf0d_19a9bd3d",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2427,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:27:04Z",
+      "side": 1,
+      "message": "Was this simply missing config for the test case previously? It doesn\u0027t look like zuul-github-driver.conf sets a tenant config file path so we were using the default?",
+      "revId": "740792ec7087b3f9dd34f413f4bf110fec311aff",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
