@@ -26,6 +26,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "90b02c67_7f93a5a1",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 1316,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-18T21:19:42Z",
+      "side": 1,
+      "message": "I think we should not be generous here.  This is security-related and we currently fail safe.  Since we\u0027re letting users make an exception to a security restriction, I\u0027d rather annoy users until they get it exactly right with no ambiguity.",
+      "parentUuid": "4729ef2d_46dc17ed",
+      "revId": "bee30d2d408bbcede3d864c1cae3dde49dfa43aa",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "f01e757c_7d480e24",
         "filename": "zuul/executor/server.py",
         "patchSetId": 10
