@@ -44,6 +44,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "75d9d64a_8b981733",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 1316,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-18T22:19:59Z",
+      "side": 1,
+      "message": "I was worried about the above disalloed_home_paths check above, but failed to convey that in the previous review. Bad wording, and bad placement of review comment - sorry.\n\nIt would not catch \u0027.ssh/../.ssh/config\u0027. Which is not fatal in this implementation, since cleanHomeDir\u0027s os.walk() reads the actual filesystem and would never match. There is a risk however that some day someone accidentally insert something that normalizes the path in between here and the cleanHomeDir. So, I argue for normalizing, but it should be done before the above disallowed_home_paths check.",
+      "parentUuid": "90b02c67_7f93a5a1",
+      "range": {
+        "startLine": 1316,
+        "startChar": 42,
+        "endLine": 1316,
+        "endChar": 59
+      },
+      "revId": "bee30d2d408bbcede3d864c1cae3dde49dfa43aa",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "f01e757c_7d480e24",
         "filename": "zuul/executor/server.py",
         "patchSetId": 10
