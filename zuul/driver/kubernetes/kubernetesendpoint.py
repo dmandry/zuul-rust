@@ -378,8 +378,9 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
                 }, {
                     'apiGroups': [""],
                     'resources': ["pods", "pods/exec", "pods/log",
-                                  "pods/portforward", "services",
-                                  "endpoints", "configmaps", "secrets"],
+                                  "pods/portforward", "pods/attach",
+                                  "services", "endpoints", "configmaps",
+                                  "secrets"],
                     'verbs': all_verbs,
                 }]
             }
