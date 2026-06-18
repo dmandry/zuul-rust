@@ -16,6 +16,24 @@
       "message": "Looks good, only suggestion would be to add a short release-note.",
       "revId": "d7935ff31833bd8c6f89b2f48a9fc2de87db3e0a",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "12bee9b1_b7520949",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 37754
+      },
+      "writtenOn": "2026-06-18T06:45:15Z",
+      "side": 1,
+      "message": "Thanks, added one.",
+      "parentUuid": "e7a695e9_93177ad0",
+      "revId": "d7935ff31833bd8c6f89b2f48a9fc2de87db3e0a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
