@@ -18,6 +18,97 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d247d05f_252e9bb2",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:58:49Z",
+      "side": 1,
+      "message": "I think this looks good to me. The inline comments are largely around areas where I think we may need to consider a bit more documentation to try and avoid confusion around behaviors that may be unexpected.",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a8d38590_51a77705",
+        "filename": "doc/source/config/project.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 232,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:58:49Z",
+      "side": 1,
+      "message": "I think this is probably the correct behavior for Zuul. But users may find it confusing. I half wonder if we should try and alert people to this situation via CI comments before they get a merge instead of a rebase or vice versa in their repo.\n\nNot really critical just me thinking out loud about how to make things less surprising for users if Zuul does something they don\u0027t expect.",
+      "range": {
+        "startLine": 231,
+        "startChar": 20,
+        "endLine": 232,
+        "endChar": 1
+      },
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "88239118_1657a971",
+        "filename": "tests/fixtures/layouts/github-allowed-merge-modes.yaml",
+        "patchSetId": 2
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:58:49Z",
+      "side": 1,
+      "message": "This example config has me wondering about whether or not it should be a bug to not have merge-mode in allowed-merge-modes if allowed-merge-modes is set. Or maybe we should implicitly add merge-mode to allowed-merge-modes if allowed-merge-modes is set?\n\nI think the behavior may be that if you were to explicitly request Merge-Mode: rebase you would get a rebase because the behavior is to ignore Merge-Mode headers if the value isn\u0027t in allowed-merge-modes. And maybe this is sufficient here. I\u0027m trying to think up a scenario where that might create unexpected results or confusion.",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9b50c18d_c2b33c79",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1645,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:58:49Z",
+      "side": 1,
+      "message": "Nit this set of checks appears to be checking the state of the repo in the job dir and checks that we used a merge to prepare the test state rather than a rebase.  I was confused about this because in my head nothing had merged yet because gating jobs haven\u0027t run yet and the PR isn\u0027t merged to the repo. Would it be appropriate to annotate the test case a bit more to indicate we\u0027re checking the job env preparation then we\u0027re testing the end result of \"clicking\" the merge button in github?",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "18a729f3_505a2d4b",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1528,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:58:49Z",
+      "side": 1,
+      "message": "I think project config can live on multiple branches. Does this construction mean the last branch evaluated with allowed_branches set will win over the others?\n\nIf so is that worth documenting?",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "437afd79_e6d0ae62",
@@ -37,6 +128,23 @@
         "endLine": 3374,
         "endChar": 27
       },
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7fd84f26_dcec5dc6",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 7129,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:58:49Z",
+      "side": 1,
+      "message": "This early return means the first allowed merge-mode listed is used in the case of multiple headers for merge mode. Should we document that behavior?",
       "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
