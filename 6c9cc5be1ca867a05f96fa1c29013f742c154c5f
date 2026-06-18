@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2d6b40f3_06fe8cf5",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1073,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-18T23:20:42Z",
+      "side": 1,
+      "message": "Mostly an observation: the recursive behavior of this function when reprime is True calling itself with reprime set to False makes handling this condition a little weird. I half wonder if it would make things a little more readable to have the cache additions more aligned with the cache removals rather than separating them across different methods in a recursive call stack.\n\nIn any case I think this is correct as written so not a -1.",
+      "revId": "6c9cc5be1ca867a05f96fa1c29013f742c154c5f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
