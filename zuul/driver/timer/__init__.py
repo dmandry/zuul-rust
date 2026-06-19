@@ -2,6 +2,7 @@
 # Copyright 2013 OpenStack Foundation
 # Copyright 2016 Red Hat, Inc.
 # Copyright 2023 Acme Gating, LLC
+# Copyright 2026 Electrifex Technologies Pvt Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -31,6 +32,7 @@ from zuul.driver.timer import timertrigger
 from zuul.driver.timer import timermodel
 from zuul.driver.timer.timermodel import TimerTriggerEvent
 from zuul.driver.timer.crontrigger import ZuulCronTrigger
+from zuul.driver.timer.rruletrigger import ZuulRRuleTrigger
 from zuul.lib.logutil import get_annotated_logger
 from zuul.zk.election import SessionAwareElection
 
@@ -59,7 +61,8 @@ class TimerDriver(Driver, TriggerInterface):
     def registerScheduler(self, scheduler):
         self.sched = scheduler
         self.election = SessionAwareElection(
-            self.sched.zk_client.client, self.election_root)
+            self.sched.zk_client.client, self.election_root
+        )
         self.election_thread = threading.Thread(name="TimerElection",
                                                 target=self._runElection,
                                                 daemon=True)
@@ -121,6 +124,15 @@ class TimerDriver(Driver, TriggerInterface):
         self.log.debug("Removed %s jobs for %s, %s remain",
                        len(to_remove), tenant, len(new_jobs))
 
+    @staticmethod
+    def _is_rrule(timespec):
+        upper = timespec.upper()
+        return (
+            upper.startswith("FREQ=")
+            or upper.startswith("DTSTART")
+            or "RRULE:FREQ=" in upper
+        )
+
     def _addJobs(self, tenant):
         jobs = {}
         for manager in tenant.layout.pipeline_managers.values():
@@ -129,49 +141,71 @@ class TimerDriver(Driver, TriggerInterface):
                 if not isinstance(ef.trigger, timertrigger.TimerTrigger):
                     continue
                 for timespec in ef.timespecs:
-                    parts = timespec.split()
-                    if len(parts) < 5 or len(parts) > 7:
-                        self.log.error(
-                            "Unable to parse time value '%s' "
-                            "defined in pipeline %s" % (
+                    timespec_stripped = timespec.strip()
+                    if self._is_rrule(timespec_stripped):
+                        try:
+                            ZuulRRuleTrigger(timespec_stripped)
+                        except ValueError:
+                            self.log.error(
+                                "Unable to parse RRULE value '%s' "
+                                "defined in pipeline %s",
                                 timespec,
-                                pipeline.name))
-                        continue
-                    try:
-                        cron_args = dict(
-                            minute=parts[0],
-                            hour=parts[1],
-                            day=parts[2],
-                            month=parts[3],
-                            day_of_week=parts[4],
-                            second=None,
-                        )
-                        if len(parts) > 5:
-                            cron_args['second'] = parts[5]
-                        if len(parts) > 6:
-                            jitter = int(parts[6])
-                        else:
-                            jitter = None
-                        # Trigger any value errors by creating a
-                        # throwaway object.
-                        ZuulCronTrigger(jitter=jitter, **cron_args)
-                    except ValueError:
-                        self.log.error(
-                            "Unable to create CronTrigger "
-                            "for value '%s' defined in "
-                            "pipeline %s",
-                            timespec,
-                            pipeline.name)
-                        continue
+                                pipeline.name,
+                            )
+                            continue
+                        self._addJobsInner(tenant,pipeline,
+                                           cron_args=None,
+                                           jitter=ef.jitter,
+                                           timespec=timespec,
+                                           dereference=ef.dereference,
+                                           jobs=jobs,
+                                           rrule_string=timespec_stripped)
 
-                    self._addJobsInner(tenant, pipeline,
-                                       cron_args, jitter, timespec,
-                                       ef.dereference, jobs)
+                    else:
+                        parts = timespec.split()
+                        if len(parts) < 5 or len(parts) > 7:
+                            self.log.error(
+                                "Unable to parse time value '%s' "
+                                "defined in pipeline %s",
+                                timespec, pipeline.name,
+                            )
+                            continue
+                        try:
+                            cron_args = dict(
+                                minute=parts[0],
+                                hour=parts[1],
+                                day=parts[2],
+                                month=parts[3],
+                                day_of_week=parts[4],
+                                second=None,
+                            )
+                            if len(parts) > 5:
+                                cron_args["second"] = parts[5]
+                            if len(parts) > 6:
+                                jitter = int(parts[6])
+                            else:
+                                jitter = None
+                            # Trigger any value errors by creating a
+                            # throwaway object.
+                            ZuulCronTrigger(jitter=jitter, **cron_args)
+                        except ValueError:
+                            self.log.error(
+                                "Unable to create CronTrigger "
+                                "for value '%s' defined in "
+                                "pipeline %s",
+                                timespec,
+                                pipeline.name,
+                            )
+                            continue
+
+                        self._addJobsInner(tenant, pipeline,
+                                           cron_args, jitter, timespec,
+                                           ef.dereference, jobs)
         self._removeJobs(tenant, jobs)
         self.tenant_jobs[tenant.name] = jobs
 
     def _addJobsInner(self, tenant, pipeline, cron_args, jitter,
-                      timespec, dereference, jobs):
+                      timespec, dereference, jobs, rrule_string=None):
         # jobs is a dict of args->job that we mutate
         existing_jobs = self.tenant_jobs.get(tenant.name, {})
         start_job_count = len(jobs)
@@ -215,8 +249,12 @@ class TimerDriver(Driver, TriggerInterface):
                         # to e.g. high scheduler load. Those short
                         # delays are not a problem for our trigger
                         # use-case.
-                        trigger = ZuulCronTrigger(
-                            jitter=job_jitter, **cron_args)
+                        if rrule_string is not None:
+                            trigger = ZuulRRuleTrigger(
+                                rrule_string, jitter=job_jitter)
+                        else:
+                            trigger = ZuulCronTrigger(jitter=job_jitter, 
+                                                      **cron_args)
                         job = self.apsched.add_job(
                             self._onTrigger, trigger=trigger,
                             args=args, misfire_grace_time=None)
