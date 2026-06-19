@@ -36,6 +36,7 @@ class TimerTrigger(BaseTrigger):
                 timespecs=to_list(trigger['time']),
                 dereference=trigger.get('dereference', False),
                 debug=trigger.get('debug'),
+                jitter=trigger.get('jitter'),
             )
 
             efilters.append(f)
