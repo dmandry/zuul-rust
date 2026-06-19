@@ -28,9 +28,12 @@ Zuul implements the timer using `apscheduler`_, Please check the
    .. attr:: time
       :required:
 
-      The time specification in cron syntax.  Only the 5 part syntax
-      is supported, not the symbolic names.  Example: ``0 0 * * *``
-      runs at midnight.
+      The time specification.  Two formats are accepted:
+
+      **Cron syntax**
+
+      Only the 5 part syntax is supported, not the symbolic names.
+      Example: ``0 0 * * *`` runs at midnight.
 
       An optional 6th part specifies seconds.  The optional 7th part
       specifies a jitter in seconds. This delays the trigger randomly,
@@ -41,6 +44,69 @@ Zuul implements the timer using `apscheduler`_, Please check the
       often be used for a given project-branch combination (in other
       words, it is not guaranteed to vary from one run of the timer
       trigger to the next).
+
+      **iCalendar RRULE syntax**
+
+      The ``time`` value may alternatively be an `RFC 5545`_ RRULE
+      string.  This is useful for recurrence patterns that are
+      difficult or impossible to express in cron notation, such as
+      the last day of the month or quarterly intervals.
+
+      The driver auto-detects RRULE format by looking for a ``FREQ=``,
+      ``DTSTART``, or ``RRULE:FREQ=`` prefix in the value (case-
+      insensitive); no other configuration change is required.
+
+      Examples:
+
+      *Last day of the month at 22:00 UTC:*
+
+      .. code-block:: yaml
+
+         trigger:
+           timer:
+             - time: "FREQ=MONTHLY;BYMONTHDAY=-1;BYHOUR=22;BYMINUTE=0"
+
+      *Quarterly — every three months on the first day at 06:00 UTC:*
+
+      .. code-block:: yaml
+
+         trigger:
+           timer:
+             - time: "FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=1;BYHOUR=6"
+
+      *Weekdays only — Monday through Friday at 08:00 UTC:*
+
+      .. code-block:: yaml
+
+         trigger:
+           timer:
+             - time: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=8;BYMINUTE=0"
+
+      *Fixed start date — daily at midnight, beginning 1 Jan 2026:*
+
+      .. code-block:: yaml
+
+         trigger:
+           timer:
+             - time: "DTSTART:20260101T000000Z\nRRULE:FREQ=DAILY"
+
+      For RRULE triggers, use the separate :attr:`pipeline.trigger.timer.jitter`
+      attribute instead of embedding jitter as the 7th cron field.
+
+   .. attr:: jitter
+      :default: none
+
+      For RRULE triggers, an integer number of seconds by which the
+      trigger may be randomly delayed.  The offset is applied after
+      the next fire time is calculated, delaying it by up to this
+      many seconds.  The offset is resolved deterministically from the
+      ``(tenant, project, branch)`` tuple so that every scheduler in a
+      cluster independently arrives at the same value — no coordination
+      is needed.
+
+      This attribute is ignored when using cron syntax; for cron
+      triggers, embed the jitter as the optional 7th field of the
+      ``time`` value instead.
 
    .. attr:: dereference
       :default: false
@@ -95,3 +161,4 @@ Zuul implements the timer using `apscheduler`_, Please check the
 
 .. _apscheduler: https://apscheduler.readthedocs.io/
 .. _apscheduler documentation: https://apscheduler.readthedocs.io/en/3.x/modules/triggers/cron.html#module-apscheduler.triggers.cron
+.. _RFC 5545: https://datatracker.ietf.org/doc/html/rfc5545
