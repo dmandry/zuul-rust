@@ -66,6 +66,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "0ebac6a5_1d7787aa",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 1316,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-19T13:24:06Z",
+      "side": 1,
+      "message": "Ah now I understand, sorry.  I agree, we should not allow users to bypass the restriction like this.  Fixed in PS 12.  Thanks!",
+      "parentUuid": "90b02c67_7f93a5a1",
+      "revId": "bee30d2d408bbcede3d864c1cae3dde49dfa43aa",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "f01e757c_7d480e24",
