@@ -31,12 +31,13 @@ from zuul.driver.timer import timertrigger
 from zuul.driver.timer import timermodel
 from zuul.driver.timer.timermodel import TimerTriggerEvent
 from zuul.driver.timer.crontrigger import ZuulCronTrigger
+from zuul.driver.timer.rruletrigger import ZuulRRuleTrigger
 from zuul.lib.logutil import get_annotated_logger
 from zuul.zk.election import SessionAwareElection
 
 
 class TimerDriver(Driver, TriggerInterface):
-    name = 'timer'
+    name = "timer"
     election_root = "/zuul/scheduler/timer-election"
     log = logging.getLogger("zuul.TimerDriver")
     tracer = trace.get_tracer("zuul")
@@ -59,10 +60,11 @@ class TimerDriver(Driver, TriggerInterface):
     def registerScheduler(self, scheduler):
         self.sched = scheduler
         self.election = SessionAwareElection(
-            self.sched.zk_client.client, self.election_root)
-        self.election_thread = threading.Thread(name="TimerElection",
-                                                target=self._runElection,
-                                                daemon=True)
+            self.sched.zk_client.client, self.election_root
+        )
+        self.election_thread = threading.Thread(
+            name="TimerElection", target=self._runElection, daemon=True
+        )
         self.election_thread.start()
 
     def _runElection(self):
@@ -111,15 +113,24 @@ class TimerDriver(Driver, TriggerInterface):
         # not be present.
         existing_jobs = self.tenant_jobs.get(tenant.name)
         if not existing_jobs:
-            self.log.debug("No jobs to remove for %s, %s remain",
-                           tenant, len(new_jobs))
+            self.log.debug("No jobs to remove for %s, %s remain", tenant, len(new_jobs))
             return
         to_remove = set(existing_jobs.keys()) - set(new_jobs.keys())
         for key in to_remove:
             job = existing_jobs[key]
             job.remove()
-        self.log.debug("Removed %s jobs for %s, %s remain",
-                       len(to_remove), tenant, len(new_jobs))
+        self.log.debug(
+            "Removed %s jobs for %s, %s remain", len(to_remove), tenant, len(new_jobs)
+        )
+
+    @staticmethod
+    def _is_rrule(timespec):
+        upper = timespec.upper()
+        return (
+            upper.startswith("FREQ=")
+            or upper.startswith("DTSTART")
+            or "RRULE:FREQ=" in upper
+        )
 
     def _addJobs(self, tenant):
         jobs = {}
@@ -129,49 +140,80 @@ class TimerDriver(Driver, TriggerInterface):
                 if not isinstance(ef.trigger, timertrigger.TimerTrigger):
                     continue
                 for timespec in ef.timespecs:
-                    parts = timespec.split()
-                    if len(parts) < 5 or len(parts) > 7:
-                        self.log.error(
-                            "Unable to parse time value '%s' "
-                            "defined in pipeline %s" % (
+                    timespec_stripped = timespec.strip()
+                    if self._is_rrule(timespec_stripped):
+                        try:
+                            ZuulRRuleTrigger(timespec_stripped)
+                        except Exception:
+                            self.log.error(
+                                "Unable to parse RRULE value '%s' "
+                                "defined in pipeline %s",
                                 timespec,
-                                pipeline.name))
-                        continue
-                    try:
-                        cron_args = dict(
-                            minute=parts[0],
-                            hour=parts[1],
-                            day=parts[2],
-                            month=parts[3],
-                            day_of_week=parts[4],
-                            second=None,
+                                pipeline.name,
+                            )
+                            continue
+                        self._addJobsInner(
+                            tenant,
+                            pipeline,
+                            cron_args=None,
+                            jitter=ef.jitter,
+                            rrule_string=timespec_stripped,
+                            timespec=timespec,
+                            dereference=ef.dereference,
+                            jobs=jobs,
                         )
-                        if len(parts) > 5:
-                            cron_args['second'] = parts[5]
-                        if len(parts) > 6:
-                            jitter = int(parts[6])
-                        else:
-                            jitter = None
-                        # Trigger any value errors by creating a
-                        # throwaway object.
-                        ZuulCronTrigger(jitter=jitter, **cron_args)
-                    except ValueError:
-                        self.log.error(
-                            "Unable to create CronTrigger "
-                            "for value '%s' defined in "
-                            "pipeline %s",
-                            timespec,
-                            pipeline.name)
-                        continue
 
-                    self._addJobsInner(tenant, pipeline,
-                                       cron_args, jitter, timespec,
-                                       ef.dereference, jobs)
+                    else:
+                        parts = timespec.split()
+                        if len(parts) < 5 or len(parts) > 7:
+                            self.log.error(
+                                "Unable to parse time value '%s' "
+                                "defined in pipeline %s" % (timespec, pipeline.name)
+                            )
+                            continue
+                        try:
+                            cron_args = dict(
+                                minute=parts[0],
+                                hour=parts[1],
+                                day=parts[2],
+                                month=parts[3],
+                                day_of_week=parts[4],
+                                second=None,
+                            )
+                            if len(parts) > 5:
+                                cron_args["second"] = parts[5]
+                            if len(parts) > 6:
+                                jitter = int(parts[6])
+                            else:
+                                jitter = None
+                            # Trigger any value errors by creating a
+                            # throwaway object.
+                            ZuulCronTrigger(jitter=jitter, **cron_args)
+                        except ValueError:
+                            self.log.error(
+                                "Unable to create CronTrigger "
+                                "for value '%s' defined in "
+                                "pipeline %s",
+                                timespec,
+                                pipeline.name,
+                            )
+                            continue
+
+                        self._addJobsInner(
+                            tenant,
+                            pipeline,
+                            cron_args,
+                            jitter,
+                            timespec,
+                            ef.dereference,
+                            jobs,
+                        )
         self._removeJobs(tenant, jobs)
         self.tenant_jobs[tenant.name] = jobs
 
-    def _addJobsInner(self, tenant, pipeline, cron_args, jitter,
-                      timespec, dereference, jobs):
+    def _addJobsInner(
+        self, tenant, pipeline, cron_args, jitter, timespec, dereference, jobs, rrule_string=None
+    ):
         # jobs is a dict of args->job that we mutate
         existing_jobs = self.tenant_jobs.get(tenant.name, {})
         start_job_count = len(jobs)
@@ -186,8 +228,14 @@ class TimerDriver(Driver, TriggerInterface):
 
             try:
                 for branch in tenant.getProjectBranches(project_name):
-                    args = (tenant.name, pipeline.name, project_name,
-                            branch, dereference, timespec,)
+                    args = (
+                        tenant.name,
+                        pipeline.name,
+                        project_name,
+                        branch,
+                        dereference,
+                        timespec,
+                    )
                     existing_job = existing_jobs.get(args)
                     if jitter:
                         # Resolve jitter here so that it is the same
@@ -215,24 +263,38 @@ class TimerDriver(Driver, TriggerInterface):
                         # to e.g. high scheduler load. Those short
                         # delays are not a problem for our trigger
                         # use-case.
-                        trigger = ZuulCronTrigger(
-                            jitter=job_jitter, **cron_args)
+                        if rrule_string is not None:
+                            trigger = ZuulRRuleTrigger(
+                                rrule_string, jitter=job_jitter)
+                        else:
+                            trigger = ZuulCronTrigger(
+                                jitter=job_jitter, **cron_args)
                         job = self.apsched.add_job(
-                            self._onTrigger, trigger=trigger,
-                            args=args, misfire_grace_time=None)
+                            self._onTrigger,
+                            trigger=trigger,
+                            args=args,
+                            misfire_grace_time=None,
+                        )
                     jobs[job.args] = job
             except Exception:
-                self.log.exception("Unable to create APScheduler job for "
-                                   "%s %s %s",
-                                   tenant, pipeline, project_name)
+                self.log.exception(
+                    "Unable to create APScheduler job for " "%s %s %s",
+                    tenant,
+                    pipeline,
+                    project_name,
+                )
         end_job_count = len(jobs)
-        self.log.debug("Added %s jobs for %s %s with %s existing tenant jobs",
-                       (end_job_count - start_job_count),
-                       tenant, pipeline,
-                       len(existing_jobs))
+        self.log.debug(
+            "Added %s jobs for %s %s with %s existing tenant jobs",
+            (end_job_count - start_job_count),
+            tenant,
+            pipeline,
+            len(existing_jobs),
+        )
 
-    def _onTrigger(self, tenant_name, pipeline_name, project_name, branch,
-                   dereference, timespec):
+    def _onTrigger(
+        self, tenant_name, pipeline_name, project_name, branch, dereference, timespec
+    ):
         try:
             if not self.election_won:
                 return
@@ -245,30 +307,41 @@ class TimerDriver(Driver, TriggerInterface):
             attributes = {
                 "timespec": timespec,
             }
-            with self.tracer.start_as_current_span(
-                    "TimerEvent", attributes=attributes):
-                self._dispatchEvent(tenant_name, pipeline_name, project_name,
-                                    branch, dereference, timespec)
+            with self.tracer.start_as_current_span("TimerEvent", attributes=attributes):
+                self._dispatchEvent(
+                    tenant_name,
+                    pipeline_name,
+                    project_name,
+                    branch,
+                    dereference,
+                    timespec,
+                )
         except Exception:
             self.stop_event.set()
             self.log.exception("Error when dispatching timer event")
 
-    def _dispatchEvent(self, tenant_name, pipeline_name, project_name,
-                       branch, dereference, timespec):
-        self.log.debug('Got trigger for tenant %s and pipeline %s '
-                       'project %s branch %s with timespec %s',
-                       tenant_name, pipeline_name, project_name,
-                       branch, timespec)
+    def _dispatchEvent(
+        self, tenant_name, pipeline_name, project_name, branch, dereference, timespec
+    ):
+        self.log.debug(
+            "Got trigger for tenant %s and pipeline %s "
+            "project %s branch %s with timespec %s",
+            tenant_name,
+            pipeline_name,
+            project_name,
+            branch,
+            timespec,
+        )
         try:
             tenant = self.sched.abide.tenants[tenant_name]
-            (trusted, project) = tenant.getProject(project_name)
+            trusted, project = tenant.getProject(project_name)
             event = TimerTriggerEvent()
-            event.type = 'timer'
+            event.type = "timer"
             event.timespec = timespec
             event.forced_pipeline = pipeline_name
             event.project_hostname = project.canonical_hostname
             event.project_name = project.name
-            event.ref = 'refs/heads/%s' % branch
+            event.ref = "refs/heads/%s" % branch
             event.branch = branch
             event.zuul_event_id = str(uuid4().hex)
             event.timestamp = time.time()
@@ -278,21 +351,22 @@ class TimerDriver(Driver, TriggerInterface):
             change_key = project.source.getChangeKey(event)
             with self.project_update_locks[project.canonical_name]:
                 if dereference:
-                    event.newrev = project.source.getProjectBranchSha(
-                        project, branch)
+                    event.newrev = project.source.getProjectBranchSha(project, branch)
                 else:
                     event.newrev = None
-                project.source.getChange(change_key, refresh=True,
-                                         event=event)
+                project.source.getChange(change_key, refresh=True, event=event)
             log = get_annotated_logger(self.log, event)
             log.debug("Adding event")
-            self.sched.pipeline_trigger_events[tenant.name][
-                pipeline_name
-            ].put(self.name, event)
+            self.sched.pipeline_trigger_events[tenant.name][pipeline_name].put(
+                self.name, event
+            )
         except Exception:
-            self.log.exception("Error dispatching timer event for "
-                               "tenant %s project %s branch %s",
-                               tenant_name, project_name, branch)
+            self.log.exception(
+                "Error dispatching timer event for " "tenant %s project %s branch %s",
+                tenant_name,
+                project_name,
+                branch,
+            )
 
     def stop(self):
         self.log.debug("Stopping timer driver")
