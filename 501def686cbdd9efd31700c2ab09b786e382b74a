@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fbc875b0_5647bc7c",
+        "filename": "zuul/executor/sensors/process.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 84,
+      "author": {
+        "id": 37112
+      },
+      "writtenOn": "2026-06-19T15:39:36Z",
+      "side": 1,
+      "message": "The RAM sensor reports \u0027cgroups\u0027 if there is a cgroups limit reached. This could be added here too to give users a hint to the origin of the limit.",
+      "revId": "501def686cbdd9efd31700c2ab09b786e382b74a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
