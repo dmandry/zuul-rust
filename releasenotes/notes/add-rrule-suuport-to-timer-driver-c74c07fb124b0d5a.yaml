@@ -1,0 +1,56 @@
+---
+features:
+  - |
+    The timer trigger now accepts iCalendar RRULE strings as the ``time``
+    value, in addition to the existing cron syntax.  RRULE is part of the
+    RFC 5545 iCalendar standard and offers recurrence patterns that are
+    difficult or impossible to express in five-field cron notation.
+
+    The driver auto-detects RRULE format by looking for a ``FREQ=``,
+    ``DTSTART``, or ``RRULE:FREQ=`` prefix in the time value; no other
+    configuration change is required.
+
+    **Use cases**
+
+    *Last day of the month* — cron cannot express this directly::
+
+      trigger:
+        timer:
+          - time: "FREQ=MONTHLY;BYMONTHDAY=-1;BYHOUR=22;BYMINUTE=0"
+
+    *Quarterly runs* — every three months on the first day::
+
+      trigger:
+        timer:
+          - time: "FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=1;BYHOUR=6"
+
+    *Weekdays only* — Monday through Friday at 08:00 UTC::
+
+      trigger:
+        timer:
+          - time: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=8;BYMINUTE=0"
+
+    *Fixed start date* — daily at midnight, beginning 1 Jan 2026::
+
+      trigger:
+        timer:
+          - time: "DTSTART:20260101T000000Z\nRRULE:FREQ=DAILY"
+
+    *With jitter* — spread load across a 10-minute window::
+
+      trigger:
+        timer:
+          - time: "FREQ=HOURLY;INTERVAL=6"
+            jitter: 600
+
+    **Jitter**
+
+    For RRULE triggers, jitter (in seconds) is a separate ``jitter`` key
+    in the trigger block.  The offset is resolved deterministically from
+    the ``(tenant, project, branch)`` tuple so every scheduler in a cluster
+    independently arrives at the same value — no coordination needed.
+
+    **Compatibility**
+
+    Existing cron-format timespecs are unchanged.  Inline jitter embedded
+    as the 7th field of a cron timespec continues to work as before.
