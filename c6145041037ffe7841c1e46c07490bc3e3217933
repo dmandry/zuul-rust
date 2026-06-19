@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c6953a18_8eee8ead",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 3416,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T16:14:28Z",
+      "side": 1,
+      "message": "Does tracking this at the Job level rather than playbook level mean that we\u0027ll avoid warning on a root path even if the actual paths change playbook to playbook? I can see how this is intentional as we\u0027re trying to cut down on noise and having 5 warnings per playbook is still noisy. But it may be helpful to understand that one playbook is different than another if you\u0027re cleaning things up and think things have been cleaned but aren\u0027t because its the other playbook that needs updating?\n\nI suspect we can figure out the balance here after we merge things. But I won\u0027t approve this immediately in case we feel that this is worth addressing upfront.",
+      "revId": "c6145041037ffe7841c1e46c07490bc3e3217933",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
