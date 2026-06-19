@@ -1,0 +1,29 @@
+---
+features:
+  - |
+    The timer trigger now accepts iCalendar RRULE strings as the ``time``
+    value in addition to the existing cron syntax. This allows periodic
+    pipelines to be scheduled using the full RFC 5545 recurrence rule format,
+    including constructs such as ``FREQ=WEEKLY;BYDAY=MO,WE,FR`` or
+    ``DTSTART`` with a specific start time.
+
+    The driver auto-detects RRULE format by looking for a ``FREQ=``,
+    ``DTSTART``, or ``RRULE:FREQ=`` prefix in the time value.
+
+    For RRULE triggers, the optional jitter (in seconds) is specified as a
+    separate ``jitter`` key in the trigger configuration rather than being
+    embedded in the time string.  The jitter offset is resolved
+    deterministically per ``(tenant, project, branch)`` so that all
+    schedulers in a cluster agree on the same offset without any
+    coordination.
+
+    Example::
+
+      trigger:
+        timer:
+          - time: "FREQ=DAILY;BYHOUR=2;BYMINUTE=30"
+          - time: "FREQ=WEEKLY;BYDAY=MO,WE,FR;BYHOUR=9"
+            jitter: 300
+
+    Existing cron-format timespecs and their inline jitter (7th field)
+    continue to work unchanged.
