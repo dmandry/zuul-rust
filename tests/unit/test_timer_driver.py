@@ -15,8 +15,11 @@
 import time
 import datetime
 import zoneinfo
+from datetime import timezone
 
+from zuul.driver.timer import TimerDriver
 from zuul.driver.timer.crontrigger import ZuulCronTrigger
+from zuul.driver.timer.rruletrigger import ZuulRRuleTrigger
 
 from tests.base import BaseTestCase, ZuulTestCase, iterate_timeout
 
@@ -164,3 +167,131 @@ class TestTimerAlwaysDynamicBranches(ZuulTestCase):
             self.assertEqual(job.result, 'SUCCESS')
             self.assertEqual(job.name, 'project-bitrot')
             self.assertIn(job.ref, ('refs/heads/stable', 'refs/heads/master'))
+
+
+class TestIsRRule(BaseTestCase):
+
+    def test_freq_prefix(self):
+        self.assertTrue(TimerDriver._is_rrule("FREQ=DAILY"))
+
+    def test_dtstart_prefix(self):
+        self.assertTrue(TimerDriver._is_rrule(
+            "DTSTART:20260101T000000Z\nRRULE:FREQ=DAILY"))
+
+    def test_rrule_freq_in_string(self):
+        self.assertTrue(TimerDriver._is_rrule("RRULE:FREQ=WEEKLY"))
+
+    def test_case_insensitive_freq(self):
+        self.assertTrue(TimerDriver._is_rrule("freq=daily"))
+
+    def test_case_insensitive_dtstart(self):
+        self.assertTrue(TimerDriver._is_rrule("dtstart:20260101T000000Z"))
+
+    def test_case_insensitive_rrule_freq(self):
+        self.assertTrue(TimerDriver._is_rrule("rrule:freq=weekly"))
+
+    def test_cron_not_rrule(self):
+        self.assertFalse(TimerDriver._is_rrule("* * * * *"))
+
+    def test_cron_with_seconds_not_rrule(self):
+        self.assertFalse(TimerDriver._is_rrule("* * * * * */1"))
+
+    def test_cron_with_jitter_not_rrule(self):
+        self.assertFalse(TimerDriver._is_rrule("* * * * * */1 1"))
+
+
+class TestRRuleTrigger(BaseTestCase):
+
+    def test_basic_next_fire_time(self):
+        # DTSTART anchors the rule near 'now' so dateutil doesn't have to
+        # iterate through decades of per-minute occurrences from the epoch.
+        rrule = "DTSTART:20260519T100000Z\nRRULE:FREQ=MINUTELY"
+        trigger = ZuulRRuleTrigger(rrule)
+        now = datetime.datetime(2026, 5, 19, 10, 0, 30, tzinfo=timezone.utc)
+        expected = datetime.datetime(2026, 5, 19, 10, 1, 0,
+                                     tzinfo=timezone.utc)
+        self.assertEqual(expected, trigger.get_next_fire_time(None, now))
+
+    def test_jitter_added_to_next_time(self):
+        rrule = "DTSTART:20260519T100000Z\nRRULE:FREQ=MINUTELY"
+        trigger = ZuulRRuleTrigger(rrule, jitter=15)
+        now = datetime.datetime(2026, 5, 19, 10, 0, 30, tzinfo=timezone.utc)
+        expected = datetime.datetime(2026, 5, 19, 10, 1, 15,
+                                     tzinfo=timezone.utc)
+        self.assertEqual(expected, trigger.get_next_fire_time(None, now))
+
+    def test_naive_now_treated_as_utc(self):
+        # APScheduler may pass naive datetimes; the trigger coerces to UTC
+        rrule = "DTSTART:20260519T100000Z\nRRULE:FREQ=MINUTELY"
+        trigger = ZuulRRuleTrigger(rrule)
+        now = datetime.datetime(2026, 5, 19, 10, 0, 30)  # no tzinfo
+        expected = datetime.datetime(2026, 5, 19, 10, 1, 0,
+                                     tzinfo=timezone.utc)
+        self.assertEqual(expected, trigger.get_next_fire_time(None, now))
+
+    def test_dtstart_in_rrule_string(self):
+        # When DTSTART is embedded in the string, dateutil honours it
+        rrule = ("DTSTART:20260101T000000Z\n"
+                 "RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0;BYSECOND=0")
+        trigger = ZuulRRuleTrigger(rrule)
+        now = datetime.datetime(2026, 5, 19, 8, 0, 0, tzinfo=timezone.utc)
+        expected = datetime.datetime(2026, 5, 19, 9, 0, 0,
+                                     tzinfo=timezone.utc)
+        self.assertEqual(expected, trigger.get_next_fire_time(None, now))
+
+    def test_exhausted_rule_returns_none(self):
+        # COUNT=1 with a DTSTART far in the past — no future occurrences
+        rrule = "DTSTART:20200101T000000Z\nRRULE:FREQ=DAILY;COUNT=1"
+        trigger = ZuulRRuleTrigger(rrule)
+        now = datetime.datetime(2026, 5, 19, 0, 0, 0, tzinfo=timezone.utc)
+        self.assertIsNone(trigger.get_next_fire_time(None, now))
+
+    def test_rrule_colon_format(self):
+        # Full iCalendar RRULE:FREQ= prefix is accepted
+        trigger = ZuulRRuleTrigger("RRULE:FREQ=HOURLY")
+        now = datetime.datetime(2026, 5, 19, 10, 30, 0, tzinfo=timezone.utc)
+        expected = datetime.datetime(2026, 5, 19, 11, 0, 0,
+                                     tzinfo=timezone.utc)
+        self.assertEqual(expected, trigger.get_next_fire_time(None, now))
+
+
+class TestTimerRRule(ZuulTestCase):
+    tenant_config_file = 'config/single-tenant/main.yaml'
+
+    def test_rrule_trigger_fires_jobs(self):
+        self.create_branch('org/project', 'stable')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'stable'))
+        self.executor_server.hold_jobs_in_build = True
+        self.commitConfigUpdate('common-config', 'layouts/timer-rrule.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+
+        # Verify the driver created RRule-based APScheduler jobs
+        timer = self.scheds.first.sched.connections.drivers['timer']
+        timer_jobs = timer.apsched.get_jobs()
+        self.assertTrue(len(timer_jobs) >= 1)
+        for job in timer_jobs:
+            self.assertIsInstance(job.trigger, ZuulRRuleTrigger)
+
+        # The pipeline triggers every second, so we should see builds quickly
+        for _ in iterate_timeout(60, 'jobs started'):
+            if len(self.builds) > 1:
+                break
+
+        self.executor_server.hold_jobs_in_build = False
+
+        # Stop queuing timer triggered jobs so the assertions don't race
+        self.commitConfigUpdate('common-config', 'layouts/no-timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+        time.sleep(3)
+        self.waitUntilSettled()
+
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertTrue(len(self.history) >= 2)
+        for job in self.history:
+            self.assertEqual(job.name, 'project-bitrot')
+            self.assertEqual(job.result, 'SUCCESS')
