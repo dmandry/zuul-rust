@@ -33,6 +33,114 @@
       "message": "Looks like this depends on later version of git than the one in Jammy?\n2.38.0[1] introduced:\n\u003e \"git merge-tree\" learned a new mode where it takes two commits and computes a tree that would result in the merge commit, if the histories leading to these two commits were to be merged.\n\nJammy has git 2.34.x ...\n\n[1] https://github.com/git/git/blob/master/Documentation/RelNotes/2.38.0.adoc",
       "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "791349f1_b7c01e79",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T00:24:47Z",
+      "side": 1,
+      "message": "I think this should work as is. I\u0027ve got some inline comments around restricting the use of rebase-first-parent to Gerrit and some small code updates to consider.",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "360854ad_87bf8bee",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 8275,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T00:24:47Z",
+      "side": 1,
+      "message": "Should this test case create a new commit on master after branching mp in order to check that we actually rebase the first parent from old master to new master? This would be similar to the test case in the merge mode change which checks that it merges instead of rebases.\n\nAs is I think this test case ensures Zuul doesn\u0027t break, but doesn\u0027t check that we\u0027ve mimicked the gerrit behavior?",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ff67f23a_0f841b22",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 48,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T00:24:47Z",
+      "side": 1,
+      "message": "Nit it looks like we\u0027re always calling run() with a vardict when we expect there might be vars. We don\u0027t call it with vardict in reset() when using hardcoded commands. This means we don\u0027t expect tokens from reset(). I wonder if we should just error below if vardict isn\u0027t set and we\u0027re trying to lookup a token?",
+      "range": {
+        "startLine": 47,
+        "startChar": 8,
+        "endLine": 48,
+        "endChar": 24
+      },
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "aa546b1c_a5e66e0c",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 54,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T00:24:47Z",
+      "side": 1,
+      "message": "Should we error here if token is None? That would catch bugs related to mismatched variable names or similar.",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8cf217d2_d6a05c8e",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 844,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T00:24:47Z",
+      "side": 1,
+      "message": "Should this else block share code with rebaseMerge() using a common set of \"normal\" rebase merge code they can both call into?\n\nThat might help avoid behaviors from diverging over time.",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "130ecce6_31452b5c",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 91,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-19T00:24:47Z",
+      "side": 1,
+      "message": "By default connections return ALL_MERGE_MODES from _fetchProjectMergeModes() unless they override this method. GitHub does override the method, but nothing else does. Do we need to override this method so that gitlab et al don\u0027t try to use rebase-first-parent? Similarly should gerrit override it to avoid using rebase?",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
