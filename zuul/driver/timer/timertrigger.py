@@ -1,6 +1,7 @@
 # Copyright 2012 Hewlett-Packard Development Company, L.P.
 # Copyright 2013 OpenStack Foundation
 # Copyright 2023 Acme Gating, LLC
+# Copyright 2026 Electrifex Technologies Pvt Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -36,6 +37,7 @@ class TimerTrigger(BaseTrigger):
                 timespecs=to_list(trigger['time']),
                 dereference=trigger.get('dereference', False),
                 debug=trigger.get('debug'),
+                jitter=trigger.get('jitter'),
             )
 
             efilters.append(f)
@@ -48,5 +50,6 @@ def getSchema():
         v.Required('time'): str,
         'dereference': bool,
         'debug': bool,
+        "jitter": int,
     }
     return timer_trigger
