@@ -18,6 +18,23 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "05a2e2ab_b65df99c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-21T20:17:17Z",
+      "side": 1,
+      "message": "This needs some work, agree with Clark on the unrelated reformatting.\nAdditionally, there a no docs and no tests.\nSee also some notes I added inline.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e7c66b82_0efbdf5a",
@@ -100,6 +117,75 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "23accafe_7af340fe",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 151,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-21T20:17:17Z",
+      "side": 1,
+      "message": "If I did this change, I would have probably split out a helper method for cron and another for rrule. Return the values that goes to _addJobsInner from each helper. And made a note in the commit message that the current cron code was moved to a helper function.",
+      "range": {
+        "startLine": 150,
+        "startChar": 56,
+        "endLine": 151,
+        "endChar": 57
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "366ae185_5ac3b29c",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 154,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-21T20:17:17Z",
+      "side": 1,
+      "message": "This is to broad - afict rrulestr[1] would raise ValueError so capture that, but not Exception which would mask actual issues like ImportError etc.\n\n[1] https://github.com/dateutil/dateutil/blob/master/src/dateutil/rrule.py",
+      "range": {
+        "startLine": 154,
+        "startChar": 31,
+        "endLine": 154,
+        "endChar": 40
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "43f54538_104368af",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 167,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-21T20:17:17Z",
+      "side": 1,
+      "message": "Let\u0027s pass args in the same order used in the function signature below.",
+      "range": {
+        "startLine": 167,
+        "startChar": 0,
+        "endLine": 167,
+        "endChar": 2
+      },
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -415,6 +501,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "bd1d591f_954089c0",
+        "filename": "zuul/driver/timer/rruletrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-21T20:17:17Z",
+      "side": 1,
+      "message": "This file should have a license header.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "7099b31c_30353d41",
         "filename": "zuul/driver/timer/rruletrigger.py",
         "patchSetId": 4
@@ -466,6 +569,29 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "Is this change purely to improve debugging?",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bae69480_8b325296",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 39,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-21T20:17:17Z",
+      "side": 1,
+      "message": "Looking at the getSchema method below, it does not have \u0027jitter\u0027 in the schema - I think the config would be rejected during validation?",
+      "range": {
+        "startLine": 39,
+        "startChar": 16,
+        "endLine": 39,
+        "endChar": 44
+      },
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
