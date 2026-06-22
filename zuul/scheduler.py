@@ -2737,6 +2737,8 @@ class Scheduler(threading.Thread):
                         self._doSupercedeEvent(event)
                     else:
                         self._process_trigger_event(tenant, manager, event)
+            except Exception:
+                log.exception("Failed to process trigger event %s", event)
             finally:
                 self.pipeline_trigger_events[tenant.name][
                     manager.pipeline.name
