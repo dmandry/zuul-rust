@@ -13,6 +13,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from enum import StrEnum
+
 from zuul import model
 from zuul.provider import statemachine
 from zuul.driver.aws.util import tag_list_to_dict
@@ -76,13 +78,14 @@ class AwsInstance(statemachine.Instance):
 
 
 class AwsResource(statemachine.Resource):
-    TYPE_HOST = 'host'
-    TYPE_INSTANCE = 'instance'
-    TYPE_AMI = 'ami'
-    TYPE_SNAPSHOT = 'snapshot'
-    TYPE_VOLUME = 'volume'
-    TYPE_OBJECT = 'object'
-    TYPE_LAUNCH_TEMPLATE = 'launch-template'
+    class ResourceType(StrEnum):
+        HOST = 'host'
+        INSTANCE = 'instance'
+        AMI = 'ami'
+        SNAPSHOT = 'snapshot'
+        VOLUME = 'volume'
+        OBJECT = 'object'
+        LAUNCH_TEMPLATE = 'launch-template'
 
     def __init__(self, metadata, type, id, bucket_name=None):
         super().__init__(metadata, type)
