@@ -394,6 +394,12 @@ class AwsProviderFlavor(BaseProviderFlavor):
                 for spot instances""",
             ),
             Constant(
+                'capacity-optimized-prioritized',
+                doc="""\
+                The capacity-optimized-priritized allocation strategy.
+                Available for spot instances""",
+            ),
+            Constant(
                 'diversified',
                 doc="""\
                 The diversified allocation strategy.  Available for

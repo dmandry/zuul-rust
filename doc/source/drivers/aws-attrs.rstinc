@@ -214,6 +214,11 @@
                The capacity-optimized allocation strategy.  Available
                for spot instances
 
+            .. value:: capacity-optimized-prioritized
+
+               The capacity-optimized-priritized allocation strategy.
+               Available for spot instances
+
             .. value:: diversified
 
                The diversified allocation strategy.  Available for
