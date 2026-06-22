@@ -2114,6 +2114,18 @@ class TenantParser(object):
         self.statsd = statsd
         self.unparsed_config_cache = unparsed_config_cache
 
+        self.inner_config_project_dict = dict(
+            TenantParser.inner_config_project_dict)
+        self.inner_untrusted_project_dict = dict(
+            TenantParser.inner_untrusted_project_dict)
+
+        for conn in self.connections.getProviderConnections():
+            for k, v in conn.driver.getProjectConfigKeys().items():
+                self.inner_config_project_dict[k] = v
+                self.inner_untrusted_project_dict[k] = v
+
+        self._build_tenant_source_schema()
+
     job_classes = (
         'pipeline', 'job', 'semaphore', 'project',
         'project-template', 'nodeset', 'secret', 'queue',
@@ -2146,32 +2158,30 @@ class TenantParser(object):
 
     inner_config_project_dict['allow-base-jobs'] = bool
 
-    config_project_dict = {str: inner_config_project_dict}
-    untrusted_project_dict = {str: inner_untrusted_project_dict}
-
-    config_project = vs.Any(str, config_project_dict)
-    untrusted_project = vs.Any(str, untrusted_project_dict)
-
-    config_group = {
-        'include': to_list(classes),
-        'exclude': to_list(classes),
-        'include-provider-config': bool,
-        vs.Required('projects'): to_list(config_project),
-    }
-    untrusted_group = {
-        'include': to_list(classes),
-        'exclude': to_list(classes),
-        'include-provider-config': bool,
-        vs.Required('projects'): to_list(untrusted_project),
-    }
-
-    config_project_or_group = vs.Any(config_project, config_group)
-    untrusted_project_or_group = vs.Any(untrusted_project, untrusted_group)
-
-    tenant_source = vs.Schema({
-        'config-projects': to_list(config_project_or_group),
-        'untrusted-projects': to_list(untrusted_project_or_group),
-    })
+    def _build_tenant_source_schema(self):
+        config_project_dict = {str: self.inner_config_project_dict}
+        untrusted_project_dict = {str: self.inner_untrusted_project_dict}
+        config_project = vs.Any(str, config_project_dict)
+        untrusted_project = vs.Any(str, untrusted_project_dict)
+        config_group = {
+            'include': to_list(self.classes),
+            'exclude': to_list(self.classes),
+            'include-provider-config': bool,
+            vs.Required('projects'): to_list(config_project),
+        }
+        untrusted_group = {
+            'include': to_list(self.classes),
+            'exclude': to_list(self.classes),
+            'include-provider-config': bool,
+            vs.Required('projects'): to_list(untrusted_project),
+        }
+        config_project_or_group = vs.Any(config_project, config_group)
+        untrusted_project_or_group = vs.Any(
+            untrusted_project, untrusted_group)
+        self.tenant_source = vs.Schema({
+            'config-projects': to_list(config_project_or_group),
+            'untrusted-projects': to_list(untrusted_project_or_group),
+        })
 
     def validateTenantSources(self):
         def v(value, path=[]):
@@ -2422,10 +2432,10 @@ class TenantParser(object):
             self.keystorage.getTenantSSHKeys(tenant.name)
         )
 
-    @staticmethod
-    def _getProject(source, conf, current_include):
+    def _getProject(self, source, conf, current_include):
         extra_config_files = ()
         extra_config_dirs = ()
+        provider_template_dirs = {}
 
         if isinstance(conf, str):
             # Return a project object whether conf is a dict or a str
@@ -2503,6 +2513,11 @@ class TenantParser(object):
                                             if not x.endswith('/')])
                 extra_config_dirs = tuple([x[:-1] for x in extra_config_paths
                                            if x.endswith('/')])
+            for conn in self.connections.getProviderConnections():
+                for key in conn.driver.getProjectConfigKeys():
+                    if key in conf[project_name]:
+                        provider_template_dirs[key] = tuple(
+                            as_list(conf[project_name][key]))
             project_load_branch = conf[project_name].get(
                 'load-branch', None)
             project_implied_branch_matchers = conf[project_name].get(
@@ -2534,6 +2549,7 @@ class TenantParser(object):
             project_always_dynamic_branches
         tenant_project_config.extra_config_files = extra_config_files
         tenant_project_config.extra_config_dirs = extra_config_dirs
+        tenant_project_config.provider_template_dirs = provider_template_dirs
         tenant_project_config.load_branch = project_load_branch
         tenant_project_config.implied_branch_matchers = \
             project_implied_branch_matchers
