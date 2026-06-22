@@ -1921,6 +1921,32 @@ class Launcher:
             except Exception:
                 log.exception("Failed to process node %s", node)
 
+    def _reportLaunchStats(self, node):
+        if provider := self._getProviderForNode(node):
+            duration = (node.state_time -
+                        node.create_state_machine.start_time)
+
+            safe_pname = _normalize_statsd_name(provider.canonical_name)
+            key = f'zuul.nodes.launch.{node.state}'
+            self.statsd.incr(key)
+            self.statsd.timing(key, duration)
+            key = f'zuul.provider.{safe_pname}.nodes.launch.{node.state}'
+            self.statsd.incr(key)
+            self.statsd.timing(key, duration)
+
+            if label := provider.labels.get(node.label):
+                safe_label = _normalize_statsd_name(label.name)
+                key = (f'zuul.provider.{safe_pname}.label.{safe_label}.'
+                       f'launch.{node.state}')
+                self.statsd.incr(key)
+                self.statsd.timing(key, duration)
+                if image := provider.images.get(label.image):
+                    safe_image = _normalize_statsd_name(image.name)
+                    key = (f'zuul.provider.{safe_pname}.image.{safe_image}.'
+                           f'launch.{node.state}')
+                    self.statsd.incr(key)
+                    self.statsd.timing(key, duration)
+
     def _processProviderNode(self, node, log):
         request = self.api.getNodesetRequest(node.request_id)
         if ((request or node.request_id is None)
@@ -1961,6 +1987,11 @@ class Launcher:
                         # start time is dated back to the start
                         # of the create state machine.
                         pass
+                if self.statsd:
+                    try:
+                        self._reportLaunchStats(node)
+                    except Exception:
+                        self.log.exception("Unable to report launch stats:")
 
         # Another launcher may have assigned our node to a request we
         # haven't seen yet; make sure the request cache is up to date.
