@@ -919,6 +919,9 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
         if resource.type == AwsResource.ResourceType.LAUNCH_TEMPLATE:
             self._deleteLaunchTemplate(resource.id)
 
+    def getResourceTypes(self):
+        return AwsResource.ResourceType
+
     def listInstances(self):
         volumes = {}
         for volume in self._listVolumes():
