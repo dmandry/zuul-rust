@@ -1937,7 +1937,8 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         log = get_annotated_logger(self.log, event)
         github = self.getGithubClient(project_name, zuul_event_id=event)
         owner, proj = project_name.split('/')
-        for retry in range(5):
+        attempts = 5
+        for retry in range(attempts):
             try:
                 probj = github.pull_request(owner, proj, number)
                 if probj is not None:
@@ -1945,9 +1946,14 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
                 self.log.warning("Pull request #%s of %s/%s returned None!" % (
                                  number, owner, proj))
             except github3.exceptions.GitHubException:
-                self.log.warning(
-                    "Failed to get pull request #%s of %s/%s; retrying" %
-                    (number, owner, proj))
+                if retry == attempts - 1:
+                    self.log.exception(
+                        "Failed to get pull request #%s of %s/%s" %
+                        (number, owner, proj))
+                else:
+                    self.log.warning(
+                        "Failed to get pull request #%s of %s/%s; retrying" %
+                        (number, owner, proj))
             time.sleep(1)
         else:
             raise Exception("Failed to get pull request #%s of %s/%s" % (
