@@ -52,6 +52,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "684fb8e9_9e597a5c",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 40,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "e7c66b82_0efbdf5a",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "dd1385de_8880035d",
@@ -65,6 +83,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5c784d4d_6a88d958",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 67,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "dd1385de_8880035d",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -104,6 +140,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "ba8cbd85_13414b9b",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 120,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "8116694e_766e0e25",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "7ceb1c05_55ec02d5",
@@ -117,6 +171,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "96724d6f_f30cad34",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 131,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "7ceb1c05_55ec02d5",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -167,6 +239,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "20848eff_f6b8094e",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 154,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "366ae185_5ac3b29c",
+      "range": {
+        "startLine": 154,
+        "startChar": 31,
+        "endLine": 154,
+        "endChar": 40
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "43f54538_104368af",
@@ -207,6 +303,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "6c1e9780_6678203f",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 218,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "990c5e51_7488e794",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "41fc65f5_a4fb4323",
@@ -224,6 +338,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "55a41d8d_cf5ebd80",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 232,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "41fc65f5_a4fb4323",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "70405de7_c702e49e",
@@ -237,6 +369,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a27ff9de_2bd19a4a",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 254,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "70405de7_c702e49e",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -276,6 +426,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "af934879_c157b168",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 292,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "f582d256_5e166931",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "26d2ad65_fae57073",
@@ -293,6 +461,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "60b8f9af_bb80e41f",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 300,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "26d2ad65_fae57073",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e0aa2685_2c95ee0d",
@@ -306,6 +492,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "47ec3c8e_83fc4184",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 308,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "e0aa2685_2c95ee0d",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -345,6 +549,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "5bd68164_1f2dba4f",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 312,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "65eb2407_f5645532",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c76d4341_a8c58c78",
@@ -358,6 +580,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4fe409aa_bd871e0b",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 334,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "c76d4341_a8c58c78",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -397,6 +637,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d4ad314e_d4d6872b",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 341,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "1c296707_5d609ceb",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "0b41b9a4_39306629",
@@ -410,6 +668,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2cee14be_df9d18a6",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 350,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "0b41b9a4_39306629",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -431,6 +707,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "388abe1f_18dc2f0a",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 353,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "c8a3f94f_7901c470",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "9e62a2ed_2c47c7e0",
@@ -444,6 +738,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "65ee6330_8db5cb73",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 355,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "9e62a2ed_2c47c7e0",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -465,6 +777,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "ba9c33d0_45b58713",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 360,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "33055721_c53438a1",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "948a095d_f1e6735e",
@@ -478,6 +808,24 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "See note about not making unrelated changes above.",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "fd0845d8_20f6eac7",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 374,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "948a095d_f1e6735e",
       "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -499,6 +847,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "00853cdb_7f0bdc33",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 387,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "1a9ad5c5_fd5ad73f",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "bd1d591f_954089c0",
@@ -516,6 +882,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b3281a4e_8c5cef60",
+        "filename": "zuul/driver/timer/rruletrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "bd1d591f_954089c0",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "7099b31c_30353d41",
@@ -529,6 +913,30 @@
       "writtenOn": "2026-06-19T16:44:22Z",
       "side": 1,
       "message": "Why rename timezone as _utc here? None of the uses of timezone.utc appear to be near line length limits. I would avoid renaming timezone to keep things more clear.",
+      "range": {
+        "startLine": 2,
+        "startChar": 30,
+        "endLine": 2,
+        "endChar": 37
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "58a43688_2f618df7",
+        "filename": "zuul/driver/timer/rruletrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "7099b31c_30353d41",
       "range": {
         "startLine": 2,
         "startChar": 30,
@@ -558,6 +966,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "0b386f3d_5c595fa6",
+        "filename": "zuul/driver/timer/rruletrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "The _addJobsInner function does create a random jitter for that tenant, project, branch combination before passing it to ZuulRRuleTrigger",
+      "parentUuid": "5f76d55e_becc1ac1",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "ab76f18f_9a39201f",
         "filename": "zuul/driver/timer/timermodel.py",
         "patchSetId": 4
@@ -575,6 +1001,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "cc7885ca_01a48222",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 38,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "The primary goal was to improve debugging, yes.",
+      "parentUuid": "ab76f18f_9a39201f",
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "bae69480_8b325296",
         "filename": "zuul/driver/timer/timertrigger.py",
         "patchSetId": 4
@@ -586,6 +1030,30 @@
       "writtenOn": "2026-06-21T20:17:17Z",
       "side": 1,
       "message": "Looking at the getSchema method below, it does not have \u0027jitter\u0027 in the schema - I think the config would be rejected during validation?",
+      "range": {
+        "startLine": 39,
+        "startChar": 16,
+        "endLine": 39,
+        "endChar": 44
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "35e8b7aa_8a6f6e4d",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 39,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-22T06:44:53Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "bae69480_8b325296",
       "range": {
         "startLine": 39,
         "startChar": 16,
