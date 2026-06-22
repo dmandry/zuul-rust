@@ -216,6 +216,9 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
         elif resource.type == KubernetesResource.ResourceType.PROJECT:
             self._deleteProject(resource.id)
 
+    def getResourceTypes(self):
+        return KubernetesResource.ResourceType
+
     def listInstances(self):
         if self.connection.use_openshift_projects:
             projects = self.dynamic_client.resources.get(
