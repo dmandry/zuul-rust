@@ -986,6 +986,19 @@ following statsd events:
                      The number of nodes of this label in this
                      provider in this state.
 
+.. stat:: zuul.provider_endpoint
+
+   Holds metrics related to individual provider endpoints.
+
+   .. stat:: <endpoint>
+
+      The canonical name of the provider endpoint.
+
+      .. stat:: leaked.<resource>
+         :type: counter
+
+         The number of leaked resources of a certain type in this
+         endpoint.  The specific resources are driver-dependent.
 
 .. stat:: zuul.nodes
 
