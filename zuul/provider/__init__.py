@@ -294,6 +294,14 @@ class BaseProviderEndpoint(metaclass=abc.ABCMeta):
 
         return []
 
+    def getResourceTypes(self):
+        """Return a list of resource types used by this endpoint.
+
+        :returns: A generator of string objects.
+        """
+
+        return []
+
     def deleteResource(self, resource):
 
         """Delete the supplied resource
