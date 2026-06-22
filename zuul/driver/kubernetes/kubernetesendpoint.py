@@ -199,10 +199,10 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
             projects = self.dynamic_client.resources.get(
                 api_version='v1', kind='Project')
             namespaces = projects.get().items
-            namespace_type = KubernetesResource.TYPE_PROJECT
+            namespace_type = KubernetesResource.ResourceType.PROJECT
         else:
             namespaces = self.core_client.list_namespace().items
-            namespace_type = KubernetesResource.TYPE_NAMESPACE
+            namespace_type = KubernetesResource.ResourceType.NAMESPACE
 
         for namespace in namespaces:
             yield KubernetesResource(namespace.metadata.labels or {},
@@ -211,9 +211,9 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
 
     def deleteResource(self, resource):
         self.log.info(f"Deleting leaked {resource.type}: {resource.id}")
-        if resource.type == KubernetesResource.TYPE_NAMESPACE:
+        if resource.type == KubernetesResource.ResourceType.NAMESPACE:
             self._deleteNamespace(resource.id)
-        elif resource.type == KubernetesResource.TYPE_PROJECT:
+        elif resource.type == KubernetesResource.ResourceType.PROJECT:
             self._deleteProject(resource.id)
 
     def listInstances(self):
