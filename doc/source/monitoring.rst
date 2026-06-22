@@ -1032,6 +1032,31 @@ following statsd events:
 
          The number of requests in this stae.
 
+.. stat:: zuul.launcher
+
+   Holds metrics related to the Zuul launcher component.
+
+   .. stat:: server.<hostname>
+
+      Holds metrics from a specific zuul-launcher server.
+
+      .. stat:: upload_workers
+         :type: gauge
+
+         The number of worker threads currently processing an image upload.
+
+      .. stat:: endpoint_upload_workers
+         :type: gauge
+
+         The number of worker threads currently uploading an image to
+         a provider endpoint.
+
+      .. stat:: endpoint_import_workers
+         :type: gauge
+
+         The number of worker threads currently importing an image to
+         a provider endpoint.
+
 
 Prometheus monitoring
 ---------------------

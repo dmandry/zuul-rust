@@ -45,6 +45,7 @@ from zuul.launcher.uploadplanner import UploadPlanner
 import zuul.lib.repl
 from zuul.lib import commandsocket, tracing
 from zuul.lib.collections import DefaultKeyDict
+from zuul.lib.concurrency import MonitoringThreadPoolExecutor
 from zuul.lib.config import get_default
 from zuul.lib.monitoring import MonitoringServer
 from zuul.zk.image_registry import (
@@ -1246,12 +1247,17 @@ class Launcher:
         self.upload_uuids_in_queue = set()
         self.upload_uuids_in_delete_queue = set()
         # Simultaneous image artifact processes (download+upload)
-        self.upload_executor = ThreadPoolExecutor(
+        self.upload_executor = MonitoringThreadPoolExecutor(
+            statsd=self.statsd,
+            metric=f'zuul.launcher.server.{self.hostname}.upload_workers',
             max_workers=1,
             thread_name_prefix="UploadWorker",
         )
         # Simultaneous uploads
-        self.endpoint_upload_executor = ThreadPoolExecutor(
+        self.endpoint_upload_executor = MonitoringThreadPoolExecutor(
+            statsd=self.statsd,
+            metric=(f'zuul.launcher.server.{self.hostname}.'
+                    'endpoint_upload_workers'),
             # TODO: make configurable
             max_workers=10,
             thread_name_prefix="EndpointUploadWorker",
@@ -1259,7 +1265,10 @@ class Launcher:
         # Simultaneous imports/copies -- we can have more threads here
         # since we aren't doing much work (but we may still poll, so
         # don't go crazy)
-        self.endpoint_import_executor = ThreadPoolExecutor(
+        self.endpoint_import_executor = MonitoringThreadPoolExecutor(
+            statsd=self.statsd,
+            metric=(f'zuul.launcher.server.{self.hostname}.'
+                    'endpoint_import_workers'),
             max_workers=20,
             thread_name_prefix="EndpointImportWorker",
         )
