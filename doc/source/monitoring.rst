@@ -951,13 +951,23 @@ following statsd events:
 
                The number of nodes in this provider in this state.
 
+      .. stat:: launch
+
+         Holds metrics related to node launches.
+
+         .. stat:: <state>
+            :type: counter, timer
+
+            A counter and timer for launches that finish in each of the
+            available states (see above).
+
       .. stat:: label
 
          Holds metrics related to specific labels.
 
          .. stat:: <label>
 
-            The canonical name of the label.
+            The name of the label.
 
             .. stat:: nodes
 
@@ -985,6 +995,35 @@ following statsd events:
 
                      The number of nodes of this label in this
                      provider in this state.
+
+            .. stat:: launch
+
+               Holds metrics related to node launches.
+
+               .. stat:: <state>
+                  :type: counter, timer
+
+                  A counter and timer for launches that finish in
+                  each of the available states (see above).
+
+      .. stat:: image
+
+         Holds metrics related to specific images.
+
+         .. stat:: <image>
+
+            The name of the image.
+
+            .. stat:: launch
+
+               Holds metrics related to node launches.
+
+               .. stat:: <state>
+                  :type: counter, timer
+
+                  A counter and timer for launches that finish in
+                  each of the available states (see above).
+
 
 .. stat:: zuul.provider_endpoint
 
@@ -1025,6 +1064,17 @@ following statsd events:
          :type: gauge
 
          The number of nodes across all providers in this state.
+
+   .. stat:: launch
+
+      Holds metrics related to node launches.
+
+      .. stat:: <state>
+         :type: counter, timer
+
+         A counter and timer for launches that finish in each of the
+         available states (see above).
+
 
 .. stat:: zuul.nodeset_requests
 
