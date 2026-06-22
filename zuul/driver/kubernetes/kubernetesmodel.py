@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from enum import StrEnum
+
 from zuul import model
 from zuul.provider import statemachine
 
@@ -46,8 +48,9 @@ class KubernetesInstance(statemachine.Instance):
 
 
 class KubernetesResource(statemachine.Resource):
-    TYPE_NAMESPACE = 'namespace'
-    TYPE_PROJECT = 'project'
+    class ResourceType(StrEnum):
+        NAMESPACE = 'namespace'
+        PROJECT = 'project'
 
     def __init__(self, metadata, type, id):
         super().__init__(metadata, type)

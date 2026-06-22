@@ -485,7 +485,7 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
             if server['status'].lower() == 'deleted':
                 continue
             yield OpenstackResource(server.get('metadata', {}),
-                                    OpenstackResource.TYPE_INSTANCE,
+                                    OpenstackResource.ResourceType.INSTANCE,
                                     server['id'])
         # Floating IP and port leakage can't be handled by the
         # automatic resource cleanup in cleanupLeakedResources because
@@ -501,7 +501,7 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
 
     def deleteResource(self, resource):
         self.log.info(f"Deleting leaked {resource.type}: {resource.id}")
-        if resource.type == OpenstackResource.TYPE_INSTANCE:
+        if resource.type == OpenstackResource.ResourceType.INSTANCE:
             self._deleteServer(resource.id)
 
     def listInstances(self):

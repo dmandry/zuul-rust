@@ -829,7 +829,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 continue
             tags = tag_list_to_dict(template.get('Tags', []))
             yield AwsResource(tags,
-                              AwsResource.TYPE_LAUNCH_TEMPLATE,
+                              AwsResource.ResourceType.LAUNCH_TEMPLATE,
                               template_name)
 
     def listResources(self, providers):
@@ -849,7 +849,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             except botocore.exceptions.ClientError:
                 continue
             yield AwsResource(tag_list_to_dict(host.get('Tags')),
-                              AwsResource.TYPE_HOST,
+                              AwsResource.ResourceType.HOST,
                               host['HostId'])
         for instance in self._listInstances():
             try:
@@ -858,7 +858,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             except botocore.exceptions.ClientError:
                 continue
             yield AwsResource(tag_list_to_dict(instance.get('Tags')),
-                              AwsResource.TYPE_INSTANCE,
+                              AwsResource.ResourceType.INSTANCE,
                               instance['InstanceId'])
         for volume in self._listVolumes():
             try:
@@ -867,7 +867,8 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             except botocore.exceptions.ClientError:
                 continue
             yield AwsResource(tag_list_to_dict(volume.get('Tags')),
-                              AwsResource.TYPE_VOLUME, volume['VolumeId'])
+                              AwsResource.ResourceType.VOLUME,
+                              volume['VolumeId'])
         for ami in self._listAmis():
             try:
                 if ami['State'].lower() == "deleted":
@@ -875,7 +876,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             except botocore.exceptions.ClientError:
                 continue
             yield AwsResource(tag_list_to_dict(ami.get('Tags')),
-                              AwsResource.TYPE_AMI, ami['ImageId'])
+                              AwsResource.ResourceType.AMI, ami['ImageId'])
         for snap in self._listSnapshots():
             try:
                 if snap['State'].lower() == "deleted":
@@ -883,7 +884,8 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             except botocore.exceptions.ClientError:
                 continue
             yield AwsResource(tag_list_to_dict(snap.get('Tags')),
-                              AwsResource.TYPE_SNAPSHOT, snap['SnapshotId'])
+                              AwsResource.ResourceType.SNAPSHOT,
+                              snap['SnapshotId'])
         for bucket_name in bucket_names:
             for obj in self._listObjects(bucket_name):
                 with self.non_mutating_rate_limiter:
@@ -893,28 +895,28 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                     except botocore.exceptions.ClientError:
                         continue
                 yield AwsResource(tag_list_to_dict(tags['TagSet']),
-                                  AwsResource.TYPE_OBJECT, obj.key,
+                                  AwsResource.ResourceType.OBJECT, obj.key,
                                   bucket_name=bucket_name)
         for template in self._listLaunchTemplates():
             yield AwsResource(tag_list_to_dict(template.get('Tags')),
-                              AwsResource.TYPE_LAUNCH_TEMPLATE,
+                              AwsResource.ResourceType.LAUNCH_TEMPLATE,
                               template['LaunchTemplateName'])
 
     def deleteResource(self, resource):
         self.log.info(f"Deleting leaked {resource.type}: {resource.id}")
-        if resource.type == AwsResource.TYPE_HOST:
+        if resource.type == AwsResource.ResourceType.HOST:
             self._releaseHost(resource.id, immediate=True)
-        if resource.type == AwsResource.TYPE_INSTANCE:
+        if resource.type == AwsResource.ResourceType.INSTANCE:
             self._deleteInstance(resource.id, immediate=True)
-        if resource.type == AwsResource.TYPE_VOLUME:
+        if resource.type == AwsResource.ResourceType.VOLUME:
             self._deleteVolume(resource.id)
-        if resource.type == AwsResource.TYPE_AMI:
+        if resource.type == AwsResource.ResourceType.AMI:
             self._deleteAmi(resource.id)
-        if resource.type == AwsResource.TYPE_SNAPSHOT:
+        if resource.type == AwsResource.ResourceType.SNAPSHOT:
             self._deleteSnapshot(resource.id)
-        if resource.type == AwsResource.TYPE_OBJECT:
+        if resource.type == AwsResource.ResourceType.OBJECT:
             self._deleteObject(resource.bucket_name, resource.id)
-        if resource.type == AwsResource.TYPE_LAUNCH_TEMPLATE:
+        if resource.type == AwsResource.ResourceType.LAUNCH_TEMPLATE:
             self._deleteLaunchTemplate(resource.id)
 
     def listInstances(self):
