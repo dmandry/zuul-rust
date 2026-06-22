@@ -997,8 +997,16 @@ following statsd events:
       .. stat:: leaked.<resource>
          :type: counter
 
-         The number of leaked resources of a certain type in this
-         endpoint.  The specific resources are driver-dependent.
+         The number of leaked resources (subsequently deleted) of a
+         certain type in this endpoint.  The specific resources are
+         driver-dependent.
+
+      .. stat:: unmanaged.<resource>
+         :type: gauge
+
+         The current number of unmanaged resources of a certain type
+         in this endpoint.  The specific resources are
+         driver-dependent.
 
 .. stat:: zuul.nodes
 
