@@ -1027,11 +1027,16 @@ class CleanupWorker:
                 continue
             quota_used.add(instance.getQuotaInformation())
         endpoint.quota_cache.setUnmanagedUsage(quota_used)
+        endpoint_statsd_name = _normalize_statsd_name(endpoint.canonical_name)
 
         for resource in endpoint.listResources(providers):
             if (resource.metadata.get('zuul_system_id') !=
                 self.launcher.system.system_id):
                 continue
+            resource_metric = (
+                f'zuul.provider_endpoint.{endpoint_statsd_name}.'
+                f'leaked.{resource.type}'
+            )
             node_id = resource.metadata.get('zuul_node_uuid')
             upload_id = resource.metadata.get('zuul_upload_uuid')
             expiration = resource.metadata.get('zuul_expiration')
@@ -1042,11 +1047,8 @@ class CleanupWorker:
                     # condition.
                     try:
                         endpoint.deleteResource(resource)
-                        # if self._statsd:
-                        #     key = ('nodepool.provider.%s.leaked.%s'
-                        #            % (self.provider.name,
-                        #               resource.plural_metric_name))
-                        #     self._statsd.incr(key, 1)
+                        if self.launcher.statsd:
+                            self.launcher.statsd.incr(resource_metric, 1)
                     except Exception:
                         self.log.exception("Unable to delete leaked "
                                            f"resource for node {node_id}")
@@ -1059,11 +1061,8 @@ class CleanupWorker:
                     # condition.
                     try:
                         endpoint.deleteResource(resource)
-                        # if self._statsd:
-                        #     key = ('nodepool.provider.%s.leaked.%s'
-                        #            % (self.provider.name,
-                        #               resource.plural_metric_name))
-                        #     self._statsd.incr(key, 1)
+                        if self.launcher.statsd:
+                            self.launcher.statsd.incr(resource_metric, 1)
                     except Exception:
                         self.log.exception(
                             "Unable to delete leaked "
@@ -1075,11 +1074,8 @@ class CleanupWorker:
                     # wait for another cycle.
                     try:
                         endpoint.deleteResource(resource)
-                        # if self._statsd:
-                        #     key = ('nodepool.provider.%s.leaked.%s'
-                        #            % (self.provider.name,
-                        #               resource.plural_metric_name))
-                        #     self._statsd.incr(key, 1)
+                        # This is a normal expiration (e.g., of an
+                        # upload), don't emit a leaked stat for it.
                     except Exception:
                         self.log.exception(
                             "Unable to delete leaked resource")
@@ -1090,11 +1086,8 @@ class CleanupWorker:
                 if resource.unique_id in possibly_leaked_resources:
                     try:
                         endpoint.deleteResource(resource)
-                        # if self._statsd:
-                        #     key = ('nodepool.provider.%s.leaked.%s'
-                        #            % (self.provider.name,
-                        #               resource.plural_metric_name))
-                        #     self._statsd.incr(key, 1)
+                        if self.launcher.statsd:
+                            self.launcher.statsd.incr(resource_metric, 1)
                     except Exception:
                         self.log.exception(
                             "Unable to delete leaked resource")
