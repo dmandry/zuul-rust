@@ -464,33 +464,33 @@ class AzureProviderEndpoint(BaseProviderEndpoint):
 
         for vm in self._listVirtualMachines():
             yield AzureResource(vm.get('tags', {}),
-                                AzureResource.TYPE_INSTANCE,
+                                AzureResource.ResourceType.INSTANCE,
                                 vm['id'])
         for nic in self._listNetworkInterfaces():
             yield AzureResource(nic.get('tags', {}),
-                                AzureResource.TYPE_NIC, nic['id'])
+                                AzureResource.ResourceType.NIC, nic['id'])
         for pip in self._listPublicIPAddresses():
             yield AzureResource(pip.get('tags', {}),
-                                AzureResource.TYPE_PIP, pip['id'])
+                                AzureResource.ResourceType.PIP, pip['id'])
         for disk in self._listDisks():
             yield AzureResource(disk.get('tags', {}),
-                                AzureResource.TYPE_DISK, disk['id'])
+                                AzureResource.ResourceType.DISK, disk['id'])
         for image in self._listImages():
             yield AzureResource(image.get('tags', {}),
-                                AzureResource.TYPE_IMAGE, image['id'])
+                                AzureResource.ResourceType.IMAGE, image['id'])
 
     def deleteResource(self, resource):
         self.log.info("Deleting leaked %s: %s",
                       resource.type, resource.id)
-        if resource.type == AzureResource.TYPE_INSTANCE:
+        if resource.type == AzureResource.ResourceType.INSTANCE:
             crud = self._client.virtual_machines
-        elif resource.type == AzureResource.TYPE_NIC:
+        elif resource.type == AzureResource.ResourceType.NIC:
             crud = self._client.network_interfaces
-        elif resource.type == AzureResource.TYPE_PIP:
+        elif resource.type == AzureResource.ResourceType.PIP:
             crud = self._client.public_ip_addresses
-        elif resource.type == AzureResource.TYPE_DISK:
+        elif resource.type == AzureResource.ResourceType.DISK:
             crud = self._client.disks
-        elif resource.type == AzureResource.TYPE_IMAGE:
+        elif resource.type == AzureResource.ResourceType.IMAGE:
             crud = self._client.images
         with self.rate_limiter:
             try:

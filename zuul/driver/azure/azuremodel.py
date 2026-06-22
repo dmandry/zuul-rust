@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from enum import StrEnum
+
 from zuul import model
 from zuul.provider import statemachine
 
@@ -72,11 +74,12 @@ class AzureInstance(statemachine.Instance):
 
 
 class AzureResource(statemachine.Resource):
-    TYPE_INSTANCE = 'instance'
-    TYPE_NIC = 'nic'
-    TYPE_PIP = 'pip'
-    TYPE_DISK = 'disk'
-    TYPE_IMAGE = 'image'
+    class ResourceType(StrEnum):
+        INSTANCE = 'instance'
+        NIC = 'nic'
+        PIP = 'pip'
+        DISK = 'disk'
+        IMAGE = 'image'
 
     def __init__(self, metadata, type, id):
         super().__init__(metadata, type)
