@@ -892,6 +892,12 @@ class TestLauncher(LauncherBaseTestCase):
 
         self.launcher.checkOldImages()
         _assert_image_state()
+        self.assertReportedStat(
+            'zuul.launcher.server.launcher-0.upload_workers',
+            value='1', kind='g')
+        self.assertReportedStat(
+            'zuul.launcher.server.launcher-0.upload_workers',
+            value='0', kind='g')
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_jobs_executed(self):
