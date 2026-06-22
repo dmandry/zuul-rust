@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from enum import StrEnum
 import time
 
 
@@ -142,6 +143,9 @@ class Resource:
     :param dict metadata: A dictionary of metadata for the resource.
 
     """
+
+    class ResourceType(StrEnum):
+        pass
 
     def __init__(self, metadata, type):
         self.type = type
