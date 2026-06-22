@@ -2114,6 +2114,18 @@ class TenantParser(object):
         self.statsd = statsd
         self.unparsed_config_cache = unparsed_config_cache
 
+        self.inner_config_project_dict = dict(
+            TenantParser.inner_config_project_dict)
+        self.inner_untrusted_project_dict = dict(
+            TenantParser.inner_untrusted_project_dict)
+
+        for conn in self.connections.getProviderConnections():
+            for k, v in conn.driver.getProjectConfigKeys().items():
+                self.inner_config_project_dict[k] = v
+                self.inner_untrusted_project_dict[k] = v
+
+        self._build_tenant_source_schema()
+
     job_classes = (
         'pipeline', 'job', 'semaphore', 'project',
         'project-template', 'nodeset', 'secret', 'queue',
@@ -2139,36 +2151,35 @@ class TenantParser(object):
         'allow-circular-dependencies': bool,
         'implied-branch-matchers': bool,
     }
-    config_project_dict = {str: inner_config_project_dict}
 
     inner_untrusted_project_dict = inner_config_project_dict.copy()
     inner_untrusted_project_dict['configure-projects'] = to_list(str)
     inner_untrusted_project_dict['allow-reporter-jobs'] = bool
-    untrusted_project_dict = {str: inner_untrusted_project_dict}
 
-    config_project = vs.Any(str, config_project_dict)
-    untrusted_project = vs.Any(str, untrusted_project_dict)
-
-    config_group = {
-        'include': to_list(classes),
-        'exclude': to_list(classes),
-        'include-provider-config': bool,
-        vs.Required('projects'): to_list(config_project),
-    }
-    untrusted_group = {
-        'include': to_list(classes),
-        'exclude': to_list(classes),
-        'include-provider-config': bool,
-        vs.Required('projects'): to_list(untrusted_project),
-    }
-
-    config_project_or_group = vs.Any(config_project, config_group)
-    untrusted_project_or_group = vs.Any(untrusted_project, untrusted_group)
-
-    tenant_source = vs.Schema({
-        'config-projects': to_list(config_project_or_group),
-        'untrusted-projects': to_list(untrusted_project_or_group),
-    })
+    def _build_tenant_source_schema(self):
+        config_project_dict = {str: self.inner_config_project_dict}
+        untrusted_project_dict = {str: self.inner_untrusted_project_dict}
+        config_project = vs.Any(str, config_project_dict)
+        untrusted_project = vs.Any(str, untrusted_project_dict)
+        config_group = {
+            'include': to_list(self.classes),
+            'exclude': to_list(self.classes),
+            'include-provider-config': bool,
+            vs.Required('projects'): to_list(config_project),
+        }
+        untrusted_group = {
+            'include': to_list(self.classes),
+            'exclude': to_list(self.classes),
+            'include-provider-config': bool,
+            vs.Required('projects'): to_list(untrusted_project),
+        }
+        config_project_or_group = vs.Any(config_project, config_group)
+        untrusted_project_or_group = vs.Any(
+            untrusted_project, untrusted_group)
+        self.tenant_source = vs.Schema({
+            'config-projects': to_list(config_project_or_group),
+            'untrusted-projects': to_list(untrusted_project_or_group),
+        })
 
     def validateTenantSources(self):
         def v(value, path=[]):
