@@ -138,9 +138,6 @@ class Resource:
     resources.  The adapter may add any other information to this
     instance for its own bookeeping (resource type, id, etc).
 
-    The 'plural_metric_name' attribute is set in the constructor
-    automatically; override this value if necessary.
-
     :param str type: The type of resource.
     :param dict metadata: A dictionary of metadata for the resource.
 
@@ -148,7 +145,6 @@ class Resource:
 
     def __init__(self, metadata, type):
         self.type = type
-        self.plural_metric_name = type + 's'
         self.metadata = metadata
 
     def __repr__(self):
