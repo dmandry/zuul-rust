@@ -45,6 +45,7 @@ from zuul.launcher.uploadplanner import UploadPlanner
 import zuul.lib.repl
 from zuul.lib import commandsocket, tracing
 from zuul.lib.collections import DefaultKeyDict
+from zuul.lib.concurrency import MonitoringThreadPoolExecutor
 from zuul.lib.config import get_default
 from zuul.lib.monitoring import MonitoringServer
 from zuul.zk.image_registry import (
@@ -1146,7 +1147,8 @@ class Launcher:
         # launcher
         self.endpoints = {}
 
-        self.statsd = get_statsd(config)
+        self.hostname = _hostname or socket.getfqdn()
+        self.statsd = get_statsd(config, statsd_extra_keys)
         if self.statsd:
             self.statsd_timer = self.statsd.timer
         else:
@@ -1178,7 +1180,6 @@ class Launcher:
         )
 
         COMPONENT_REGISTRY.create(self.zk_client)
-        self.hostname = _hostname or socket.getfqdn()
         self.component_info = LauncherComponent(
             self.zk_client, self.hostname, version=get_version_string(),
             connection_filter=self.connection_filter)
@@ -1246,12 +1247,17 @@ class Launcher:
         self.upload_uuids_in_queue = set()
         self.upload_uuids_in_delete_queue = set()
         # Simultaneous image artifact processes (download+upload)
-        self.upload_executor = ThreadPoolExecutor(
+        self.upload_executor = MonitoringThreadPoolExecutor(
+            statsd=self.statsd,
+            metric='zuul.launcher.server.{hostname}.upload_workers',
             max_workers=1,
             thread_name_prefix="UploadWorker",
         )
         # Simultaneous uploads
-        self.endpoint_upload_executor = ThreadPoolExecutor(
+        self.endpoint_upload_executor = MonitoringThreadPoolExecutor(
+            statsd=self.statsd,
+            metric=('zuul.launcher.server.{hostname}.'
+                    'endpoint_upload_workers'),
             # TODO: make configurable
             max_workers=10,
             thread_name_prefix="EndpointUploadWorker",
@@ -1259,7 +1265,10 @@ class Launcher:
         # Simultaneous imports/copies -- we can have more threads here
         # since we aren't doing much work (but we may still poll, so
         # don't go crazy)
-        self.endpoint_import_executor = ThreadPoolExecutor(
+        self.endpoint_import_executor = MonitoringThreadPoolExecutor(
+            statsd=self.statsd,
+            metric=('zuul.launcher.server.{hostname}.'
+                    'endpoint_import_workers'),
             max_workers=20,
             thread_name_prefix="EndpointImportWorker",
         )
