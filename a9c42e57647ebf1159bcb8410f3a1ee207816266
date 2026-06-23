@@ -41,6 +41,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "16875eac_1bd2870f",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1925,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-23T14:17:54Z",
+      "side": 1,
+      "message": "It would be caught at the call site.",
+      "parentUuid": "ac537ca8_08951872",
+      "range": {
+        "startLine": 1925,
+        "startChar": 28,
+        "endLine": 1925,
+        "endChar": 47
+      },
+      "revId": "a9c42e57647ebf1159bcb8410f3a1ee207816266",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "0c6f9749_1faadbb1",
@@ -54,6 +78,30 @@
       "writtenOn": "2026-06-23T11:05:39Z",
       "side": 1,
       "message": "Should multiple by 1000 here, statsd expect milliseconds?",
+      "range": {
+        "startLine": 1926,
+        "startChar": 12,
+        "endLine": 1927,
+        "endChar": 61
+      },
+      "revId": "a9c42e57647ebf1159bcb8410f3a1ee207816266",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "70a6797f_a6181e3b",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1927,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-23T14:17:54Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "0c6f9749_1faadbb1",
       "range": {
         "startLine": 1926,
         "startChar": 12,
