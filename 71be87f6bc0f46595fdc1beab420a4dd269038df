@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5d07a849_38c359d0",
+        "filename": "zuul/provider/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 300,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T10:49:30Z",
+      "side": 1,
+      "message": "nit: StrEnum is not a generator.",
+      "range": {
+        "startLine": 300,
+        "startChar": 20,
+        "endLine": 300,
+        "endChar": 29
+      },
+      "revId": "71be87f6bc0f46595fdc1beab420a4dd269038df",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
