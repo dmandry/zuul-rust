@@ -1,0 +1,84 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0f40b266_8171fa8c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 15
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T12:30:20Z",
+      "side": 1,
+      "message": "I don\u0027t think the commit message should hold the \"docs\" and the subject \"Summary\" is not great. See inline regarding releasenote as well.",
+      "revId": "dfa4aa63e4fb6b49fc25962658724bb4ef8dd362",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e5ccd4d3_c6a8bf46",
+        "filename": "releasenotes/notes/add-rrule-suuport-to-timer-driver-c74c07fb124b0d5a.yaml",
+        "patchSetId": 15
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T12:30:20Z",
+      "side": 1,
+      "message": "I think this is too much detail for a releasenote.\nSuggest making changes to doc/source/drivers/timer.rst and keep a shorter releasenote.",
+      "revId": "dfa4aa63e4fb6b49fc25962658724bb4ef8dd362",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a22e5b4e_728f7f3f",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 64,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T12:30:20Z",
+      "side": 1,
+      "message": "unrelated change?",
+      "range": {
+        "startLine": 64,
+        "startChar": 12,
+        "endLine": 64,
+        "endChar": 16
+      },
+      "revId": "dfa4aa63e4fb6b49fc25962658724bb4ef8dd362",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "32acfae2_adefaa42",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 15
+      },
+      "lineNbr": 187,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T12:30:20Z",
+      "side": 1,
+      "message": "Since you introduce \u0027jitter\u0027 to the TimerTrigger schema.\nMay want to add an else if here, so that the same format could be used for cron based, 6th element of string should be preffered but if there is no 6th element but jitter is defined use that. unified UX?",
+      "range": {
+        "startLine": 187,
+        "startChar": 28,
+        "endLine": 187,
+        "endChar": 32
+      },
+      "revId": "dfa4aa63e4fb6b49fc25962658724bb4ef8dd362",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

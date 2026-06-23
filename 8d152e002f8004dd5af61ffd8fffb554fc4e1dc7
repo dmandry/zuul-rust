@@ -242,6 +242,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "827d0057_f713fbd2",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 151,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T12:30:20Z",
+      "side": 1,
+      "message": "I kind of see two \"parser\" functions here.\n\nif self._is_rrule(timespec_stripped):\n    values \u003d parse_rrule()\nelse:\n    values \u003d parse_cron()\n\nself._addJobsInner(...) \u003c- can be outside the if/else block.\n\n... but, suggest wait for other reviewers to chime in. :)",
+      "parentUuid": "442b9ecb_d3876866",
+      "range": {
+        "startLine": 150,
+        "startChar": 56,
+        "endLine": 151,
+        "endChar": 57
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "366ae185_5ac3b29c",
         "filename": "zuul/driver/timer/__init__.py",
         "patchSetId": 4
