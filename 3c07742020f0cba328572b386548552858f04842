@@ -1,0 +1,73 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7c8500f3_a7f1c86c",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 10,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T10:05:56Z",
+      "side": 1,
+      "message": "very nit - typo s/guage/gauge/",
+      "range": {
+        "startLine": 10,
+        "startChar": 10,
+        "endLine": 10,
+        "endChar": 15
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3224b7d8_1fbd353f",
+        "filename": "doc/source/monitoring.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1033,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T10:05:56Z",
+      "side": 1,
+      "message": "nit, unrelated typo s/stae/state/? - might worth just fixing if you do another revision since it is so close to the relevant diff.",
+      "range": {
+        "startLine": 1033,
+        "startChar": 40,
+        "endLine": 1033,
+        "endChar": 44
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bf006a89_05ad1fe9",
+        "filename": "zuul/lib/concurrency.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 42,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T10:05:56Z",
+      "side": 1,
+      "message": "These args are not used - inside this method the outer `*args` and `**kw` is used. Functionally ok, since thoose are also what is passed to wrap. A cleaner approach would be to just do `super().submit(wrap)` and drop the args on the inner function?",
+      "range": {
+        "startLine": 42,
+        "startChar": 17,
+        "endLine": 42,
+        "endChar": 39
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
