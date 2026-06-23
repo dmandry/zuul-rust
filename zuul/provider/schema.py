@@ -19,6 +19,7 @@
 
 import voluptuous as vs
 from zuul.lib.voluputil import (
+    AsList,
     Constant,
     Nullable,
     Optional,
@@ -79,6 +80,16 @@ common_label = vs.Schema({
         doc="""\
         Should the node be reused (True) or deleted (False) after use."""
     ): bool,
+    Optional(
+        'aliases',
+        doc="""\
+        A list of label aliases to associate with nodes created from
+        this label.  These labels may be used to request existing
+        ready nodes that were previously created from this label, but
+        none of their attributes will be used to define
+        characteristics.
+        """,
+        default=[]): AsList(str),
     Optional(
         'executor-zone',
         doc="""\

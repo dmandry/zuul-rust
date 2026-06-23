@@ -1,0 +1,90 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: debian-normal
+          name: controller
+
+- job:
+    name: check-job
+    run: playbooks/check.yaml
+
+- project:
+    name: org/project
+    check:
+      jobs:
+        - check-job
+
+- image:
+    name: debian
+    type: cloud
+
+- flavor:
+    name: normal
+
+- flavor:
+    name: spot
+
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+    aliases: debian-spot
+    min-ready: 1
+
+- label:
+    name: debian-spot
+    image: debian
+    flavor: spot
+    min-ready: 1
+
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    launch-timeout: 600
+    launch-attempts: 2
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+      - name: spot
+        instance-type: t3.medium
+        market-type: spot
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: debian-normal
+        reuse: true
+        max-age: 600
+      - name: debian-spot
+        reuse: true
+        max-age: 600

@@ -448,6 +448,7 @@ class LabelParser(object):
         'max-age': int,
         'min-retention-time': int,
         'max-nodes': int,
+        'aliases': to_list(str),
     }
     schema = vs.Schema(label)
 
@@ -462,7 +463,8 @@ class LabelParser(object):
                             conf.get('description'), conf.get('min-ready'),
                             conf.get('max-ready-age'), conf.get('max-age'),
                             conf.get('max-nodes'),
-                            conf.get('min-retention-time'))
+                            conf.get('min-retention-time'),
+                            as_list(conf.get('aliases')))
         label.source_context = conf.get('_source_context')
         label.start_mark = conf.get('_start_mark')
         return label

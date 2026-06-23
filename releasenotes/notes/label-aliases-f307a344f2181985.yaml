@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    A new attribute, :attr:`label.aliases` is available for indicating
+    to Zuul that if an existing node of other labels is ready
+    for use, it may be used to satisfy a request for the label.
