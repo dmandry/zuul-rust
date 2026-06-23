@@ -10,6 +10,7 @@
         - event: gl_merge_request
           action:
             - opened
+            - reopened
             - changed
           branch: master
     start:
