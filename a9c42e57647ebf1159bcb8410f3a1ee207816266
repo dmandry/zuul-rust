@@ -1,0 +1,67 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4647b98f_6bc2d803",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T11:05:39Z",
+      "side": 1,
+      "message": "Looks good, but I believe there are two minor issues to fix. See inline.",
+      "revId": "a9c42e57647ebf1159bcb8410f3a1ee207816266",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ac537ca8_08951872",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1925,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T11:05:39Z",
+      "side": 1,
+      "message": "`_getProviderForNode` raises `ProviderNodeError` (L2638), afict it never return `None` Would it be better to capture that and log + return early  if that is caught?",
+      "range": {
+        "startLine": 1925,
+        "startChar": 28,
+        "endLine": 1925,
+        "endChar": 47
+      },
+      "revId": "a9c42e57647ebf1159bcb8410f3a1ee207816266",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0c6f9749_1faadbb1",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1927,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-23T11:05:39Z",
+      "side": 1,
+      "message": "Should multiple by 1000 here, statsd expect milliseconds?",
+      "range": {
+        "startLine": 1926,
+        "startChar": 12,
+        "endLine": 1927,
+        "endChar": 61
+      },
+      "revId": "a9c42e57647ebf1159bcb8410f3a1ee207816266",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
