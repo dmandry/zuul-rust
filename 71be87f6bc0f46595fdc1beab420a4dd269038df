@@ -22,6 +22,30 @@
       },
       "revId": "71be87f6bc0f46595fdc1beab420a4dd269038df",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ac05d107_d109d578",
+        "filename": "zuul/provider/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 300,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-23T14:13:48Z",
+      "side": 1,
+      "message": "I know.  All of these methods should say iterator instead of generator; I just matched the existing error.",
+      "parentUuid": "5d07a849_38c359d0",
+      "range": {
+        "startLine": 300,
+        "startChar": 20,
+        "endLine": 300,
+        "endChar": 29
+      },
+      "revId": "71be87f6bc0f46595fdc1beab420a4dd269038df",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
