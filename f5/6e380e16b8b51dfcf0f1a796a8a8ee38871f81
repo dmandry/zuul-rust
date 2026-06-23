@@ -1,0 +1,10 @@
+Workflow+1: Felix Edel <felix.edel@bmw.de>
+Code-Review+2: Felix Edel <felix.edel@bmw.de>
+Verified+2: Zuul
+Code-Review+2: Simon Westphahl <simon.westphahl@bmw.de>
+Submitted-by: Zuul
+Submitted-at: Tue, 23 Jun 2026 12:42:17 +0000
+Reviewed-on: https://review.opendev.org/c/zuul/zuul/+/994294
+Comments-Total: 1
+Project: zuul/zuul
+Branch: refs/heads/master
