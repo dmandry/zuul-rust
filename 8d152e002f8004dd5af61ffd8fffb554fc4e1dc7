@@ -218,6 +218,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "442b9ecb_d3876866",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 151,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-23T11:30:54Z",
+      "side": 1,
+      "message": "I don\u0027t feel that we should split these code branches into helper functions. \n\nBoth these branches are there to generate the arguments for the _addJobsInner function(cron_args, jitter, rrule_string). Extracting them to a different helper function would only lead to indirection with no abstraction benefits.\n\nAlso both these branches are small and not reused, further defeating the purpose of extracting them into helper functions.",
+      "parentUuid": "23accafe_7af340fe",
+      "range": {
+        "startLine": 150,
+        "startChar": 56,
+        "endLine": 151,
+        "endChar": 57
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "366ae185_5ac3b29c",
         "filename": "zuul/driver/timer/__init__.py",
         "patchSetId": 4
@@ -276,6 +300,30 @@
       "writtenOn": "2026-06-21T20:17:17Z",
       "side": 1,
       "message": "Let\u0027s pass args in the same order used in the function signature below.",
+      "range": {
+        "startLine": 167,
+        "startChar": 0,
+        "endLine": 167,
+        "endChar": 2
+      },
+      "revId": "8d152e002f8004dd5af61ffd8fffb554fc4e1dc7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "965fe4e9_6e173c4b",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 167,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-23T11:30:54Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "43f54538_104368af",
       "range": {
         "startLine": 167,
         "startChar": 0,
