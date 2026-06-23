@@ -3191,6 +3191,48 @@ class TestMinReadyLauncher(LauncherBaseTestCase):
         nodes_by_label = self._nodes_by_label()
         self.assertEqual(1, len(nodes_by_label['debian-emea']))
 
+    @simple_layout('layouts/nodepool-min-ready-aliases.yaml',
+                   enable_nodepool=True)
+    def test_min_ready_aliases(self):
+        for _ in iterate_timeout(60, "nodes to be ready"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            if len(nodes) != 1:
+                continue
+            if all(n.state == n.State.READY for n in nodes):
+                break
+
+        # NOTE: This test relies on the min-ready algorithm processing
+        # labels in the order they appear in the tenant config, but
+        # that is not something we want to codify; it is a convenient
+        # implementation detail that is okay to change.
+
+        # We create the aliased debian-normal instance first, so it
+        # can be reused by debian-spot.
+        self.waitUntilSettled()
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+
+    @simple_layout('layouts/nodepool-min-ready-aliases-reverse.yaml',
+                   enable_nodepool=True)
+    def test_min_ready_aliases_reverse(self):
+        for _ in iterate_timeout(60, "nodes to be ready"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            if len(nodes) != 2:
+                continue
+            if all(n.state == n.State.READY for n in nodes):
+                break
+
+        # NOTE: This test relies on the min-ready algorithm processing
+        # labels in the order they appear in the tenant config, but
+        # that is not something we want to codify; it is a convenient
+        # implementation detail that is okay to change.
+
+        # We create the unaliased debian-normal instance first, and it
+        # is not reusable by debian-spot, so we end up with two nodes.
+        self.waitUntilSettled()
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(2, len(nodes))
+
 
 class TestMinReadyTenantVariant(LauncherBaseTestCase):
     tenant_config_file = "config/launcher-min-ready/tenant-variant.yaml"
@@ -4125,6 +4167,79 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 node.refresh(ctx)
             except NoNodeError:
                 break
+
+    @simple_layout('layouts/nodepool-reuse-aliases.yaml', enable_nodepool=True)
+    def test_reuse_aliases(self):
+        # Test requesting an alias of a reusable node
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+        node = nodes[0]
+        # Get a copy so we're not modifying the launcher's
+        node = model.ProviderNode.fromZK(ctx, path=node.getPath())
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                node.unassign(ctx)
+                node.assign(ctx, request_id="dne", tenant_name="test")
+                # Modify the request so that the max zxid of the
+                # request cache is later than the node assignment
+                # (since the "dne" request does not exist).
+                with request.locked(ctx), request.activeContext(ctx):
+                    request.priority += 1
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "node to be recycled"):
+            node.refresh(ctx)
+            if node.state == node.State.READY:
+                break
+
+        # The normal label can also be requested as a spot label
+        request = self.requestNodes(['debian-spot'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+
+    @simple_layout('layouts/nodepool-reuse-aliases.yaml', enable_nodepool=True)
+    def test_reuse_aliases_reverse(self):
+        # Test the reverse of the above test: that label aliases are
+        # one-way
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-spot'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(1, len(nodes))
+        node = nodes[0]
+        # Get a copy so we're not modifying the launcher's
+        node = model.ProviderNode.fromZK(ctx, path=node.getPath())
+
+        with node.locked(ctx):
+            with node.activeContext(ctx):
+                node.unassign(ctx)
+                node.assign(ctx, request_id="dne", tenant_name="test")
+                # Modify the request so that the max zxid of the
+                # request cache is later than the node assignment
+                # (since the "dne" request does not exist).
+                with request.locked(ctx), request.activeContext(ctx):
+                    request.priority += 1
+                node.setState(node.State.USED)
+
+        for _ in iterate_timeout(10, "node to be recycled"):
+            node.refresh(ctx)
+            if node.state == node.State.READY:
+                break
+
+        # The spot label may not be requested as a normal label
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        self.assertEqual(2, len(nodes))
 
     @simple_layout('layouts/nodepool-reuse.yaml', enable_nodepool=True)
     @okay_tracebacks('_checkNodescanRequest')

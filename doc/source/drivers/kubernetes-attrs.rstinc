@@ -498,6 +498,15 @@
       Values set on individual labels may still override the
       values set here.
 
+      .. attr:: aliases
+         :type: str
+
+         A list of label aliases to associate with nodes created from
+         this label.  These labels may be used to request existing
+         ready nodes that were previously created from this label, but
+         none of their attributes will be used to define
+         characteristics.
+
       .. attr:: annotations
          :type: dict
 
@@ -646,6 +655,15 @@
       :type: dict
 
       A list of labels associated with this provider.
+
+      .. attr:: aliases
+         :type: str
+
+         A list of label aliases to associate with nodes created from
+         this label.  These labels may be used to request existing
+         ready nodes that were previously created from this label, but
+         none of their attributes will be used to define
+         characteristics.
 
       .. attr:: annotations
          :type: dict

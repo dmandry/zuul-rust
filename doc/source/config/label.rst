@@ -127,3 +127,12 @@ The attributes available to top-level label objects are:
       instance is retained for at least the minimum billing interval.
 
       This setting takes precedence over `max-[ready-]age`.
+
+   .. attr:: aliases
+      :type: str
+
+      A list of label aliases to associate with nodes created from
+      this label.  These labels may be used to request existing
+      ready nodes that were previously created from this label, but
+      none of their attributes will be used to define
+      characteristics.
