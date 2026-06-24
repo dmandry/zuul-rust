@@ -3285,6 +3285,14 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
         infrastructure resources."""
         return []
 
+    def getManagedResources(self):
+        """Return a list of resource IDs created by this node
+
+        Used by the launcher to classify cloud resources as managed
+        (belonging to a known node) vs unmanaged for quota tracking.
+        """
+        return []
+
     def getSpanAttributes(self):
         return dict(
             uuid=self.uuid,
