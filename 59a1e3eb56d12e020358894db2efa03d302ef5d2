@@ -41,6 +41,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "df8f7647_b39d721b",
+        "filename": "doc/source/config/label.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 132,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T14:49:47Z",
+      "side": 1,
+      "message": "While that would be nice (it should say \"str or list of str\"), that is not currently supported by the doc generation tool, and it matches the output for similar existing attributes.  The text makes it clear that it\u0027s a list.",
+      "parentUuid": "8379e407_4ec2fe67",
+      "range": {
+        "startLine": 132,
+        "startChar": 13,
+        "endLine": 132,
+        "endChar": 16
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "fd0990da_3a6ce053",
@@ -54,6 +78,30 @@
       "writtenOn": "2026-06-24T09:30:55Z",
       "side": 1,
       "message": "list? (... looks like all doc have same issue.",
+      "range": {
+        "startLine": 1182,
+        "startChar": 16,
+        "endLine": 1182,
+        "endChar": 19
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "06cfdbfd_8bcd29ef",
+        "filename": "doc/source/drivers/aws-attrs.rstinc",
+        "patchSetId": 1
+      },
+      "lineNbr": 1182,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T14:49:47Z",
+      "side": 1,
+      "message": "N/A",
+      "parentUuid": "fd0990da_3a6ce053",
       "range": {
         "startLine": 1182,
         "startChar": 16,
@@ -87,6 +135,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "c034b320_fb9312d4",
+        "filename": "tests/fixtures/layouts/nodepool-min-ready-aliases-reverse.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 53,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T14:49:47Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "58f3a2bc_c5d8c33d",
+      "range": {
+        "startLine": 53,
+        "startChar": 13,
+        "endLine": 53,
+        "endChar": 19
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c982f2bf_ca6d8a22",
@@ -100,6 +172,30 @@
       "writtenOn": "2026-06-24T09:30:55Z",
       "side": 1,
       "message": "This needs condition on model_api \u003e\u003d 37?",
+      "range": {
+        "startLine": 1826,
+        "startChar": 12,
+        "endLine": 1826,
+        "endChar": 36
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b903acb0_72127153",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1826,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T14:49:47Z",
+      "side": 1,
+      "message": "I do not believe it does.",
+      "parentUuid": "c982f2bf_ca6d8a22",
       "range": {
         "startLine": 1826,
         "startChar": 12,
