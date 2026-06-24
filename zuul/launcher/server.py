@@ -1006,6 +1006,7 @@ class CleanupWorker:
 
         # Get information about all nodes and their required resources
         node_ids = []
+        managed_resource_ids = {}
         for node in self.launcher.api.nodes_cache.getItems():
             node_ids.append(node.uuid)
             # If this node is associated with a provider on this
@@ -1013,6 +1014,12 @@ class CleanupWorker:
             if node.endpoint_name == endpoint.name:
                 required_resource_ids.update(set(
                     node.getRequiredResources()))
+                # Track resources created by this node so that
+                # listInstances() can classify them as managed
+                # for quota accounting.
+                for rid in node.getManagedResources():
+                    managed_resource_ids[rid] = node.uuid
+        endpoint.managed_resource_ids = managed_resource_ids
 
         # Update quota; we get different classes back from
         # listInstances and listResources, so we can't use the same
