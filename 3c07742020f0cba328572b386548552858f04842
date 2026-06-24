@@ -48,6 +48,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b06f2617_4ede2b17",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 10,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T18:14:18Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7c8500f3_a7f1c86c",
+      "range": {
+        "startLine": 10,
+        "startChar": 10,
+        "endLine": 10,
+        "endChar": 15
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "3224b7d8_1fbd353f",
@@ -95,6 +119,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "1a5d9156_38f9ae27",
+        "filename": "doc/source/monitoring.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1033,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T18:14:18Z",
+      "side": 1,
+      "message": "Fixed in the change in which it was introduced.",
+      "parentUuid": "3224b7d8_1fbd353f",
+      "range": {
+        "startLine": 1033,
+        "startChar": 40,
+        "endLine": 1033,
+        "endChar": 44
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "bf006a89_05ad1fe9",
@@ -108,6 +156,30 @@
       "writtenOn": "2026-06-23T10:05:56Z",
       "side": 1,
       "message": "These args are not used - inside this method the outer `*args` and `**kw` is used. Functionally ok, since thoose are also what is passed to wrap. A cleaner approach would be to just do `super().submit(wrap)` and drop the args on the inner function?",
+      "range": {
+        "startLine": 42,
+        "startChar": 17,
+        "endLine": 42,
+        "endChar": 39
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "23375766_a51e89bc",
+        "filename": "zuul/lib/concurrency.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 42,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T18:14:18Z",
+      "side": 1,
+      "message": "I\u0027m going to fix it the other way; I want minimal changes to superclass behavior.\n\n(I agree it\u0027s equivalent and the way you suggest is fine too.)",
+      "parentUuid": "bf006a89_05ad1fe9",
       "range": {
         "startLine": 42,
         "startChar": 17,
