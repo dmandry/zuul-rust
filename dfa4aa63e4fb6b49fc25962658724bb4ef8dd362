@@ -18,6 +18,23 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "0c43479b_c7346098",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 15
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 39118
+      },
+      "writtenOn": "2026-06-24T03:30:57Z",
+      "side": 1,
+      "message": "The aim of this change was to not limit users to the existing cron syntax.\n\nMany companies follow the release after sprint model, meaning they want to release their software after the sprint. Currently it is being handled manually as cron syntax currently cannot support schedules such as \"every 2 weeks on a Wednesday, last Friday of the month, etc\".\n\nI believe this change will be particularly beneficial for companies using Zuul but still have to release manually due to this exact limitation of cron syntax.",
+      "revId": "dfa4aa63e4fb6b49fc25962658724bb4ef8dd362",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e5ccd4d3_c6a8bf46",
