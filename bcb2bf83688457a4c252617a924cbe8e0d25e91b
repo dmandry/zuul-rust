@@ -22,6 +22,24 @@
       },
       "revId": "bcb2bf83688457a4c252617a924cbe8e0d25e91b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "567bd645_ff0d9b49",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1252,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T14:20:24Z",
+      "side": 1,
+      "message": "That is correct and consistent with the rest of Zuul.",
+      "parentUuid": "bdf54143_6cc4d9aa",
+      "revId": "bcb2bf83688457a4c252617a924cbe8e0d25e91b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
