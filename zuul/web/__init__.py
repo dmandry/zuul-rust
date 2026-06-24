@@ -102,7 +102,7 @@ from zuul.zk.zkobject import LocalZKContext, ZKContext
 from zuul.lib.auth import AuthenticatorRegistry
 from zuul.lib.config import get_default
 from zuul.lib.logutil import get_annotated_logger
-from zuul.lib.statsd import get_statsd, normalize_statsd_name
+from zuul.lib.statsd import get_statsd
 from zuul.web.logutil import ZuulCherrypyLogManager
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
@@ -1120,7 +1120,6 @@ class StatsTool(cherrypy.Tool):
     def __init__(self, statsd, metrics):
         self.statsd = statsd
         self.metrics = metrics
-        self.hostname = normalize_statsd_name(socket.getfqdn())
         cherrypy.Tool.__init__(self, 'on_start_resource',
                                self.emitStats)
 
@@ -1134,10 +1133,10 @@ class StatsTool(cherrypy.Tool):
         self.metrics.threadpool_queue.set(qsize)
         if self.statsd:
             self.statsd.gauge(
-                f'zuul.web.server.{self.hostname}.threadpool.idle',
+                'zuul.web.server.{hostname}.threadpool.idle',
                 idle)
             self.statsd.gauge(
-                f'zuul.web.server.{self.hostname}.threadpool.queue',
+                'zuul.web.server.{hostname}.threadpool.queue',
                 qsize)
 
 
@@ -3517,7 +3516,6 @@ class StreamManager(object):
         self.thread = None
         self.statsd = statsd
         self.metrics = metrics
-        self.hostname = normalize_statsd_name(socket.getfqdn())
         self.streamers = {}
         self.poll = select.poll()
         self.bitmask = (select.POLLIN | select.POLLERR |
@@ -3583,7 +3581,7 @@ class StreamManager(object):
         streamers = len(self.streamers)
         self.metrics.streamers.set(streamers)
         if self.statsd:
-            self.statsd.gauge(f'zuul.web.server.{self.hostname}.streamers',
+            self.statsd.gauge('zuul.web.server.{hostname}.streamers',
                               streamers)
 
     def registerStreamer(self, streamer):
@@ -3851,7 +3849,9 @@ class ZuulWeb(object):
         self.config = config
         self.tracing = tracing.Tracing(self.config)
         self.metrics = WebMetrics()
-        self.statsd = get_statsd(config)
+        self.hostname = socket.getfqdn()
+        statsd_extra_keys = {'hostname': self.hostname}
+        self.statsd = get_statsd(config, statsd_extra_keys)
         self.wsplugin = None
 
         self.listen_address = get_default(self.config,
@@ -3866,7 +3866,6 @@ class ZuulWeb(object):
         self.static_path = os.path.abspath(
             get_default(self.config, 'web', 'static_path', STATIC_DIR)
         )
-        self.hostname = socket.getfqdn()
 
         self.zk_client = ZooKeeperClient.fromConfig(self.config)
         self.zk_client.connect()
