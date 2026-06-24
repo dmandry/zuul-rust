@@ -1528,6 +1528,38 @@ class Launcher:
         random.shuffle(providers)
         return providers
 
+    def _checkProviderTemplatePolicy(self, provider, label_name, request,
+                                     label_index, messages):
+        """Check provider template policy allows requested template.
+
+        This is called as an explicit filtering step before quota checks
+        in _selectProviders. Returns the template props dict for use by
+        subsequent quota calculations, or None to signal that the provider
+        should be excluded due to a template policy violation.
+
+        :param provider: The provider to check.
+        :param str label_name: Name of the label being requested.
+        :param request: The nodeset request object.
+        :param int label_index: Index of the label in request.labels,
+            used to look up the corresponding template_config entry.
+        :param list messages: Accumulator for diagnostic messages.
+        :returns: Template config dict or None.
+        :rtype: dict or None
+        """
+        if not request.template_config:
+            return {}
+        props = {}
+        if label_index < len(request.template_config):
+            props = request.template_config[label_index]
+        try:
+            provider.checkTemplatePolicy(props)
+        except exceptions.TemplatePolicyViolation as e:
+            messages.append(
+                f"Provider {provider} excluded for label "
+                f"{label_name}: template policy violation: {e}")
+            return None
+        return props
+
     def _selectProviders(self, request, request_unassigned_nodes, messages):
         providers = self.tenant_providers.get(request.tenant_name)
         if not providers:
@@ -1609,6 +1641,12 @@ class Launcher:
                     )
                     if not any(valid_uploads):
                         continue
+                props = self._checkProviderTemplatePolicy(
+                    provider, label_name, request, i, messages)
+                # None means policy violation; skip this provider.
+                # A dict (even empty) means policy passed; proceed to quota.
+                if props is None:
+                    continue
                 # Check if the provider could possibly handle the
                 # request based on quota but not current zuul usage.
                 # TODO: consider the impact of a multi-node request
