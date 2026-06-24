@@ -55,6 +55,33 @@ A small number of very basic options which are available in all cases
 are documented here, but the full list of available options is
 provided with each driver's documentation.
 
+.. _template-driven-providers:
+
+Template-Driven Providers
+-------------------------
+
+Some provider drivers support template driven node creation, where
+the infrastructure topology for a build node is defined by a template
+stored in the project repository. In this case, the node in a nodeset
+carries a `template-config` dict with driver specific keys, such as a
+path to the template file and template parameters.
+
+During configuration loading, the driver resolves template content
+from the repository files and validates it. At node request time, the
+launcher may filter providers based on template policy.  When multiple
+providers serve the same label, each provider independently evaluates
+whether its policy accepts the submitted template.  Providers that
+reject the template are excluded, and the request is routed to one
+that accepts it.  The request will fail if no provider accepts the
+template.
+
+Drivers can declare additional tenant project configuration keys,
+such as directories containing template files, so that the scheduler
+fetches the necessary files from git.
+
+Individual drivers document the specific template-config keys and
+policy options available.
+
 .. attr:: provider
 
    For the full list of attributes available to a provider based on

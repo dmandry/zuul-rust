@@ -103,6 +103,16 @@ configure settings that are universally applicable to AWS.  The
 `north` and `central` sections may add settings applicable to just
 those regions, and finally, the providers can further refine settings.
 
+Template-Driven Providers
+-------------------------
+
+Some provider drivers support defining the infrastructure for a build
+node using a template from the project repository rather than fixed
+provider configuration alone.  In this case, the nodeset node definition
+includes a :attr:`nodeset.nodes.template-config` dict whose keys are
+defined by the driver.  See :ref:`template-driven-providers` for more
+details.
+
 Node Reuse
 ----------
 
