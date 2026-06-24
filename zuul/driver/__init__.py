@@ -300,7 +300,7 @@ class AuthenticatorInterface(object, metaclass=abc.ABCMeta):
         This method is required by the interface
 
         :arg string rawToken: the base64-encoded Auth Token as passed in the
-        "Authorization" header.
+            "Authorization" header.
 
         :returns: a string and a dictionary
         :rtype: list
