@@ -18,3 +18,12 @@ other systems.
 
 .. autoclass:: zuul.driver.ReporterInterface
    :members:
+
+.. autoclass:: zuul.driver.WrapperInterface
+   :members:
+
+.. autoclass:: zuul.driver.AuthenticatorInterface
+   :members:
+
+.. autoclass:: zuul.driver.ProviderInterface
+   :members:
