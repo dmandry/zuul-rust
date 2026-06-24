@@ -50,6 +50,24 @@
       "message": "Is this sleep necessary? I think waitUntilSettled may busy wait?",
       "revId": "7525ba827198e666d2edd19a92f4ac1b7820d6d8",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c08edcc6_5962a019",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 166,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-06-24T09:38:23Z",
+      "side": 1,
+      "message": "The timer was already stopped and waitUntilSettled() called before this point, so the sleep wasn\u0027t needed. Simplified to just release() + waitUntilSettled().",
+      "parentUuid": "2c8f83e4_4804ecd2",
+      "revId": "7525ba827198e666d2edd19a92f4ac1b7820d6d8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
