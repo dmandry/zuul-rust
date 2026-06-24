@@ -24,6 +24,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "15ec106d_338f7a9a",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 10,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T07:19:56Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "7c8500f3_a7f1c86c",
+      "range": {
+        "startLine": 10,
+        "startChar": 10,
+        "endLine": 10,
+        "endChar": 15
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "3224b7d8_1fbd353f",
@@ -37,6 +61,30 @@
       "writtenOn": "2026-06-23T10:05:56Z",
       "side": 1,
       "message": "nit, unrelated typo s/stae/state/? - might worth just fixing if you do another revision since it is so close to the relevant diff.",
+      "range": {
+        "startLine": 1033,
+        "startChar": 40,
+        "endLine": 1033,
+        "endChar": 44
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "758dc8e3_af8eb3d6",
+        "filename": "doc/source/monitoring.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1033,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T07:19:56Z",
+      "side": 1,
+      "message": "Done in earlier change. 👍",
+      "parentUuid": "3224b7d8_1fbd353f",
       "range": {
         "startLine": 1033,
         "startChar": 40,

@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bdf54143_6cc4d9aa",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1252,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T07:19:56Z",
+      "side": 1,
+      "message": "should hostname be normalized?\n\nL1182 above does `self.hostname \u003d _hostname or socket.getfqdn()` - if that returns an FQDN like launcher-0.example.com we would end up with .launcher-0.example.com.upload_workers in the metric path?",
+      "range": {
+        "startLine": 1252,
+        "startChar": 42,
+        "endLine": 1252,
+        "endChar": 57
+      },
+      "revId": "bcb2bf83688457a4c252617a924cbe8e0d25e91b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
