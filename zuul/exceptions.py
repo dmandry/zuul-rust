@@ -95,6 +95,11 @@ class QuotaException(Exception):
     pass
 
 
+class TemplatePolicyViolation(Exception):
+    """Exception raised when a template violates template policies."""
+    pass
+
+
 class AlgorithmNotSupportedException(Exception):
     pass
 
