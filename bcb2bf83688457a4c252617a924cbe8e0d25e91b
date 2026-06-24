@@ -40,6 +40,30 @@
       "parentUuid": "bdf54143_6cc4d9aa",
       "revId": "bcb2bf83688457a4c252617a924cbe8e0d25e91b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5cb8f495_185f6eb4",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1252,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T16:08:42Z",
+      "side": 1,
+      "message": "Ok, thanks. Looking deeper I see it is consistently not normalized in the Launcher. I saw it normalized in Web server and Executor (see below), so I figured it would make sense here as well.\n\nMarking as resolved, it probably does not make sense to change this now that it has been like this for some time.\n\n\nExecutor uses zuul/lib/statsd.py - passes hostname in statsd_extra_keys[1]. So it is normalized by CustomStatsClient. And web server also normalizes[2]. \n\n[1] https://opendev.org/zuul/zuul/src/branch/master/zuul/executor/server.py#L4162\n[2] https://opendev.org/zuul/zuul/src/branch/master/zuul/web/__init__.py#L1123\n[3] https://opendev.org/zuul/zuul/src/branch/master/zuul/web/__init__.py#L3520",
+      "parentUuid": "567bd645_ff0d9b49",
+      "range": {
+        "startLine": 1252,
+        "startChar": 42,
+        "endLine": 1252,
+        "endChar": 57
+      },
+      "revId": "bcb2bf83688457a4c252617a924cbe8e0d25e91b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
