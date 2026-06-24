@@ -16,6 +16,52 @@
       "message": "recheck",
       "revId": "dc4cd7b3c0a8b952d84842e34d6084c9d49a163a",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4ecadb1c_e8716472",
+        "filename": "doc/source/drivers/aws-attrs.rstinc",
+        "patchSetId": 1
+      },
+      "lineNbr": 219,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T11:58:23Z",
+      "side": 1,
+      "message": "nit: Typo",
+      "range": {
+        "startLine": 219,
+        "startChar": 38,
+        "endLine": 219,
+        "endChar": 48
+      },
+      "revId": "dc4cd7b3c0a8b952d84842e34d6084c9d49a163a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "19646950_47826406",
+        "filename": "zuul/driver/aws/awsprovider.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 399,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T11:58:23Z",
+      "side": 1,
+      "message": "nit: Typo.",
+      "range": {
+        "startLine": 399,
+        "startChar": 39,
+        "endLine": 399,
+        "endChar": 49
+      },
+      "revId": "dc4cd7b3c0a8b952d84842e34d6084c9d49a163a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
