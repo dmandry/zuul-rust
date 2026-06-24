@@ -786,6 +786,16 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
         """
         return model.QuotaInformation(default=math.inf)
 
+    def checkTemplatePolicy(self, template_config):
+        """Validate template_config against provider template-policy.
+
+        The default implementation accepts all templates (no policy).
+
+        :param dict template_config: Template configuration dict.
+        :raises TemplatePolicyViolation: If the template violates policy.
+        """
+        pass
+
     def getQuotaForLabel(self, label, **kwargs):
         """Return information about the quota used for a label
 
