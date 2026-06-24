@@ -1,0 +1,113 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f36107a3_144a486b",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T09:30:55Z",
+      "side": 1,
+      "message": "Looks good, but needs new version in zuul/model_api.py - and the compat mode conditions?",
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8379e407_4ec2fe67",
+        "filename": "doc/source/config/label.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 132,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T09:30:55Z",
+      "side": 1,
+      "message": "list?",
+      "range": {
+        "startLine": 132,
+        "startChar": 13,
+        "endLine": 132,
+        "endChar": 16
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fd0990da_3a6ce053",
+        "filename": "doc/source/drivers/aws-attrs.rstinc",
+        "patchSetId": 1
+      },
+      "lineNbr": 1182,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T09:30:55Z",
+      "side": 1,
+      "message": "list? (... looks like all doc have same issue.",
+      "range": {
+        "startLine": 1182,
+        "startChar": 16,
+        "endLine": 1182,
+        "endChar": 19
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "58f3a2bc_c5d8c33d",
+        "filename": "tests/fixtures/layouts/nodepool-min-ready-aliases-reverse.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 53,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T09:30:55Z",
+      "side": 1,
+      "message": "s/debian/debian-normal/ ?",
+      "range": {
+        "startLine": 53,
+        "startChar": 13,
+        "endLine": 53,
+        "endChar": 19
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c982f2bf_ca6d8a22",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1826,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-24T09:30:55Z",
+      "side": 1,
+      "message": "This needs condition on model_api \u003e\u003d 37?",
+      "range": {
+        "startLine": 1826,
+        "startChar": 12,
+        "endLine": 1826,
+        "endChar": 36
+      },
+      "revId": "59a1e3eb56d12e020358894db2efa03d302ef5d2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
