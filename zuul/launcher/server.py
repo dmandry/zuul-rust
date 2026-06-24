@@ -1528,6 +1528,34 @@ class Launcher:
         random.shuffle(providers)
         return providers
 
+    def _checkProviderTemplatePolicy(self, provider, label_name, request,
+                                     label_index, messages):
+        """Check provider template policy allows requested template.
+
+        This is called as an explicit filtering step before quota checks
+        in _selectProviders.
+
+        :param provider: The provider to check.
+        :param str label_name: Name of the label being requested.
+        :param request: The nodeset request object.
+        :param int label_index: Index of the label in request.labels,
+            used to look up the corresponding template_config entry.
+        :param list messages: Accumulator for diagnostic messages.
+        :returns: Whether the template policy check passed.
+        :rtype: bool
+        """
+        if not request.template_config:
+            return True
+        try:
+            provider.checkTemplatePolicy(
+                request.template_config[label_index])
+        except exceptions.TemplatePolicyViolation as e:
+            messages.append(
+                f"Provider {provider} excluded for label "
+                f"{label_name}: template policy violation: {e}")
+            return False
+        return True
+
     def _selectProviders(self, request, request_unassigned_nodes, messages):
         providers = self.tenant_providers.get(request.tenant_name)
         if not providers:
@@ -1609,6 +1637,9 @@ class Launcher:
                     )
                     if not any(valid_uploads):
                         continue
+                if not self._checkProviderTemplatePolicy(
+                        provider, label_name, request, i, messages):
+                    continue
                 # Check if the provider could possibly handle the
                 # request based on quota but not current zuul usage.
                 # TODO: consider the impact of a multi-node request
