@@ -110,6 +110,18 @@ specify nodes and groups, or alternative nodesets, but not both.
          The label for the node.  Zuul will request a node with
          this label.
 
+      .. attr:: template-config
+         :type: dict
+
+         Optional driver-specific template configuration for this node.
+         The available keys depend on which provider drivers are
+         configured.  When a provider driver implements template-based
+         provisioning, the keys it contributes are documented in that
+         driver's documentation.
+
+         See :ref:`template-driven-providers` for an overview of how
+         template configuration works.
+
    .. attr:: groups
 
       Additional groups can be defined which are accessible from the ansible
