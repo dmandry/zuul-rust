@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f08bed72_750c6760",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 11860,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T17:58:16Z",
+      "side": 1,
+      "message": "Nit: this duplicates the comment above and isn\u0027t necessary.",
+      "revId": "7fcbf371195e919e7bae04fe9f5ff49de53e94e3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3fc816ea_be0970d1",
+        "filename": "tests/unit/test_v3.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 11871,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-24T17:58:16Z",
+      "side": 1,
+      "message": "Nit: The first sentence of this comemnt duplicates the comment above and doesn\u0027t need to be repeated.  As for the second sentence: we don\u0027t need to explain waitUntilSettled every time we use it, there are 3018 call sites in the test suite.",
+      "revId": "7fcbf371195e919e7bae04fe9f5ff49de53e94e3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
