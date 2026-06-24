@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d18c4dfd_d49b83e2",
+        "filename": "tests/unit/test_model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 416,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-24T22:10:02Z",
+      "side": 1,
+      "message": "Are these secrets large enough to be deduplicated at 128 byes? I think it depends on the size of self.context and self.start_mark? if thare small then this may fit in under 128 bytes anyway?\n\nMaybe a good check is to check the size of the secret falls between 128 and 1024 bytes somewhere below to ensure we\u0027re testing what we think we\u0027re testing?",
+      "revId": "297bb1ab9ec9984ecd49f30fc9a4902581e4d65c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
