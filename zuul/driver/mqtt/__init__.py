@@ -1,4 +1,5 @@
 # Copyright 2017 Red Hat, Inc.
+# Copyright 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -14,7 +15,9 @@
 
 from zuul.driver import Driver, ConnectionInterface, ReporterInterface
 from zuul.driver.mqtt import mqttconnection
+from zuul.driver.mqtt import mqttmodel
 from zuul.driver.mqtt import mqttreporter
+from zuul.driver.mqtt import mqtttrigger
 
 
 class MQTTDriver(Driver, ConnectionInterface, ReporterInterface):
@@ -23,9 +26,42 @@ class MQTTDriver(Driver, ConnectionInterface, ReporterInterface):
     def getConnection(self, name, config):
         return mqttconnection.MQTTConnection(self, name, config)
 
+    def getTrigger(self, connection, config=None):
+        return mqtttrigger.MQTTTrigger(self, connection, config)
+
+    def getTriggerSchema(self):
+        return mqtttrigger.getSchema()
+
+    def getTriggerEventClass(self):
+        return mqttmodel.MQTTTriggerEvent
+
     def getReporter(self, connection, pipeline, config=None,
                     parse_context=None):
         return mqttreporter.MQTTReporter(self, connection, config)
 
     def getReporterSchema(self):
         return mqttreporter.getSchema()
+
+    def reconfigure(self, tenant):
+        connection_transformer_map = {}
+        connection_subscription_map = {}
+        for manager in tenant.layout.pipeline_managers.values():
+            pipeline = manager.pipeline
+            for event_filter in pipeline.event_filters:
+                trigger = event_filter.trigger
+                if isinstance(trigger, mqtttrigger.MQTTTrigger):
+                    con = trigger.connection
+                    transformers = connection_transformer_map.setdefault(
+                        con, [])
+                    transformers.append(event_filter.getTransformer())
+                    subscriptions = connection_subscription_map.setdefault(
+                        con, set())
+                    # Event filter configuration describes topics to subscribe
+                    # to. Those are user facing values for which topic makes
+                    # sense. Internally mqtt subscribes to these values so we
+                    # track them as subscriptions here.
+                    subscriptions.update(event_filter.topic)
+        for (con, transformers) in connection_transformer_map.items():
+            con.setTransformers(tenant.name, transformers)
+        for (con, subscriptions) in connection_subscription_map.items():
+            con.setSubscriptions(tenant.name, subscriptions)
