@@ -1,0 +1,16 @@
+---
+features:
+  - |
+    The MQTT driver has been extended to support triggering in addition
+    to the existing reporter functionality. The driver will not start
+    listening to events until an MQTT trigger is configured on a pipeline
+    with an MQTT topic subscription. This makes upgrades for existing users of
+    the MQTT driver a noop. Those wishing to trigger jobs from MQTT events
+    must add new configuration to their pipelines to start subscribing
+    to events by topic.
+deprecations:
+  - |
+    The MQTT driver would read and use a client_id from its configuration.
+    This was never documented and is not necessary. It is deprecated and Zuul
+    will no longer read this value or use this value when setting up MQTT
+    connections.
