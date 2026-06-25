@@ -3040,9 +3040,14 @@ class ZuulTestCase(BaseTestCase):
         try:
             gc.collect()
             for obj in gc.get_objects():
-                if isinstance(obj, git.Repo):
-                    self.log.debug("Leaked git repo object: 0x%x %s" %
-                                   (id(obj), repr(obj)))
+                try:
+                    if isinstance(obj, git.Repo):
+                        self.log.debug("Leaked git repo object: 0x%x %s" %
+                                       (id(obj), repr(obj)))
+                except ValueError:
+                    # amqtt pulls in passlib and that explodes when checking
+                    # isinstance against it on a ValueError
+                    pass
         finally:
             gc.enable()
         if len(self.scheds) > 1:

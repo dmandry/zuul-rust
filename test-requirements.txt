@@ -1,3 +1,4 @@
+amqtt
 coverage>=3.6
 fixtures>=0.3.14
 stestr>=1.0.0 # Apache-2.0
