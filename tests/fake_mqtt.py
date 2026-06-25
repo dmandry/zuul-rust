@@ -42,7 +42,9 @@ class FakeMQTTBroker:
         for client, topics in self.clients.items():
             for client_sub in topics:
                 if topic_matches_sub(client_sub, topic):
-                    if f := getattr(self, 'on_message', None):
+                    if f := getattr(client, 'on_message', None):
+                        # TODO Need to convert payload to a paho mqtt message
+                        # with payload and topic attributes then pass it here.
                         f(self, None, None)
                     break
 
