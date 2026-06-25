@@ -913,24 +913,30 @@ Here is an example of two job definitions:
          un-branched repositories.  Otherwise different branches of
          the role repo may be checked out.
 
-      A project which supplies a role may be structured in one of two
+      A project which supplies a role may be structured in one of three
       configurations: a bare role (in which the role exists at the
-      root of the project), or a contained role (in which the role
+      root of the project), a contained role (in which the role
       exists within the ``roles/`` directory of the project, perhaps
-      along with other roles).  In the case of a contained role, the
+      along with other roles), or an Ansible collection (in which the
+      project root contains a ``galaxy.yml`` file with ``namespace``
+      and ``name`` fields).  In the case of a contained role, the
       ``roles/`` directory of the project is added to the role search
       path.  In the case of a bare role, the project itself is added
       to the role search path.  In case the name of the project is not
       the name under which the role should be installed (and therefore
       referenced from Ansible), the ``name`` attribute may be used to
-      specify an alternate.
+      specify an alternate.  In the case of an Ansible collection,
+      Zuul creates the standard
+      ``ansible_collections/<namespace>/<name>/`` symlink structure
+      and adds the containing directory to ``collections_paths`` in
+      the generated ``ansible.cfg``.
 
       A job automatically has the project in which it is defined added
       to the roles path if that project appears to contain a role or
-      ``roles/`` directory.  By default, the project is added to the
-      path under its own name, however, that may be changed by
-      explicitly listing the project in the roles list in the usual
-      way.
+      ``roles/`` directory, or to the collections path if it contains
+      a ``galaxy.yml``.  By default, the project is added to the path
+      under its own name, however, that may be changed by explicitly
+      listing the project in the roles list in the usual way.
 
       .. attr:: galaxy
 
