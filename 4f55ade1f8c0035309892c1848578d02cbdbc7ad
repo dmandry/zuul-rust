@@ -16,6 +16,24 @@
       "message": "This comment feels no longer true?",
       "revId": "4f55ade1f8c0035309892c1848578d02cbdbc7ad",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6cf386b9_d2032069",
+        "filename": "zuul/driver/kubernetes/kubernetesendpoint.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 123,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-25T22:08:54Z",
+      "side": 1,
+      "message": "It could be more clear, what that means to me is:\n\n  The name that we generate for a pod is the same as the one that we use for the namespace.\n\nI think it\u0027s worth a comment because it explains why line 125 is basically: \"...pod \u003d namespace\", which might otherwise look like an error without that context.\n\nI could move it to be between line 124 and 125 and expand on it if that helps.",
+      "parentUuid": "2859cdf1_1338fec8",
+      "revId": "4f55ade1f8c0035309892c1848578d02cbdbc7ad",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
