@@ -96,6 +96,11 @@
     image: debian
     flavor: normal
 
+- label:
+    name: k8s-namespace
+    image: debian
+    flavor: normal
+
 - section:
     name: kube-base
     abstract: true
@@ -127,3 +132,5 @@
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args: ["while true; do sleep 30; done;"]
+      - name: k8s-namespace
+        kind: namespace

@@ -121,7 +121,10 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             not self.endpoint.core_client.api_client.configuration.verify_ssl
         self.node.kubernetes_connection['namespace'] = self.namespace
         # Pod and namespace names are the same
-        self.node.kubernetes_connection['pod'] = self.namespace
+        if label.kind == 'pod':
+            self.node.kubernetes_connection['pod'] = self.namespace
+        elif label.kind == 'namespace':
+            self.node.kubernetes_connection['pod'] = None
         self.node.kubernetes_connection['containers'] = self.containers
 
     def advance(self):
@@ -149,9 +152,13 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
             self.state = self.RBAC_CREATING
 
         if self.state == self.RBAC_CREATING:
-            self.endpoint._createPod(self.namespace, self.hostname,
-                                     self.label, self.node.tags)
-            self.state = self.POD_CREATING
+            if self.label.kind == 'pod':
+                self.endpoint._createPod(self.namespace, self.hostname,
+                                         self.label, self.node.tags)
+                self.state = self.POD_CREATING
+            elif self.label.kind == 'namespace':
+                self._updateNode()
+                self.state = self.COMPLETE
 
         if self.state == self.POD_CREATING:
             if not self.endpoint._getPod(self.namespace, self.hostname):
