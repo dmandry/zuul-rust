@@ -188,6 +188,30 @@
       },
       "revId": "3c07742020f0cba328572b386548552858f04842",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0bdc8baa_7917f8e8",
+        "filename": "zuul/lib/concurrency.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 42,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-25T07:35:02Z",
+      "side": 1,
+      "message": "Yes indeed, that is fine too.",
+      "parentUuid": "23375766_a51e89bc",
+      "range": {
+        "startLine": 42,
+        "startChar": 17,
+        "endLine": 42,
+        "endChar": 39
+      },
+      "revId": "3c07742020f0cba328572b386548552858f04842",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
