@@ -2125,11 +2125,14 @@ class TenantParser(object):
         'allow-circular-dependencies': bool,
         'implied-branch-matchers': bool,
     }
-    config_project_dict = {str: inner_config_project_dict}
 
     inner_untrusted_project_dict = inner_config_project_dict.copy()
     inner_untrusted_project_dict['configure-projects'] = to_list(str)
     inner_untrusted_project_dict['allow-reporter-jobs'] = bool
+
+    inner_config_project_dict['allow-base-jobs'] = bool
+
+    config_project_dict = {str: inner_config_project_dict}
     untrusted_project_dict = {str: inner_untrusted_project_dict}
 
     config_project = vs.Any(str, config_project_dict)
@@ -2422,6 +2425,7 @@ class TenantParser(object):
             project_implied_branch_matchers = None
             project_configure_projects = None
             project_allow_reporter_jobs = None
+            project_allow_base_jobs = None
         else:
             project_name = list(conf.keys())[0]
             project = source.getProject(project_name)
@@ -2498,6 +2502,8 @@ class TenantParser(object):
                 project_configure_projects = None
             project_allow_reporter_jobs = conf[project_name].get(
                 'allow-reporter-jobs', None)
+            project_allow_base_jobs = conf[project_name].get(
+                'allow-base-jobs', None)
 
         tenant_project_config = model.TenantProjectConfig(project)
         tenant_project_config.load_classes = frozenset(project_include)
@@ -2519,6 +2525,8 @@ class TenantParser(object):
             project_configure_projects
         tenant_project_config.allow_reporter_jobs = \
             project_allow_reporter_jobs
+        tenant_project_config.allow_base_jobs = \
+            project_allow_base_jobs
         return tenant_project_config
 
     def _getProjects(self, source, conf, current_include):

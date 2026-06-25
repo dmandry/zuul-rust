@@ -22,3 +22,8 @@
     parent: null
     tags:
       - otherbase
+
+- project:
+    name: extra-config
+    check:
+      jobs: []
