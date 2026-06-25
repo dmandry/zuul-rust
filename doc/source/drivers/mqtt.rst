@@ -3,11 +3,111 @@
 MQTT
 ====
 
-The MQTT driver supports reporters only. It is used to send MQTT
-message when items report.
+The MQTT driver by default operates as a reporter only. It can optionally
+be configured with a subscription topic that will listen for events
+that trigger pipelines.
 
-Message Schema
---------------
+Connection Configuration
+------------------------
+
+.. attr:: <mqtt connection>
+
+   .. attr:: driver
+      :required:
+
+      .. value:: mqtt
+
+         The connection must set ``driver=mqtt`` for MQTT connections.
+
+   .. attr:: server
+      :default: localhost
+
+      MQTT server hostname or address to use.
+
+   .. attr:: port
+      :default: 1883
+
+      MQTT server port.
+
+   .. attr:: keepalive
+      :default: 60
+
+      Maximum period in seconds allowed between communications with the broker.
+
+   .. attr:: user
+
+      Set a username for optional broker authentication.
+
+   .. attr:: password
+
+      Set a password for optional broker authentication.
+
+   .. attr:: ca_certs
+
+      A string path to the Certificate Authority certificate files to enable
+      TLS connection.
+
+   .. attr:: certfile
+
+      A strings pointing to the PEM encoded client certificate to
+      enable client TLS based authentication. This option requires keyfile to
+      be set too.
+
+   .. attr:: keyfile
+
+      A strings pointing to the PEM encoded client private keys to
+      enable client TLS based authentication. This option requires certfile to
+      be set too.
+
+   .. attr:: ciphers
+
+      A string specifying which encryption ciphers are allowable for this
+      connection. More information in this
+      `openssl doc <https://www.openssl.org/docs/manmaster/man1/ciphers.html>`_.
+
+Reporter Configuration
+----------------------
+
+A :ref:`connection<connections>` that uses the mqtt driver must be supplied to the
+reporter. Each pipeline must provide a topic name. For example:
+
+.. code-block:: yaml
+
+   - pipeline:
+       name: check
+       success:
+         mqtt:
+           topic: "{tenant}/zuul/{pipeline}/{project}/{branch}/{change}"
+           qos: 2
+
+
+.. attr:: pipeline.<reporter>.<mqtt>
+
+   To report via MQTT message, the dictionaries passed to any of the pipeline
+   :ref:`reporter<reporters>` support the following attributes:
+
+   .. attr:: topic
+
+      The MQTT topic to publish messages. The topic can be a format string that
+      can use the following parameters: ``tenant``, ``pipeline``, ``project``,
+      ``branch``, ``change``, ``patchset`` and ``ref``.
+      MQTT topic can have hierarchy separated by ``/``, more details in this
+      `doc <https://mosquitto.org/man/mqtt-7.html>`_
+
+   .. attr:: qos
+      :default: 0
+
+      The quality of service level to use, it can be 0, 1 or 2. Read more in this
+      `guide <https://www.hivemq.com/blog/mqtt-essentials-part-6-mqtt-quality-of-service-levels>`_
+
+   .. attr:: include-returned-data
+      :default: false
+
+      If set to ``true``, Zuul will include any data returned from the
+      job via :ref:`return_values`.
+
+Reporter Message Schema
+-----------------------
 
 An MQTT report uses this schema:
 
@@ -222,103 +322,80 @@ Here is an example of a success message:
     },
   }
 
+Trigger Configuration
+---------------------
 
-Connection Configuration
-------------------------
+.. attr:: pipeline.trigger.<mqtt trigger>
 
-.. attr:: <mqtt connection>
-
-   .. attr:: driver
-      :required:
-
-      .. value:: mqtt
-
-         The connection must set ``driver=mqtt`` for MQTT connections.
-
-   .. attr:: server
-      :default: localhost
-
-      MQTT server hostname or address to use.
-
-   .. attr:: port
-      :default: 1883
-
-      MQTT server port.
-
-   .. attr:: keepalive
-      :default: 60
-
-      Maximum period in seconds allowed between communications with the broker.
-
-   .. attr:: user
-
-      Set a username for optional broker authentication.
-
-   .. attr:: password
-
-      Set a password for optional broker authentication.
-
-   .. attr:: ca_certs
-
-      A string path to the Certificate Authority certificate files to enable
-      TLS connection.
-
-   .. attr:: certfile
-
-      A strings pointing to the PEM encoded client certificate to
-      enable client TLS based authentication. This option requires keyfile to
-      be set too.
-
-   .. attr:: keyfile
-
-      A strings pointing to the PEM encoded client private keys to
-      enable client TLS based authentication. This option requires certfile to
-      be set too.
-
-   .. attr:: ciphers
-
-      A string specifying which encryption ciphers are allowable for this
-      connection. More information in this
-      `openssl doc <https://www.openssl.org/docs/manmaster/man1/ciphers.html>`_.
-
-
-Reporter Configuration
-----------------------
-
-A :ref:`connection<connections>` that uses the mqtt driver must be supplied to the
-reporter. Each pipeline must provide a topic name. For example:
-
-.. code-block:: yaml
-
-   - pipeline:
-       name: check
-       success:
-         mqtt:
-           topic: "{tenant}/zuul/{pipeline}/{project}/{branch}/{change}"
-           qos: 2
-
-
-.. attr:: pipeline.<reporter>.<mqtt>
-
-   To report via MQTT message, the dictionaries passed to any of the pipeline
-   :ref:`reporter<reporters>` support the following attributes:
+   The dictionary passed to the MQTT pipeline ``trigger`` attribute
+   supports the following attributes:
 
    .. attr:: topic
+      :required:
+      :type: str
 
-      The MQTT topic to publish messages. The topic can be a format string that
-      can use the following parameters: ``tenant``, ``pipeline``, ``project``,
-      ``branch``, ``change``, ``patchset`` and ``ref``.
-      MQTT topic can have hierarchy separated by ``/``, more details in this
-      `doc <https://mosquitto.org/man/mqtt-7.html>`_
+      An MQTT topic subscription definition for which any matching mqtt event
+      topics will trigger evaluation for Zuul triggering.
 
-   .. attr:: qos
-      :default: 0
+      The MQTT driver will not subscribe to any events until at least one
+      MQTT trigger is configured with a topic subscription. This means that
+      users of the driver only for reporting purposes will not subscribe to any
+      events.
 
-      The quality of service level to use, it can be 0, 1 or 2. Read more in this
-      `guide <https://www.hivemq.com/blog/mqtt-essentials-part-6-mqtt-quality-of-service-levels>`_
+   .. attr:: required-payload
+      :type: dict
 
-   .. attr:: include-returned-data
-      :default: false
+      A dictionary of jsonpath expression keys to json primitive values (int,
+      float, string, null) or :ref:`regular expressions <regex>` values. All
+      jsonpath keys must be found in the MQTT event payload and have matching
+      values in the MQTT payload. If these keys are not found or the values do
+      not match then the MQTT event is filtered out and does not trigger the
+      pipeline.
 
-      If set to ``true``, Zuul will include any data returned from the
-      job via :ref:`return_values`.
+   .. attr:: data-mapping
+      :required:
+      :type: dict
+
+      Because MQTT is arbitrary and may differ from source to source on the
+      same message bus we need to map the data in the MQTT event payload to
+      data that Zuul knows how to handle. In particular Zuul needs two major
+      pieces of information.
+
+      First is the source of the "change" event. To lookup source info we need
+      to map either ``project-canonical-name`` or ``project-hostname`` and
+      ``project`` from the MQTT payload to Zuul. To do that add key value entries
+      where the keys are ``project-canonical-name`` or ``project-hostname`` and
+      ``project`` and the values are jsonpath expressions. These jsonpath
+      expressions will be looked up in the payload and the resulting value is
+      assigned to ``project-canonical-name`` etc.
+
+      Next we need to know what "change" should be enqueued into the pipeline.
+      For this information we need to map either a ``ref`` or ``change`` (with
+      optional ``patchset``) from MQTT event payload into Zuul. To do this
+      add key value entries where the keys are ``ref`` or ``change`` and the
+      values are jsonpath expressions. These jsonpath expressions will be looked
+      up in the payload and the resulting value is assigned to ``ref`` etc.
+
+      If any of these jsonpath expressions fail the entire MQTT event is ignored.
+      If a minimal subset of these required attributes is not properly mapped then
+      the entire MQTT event is ignored.
+
+   .. attr:: debug
+      :type: bool
+      :default: False
+
+      Because MQTT payload data and how jsonpath may apply against that payload
+      is somewhat opqaue triggers can be annotated with the debug flag to add
+      additional debug logging around these events. Note that this logging occurs
+      in the Zuul scheduler and won't be exposed to end users.
+
+   For example::
+
+     - topic: some/topic/path
+       required-payload:
+         "$.action": enqueue
+       data-mapping:
+         project: "$.project_name"
+         project-hostname: "$.project_hostname"
+         change: "$.change"
+         patchset: "$.patchset"
