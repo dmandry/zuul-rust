@@ -1322,7 +1322,15 @@ The following variables related to the job are available:
 
             .. var:: role_path
 
-               The role path passed to Ansible.
+               The role path passed to Ansible.  Present only when
+               the role is a bare or contained role, not a collection.
+
+            .. var:: collection_path
+
+               The path of the ``ansible_collections/<namespace>/<name>/``
+               symlink created for this collection.  Present only when
+               the role is an Ansible collection (i.e., the project
+               root contains a ``galaxy.yml``).
 
       .. var:: post_playbooks
          :type: list
