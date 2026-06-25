@@ -1,0 +1,10 @@
+---
+features:
+  - |
+    The MQTT driver has been extended to support triggering in addition
+    to the existing reporter functionality. The driver will not start
+    listening to events until an MQTT trigger is configured on a pipeline
+    with an MQTT subscription. This makes upgrades for existing users of
+    the MQTT driver a noop. Those wishing to trigger jobs from MQTT events
+    must add new configuration to their pipelines to start subscribing
+    to events.

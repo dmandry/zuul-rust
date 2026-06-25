@@ -1,0 +1,57 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      mqtt:
+        - subscription: 'tenant-one/zuul/#'
+          required-payload:
+            "$.action": 'enqueue'
+          data-mapping:
+            project-canonical-name: '$.project_canonical_name'
+            ref: '$.ref'
+        - subscription: 'tenant-one/zuul/#'
+          required-payload:
+            "$.action": 'enqueue'
+          data-mapping:
+            project-canonical-name: '$.project_canonical_name'
+            ref: '$.branch'
+          debug: true
+        - subscription: 'tenant-one/zuul/#'
+          required-payload:
+            "$.action": 'enqueue'
+          data-mapping:
+            project-hostname: '$.project_hostname'
+            project: '$.project_name'
+            change: '$.change'
+        - subscription: 'tenant-one/zuul/#'
+          required-payload:
+            "$.action": 'enqueue'
+          data-mapping:
+            project-hostname: '$.project_hostname'
+            project: '$.project_name'
+            change: '$.change'
+            patchset: '$.patchset'
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- job:
+    name: base
+    parent: null
+
+- job:
+    name: project-test1
+    nodeset:
+      nodes:
+        - name: controller
+          label: label1
+    run: playbooks/project-test1.yaml
+
+- project:
+    name: org/project
+    check:
+      jobs:
+        - project-test1
