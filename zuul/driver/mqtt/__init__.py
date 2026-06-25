@@ -1,4 +1,5 @@
 # Copyright 2017 Red Hat, Inc.
+# Copyright 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -14,7 +15,9 @@
 
 from zuul.driver import Driver, ConnectionInterface, ReporterInterface
 from zuul.driver.mqtt import mqttconnection
+from zuul.driver.mqtt import mqttmodel
 from zuul.driver.mqtt import mqttreporter
+from zuul.driver.mqtt import mqtttrigger
 
 
 class MQTTDriver(Driver, ConnectionInterface, ReporterInterface):
@@ -22,6 +25,15 @@ class MQTTDriver(Driver, ConnectionInterface, ReporterInterface):
 
     def getConnection(self, name, config):
         return mqttconnection.MQTTConnection(self, name, config)
+
+    def getTrigger(self, connection, config=None):
+        return mqtttrigger.MQTTTrigger(self, connection, config)
+
+    def getTriggerSchema(self):
+        return mqtttrigger.getSchema()
+
+    def getTriggerEventClass(self):
+        return mqttmodel.MQTTTriggerEvent
 
     def getReporter(self, connection, pipeline, config=None,
                     parse_context=None):
