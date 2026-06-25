@@ -1,6 +1,29 @@
 {
   "comments": [
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "e25c59f7_c340fabb",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 7
+      },
+      "lineNbr": 19,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-25T11:11:04Z",
+      "side": 1,
+      "message": "I see no debug logging added. Guess it was removed, and commit message not updated?",
+      "range": {
+        "startLine": 19,
+        "startChar": 6,
+        "endLine": 19,
+        "endChar": 11
+      },
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "b05352fa_b952b46a",
@@ -14,6 +37,86 @@
       "writtenOn": "2026-06-25T10:25:33Z",
       "side": 1,
       "message": "recheck",
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "8b866a2f_795ac60a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 7
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-25T11:11:04Z",
+      "side": 1,
+      "message": "Add doc in: doc/source/drivers/timer.rst? Or a follow up. Also I believe you need to revisit the test, to ensure it tests whats intended - see inline.",
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7c08d0ff_00fab573",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 170,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-25T11:11:04Z",
+      "side": 1,
+      "message": "I don\u0027t think this test actually tests what it intends do.\n`_addJobsInner` calls `tenant.getProjectBranches(project_name)` which excludes always-dynamic branches[1]. May want to use a different tenant config, or have the test create branch that does not match the configs always-dynamic-branches filter?\n\n[1] https://opendev.org/zuul/zuul/src/branch/master/zuul/model.py#L11481",
+      "range": {
+        "startLine": 170,
+        "startChar": 0,
+        "endLine": 170,
+        "endChar": 2
+      },
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9031286d_88eb12ad",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 215,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-25T11:11:04Z",
+      "side": 1,
+      "message": "This assert is passing because of the above mentioned exclusion of always-dynamic branches.",
+      "range": {
+        "startLine": 215,
+        "startChar": 13,
+        "endLine": 215,
+        "endChar": 24
+      },
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0161248f_df0fae94",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 49,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-25T11:11:04Z",
+      "side": 1,
+      "message": "May want to add break here as well?\n\nAlso might be good to propose that and the change to use FalseWithReason as a separate change before this to keep general changes/improvements and new feature separate.",
       "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
