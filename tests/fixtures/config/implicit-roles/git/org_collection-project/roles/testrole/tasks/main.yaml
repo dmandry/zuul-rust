@@ -1,0 +1,5 @@
+---
+- name: Assert role was loaded from the collection
+  assert:
+    that:
+      - testrole_message == 'hello from testns.testcol'
