@@ -1,4 +1,5 @@
 # Copyright 2017 Red Hat, Inc.
+# Copyright 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -18,6 +19,7 @@ import json
 import paho.mqtt.client as mqtt
 
 from zuul.connection import BaseConnection
+from zuul.driver.mqtt.mqttmodel import MQTTTriggerEvent
 from zuul.exceptions import ConfigurationError
 from zuul.lib.logutil import get_annotated_logger
 
@@ -55,12 +57,40 @@ class MQTTConnection(BaseConnection):
         self.connected = False
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
+        self.client.on_subscribe = self._on_subscribe
+        self.client.on_message = self._on_message
 
     def _on_connect(self, client, userdata, flags, rc):
         self.connected = True
+        # TODO(clarkb) make this configurable
+        # This matches the events that Zuul itself will publish to
+        # the mqtt broker.
+        client.subscribe('+/zuul/#', 2)
 
     def _on_disconnect(self, client, userdata, rc):
         self.connected = False
+
+    def _on_subscribe(self, client, userdata, mid, granted_qos):
+        # QOS of 128 indicates a subscription error in MQTT 3.x
+        if 128 in granted_qos:
+            self.log.error("Failed to subscribe to '+/zuul/#' mqtt topic")
+
+    def _on_message(self, client, userdata, message):
+        # TODO(clarkb) Does this need to be behind a scheduler election
+        # like the Gerrit ssh event listener?
+        payload = json.loads(message.payload)
+        self.addEvent(message.topic, payload)
+
+    def addEvent(self, topic, payload):
+        event = MQTTTriggerEvent()
+        event.connection_name = self.connection_name
+        event.type = 'mqtt-event'
+        event.topic = topic
+        event.action = payload['action']
+        event.tenant = payload['tenant']
+        event.project = payload['project']
+        event.pipeline = payload['pipeline']
+        self.sched.addTriggerEvent(self.driver_name, event)
 
     def onLoad(self, zk_client, component_registry):
         self.log.debug("Starting MQTT Connection")
