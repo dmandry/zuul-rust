@@ -34,6 +34,24 @@
       "parentUuid": "2859cdf1_1338fec8",
       "revId": "4f55ade1f8c0035309892c1848578d02cbdbc7ad",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a715be76_0ce1ae50",
+        "filename": "zuul/driver/kubernetes/kubernetesendpoint.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 123,
+      "author": {
+        "id": 2
+      },
+      "writtenOn": "2026-06-25T22:13:01Z",
+      "side": 1,
+      "message": "I think it would make it clearer to my brain, but I also now notice that my eyes dropped the word \"names\" - so I was reading \"pod and namespace are the same\" - which seemed to match the previous adjacent line but then was weird in front of an if with pod and namespace being different.\n\nMaybe if I could read ALL the words?\n\nCertainly not worth a respin just for that. But if you respin for other reasons, I\u0027d vote for moving it between 124 and 125.",
+      "parentUuid": "6cf386b9_d2032069",
+      "revId": "4f55ade1f8c0035309892c1848578d02cbdbc7ad",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
