@@ -19,6 +19,12 @@ import fixtures
 from paho.mqtt.client import topic_matches_sub
 
 
+class FakeMQTTMessage:
+    def __init__(self, topic, payload):
+        self.topic = topic
+        self.payload = payload
+
+
 class FakeMQTTBroker:
     log = logging.getLogger('zuul.FakeMQTTBroker')
 
@@ -42,15 +48,16 @@ class FakeMQTTBroker:
         for client, topics in self.clients.items():
             for client_sub in topics:
                 if topic_matches_sub(client_sub, topic):
-                    if f := getattr(self, 'on_message', None):
-                        f(self, None, None)
+                    if f := getattr(client, 'on_message', None):
+                        message = FakeMQTTMessage(topic, payload)
+                        f(self, None, message)
                     break
 
 
 class FakeMQTTService:
     _fake_data = {}
 
-    def __init__(self, client_id):
+    def __init__(self):
         pass
 
     def connect(self, server, port, keepalive):
