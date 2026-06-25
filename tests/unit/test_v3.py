@@ -6140,6 +6140,34 @@ class RoleTestCase(ZuulTestCase):
                     matches.add(rolename)
         self.assertEqual(files, matches)
 
+    def _getCollectionsPaths(self, build, playbook):
+        path = os.path.join(self.jobdir_root, build.uuid,
+                            'ansible', playbook, 'ansible.cfg')
+        with open(path) as f:
+            return [line for line in f if line.startswith('collections_paths')]
+
+    def _assertCollectionPath(self, build, playbook, present=True):
+        lines = self._getCollectionsPaths(build, playbook)
+        if present:
+            self.assertEqual(len(lines), 1,
+                             "Expected one collections_paths line in %s" %
+                             playbook)
+        else:
+            self.assertEqual(len(lines), 0,
+                             "Expected no collections_paths line in %s" %
+                             playbook)
+
+    def _assertCollectionSymlink(self, build, playbook, namespace, name):
+        lines = self._getCollectionsPaths(build, playbook)
+        self.assertTrue(lines, "No collections_paths in ansible.cfg")
+        collections_root = lines[0].split('=', 1)[-1].strip()
+        symlink = os.path.join(
+            collections_root, 'ansible_collections', namespace, name)
+        self.assertTrue(os.path.islink(symlink),
+                        "Expected symlink at %s" % symlink)
+        self.assertTrue(os.path.isdir(symlink),
+                        "Symlink target should be a directory: %s" % symlink)
+
 
 class TestRoleBranches(RoleTestCase):
     tenant_config_file = 'config/role-branches/main.yaml'
@@ -6513,6 +6541,78 @@ class TestRoles(RoleTestCase):
             '- project-test .* ERROR Unable to find role',
             A.messages[-1]))
 
+    def test_collection_role(self):
+        self.executor_server.hold_jobs_in_build = True
+        conf = textwrap.dedent("""
+            - job:
+                name: project-test
+                run: playbooks/project-test.yaml
+                roles:
+                  - zuul: bare-collection
+
+            - project:
+                name: org/project
+                check:
+                  jobs:
+                    - project-test
+            """)
+
+        file_dict = {'.zuul.yaml': conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertEqual(len(self.builds), 1)
+        build = self.getBuildByName('project-test')
+
+        self._assertCollectionPath(build, 'playbook_0', present=True)
+        self._assertCollectionSymlink(build, 'playbook_0', 'testns', 'testcol')
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+        ])
+
+    def test_collection_and_role(self):
+        self.executor_server.hold_jobs_in_build = True
+        conf = textwrap.dedent("""
+            - job:
+                name: project-test
+                run: playbooks/project-test.yaml
+                roles:
+                  - zuul: bare-collection
+                  - zuul: bare-role
+
+            - project:
+                name: org/project
+                check:
+                  jobs:
+                    - project-test
+            """)
+
+        file_dict = {'.zuul.yaml': conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertEqual(len(self.builds), 1)
+        build = self.getBuildByName('project-test')
+
+        self._assertCollectionPath(build, 'playbook_0', present=True)
+        self._assertCollectionSymlink(build, 'playbook_0', 'testns', 'testcol')
+        self._assertRolePath(build, 'playbook_0', 'role_')
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+        ])
+
 
 class TestImplicitRoles(RoleTestCase):
     tenant_config_file = 'config/implicit-roles/main.yaml'
@@ -6563,6 +6663,27 @@ class TestImplicitRoles(RoleTestCase):
             dict(name='implicit-role-ok', result='SUCCESS', changes='1,1'),
             dict(name='explicit-role-ok', result='SUCCESS', changes='1,1'),
         ], ordered=False)
+
+    def test_collection(self):
+        # A project whose own repo is a collection (has galaxy.yml at root)
+        # should set up collections_paths silently via the implicit role.
+        self.executor_server.hold_jobs_in_build = True
+        A = self.fake_gerrit.addFakeChange(
+            'org/collection-project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        build = self.getBuildByName('implicit-collection-ok')
+        self._assertCollectionPath(build, 'playbook_0', present=True)
+        self._assertCollectionSymlink(build, 'playbook_0', 'testns', 'testcol')
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='implicit-collection-ok', result='SUCCESS',
+                 changes='1,1'),
+        ])
 
 
 class TestShadow(ZuulTestCase):
