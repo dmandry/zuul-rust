@@ -505,7 +505,7 @@
          metadata.  The value of this field is added to the
          `metadata.annotations` field in Kubernetes.  This field
          contains arbitrary key/value pairs that can be accessed by
-         tools and libraries.  
+         tools and libraries.
 
       .. attr:: boot-timeout
          :type: int
@@ -635,6 +635,34 @@
 
          The time (in seconds) to wait for a snapshot to complete.
 
+      .. attr:: spec
+         :type: dict
+
+         Zuul will supply the contents of this value verbatim to
+         Kubernetes as the ``spec`` attribute of the Kubernetes
+         ``Pod`` definition.
+
+         This attribute allows for the creation of arbitrary
+         complex pod definitions but the user is responsible for
+         ensuring that they are suitable.  The first container in
+         the pod is expected to be a long-running container that
+         hosts a shell environment for running commands.  The
+         following minimal definition is recommended as a starting
+         point:
+
+         .. code-block:: yaml
+
+            labels:
+              - name: custom-pod
+                kind: pod
+                spec:
+                  containers:
+                    - name: custom-pod
+                      image: ubuntu:jammy
+                      imagePullPolicy: IfNotPresent
+                      command: ["/bin/sh", "-c"]
+                      args: ["sleep infinity"]
+
       .. attr:: tags
          :type: dict
 
@@ -643,9 +671,14 @@
          values.
 
    .. attr:: labels
-      :type: dict
+      :type: list
 
       A list of labels associated with this provider.
+
+   .. attr:: labels[pod]
+      :type: dict
+
+      These are the attributes available for a pod label.
 
       .. attr:: annotations
          :type: dict
@@ -654,7 +687,7 @@
          metadata.  The value of this field is added to the
          `metadata.annotations` field in Kubernetes.  This field
          contains arbitrary key/value pairs that can be accessed by
-         tools and libraries.  
+         tools and libraries.
 
       .. attr:: boot-timeout
          :type: int
@@ -736,13 +769,190 @@
 
       .. attr:: kind
 
-         The Kubernetes driver supports two types of labels:
+         The type of label:
 
          .. value:: pod
 
             Pod labels provide a dedicated namespace with a single
             pod and a service account that can exec and get the
             logs of the pod.
+
+      .. attr:: max-age
+         :type: int
+         :default: 0
+
+         The time (in seconds) since creation that a node may be
+         available for use.  Ready nodes older than this time will be
+         deleted.
+
+      .. attr:: max-ready-age
+         :type: int
+         :default: 0
+
+         The time (in seconds) an unassigned node should stay in ready state.
+
+      .. attr:: min-retention-time
+         :type: int
+         :default: 0
+
+         The time (in seconds) since an instance was launched, during
+         which a node will not be deleted. For node resources with
+         minimum billing times, this can be used to ensure that the
+         instance is retained for at least the minimum billing interval.
+
+         This setting takes precedence over `max-[ready-]age`.
+
+      .. attr:: name
+         :type: str
+
+         The name of the label.  Used to refer to the label in Zuul
+         configuration.
+
+      .. attr:: reuse
+         :type: bool
+         :default: False
+
+         Should the node be reused (True) or deleted (False) after use.
+
+      .. attr:: slots
+         :type: int
+         :default: 1
+
+         How many jobs are permitted run on the same node simultaneously.
+
+      .. attr:: snapshot-expiration
+         :type: int
+         :default: 604800
+
+         The time (in seconds) until a snapshot expires.
+
+      .. attr:: snapshot-timeout
+         :type: int
+         :default: 3600
+
+         The time (in seconds) to wait for a snapshot to complete.
+
+      .. attr:: spec
+         :type: dict
+
+         Zuul will supply the contents of this value verbatim to
+         Kubernetes as the ``spec`` attribute of the Kubernetes
+         ``Pod`` definition.
+
+         This attribute allows for the creation of arbitrary
+         complex pod definitions but the user is responsible for
+         ensuring that they are suitable.  The first container in
+         the pod is expected to be a long-running container that
+         hosts a shell environment for running commands.  The
+         following minimal definition is recommended as a starting
+         point:
+
+         .. code-block:: yaml
+
+            labels:
+              - name: custom-pod
+                kind: pod
+                spec:
+                  containers:
+                    - name: custom-pod
+                      image: ubuntu:jammy
+                      imagePullPolicy: IfNotPresent
+                      command: ["/bin/sh", "-c"]
+                      args: ["sleep infinity"]
+
+      .. attr:: tags
+         :type: dict
+
+         A dictionary of tags to add to nodes.  Avoid the use of
+         `zuul_` as a key prefix since Zuul uses this for internal
+         values.
+
+   .. attr:: labels[namespace]
+      :type: dict
+
+      These are the attributes available for a namespace label.
+
+      .. attr:: boot-timeout
+         :type: int
+         :default: 300
+
+         The time (in seconds) to wait for a node to boot.
+
+      .. attr:: description
+         :type: str
+
+         A textual description of the label for reference purposes.
+
+      .. attr:: executor-zone
+         :type: str
+
+         Specify that a Zuul executor in the specified zone is
+         used to run jobs with nodes from this label.
+
+      .. attr:: final
+         :default: False
+
+         Whether the configuration of the label may be updated
+         by values in label-defaults or overidden with a new definition
+         by sections or providers lower in the hierarchy than the point
+         at which the final attribute is applied.
+
+         .. value:: True
+
+            The label may not be updated or overidden.
+
+         .. value:: False
+
+            The label may be updated or overidden.
+
+         .. value:: allow-override
+
+            The label may not be updated by label-defaults
+            but may be explicitly overidden by redefining
+            it in a new 'label' entry.
+
+      .. attr:: flavor
+         :type: str
+
+         The flavor to use with this label.
+
+      .. attr:: image
+         :type: str
+
+         The image to use with this label.
+
+      .. attr:: image-pull-secrets
+         :type: dict
+
+
+         The imagePullSecrets needed to pull container images from
+         a private registry.  Because Zuul creates pods in a new
+         namespace, and image pull secrets must exist in the
+         namespace of the pods that use them, the referenced
+         secrets will be copied into the temporary namespace that
+         Zuul creates before creating the pod.  The new secrets
+         will have the same name as the old secrets.
+
+         Each entry is a dictionary with the following keys:
+
+         .. attr:: name
+            :type: str
+
+            Identifier for this secret.  The referenced secret must
+            already exist under this name so that Nodepool may copy
+            it.  It will be copied into the new namespace with the
+            same name, therefore, if multiple entries are provided,
+            they must have distinct names.
+
+         .. attr:: namespace
+            :type: str
+            :default: default
+
+            The namespace of the existing secret to copy.
+
+      .. attr:: kind
+
+         The type of label:
 
          .. value:: namespace
 
@@ -804,35 +1014,6 @@
          :default: 3600
 
          The time (in seconds) to wait for a snapshot to complete.
-
-      .. attr:: spec
-         :type: dict
-
-
-         Zuul will supply the contents of this value verbatim to
-         Kubernetes as the ``spec`` attribute of the Kubernetes
-         ``Pod`` definition.
-
-         This attribute allows for the creation of arbitrary
-         complex pod definitions but the user is responsible for
-         ensuring that they are suitable.  The first container in
-         the pod is expected to be a long-running container that
-         hosts a shell environment for running commands.  The
-         following minimal definition is recommended as a starting
-         point:
-
-         .. code-block:: yaml
-
-            labels:
-              - name: custom-pod
-                kind: pod
-                spec:
-                  containers:
-                    - name: custom-pod
-                      image: ubuntu:jammy
-                      imagePullPolicy: IfNotPresent
-                      command: ["/bin/sh", "-c"]
-                      args: ["sleep infinity"]
 
       .. attr:: tags
          :type: dict
