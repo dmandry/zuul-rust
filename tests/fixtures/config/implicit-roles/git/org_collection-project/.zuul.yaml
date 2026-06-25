@@ -1,0 +1,9 @@
+- job:
+    name: implicit-collection-ok
+    run: playbooks/implicit-collection-ok.yaml
+
+- project:
+    name: org/collection-project
+    check:
+      jobs:
+        - implicit-collection-ok

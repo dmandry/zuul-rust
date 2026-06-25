@@ -1,0 +1,13 @@
+- hosts: all
+  roles:
+    - testns.testcol.testrole
+  tasks:
+    - name: Use a module from the collection
+      testns.testcol.testmodule:
+        msg: hello from testns.testcol
+      register: result
+
+    - name: Assert module was loaded from the collection
+      assert:
+        that:
+          - result.msg == 'hello from testns.testcol'

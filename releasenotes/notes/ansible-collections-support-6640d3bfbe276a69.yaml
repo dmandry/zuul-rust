@@ -1,0 +1,11 @@
+---
+features:
+  - |
+    Zuul now supports Ansible collections as Zuul roles.  A project whose
+    root contains a ``galaxy.yml`` file with ``namespace`` and ``name``
+    fields is automatically treated as an Ansible collection.  Zuul creates
+    the standard ``ansible_collections/<namespace>/<name>/`` symlink
+    structure and sets ``collections_paths`` in the generated
+    ``ansible.cfg``, both when the collection is listed explicitly under
+    ``roles`` in a job definition and implicitly when the project under
+    test is itself a collection.

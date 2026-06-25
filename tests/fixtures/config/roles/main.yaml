@@ -7,3 +7,6 @@
         untrusted-projects:
           - org/project
           - bare-role
+          - bare-collection
+          - broken-collection
+          - incomplete-collection
