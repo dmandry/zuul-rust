@@ -60,6 +60,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "59d67798_35f270d8",
+        "filename": "doc/source/config/project.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 232,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-26T16:01:20Z",
+      "side": 1,
+      "message": "We might be able to do something like that.  It\u0027s not too hard but it\u0027s not trivial.",
+      "parentUuid": "a8d38590_51a77705",
+      "range": {
+        "startLine": 231,
+        "startChar": 20,
+        "endLine": 232,
+        "endChar": 1
+      },
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "88239118_1657a971",
         "filename": "tests/fixtures/layouts/github-allowed-merge-modes.yaml",
         "patchSetId": 2
@@ -111,6 +135,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "6f5c1bf1_5a8d5409",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1528,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-26T16:01:20Z",
+      "side": 1,
+      "message": "-1: This construction just adds the merge modes to each individual project stanza that we keep in memory.  In other words, we have a python object for every \"project\" stanza on every branch.\n\nLater in model.py line 10798 (in this change) when we construct the tenant layout, we pick the first one.  That\u0027s consistent with the \u0027merge-mode\u0027 setting as well.\n\nWe should probably include that in the docs (I think we do for merge-mode).",
+      "parentUuid": "18a729f3_505a2d4b",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "437afd79_e6d0ae62",
         "filename": "zuul/configloader.py",
         "patchSetId": 2
@@ -145,6 +187,24 @@
       "writtenOn": "2026-06-18T23:58:49Z",
       "side": 1,
       "message": "This early return means the first allowed merge-mode listed is used in the case of multiple headers for merge mode. Should we document that behavior?",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "98db1a26_c7a5bb03",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 7129,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-26T16:01:20Z",
+      "side": 1,
+      "message": "I\u0027m actually okay leaving that as undefined behavior, but if others feel strongly it should be documented, I don\u0027t object.",
+      "parentUuid": "7fd84f26_dcec5dc6",
       "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
