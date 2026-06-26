@@ -103,12 +103,30 @@ class ZuulTreeCache(abc.ABC):
     def _bytesToDict(self, data):
         return json.loads(data.decode('utf8'))
 
+    def _drain_sentinels(self):
+        """Signal pending sentinels in both queues.
+
+        Drain event and playback queues, signal CacheSyncSentinel
+        items so threads blocked in waitForSync() can unblock
+        (forced unblock — cache is not actually synced).
+        """
+        for q in (self._event_queue, self._playback_queue):
+            while True:
+                try:
+                    item = q.get(block=False)
+                    if isinstance(item, CacheSyncSentinel):
+                        item.set()
+                    q.task_done()
+                except queue.Empty:
+                    break
+
     def _sessionListener(self, state):
         if state == KazooState.LOST:
             self._ready.clear()
             self._stop_workers = True
             self._event_queue.put(None)
             self._playback_queue.put(None)
+            self._drain_sentinels()
         elif state == KazooState.CONNECTED and not self._stopped:
             self.client.handler.short_spawn(self._start)
 
@@ -177,17 +195,27 @@ class ZuulTreeCache(abc.ABC):
                                 new_queue.put(x)
                         except queue.Empty:
                             break
+                # Bail out if the cache is being stopped. Continuing
+                # risks blocking forever in waitForSync(), or marking
+                # cache ready after a forced unblock.
+                if self._stopped or self._stop_workers:
+                    return
                 self.waitForSync()
+                if self._stopped or self._stop_workers:
+                    return
                 self._ready.set()
                 self.log.debug("Cache at %s is ready", self.root)
             except Exception:
                 self.log.exception("Error initializing cache at %s", self.root)
-                self.client.handler.short_spawn(self._start)
+                if not self._stopped:
+                    self.client.handler.short_spawn(self._start)
 
     def stop(self):
         self._stopped = True
+        self._stop_workers = True
         self._event_queue.put(None)
         self._playback_queue.put(None)
+        self._drain_sentinels()
         self.client.remove_listener(self._sessionListener)
 
     def _walkTree(self, root=None, seen_paths=None):
