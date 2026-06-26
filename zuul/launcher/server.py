@@ -1140,6 +1140,8 @@ class Launcher:
         else:
             self.connection_filter = None
         self.repl = None
+        # Flag to determine whether we've primed the tenant providers
+        self._primed = False
         # All tenants and all providers
         self.tenant_providers = {}
         # Only endpoints corresponding to connections handled by this
@@ -1277,7 +1279,6 @@ class Launcher:
         self.wake_event.set()
 
     def run(self):
-        self.component_info.state = self.component_info.RUNNING
         self.log.debug("Launcher running")
         while self._running:
             loop_start = time.monotonic()
@@ -1303,6 +1304,9 @@ class Launcher:
             if updated:
                 self.checkOldImages()
                 self.checkMissingUploads()
+                if not self._primed:
+                    self._primed = True
+                    self.component_info.state = self.component_info.RUNNING
         if self.image_updated_event.is_set():
             self.checkOldImages()
             self.checkMissingUploads()
