@@ -2210,6 +2210,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
                 break
 
         node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
+        node = zuul.model.ProviderNode.fromZK(ctx, path=node.getPath())
         for _ in iterate_timeout(10, "node to hold"):
             node.refresh(ctx)
             if node.state == node.State.HOLD:
