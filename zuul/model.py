@@ -6146,6 +6146,9 @@ class JobRequest:
             "span_context": self.span_context,
         }
 
+    def hasLock(self):
+        return self.lock is not None
+
     def updateFromDict(self, data):
         self.precedence = data["precedence"]
         self.state = data["state"]

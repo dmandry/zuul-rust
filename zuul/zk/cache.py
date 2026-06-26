@@ -387,7 +387,7 @@ class ZuulTreeCache(abc.ABC):
                 # that the next few lines don't race with a
                 # lock+save+unlock series of calls in another thread.
                 if (stat.mzxid > old_mzxid and
-                    getattr(obj, 'lock', None) is None):
+                    not getattr(obj, 'hasLock', lambda: False)()):
                     self.updateFromRaw(obj, key, data, stat)
             else:
                 obj = self.objectFromRaw(key, data, stat)
