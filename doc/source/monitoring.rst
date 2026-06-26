@@ -805,6 +805,15 @@ These metrics are emitted by the Zuul :ref:`scheduler`:
       performance metric of how long the SQL query takes; it is not
       the estimated time value itself.
 
+As an example, given a job named `myjob` in `mytenant` triggered by a
+change to `myproject` on the `master` branch in the `gate` pipeline
+which took 40 seconds to build, the Zuul scheduler will emit the
+following statsd events:
+
+  * ``zuul.tenant.mytenant.pipeline.gate.project.example_com.myproject.master.job.myjob.SUCCESS`` +1
+  * ``zuul.tenant.mytenant.pipeline.gate.project.example_com.myproject.master.job.myjob.SUCCESS``  40 seconds
+  * ``zuul.tenant.mytenant.pipeline.gate.all_jobs`` +1
+
 .. stat:: zuul.web
 
    Holds metrics related to the Zuul web component.
@@ -832,15 +841,196 @@ These metrics are emitted by the Zuul :ref:`scheduler`:
 
          The number of log streamers currently in operation.
 
+.. stat:: zuul.image
 
-As an example, given a job named `myjob` in `mytenant` triggered by a
-change to `myproject` on the `master` branch in the `gate` pipeline
-which took 40 seconds to build, the Zuul scheduler will emit the
-following statsd events:
+   Holds metrics related to Zuul images.
 
-  * ``zuul.tenant.mytenant.pipeline.gate.project.example_com.myproject.master.job.myjob.SUCCESS`` +1
-  * ``zuul.tenant.mytenant.pipeline.gate.project.example_com.myproject.master.job.myjob.SUCCESS``  40 seconds
-  * ``zuul.tenant.mytenant.pipeline.gate.all_jobs`` +1
+   .. stat:: <image>
+
+      The canonical name of the image.
+
+      .. stat:: upload
+
+         Holds metrics related to image uploads.
+
+         .. stat:: <endpoint>
+
+            The canonical name of the upload endpoint.
+
+            .. stat:: duration
+               :type: timer
+
+               The duration of the upload operation.
+
+            .. stat:: state
+
+               Holds metrics for each of the following states:
+
+               * ready
+               * deleting
+               * pending
+               * uploading
+               * failed
+
+               .. stat:: <state>
+                  :type: gauge
+
+                  The number of uploads for this image and endpoint
+                  currently in this state.
+
+.. stat:: zuul.uploads
+
+   Holds metrics related to Zuul image upload operations.
+
+   .. stat:: state
+
+      Holds metrics for each of the following states:
+
+      * ready
+      * deleting
+      * pending
+      * uploading
+      * failed
+
+      .. stat:: <state>
+         :type: gauge
+
+         The number of uploads currently in this state.
+
+.. stat:: zuul.provider
+
+   Holds metrics related to individual providers.
+
+   .. stat:: <provider>
+
+      The canonical name of the provider.
+
+      .. stat:: limit
+
+         Quota limits for the named resource.  The actual resource
+         names are driver-dependent.
+
+         .. stat:: <resource>
+            :type: gauge
+
+            The limit for this resource in this provider.
+
+      .. stat:: usage
+
+         Quota usage for the named resource.  The actual resource
+         names are driver-dependent.
+
+         .. stat:: <resource>
+            :type: gauge
+
+            The current usage of this resource in this provider.
+
+      .. stat:: nodes
+
+         Holds metrics related to nodes in this provider.
+
+         .. stat:: state
+
+            Holds metrics for each of the following node states:
+
+            * requested
+            * building
+            * ready
+            * failed
+            * tempfailed
+            * in-use
+            * used
+            * outdated
+            * deregister
+            * hold
+            * snapshot
+            * slot-host
+
+            .. stat:: <state>
+               :type: gauge
+
+               The number of nodes in this provider in this state.
+
+      .. stat:: label
+
+         Holds metrics related to specific labels.
+
+         .. stat:: <label>
+
+            The canonical name of the label.
+
+            .. stat:: nodes
+
+               Holds metrics related to label nodes in this provider.
+
+               .. stat:: state
+
+                  Holds metrics for each of the following node states:
+
+                  * requested
+                  * building
+                  * ready
+                  * failed
+                  * tempfailed
+                  * in-use
+                  * used
+                  * outdated
+                  * deregister
+                  * hold
+                  * snapshot
+                  * slot-host
+
+                  .. stat:: <state>
+                     :type: gauge
+
+                     The number of nodes of this label in this
+                     provider in this state.
+
+
+.. stat:: zuul.nodes
+
+   Holds metrics related to nodes.
+
+   .. stat:: state
+
+      Holds metrics for each of the following node states:
+
+      * requested
+      * building
+      * ready
+      * failed
+      * tempfailed
+      * in-use
+      * used
+      * outdated
+      * deregister
+      * hold
+      * snapshot
+      * slot-host
+
+      .. stat:: <state>
+         :type: gauge
+
+         The number of nodes across all providers in this state.
+
+.. stat:: zuul.nodeset_requests
+
+   Holds metrics related to nodeset requests.  These are requests that
+   are handled by zuul-launcher.
+
+   .. stat:: state
+
+      Holds metrics for each of the following states:
+
+      * requested
+      * accepted
+      * fulfilled
+      * failed
+
+      .. stat:: <state>
+         :type: gauge
+
+         The number of requests in this state.
 
 
 Prometheus monitoring
