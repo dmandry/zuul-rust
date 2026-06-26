@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "36fbf015_b6150c87",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-26T23:43:23Z",
+      "side": 1,
+      "message": "I should note I\u0027m not approving this because I\u0027m not sure if we\u0027re ready to debug this if/when OpenDev deploys it in a few minutes. That is probably selfish of me but I\u0027m trying to avoid problems this weekend :)",
+      "revId": "297bb1ab9ec9984ecd49f30fc9a4902581e4d65c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "d18c4dfd_d49b83e2",
