@@ -1,0 +1,84 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "70b3f965_84a336e7",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-26T11:19:26Z",
+      "side": 1,
+      "message": "Very good overall, kudos for completeness! Couple of nit/suggestion inline. Can be fixed in follow up I think.",
+      "revId": "e2fa4b85b6a2dc2c615e8491cc464fa84bb46fb5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "32250070_d46a7e57",
+        "filename": "doc/source/monitoring.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 843,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-26T11:19:26Z",
+      "side": 1,
+      "message": "In L27 there is a line: \n These metrics are emitted by the Zuul :ref:`scheduler`\n \nMay want to add similar to make it clear these are launcher metrics:\n These metrics are emitted by the Zuul :ref:`launcher`",
+      "revId": "e2fa4b85b6a2dc2c615e8491cc464fa84bb46fb5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f6c48c08_3651a9bd",
+        "filename": "doc/source/monitoring.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 863,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-26T11:19:26Z",
+      "side": 1,
+      "message": "nit: typo s/dulation/duration/",
+      "range": {
+        "startLine": 863,
+        "startChar": 19,
+        "endLine": 863,
+        "endChar": 27
+      },
+      "revId": "e2fa4b85b6a2dc2c615e8491cc464fa84bb46fb5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a7fe3612_1da43b8b",
+        "filename": "doc/source/monitoring.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 930,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-26T11:19:26Z",
+      "side": 1,
+      "message": "nit: typo s/metrices/metrics/",
+      "range": {
+        "startLine": 930,
+        "startChar": 15,
+        "endLine": 930,
+        "endChar": 23
+      },
+      "revId": "e2fa4b85b6a2dc2c615e8491cc464fa84bb46fb5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
