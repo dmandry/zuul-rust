@@ -83,6 +83,13 @@ class FakeProvider:
                           image_format, metadata, md5, sha256):
         return FakeImageUploadJob(metadata)
 
+    def getUploadTags(self, system_id, image, upload_uuid):
+        fixed = {
+            'zuul_system_id': system_id,
+            'zuul_upload_uuid': upload_uuid,
+        }
+        return fixed
+
 
 class FakeLauncher:
     def __init__(self):
