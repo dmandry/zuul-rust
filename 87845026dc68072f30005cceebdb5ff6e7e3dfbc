@@ -35,6 +35,23 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "0354cf27_4bbb9a65",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-26T23:52:21Z",
+      "side": 1,
+      "message": "Shifted to a -1 because the comment in configloader.py indicates we should update the documentation and has an inline -1. I\u0027m bubbling that up here.",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "a8d38590_51a77705",
@@ -72,6 +89,30 @@
       "side": 1,
       "message": "We might be able to do something like that.  It\u0027s not too hard but it\u0027s not trivial.",
       "parentUuid": "a8d38590_51a77705",
+      "range": {
+        "startLine": 231,
+        "startChar": 20,
+        "endLine": 232,
+        "endChar": 1
+      },
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5ca788b9_3e7eb70e",
+        "filename": "doc/source/config/project.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 232,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-26T23:52:21Z",
+      "side": 1,
+      "message": "As mentioned I don\u0027t think this is critical. If isn\u0027t simple to add then it may be better to leave for if/when it becomes a real concern rather than a theoretical one.",
+      "parentUuid": "59d67798_35f270d8",
       "range": {
         "startLine": 231,
         "startChar": 20,
@@ -153,6 +194,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "a1a81a40_5b1a840b",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1528,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-26T23:52:21Z",
+      "side": 1,
+      "message": "Oh yup if project metadata allowed merged modes is None and we have a merge mode we take it and set it on project metadata then we won\u0027t set an additional value.\n\nI do think this is worth documenting as unlike multiple merge mode request headers users may accidentally set different merge modes on different branches. Its also less clear in that situation as they aren\u0027t all set in one location.",
+      "parentUuid": "6f5c1bf1_5a8d5409",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "437afd79_e6d0ae62",
         "filename": "zuul/configloader.py",
         "patchSetId": 2
@@ -205,6 +264,24 @@
       "side": 1,
       "message": "I\u0027m actually okay leaving that as undefined behavior, but if others feel strongly it should be documented, I don\u0027t object.",
       "parentUuid": "7fd84f26_dcec5dc6",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5536c4f4_efdcc2e5",
+        "filename": "zuul/model.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 7129,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-26T23:52:21Z",
+      "side": 1,
+      "message": "I wouldn\u0027t say I feel strongly about it and I think it would be unusual for a user to specify multiple headers. I mostly call it out because merging commit into a repo is a bit of a final state for the change/PR so ensuring that it happens as users expect it to may be worthwhile.\n\nThat said I think if a user listed multiple headers and complained about the result they got it would be easy to explain that they created the situation themselves and everyone would move on.\n\nAll that to say I think this is ok to leave as undefined.",
+      "parentUuid": "98db1a26_c7a5bb03",
       "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
