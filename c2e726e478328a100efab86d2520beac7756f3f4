@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "06da989d_7276a1cf",
+        "filename": "tests/unit/test_connection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 762,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-27T21:20:10Z",
+      "side": 1,
+      "message": "This should actually be 127.0.0.1:0",
+      "revId": "c2e726e478328a100efab86d2520beac7756f3f4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1b6da521_5b34cd1b",
+        "filename": "tests/unit/test_connection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 801,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-27T21:20:10Z",
+      "side": 1,
+      "message": "I left this print here for now as it shows that we get random changing ports for each test run.",
+      "revId": "c2e726e478328a100efab86d2520beac7756f3f4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
