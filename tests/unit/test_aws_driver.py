@@ -851,6 +851,15 @@ class TestAwsDriver(AwsBaseTest):
             except self.s3_client.exceptions.NoSuchKey:
                 break
             time.sleep(1)
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-east-1.leaked.instance',
+            value='1', kind='c')
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-east-1.leaked.volume',
+            value='1', kind='c')
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-east-1.leaked.object',
+            value='1', kind='c')
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_aws_resource_cleanup_import_snapshot(self):
