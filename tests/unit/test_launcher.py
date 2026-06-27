@@ -943,6 +943,21 @@ class TestLauncher(LauncherBaseTestCase):
         self._waitForNoChildren('/zuul/nodeset/requests')
         self._waitForNoChildren('/zuul/nodes/locks')
         self._waitForNoChildren('/zuul/nodes/nodes')
+        self.assertReportedStat(
+            'zuul.nodes.launch.ready',
+            kind='ms')
+        self.assertReportedStat(
+            'zuul.nodes.launch.ready',
+            value='1', kind='c')
+        self.assertReportedStat(
+            f'zuul.provider.{pname}.nodes.launch.ready',
+            value='1', kind='c')
+        self.assertReportedStat(
+            f'zuul.provider.{pname}.label.debian-normal.launch.ready',
+            value='1', kind='c')
+        self.assertReportedStat(
+            f'zuul.provider.{pname}.image.debian.launch.ready',
+            value='1', kind='c')
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_zuul_node_data(self):
