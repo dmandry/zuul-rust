@@ -13,6 +13,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from enum import StrEnum
+
 from zuul import model
 from zuul.provider import statemachine
 
@@ -57,12 +59,13 @@ class OpenstackInstance(statemachine.Instance):
 
 
 class OpenstackResource(statemachine.Resource):
-    TYPE_HOST = 'host'
-    TYPE_INSTANCE = 'instance'
-    TYPE_AMI = 'ami'
-    TYPE_SNAPSHOT = 'snapshot'
-    TYPE_VOLUME = 'volume'
-    TYPE_OBJECT = 'object'
+    class ResourceType(StrEnum):
+        HOST = 'host'
+        INSTANCE = 'instance'
+        AMI = 'ami'
+        SNAPSHOT = 'snapshot'
+        VOLUME = 'volume'
+        OBJECT = 'object'
 
     def __init__(self, metadata, type, id):
         super().__init__(metadata, type)
