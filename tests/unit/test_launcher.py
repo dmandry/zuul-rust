@@ -3955,8 +3955,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 sub1.setState(sub1.State.USED)
 
         for _ in iterate_timeout(10, "sub1 to be deleted"):
@@ -3976,8 +3978,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 sub2.setState(sub2.State.USED)
 
         for _ in iterate_timeout(10, "sub2 to be deleted"):
@@ -4159,8 +4163,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 node.setState(node.State.USED)
 
         for _ in iterate_timeout(10, "node to be recycled"):
@@ -4198,8 +4204,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 node.setState(node.State.USED)
 
         for _ in iterate_timeout(10, "node to be recycled"):
@@ -4235,8 +4243,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 node.setState(node.State.USED)
 
         for _ in iterate_timeout(10, "node to be recycled"):
@@ -4273,8 +4283,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 node.setState(node.State.USED)
 
         for _ in iterate_timeout(10, "node to be recycled"):
@@ -4293,8 +4305,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
             with node.locked(ctx):
                 with node.activeContext(ctx):
                     node.assign(ctx, request_id="dne", tenant_name="test")
-                    with request.locked(ctx), request.activeContext(ctx):
-                        request.priority += 1
+                    with request.locked(ctx):
+                        request.refresh(ctx)
+                        with request.activeContext(ctx):
+                            request.priority += 1
                     node.setState(node.State.USED)
 
             for _ in iterate_timeout(10, "node to be failed"):
@@ -4323,8 +4337,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 # Node exceeding max-age should not impact the reuse.
                 node.request_time -= 1200
                 node.setState(node.State.USED)
@@ -4381,8 +4397,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 # Modify the request so that the max zxid of the
                 # request cache is later than the node assignment
                 # (since the "dne" request does not exist).
-                with request.locked(ctx), request.activeContext(ctx):
-                    request.priority += 1
+                with request.locked(ctx):
+                    request.refresh(ctx)
+                    with request.activeContext(ctx):
+                        request.priority += 1
                 sub1.setState(sub1.State.USED)
 
         for _ in iterate_timeout(10, "sub to be recycled"):
@@ -4501,8 +4519,10 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                     # Modify the request so that the max zxid of the
                     # request cache is later than the node assignment
                     # (since the "dne" request does not exist).
-                    with request.locked(ctx), request.activeContext(ctx):
-                        request.priority += 1
+                    with request.locked(ctx):
+                        request.refresh(ctx)
+                        with request.activeContext(ctx):
+                            request.priority += 1
                     sub2.setState(sub2.State.USED)
 
             for _ in iterate_timeout(10, "nodes to be marked failed"):
