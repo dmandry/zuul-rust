@@ -31,7 +31,7 @@ from collections import defaultdict, OrderedDict
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from kazoo.exceptions import NotEmptyError
+from kazoo.exceptions import NoNodeError, NotEmptyError
 from opentelemetry import trace
 
 from zuul import configloader, exceptions
@@ -868,6 +868,10 @@ class Scheduler(threading.Thread):
                                 "tenant %s", leaked_path, tenant.name)
             except LockException:
                 # We'll cleanup this tenant on the next iteration
+                pass
+            except NoNodeError:
+                # Tenant has no pipelines or failed to load,
+                # nothing to clean up.
                 pass
 
     def _runBlobStoreCleanup(self):
