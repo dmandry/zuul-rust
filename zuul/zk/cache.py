@@ -352,6 +352,10 @@ class ZuulTreeCache(abc.ABC):
                 exists = True
             except kze.NoNodeError:
                 exists = False
+            except (kze.ConnectionLoss, kze.SessionExpiredError):
+                # Connection lost before data could be fetched.
+                # Cache will be re-initialized on reconnect, skip event.
+                return
 
         # Keep the cached paths up to date
         if exists:
