@@ -11,4 +11,4 @@ psycopg2-binary
 beautifulsoup4
 graphene
 requests_mock
-moto<5.1.17
+moto
