@@ -1753,7 +1753,8 @@ class Label(ConfigObject):
     """
 
     def __init__(self, name, image, flavor, description, min_ready,
-                 max_ready_age, max_age, max_nodes, min_retention_time):
+                 max_ready_age, max_age, max_nodes, min_retention_time,
+                 aliases):
         super().__init__()
         self.name = name
         self.image = image
@@ -1764,6 +1765,7 @@ class Label(ConfigObject):
         self.max_age = max_age
         self.max_nodes = max_nodes
         self.min_retention_time = min_retention_time
+        self.aliases = aliases
 
     @property
     def project_canonical_name(self):
@@ -1793,7 +1795,8 @@ class Label(ConfigObject):
                 self.max_ready_age == other.max_ready_age and
                 self.max_age == other.max_age and
                 self.max_nodes == other.max_nodes and
-                self.min_retention_time == other.min_retention_time)
+                self.min_retention_time == other.min_retention_time and
+                self.aliases == other.aliases)
 
     def toDict(self):
         return {
@@ -1807,6 +1810,7 @@ class Label(ConfigObject):
             'max_age': self.max_age,
             'max_nodes': self.max_nodes,
             'min_retention_time': self.min_retention_time,
+            'aliases': self.aliases,
         }
 
     def toConfig(self):
@@ -1820,6 +1824,7 @@ class Label(ConfigObject):
             'max-age': self.max_age,
             # max-nodes is only permitted at the top level
             'min-retention-time': self.min_retention_time,
+            'aliases': self.aliases,
         }
 
     def validateReferences(self, layout):
@@ -1831,6 +1836,11 @@ class Label(ConfigObject):
             raise Exception(
                 f'The label "{self.name}" references an unknown flavor '
                 f'"{self.flavor}"')
+        for alias in self.aliases:
+            if not layout.labels.get(alias):
+                raise Exception(
+                    f'The label "{self.name}" references an unknown label '
+                    f'"{alias}"')
 
 
 class Section(ConfigObject):

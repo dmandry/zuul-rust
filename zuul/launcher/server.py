@@ -1720,12 +1720,14 @@ class Launcher:
             node_uuid = static_node.node_id
             connection_port = static_node.connection_port
             state = model.ProviderNode.State.BUILDING
-            label_aliases = static_node.aliases
+            label_aliases = set(static_node.aliases)
         else:
             node_uuid = uuid.uuid4().hex
             connection_port = image.connection_port
             state = model.ProviderNode.State.REQUESTED
-            label_aliases = []
+            label_aliases = set()
+        label_aliases |= set(label.aliases)
+        label_aliases = list(label_aliases)
         args = dict(
             uuid=node_uuid,
             state=state,
@@ -2504,9 +2506,14 @@ class Launcher:
                             label_scores,
                             candidate_launchers):
                         continue
-                    # We collect all label variants to determin if
+                    # We collect all label variants to determine if
                     # min-ready is satisfied based on the config hashes
                     tenant_labels[tenant_name][label.name].append(label)
+                    # Also collect all aliases
+                    for alias in label.aliases:
+                        if aliased_label := tenant_provider.labels.get(alias):
+                            tenant_labels[tenant_name][
+                                aliased_label.name].append(label)
 
         unassigned_hashes = self._getUnassignedNodeLabelHashes()
         for tenant_name, min_ready_labels in tenant_labels.items():
@@ -2524,7 +2531,13 @@ class Launcher:
                     provider = random.choice(label_providers)
                     label = provider.labels[label_name]
                     yield label, provider
+                    # Add the node we just added to the node list for its label
                     unassigned_hashes[label.name].append(label.config_hash)
+                    # And also all of its aliases
+                    for alias in label.aliases:
+                        if aliased_label := provider.labels.get(alias):
+                            unassigned_hashes[alias].append(
+                                label.config_hash)
 
     def _hasHighestMinReadyScore(
             self, label_cname, label_scores, candidate_launchers):
@@ -2547,6 +2560,10 @@ class Launcher:
             if node.request_id is not None:
                 continue
             unassigned_nodes[node.label].append(node.label_config_hash)
+            # Append our config hash for all other aliases that are
+            # equivalent
+            for alias in node.label_aliases:
+                unassigned_nodes[alias].append(node.label_config_hash)
         return unassigned_nodes
 
     def _getUnassignedNodes(self):
