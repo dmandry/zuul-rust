@@ -504,6 +504,9 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
         if resource.type == OpenstackResource.ResourceType.INSTANCE:
             self._deleteServer(resource.id)
 
+    def getResourceTypes(self):
+        return OpenstackResource.ResourceType
+
     def listInstances(self):
         volumes = {}
         for volume in self._listVolumes():

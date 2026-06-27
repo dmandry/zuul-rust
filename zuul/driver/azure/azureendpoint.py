@@ -498,6 +498,9 @@ class AzureProviderEndpoint(BaseProviderEndpoint):
             except azul.AzureNotFoundError:
                 pass
 
+    def getResourceTypes(self):
+        return AzureResource.ResourceType
+
     def listInstances(self):
         for vm in self._listVirtualMachines():
             sku = self.skus.get((vm['properties']['hardwareProfile']['vmSize'],

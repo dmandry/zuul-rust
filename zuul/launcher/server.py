@@ -1029,9 +1029,13 @@ class CleanupWorker:
         endpoint.quota_cache.setUnmanagedUsage(quota_used)
         endpoint_statsd_name = _normalize_statsd_name(endpoint.canonical_name)
 
+        unmanaged_resources = collections.Counter()
+        for rtype in endpoint.getResourceTypes():
+            unmanaged_resources[rtype] = 0
         for resource in endpoint.listResources(providers):
             if (resource.metadata.get('zuul_system_id') !=
                 self.launcher.system.system_id):
+                unmanaged_resources[resource.type] += 1
                 continue
             resource_metric = (
                 f'zuul.provider_endpoint.{endpoint_statsd_name}.'
@@ -1098,6 +1102,13 @@ class CleanupWorker:
             newly_leaked_uploads
         self.possibly_leaked_resources[endpoint.canonical_name] =\
             newly_leaked_resources
+        if self.launcher.statsd:
+            for rtype, value in unmanaged_resources.items():
+                key = (
+                    f'zuul.provider_endpoint.{endpoint_statsd_name}.'
+                    f'unmanaged.{rtype}'
+                )
+                self.launcher.statsd.gauge(key, value)
 
 
 class Launcher:
