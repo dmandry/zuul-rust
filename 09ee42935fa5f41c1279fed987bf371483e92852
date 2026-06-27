@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9e3c0623_270ec517",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-27T16:28:55Z",
+      "side": 1,
+      "message": "FWIW: I am also seeing the following tests failed over the past 2-3 days due to the similar issue in zk/cache.py:_handlePlayback.\n\n* test_branch_cache_change_protected 994370,4\n* test_lost_merge_requests 995115,4\n* test_nodepool_config_defaults_inheritance_final 991718,1",
+      "revId": "09ee42935fa5f41c1279fed987bf371483e92852",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
