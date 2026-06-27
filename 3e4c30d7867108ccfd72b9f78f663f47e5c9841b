@@ -22,6 +22,23 @@
       },
       "revId": "3e4c30d7867108ccfd72b9f78f663f47e5c9841b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "77825c4b_743ad716",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 512,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-06-27T00:09:54Z",
+      "side": 1,
+      "message": "This is me mostly thinking out loud to convince myself this is ok. I\u0027m going to +2 the change, but since I had to work through this concern I figured I\u0027d write it down in case I\u0027ve overlooked anything.\n\nThe nested loops here have me slightly concerned about potential performance impacts here. I think because we\u0027re checking the orig_ref in the scheduler that we effectively only fall into this code path if we\u0027re using circular dependencies and generate the events that created the original problem right? This means that the only affected groups are those opting into circular dependencies?\n\nThen for those using circular dependencies how expensive do we think it would be to have to check every change in every item if we had say 20 items and a hundred changes within that dependency loop? I don\u0027t know how typical of a case this is (I know upstream gerrit has had massive loops but not many of them at once). Needing to check every single change would happen in the case where the change isn\u0027t an old version of a new change or if it was the very last one so I think doing a scan like that is possible.\n\nMy suspicion here is that the actual cost is relatively low due to loops and queues operating on mostly human scales of things and isUpdateOf() doing some simple comparisons against objects that are already in memory.",
+      "revId": "3e4c30d7867108ccfd72b9f78f663f47e5c9841b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
