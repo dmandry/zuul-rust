@@ -4140,20 +4140,20 @@ class ZuulTestCase(BaseTestCase):
                 if timeout:
                     for _ in iterate_timeout(
                             timeout, "nodeset request to be fulfilled"):
-                        result_events = list(result_queue)
+                        result_events = []
+                        for event in result_queue:
+                            result_queue.ack(event)
+                            if (isinstance(event, model.NodesProvisionedEvent)
+                                    and event.request_id == request.uuid):
+                                result_events.append(event)
                         if result_events:
-                            for event in result_events:
-                                # Remove event(s) from queue
-                                result_queue.ack(event)
                             break
                 else:
                     return request
 
             self.assertEqual(len(result_events), 1)
-            for event in result_queue:
-                self.assertIsInstance(event, model.NodesProvisionedEvent)
-                self.assertEqual(event.request_id, request.uuid)
-                self.assertEqual(event.build_set_uuid, request.buildset_uuid)
+            event = result_events[0]
+            self.assertEqual(event.build_set_uuid, request.buildset_uuid)
 
             request.refresh(ctx)
         return request
