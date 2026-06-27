@@ -1254,14 +1254,14 @@ class Launcher:
         self.endpoint_upload_executor = ThreadPoolExecutor(
             # TODO: make configurable
             max_workers=10,
-            thread_name_prefix="UploadWorker",
+            thread_name_prefix="EndpointUploadWorker",
         )
         # Simultaneous imports/copies -- we can have more threads here
         # since we aren't doing much work (but we may still poll, so
         # don't go crazy)
         self.endpoint_import_executor = ThreadPoolExecutor(
             max_workers=20,
-            thread_name_prefix="ImportWorker",
+            thread_name_prefix="EndpointImportWorker",
         )
         self.cleanup_worker = CleanupWorker(self)
         self.stats_election = LauncherStatsElection(self.zk_client)
