@@ -16,6 +16,29 @@
       "message": "Rebase to address the conflict with 0f34db84b9f07c73e37f947e864a21581d76a794 . `doc/source/drivers/kubernetes-attrs.rstinc` had an `alias` added to labels.",
       "revId": "941c7058ad7a7d2fcd85aeaeae46ea0fb8f3ab7a",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "97253ecb_4f42e8fc",
+        "filename": "zuul/driver/kubernetes/kubernetesendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 155,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-28T08:51:59Z",
+      "side": 1,
+      "message": "semi unrelated, self.create_pod is set up in init, but afict is not used. I guess at some point it was intended to be used for this logic. If there is a re-spin may want to remove the unused variable ...",
+      "range": {
+        "startLine": 155,
+        "startChar": 13,
+        "endLine": 155,
+        "endChar": 39
+      },
+      "revId": "941c7058ad7a7d2fcd85aeaeae46ea0fb8f3ab7a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
