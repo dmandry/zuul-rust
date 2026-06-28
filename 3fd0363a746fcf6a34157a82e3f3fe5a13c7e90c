@@ -16,6 +16,23 @@
       "message": "Patchset 5, is a re-write as the spec changes to propose the extensions to provide the generic framework that the Heat driver is the first consumer of.",
       "revId": "3fd0363a746fcf6a34157a82e3f3fe5a13c7e90c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1b71177d_b8928183",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 5
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-28T17:03:54Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "3fd0363a746fcf6a34157a82e3f3fe5a13c7e90c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
