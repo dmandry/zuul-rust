@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "898949f5_8872a850",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 2475
+      },
+      "writtenOn": "2026-06-28T08:24:44Z",
+      "side": 1,
+      "message": "Rebase to address the conflict with 0f34db84b9f07c73e37f947e864a21581d76a794 . `doc/source/drivers/kubernetes-attrs.rstinc` had an `alias` added to labels.",
+      "revId": "941c7058ad7a7d2fcd85aeaeae46ea0fb8f3ab7a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
