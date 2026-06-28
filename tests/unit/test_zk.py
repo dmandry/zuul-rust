@@ -1720,6 +1720,7 @@ class TestMergerApi(ZooKeeperBaseTestCase):
             event_id='1',
         ), payload)
 
+        merger_api.waitForSync()
         b = self.getRequest(merger_api, 'B')
         c = self.getRequest(merger_api, 'C')
         d = self.getRequest(merger_api, 'D')
@@ -1733,6 +1734,8 @@ class TestMergerApi(ZooKeeperBaseTestCase):
 
         d.state = MergeRequest.COMPLETED
         merger_api.update(d)
+
+        merger_api.waitForSync()
 
         # The lost_merges method should only return merges which are running
         # but not locked by any merger, in this case merge b
