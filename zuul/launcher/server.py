@@ -1250,6 +1250,8 @@ class Launcher:
         )
         # Avoid submitting duplicate upload jobs
         self.upload_uuids_in_queue = set()
+        # Track in-flight min-ready nodes not yet visible in the cache
+        self._inflight_min_ready = {}  # uuid -> (label, config_hash, aliases)
         self.upload_uuids_in_delete_queue = set()
         # Simultaneous image artifact processes (download+upload)
         self.upload_executor = MonitoringThreadPoolExecutor(
@@ -2523,9 +2525,18 @@ class Launcher:
                              self.CACHE_SYNC_TIMEOUT)
             return
 
+        # Prune in-flight entries that are now visible in the cache
+        cached_uuids = {n.uuid for n in self.api.getProviderNodes()}
+        self._inflight_min_ready = {
+            k: v for k, v in self._inflight_min_ready.items()
+            if k not in cached_uuids
+        }
+
         for label, provider in self._getMissingMinReadySlots():
             with self.createZKContext(None, self.log) as ctx:
                 node = self._requestNode(label, None, provider, self.log, ctx)
+                self._inflight_min_ready[node.uuid] = (
+                    label.name, label.config_hash, list(label.aliases))
                 self.log.debug("Created min-ready node %s via provider %s",
                                node, provider)
 
@@ -2609,6 +2620,12 @@ class Launcher:
             # equivalent
             for alias in node.label_aliases:
                 unassigned_nodes[alias].append(node.label_config_hash)
+        # Include in-flight min-ready nodes not yet visible in the cache
+        for label_name, config_hash, aliases in (
+                self._inflight_min_ready.values()):
+            unassigned_nodes[label_name].append(config_hash)
+            for alias in aliases:
+                unassigned_nodes[alias].append(config_hash)
         return unassigned_nodes
 
     def _getUnassignedNodes(self):
