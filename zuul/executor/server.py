@@ -4814,6 +4814,12 @@ class ExecutorServer(BaseMergeServer):
             len(self.job_workers),
             self.job_workers,
         )
+        # Re-evaluate load sensors immediately so that freed
+        # resources are detected without waiting for the next
+        # governor cycle (up to 10s). If the executor was
+        # unregistered due to resource pressure, this allows
+        # it to re-register and pick up pending requests.
+        self.manageLoad()
 
     def stopJobDiskFull(self, jobdir):
         unique = os.path.basename(jobdir)
