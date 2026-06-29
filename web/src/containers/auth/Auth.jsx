@@ -100,6 +100,7 @@ class AuthContainerComponent extends React.Component {
 
   clickOnSignIn() {
     const redirect_target = window.location.href.slice(getHomepageUrl().length)
+    sessionStorage.setItem('zuul_auth_redirect', redirect_target)
     localStorage.setItem('zuul_auth_redirect', redirect_target)
     this.props.signIn()
   }

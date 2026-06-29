@@ -47,7 +47,8 @@ function AuthCallbackPage(props) {
       // the login process is triggered before a token is received from another tab.
       // In this case, we fall back to the redirect target saved in localStorage,
       // other wise it would hanging on the AuthCallback page.
-      history.push(localStorage.getItem('zuul_auth_redirect'))
+      history.push(sessionStorage.getItem('zuul_auth_redirect') ||
+                   localStorage.getItem('zuul_auth_redirect'))
     }
   }, [history, user])
 

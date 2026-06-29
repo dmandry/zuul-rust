@@ -67,7 +67,8 @@ class ZuulAuthProvider extends React.Component {
       onSignIn: async (user) => {
         // Update redux with the logged in state and send the
         // credentials to any other tabs.
-        const redirect = localStorage.getItem('zuul_auth_redirect')
+        const redirect = sessionStorage.getItem('zuul_auth_redirect') ||
+              localStorage.getItem('zuul_auth_redirect')
         this.props.dispatch(userLoggedIn(user, redirect))
         this.props.channel.postMessage({
           type: 'signIn',

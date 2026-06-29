@@ -145,10 +145,16 @@ class AppComponent extends React.Component {
       return <Fetching />
     }
     if (auth.info.read_protected && !user.data) {
-      const redirect_target = window.location.href.slice(getHomepageUrl().length)
-      // If the redirect_target is the root url, we set the zuul_auth_redirect to /
-      // so that the auth callback page can redirect to the / after login
-      localStorage.setItem('zuul_auth_redirect', redirect_target==='' ? '/' : redirect_target)
+      const redirectTarget = window.location.href.slice(getHomepageUrl().length)
+      // If the redirect_target is the root url, we set the
+      // zuul_auth_redirect to / so that the auth callback page can
+      // redirect to / after login.  Set this in sessionStorage so
+      // that it's specific for this tab as well as localStorage as a
+      // fallback for use by other tabs.
+
+      const finalRedirectTarget = redirectTarget==='' ? '/' : redirectTarget
+      localStorage.setItem('zuul_auth_redirect', finalRedirectTarget)
+      sessionStorage.setItem('zuul_auth_redirect', finalRedirectTarget)
       this.props.signIn()
       return <Fetching />
     }
