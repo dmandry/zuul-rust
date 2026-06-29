@@ -16,6 +16,23 @@
       "message": "recheck",
       "revId": "6a2210ebd409205dbe2d5c72b75f2b010d9486f6",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ea9edf8a_bfce1c0d",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-29T11:27:16Z",
+      "side": 1,
+      "message": "rehceck\n\ntest_subnodes_reuse should be fixed by https://review.opendev.org/c/zuul/zuul/+/995181\ntest_web_nodes_list_niz should be fixed by https://review.opendev.org/c/zuul/zuul/+/995224?usp\u003dsearch",
+      "revId": "6a2210ebd409205dbe2d5c72b75f2b010d9486f6",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
