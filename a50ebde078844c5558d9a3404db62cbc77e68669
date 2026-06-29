@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "1fc71080_05cb70d4",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-29T11:11:17Z",
+      "side": 1,
+      "message": "I guess I triggered this with the heat-driver changes that I pushed a while back. In general I agree with the content, humans should be in the loop and humans should understand the code proposed. Monty said something that resonate with me in https://www.youtube.com/live/b_Q_Hp6-QPQ?si\u003d7Spsha2L5dUVqg9j regarding AI agents enabling us to implement ideas that we\u0027ve had for a long time, but did not have time to do. Pushing PoC code for early review feedback is also good IMO, essentially I wish the wording here was a bit more aligned with openinfra\u0027s policy \"provide a starting point, which is then reworked by the human author.\"\n\nI think Zuul as a project should follow up with requiring Signed-Off in proposed changes. I am not a legal expert, but requiring that reduces the projects risk, creates a \"clearer\" line of responsibility - e.g. pushes the copy-riught responsibility to the author proposing the code to the review system.",
+      "revId": "a50ebde078844c5558d9a3404db62cbc77e68669",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
