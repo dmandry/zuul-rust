@@ -16,6 +16,23 @@
       "message": "recheck test_lost_build_requests_disconnect",
       "revId": "dc762c0d524469d720c1738788a682c3f9f05950",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "17ca6ed9_7f1de9d9",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-29T01:21:08Z",
+      "side": 1,
+      "message": "recheck - test_model_upgrade_36_37",
+      "revId": "dc762c0d524469d720c1738788a682c3f9f05950",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
