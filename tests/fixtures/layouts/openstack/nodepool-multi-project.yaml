@@ -1,0 +1,101 @@
+- pipeline:
+    name: image
+    manager: independent
+    trigger:
+      zuul:
+        - event: image-build
+    success:
+      zuul:
+        image-built: true
+        image-validated: true
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: debian-normal
+          name: controller
+
+- job:
+    name: build-debian-local-image
+    image-build-name: debian-local
+
+- project:
+    name: org/common-config
+    image:
+      jobs:
+        - build-debian-local-image
+
+- image:
+    name: debian-local
+    type: zuul
+
+- flavor:
+    name: normal
+
+- label:
+    name: debian-local-normal
+    image: debian-local
+    flavor: normal
+
+- section:
+    name: openstack-base
+    abstract: true
+    connection: openstack
+    launch-timeout: 600
+    launch-attempts: 2
+    floating-ip-cleanup: true
+    port-cleanup-interval: 1
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+      networks:
+        - fake-network
+    flavors:
+      - name: normal
+        flavor-name: Fake Flavor
+    images:
+      - name: debian-local
+        tags:
+          hw_architecture: 'x86_64'
+          hw_disk_bus: 'scsi'
+          visibility: 'shared'
+
+- provider:
+    name: openstack-main
+    section: openstack-base
+    labels:
+      - name: debian-local-normal
+
+- section:
+    name: openstack2-base
+    abstract: true
+    connection: openstack2
+    launch-timeout: 600
+    launch-attempts: 2
+    floating-ip-cleanup: true
+    port-cleanup-interval: 1
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+      networks:
+        - fake-network
+    flavors:
+      - name: normal
+        flavor-name: Fake Flavor
+    images:
+      - name: debian-local
+        tags:
+          hw_architecture: 'x86_64'
+          hw_disk_bus: 'scsi'
+          visibility: 'shared'
+
+- provider:
+    name: openstack2-main
+    section: openstack2-base
+    labels:
+      - name: debian-local-normal

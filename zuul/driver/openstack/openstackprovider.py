@@ -410,5 +410,11 @@ class OpenstackProvider(BaseProvider, subclass_id='openstack'):
             provider_image, image_name,
             image_format, metadata, md5, sha256)
 
+    def getImageCopyJob(self, source_provider, provider_image, image_name,
+                        image_format, metadata, md5, sha256):
+        return self.endpoint.getImageCopyJob(
+            source_provider, provider_image, image_name,
+            image_format, metadata, md5, sha256)
+
     def deleteImage(self, external_id):
         self.endpoint.deleteImage(external_id)
