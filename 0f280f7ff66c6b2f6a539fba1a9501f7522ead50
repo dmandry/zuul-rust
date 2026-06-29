@@ -16,6 +16,23 @@
       "message": "recheck unit test timeout",
       "revId": "0f280f7ff66c6b2f6a539fba1a9501f7522ead50",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "58e8c7de_9bead4e5",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-29T20:53:26Z",
+      "side": 1,
+      "message": "recheck timeout",
+      "revId": "0f280f7ff66c6b2f6a539fba1a9501f7522ead50",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
