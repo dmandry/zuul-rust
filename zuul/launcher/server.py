@@ -400,10 +400,28 @@ class UploadJob:
                                 upload.releaseLock(ctx)
                                 log.debug("Released upload lock for %s",
                                           upload)
+                                uploads.remove(upload)
 
                             except Exception:
                                 log.exception(
                                     "Unable to release lock for %s", upload)
+                for upload in uploads:
+                    log = get_annotated_logger(
+                        self.log, upload=upload.uuid)
+                    try:
+                        self.finalizeUpload(upload, ctx, log)
+                    except Exception:
+                        log.exception("Unable to update state for %s",
+                                      upload)
+                    try:
+                        upload.releaseLock(ctx)
+                        log.debug("Released unused upload lock for %s",
+                                  upload)
+                        uploads.remove(upload)
+
+                    except Exception:
+                        log.exception(
+                            "Unable to release unused lock for %s", upload)
                 if path:
                     try:
                         os.unlink(path)

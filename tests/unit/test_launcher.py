@@ -2597,6 +2597,41 @@ class TestLauncher(LauncherBaseTestCase):
                 if request2.state == request2.State.FULFILLED:
                     break
 
+    @simple_layout('layouts/aws/nodepool-image-copy.yaml',
+                   enable_nodepool=True)
+    @return_data(
+        'build-debian-local-image',
+        'refs/heads/master',
+        LauncherBaseTestCase.debian_return_data,
+    )
+    @okay_tracebacks('_execute_mock_call')
+    @mock.patch('zuul.driver.aws.awsendpoint.AwsImageUploadJob.run')
+    def test_failed_upload_unlock(self, mock_image_upload_run):
+        # Test if skipped upload jobs are eventually failed and
+        # unlocked.
+        # This test is based on test_aws_diskimage_copy, but we fail
+        # the original upload job so the copy job can't run.
+        mock_image_upload_run.side_effect = RuntimeError
+
+        bucket = self.s3.Bucket('zuul')
+        bucket.put_object(Body=ImageMocksFixture.raw_body.encode('utf8'),
+                          Key='image.raw')
+        self.addImageBuildEvent(
+            'tenant-one',
+            'review.example.com/org/common-config',
+            'master',
+            ['debian-local'],
+        )
+
+        image_cname = 'review.example.com%2Forg%2Fcommon-config/debian-local'
+        for _ in iterate_timeout(60, "upload to complete"):
+            uploads = self.launcher.image_upload_registry.getUploadsForImage(
+                image_cname)
+            failed = [u for u in uploads
+                      if (u.state == u.State.FAILED and not u.is_locked)]
+            if len(failed) == 2:
+                break
+
 
 class TestLauncherTenantLimits(LauncherBaseTestCase):
     # We use a multi-tenant config here to make sure we don't end up
