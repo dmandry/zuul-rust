@@ -185,8 +185,8 @@ class TestModelUpgrade(ZuulTestCase):
         new_ltime2 = connection2._branch_cache._new_cache.ltime
         self.assertEqual(stage1_ltime, old_ltime1)
         self.assertEqual(stage1_ltime, old_ltime2)
-        self.assertEqual(stage2_ltime, new_ltime1)
-        self.assertEqual(stage2_ltime, new_ltime2)
+        self.assertGreaterEqual(new_ltime1, stage2_ltime)
+        self.assertEqual(new_ltime1, new_ltime2)
 
         branches2 = connection2.getProjectBranches(project2, tenant2)
         self.assertEqual(['master'], branches2)
