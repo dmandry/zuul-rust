@@ -39,6 +39,7 @@ from zuul.driver.util import (
 )
 from zuul.model import QuotaInformation
 from zuul.provider import (
+    BaseImageCopyJob,
     BaseImageUploadJob,
     BaseProviderEndpoint,
     statemachine
@@ -419,6 +420,36 @@ class OpenstackImageUploadJob(BaseImageUploadJob):
         return image_id
 
 
+class OpenstackImageCopyJob(BaseImageCopyJob):
+    def __init__(self, endpoint, provider_image, image_name,
+                 image_format, metadata, source_endpoint,
+                 source_project, target_project):
+        super().__init__()
+        self.endpoint = endpoint
+        self.provider_image = provider_image
+        self.image_name = image_name
+        self.image_format = image_format
+        self.metadata = metadata
+        self.source_endpoint = source_endpoint
+        self.source_project = source_project
+        self.target_project = target_project
+
+    def run(self, external_id):
+        if self.provider_image.tags['visibility'] == 'public':
+            self.endpoint.log.debug(
+                f"Using public image {self.image_name} "
+                f"from {external_id} in {self.source_project}")
+            return external_id
+
+        self.endpoint.log.debug(
+            f"Sharing image {self.image_name} "
+            f"from {external_id} in {self.source_project}")
+        member_id = self.source_endpoint._shareImage(
+            external_id, self.target_project)
+        self.endpoint._acceptImage(external_id, member_id)
+        return external_id
+
+
 class OpenstackProviderEndpoint(BaseProviderEndpoint):
     """An OPENSTACK Endpoint corresponds to a single OPENSTACK region,
     and can include multiple availability zones.
@@ -604,6 +635,29 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
             provider_image, image_name,
             image_format, metadata, md5, sha256)
 
+    def getImageCopyJob(self, source_provider, provider_image, image_name,
+                        image_format, metadata, md5, sha256):
+        source_endpoint = source_provider.endpoint
+        if not isinstance(source_endpoint, OpenstackProviderEndpoint):
+            return None
+        source_region = source_endpoint.region
+        if source_region != self.region:
+            return None
+        source_project = source_endpoint._client.auth['project_id']
+        target_project = self._client.auth['project_id']
+        if source_project == target_project:
+            return None
+        if provider_image.tags.get('visibility') not in ('public', 'shared'):
+            return None
+        return OpenstackImageCopyJob(
+            self,
+            provider_image, image_name,
+            image_format, metadata,
+            source_endpoint,
+            source_project,
+            target_project,
+        )
+
     def _uploadImage(self, filename, provider_image, image_name,
                      image_format, metadata, md5, sha256):
         # configure glance and upload image.  Note the meta flags
@@ -632,6 +686,16 @@ class OpenstackProviderEndpoint(BaseProviderEndpoint):
                 timeout=timeout,
                 **metadata)
         return image.id
+
+    def _shareImage(self, external_id, member_id):
+        ret = self._client.image.add_member(external_id,
+                                            member_id=member_id)
+        return ret.member_id
+
+    def _acceptImage(self, external_id, member_id):
+        self._client.image.update_member(member_id,
+                                         external_id,
+                                         status='accepted')
 
     def deleteImage(self, external_id):
         self.log.debug(f"Deleting image {external_id}")
