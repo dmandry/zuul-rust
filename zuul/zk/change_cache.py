@@ -24,7 +24,13 @@ import zlib
 from collections import defaultdict
 from collections.abc import Iterable
 
-from kazoo.exceptions import BadVersionError, NodeExistsError, NoNodeError
+from kazoo.exceptions import (
+    BadVersionError,
+    ConnectionLoss,
+    NodeExistsError,
+    NoNodeError,
+    SessionExpiredError,
+)
 
 from zuul import model
 from zuul.zk import sharding, ZooKeeperSimpleBase
@@ -229,7 +235,12 @@ class AbstractChangeCache(ZooKeeperSimpleBase, Iterable, abc.ABC):
                        key, data_uuid)
         if self._stopped:
             return
-        self._get(key, data_uuid, zstat)
+        try:
+            self._get(key, data_uuid, zstat)
+        except (ConnectionLoss, SessionExpiredError):
+            # Connection lost during data fetch, the watcher
+            # will re-fetch on reconnect.
+            return
 
     def _loadKey(self, data):
         data = json.loads(data.decode("utf8"))
