@@ -63,6 +63,12 @@ class FakeOpenstackImage(FakeOpenstackObject):
     pass
 
 
+class FakeOpenstackMember(FakeOpenstackObject):
+    def __repr__(self):
+        return (f'<FakeOpenstackMember m={self.member_id} '
+                f'i={self.image_id} {self.status}')
+
+
 class FakeOpenstackNetwork(FakeOpenstackObject):
     pass
 
@@ -80,20 +86,30 @@ class FakeOpenstackPort(FakeOpenstackObject):
     pass
 
 
+class FakeOpenstackAuth(FakeOpenstackObject):
+    pass
+
+
 class FakeOpenstackCloud:
     log = logging.getLogger("zuul.FakeOpenstackCloud")
 
     def __init__(self,
                  region,
+                 project,
                  needs_floating_ip=False,
                  auto_attach_floating_ip=True,
                  ):
         self._fake_region = region
+        # A project is not really a characteristic of a server-side
+        # cloud, but in tests we treat different projects as different
+        # clouds for simplicity.
+        self._fake_project = project
         self._fake_needs_floating_ip = needs_floating_ip
         self._fake_auto_attach_floating_ip = auto_attach_floating_ip
         self.servers = []
         self.volumes = []
         self.images = []
+        self.members = []
         self.floating_ips = []
         self.flavors = [
             FakeOpenstackFlavor(
@@ -149,6 +165,29 @@ class FakeOpenstackConfig:
         self.config['region_name'] = region
 
 
+class FakeOpenstackImageProxy:
+    def __init__(self, cloud):
+        self.cloud = cloud
+
+    def add_member(self, image, **attrs):
+        member = FakeOpenstackMember(
+            member_id=uuid.uuid4().hex,
+            image_id=image,
+            status='pending',
+        )
+        self.cloud.members.append(member)
+        return member
+
+    def update_member(self, member_id, image_id, **attrs):
+        for m in self.cloud.members:
+            if (m.member_id == member_id and
+                m.image_id == image_id):
+                m.__dict__.update(attrs)
+                break
+        else:
+            raise Exception("Unable to find member")
+
+
 class FakeOpenstackConnection:
     log = logging.getLogger("zuul.FakeOpenstackConnection")
 
@@ -156,6 +195,10 @@ class FakeOpenstackConnection:
         self.cloud = cloud
         self.compute = FakeOpenstackSession(cloud)
         self.config = FakeOpenstackConfig(cloud._fake_region or 'region1')
+        self.auth = FakeOpenstackAuth(
+            project_id=cloud._fake_project,
+        )
+        self.image = FakeOpenstackImageProxy(cloud)
 
     def _needs_floating_ip(self, server, nat_destination):
         return self.cloud._fake_needs_floating_ip
@@ -322,7 +365,8 @@ class FakeOpenstackProviderEndpoint(OpenstackProviderEndpoint):
         return FakeOpenstackConfig('region1')
 
     def _getClient(self):
-        return self._fake_cloud[self.region]._getConnection()
+        name = f'{self.connection.connection_name}-{self.region}'
+        return self._fake_cloud[name]._getConnection()
 
     def _expandServer(self, server):
         return server

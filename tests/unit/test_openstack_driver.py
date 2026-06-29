@@ -65,9 +65,10 @@ class BaseOpenstackDriverTest(ZuulTestCase):
     openstack_needs_floating_ip = False
     openstack_auto_attach_floating_ip = True
 
-    def _makeFakeCloud(self, region):
+    def _makeFakeCloud(self, connection_name, region, project='project1'):
         fake_cloud = FakeOpenstackCloud(
             region,
+            project,
             needs_floating_ip=self.openstack_needs_floating_ip,
             auto_attach_floating_ip=self.openstack_auto_attach_floating_ip,
         )
@@ -81,7 +82,8 @@ class BaseOpenstackDriverTest(ZuulTestCase):
             self.test_config.driver.openstack.get('max_volumes', 100)
         fake_cloud.max_volume_gb =\
             self.test_config.driver.openstack.get('max_volume_gb', 100)
-        self.fake_cloud[region] = fake_cloud
+        name = f'{connection_name}-{region}'
+        self.fake_cloud[name] = fake_cloud
 
     def setUp(self):
         self.initTestConfig()
@@ -92,8 +94,15 @@ class BaseOpenstackDriverTest(ZuulTestCase):
             fixtures.EnvironmentVariable('OS_CLIENT_CONFIG_FILE', clouds_yaml))
 
         self.fake_cloud = {}
-        self._makeFakeCloud(None)
-        self._makeFakeCloud('region2')
+        self._makeFakeCloud('openstack', None)
+        self._makeFakeCloud('openstack', 'region2')
+        self._makeFakeCloud('openstack2', None, project='project2')
+        # The image copy test uses two projects on the same cloud, so
+        # link up their data structures.
+        self.fake_cloud['openstack2-None'].images =\
+            self.fake_cloud['openstack-None'].images
+        self.fake_cloud['openstack2-None'].members =\
+            self.fake_cloud['openstack-None'].members
         self.patch(OpenstackDriver, '_endpoint_class',
                    FakeOpenstackProviderEndpoint)
         self.patch(FakeOpenstackProviderEndpoint,
@@ -148,7 +157,7 @@ class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
     )
     def test_openstack_diskimage(self):
         self._test_diskimage()
-        conn = self.fake_cloud[None]._getConnection()
+        conn = self.fake_cloud['openstack-None']._getConnection()
         props = conn.list_images()[0].properties
         self.assertEqual('qcow2', props['disk_format'])
         self.assertEqual('x86_64', props['hw_architecture'])
@@ -161,7 +170,7 @@ class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
     def test_openstack_resource_cleanup(self):
         self.waitUntilSettled()
         self.launcher.cleanup_worker.INTERVAL = 1
-        conn = self.fake_cloud[None]._getConnection()
+        conn = self.fake_cloud['openstack-None']._getConnection()
         # This test class doesn't generally use fips, but since we're
         # testing *all* leaked resources, set it here.
         conn.cloud._fake_needs_floating_ip = True
@@ -220,6 +229,21 @@ class TestOpenstackDriver(BaseOpenstackDriverTest, BaseCloudDriverTest):
         future_names = ['delete_future', 'create_future']
         self._test_state_machines(label_name, provider_name,
                                   node_class, future_names)
+
+    @simple_layout('layouts/openstack/nodepool-multi-project.yaml',
+                   enable_nodepool=True)
+    @return_data(
+        'build-debian-local-image',
+        'refs/heads/master',
+        BaseOpenstackDriverTest.debian_return_data,
+    )
+    def test_openstack_image_share(self):
+        self._test_diskimage(expected_uploads=2)
+        name = 'review.example.com%2Forg%2Fcommon-config/debian-local'
+        uploads = self.launcher.image_upload_registry.getUploadsForImage(
+            name)
+        # Since they are shared, they should have the same external id
+        self.assertEqual(uploads[0].external_id, uploads[1].external_id)
 
 
 class TestOpenstackDriverFloatingIp(BaseOpenstackDriverTest,
