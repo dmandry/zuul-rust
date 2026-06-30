@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    The timer trigger now accepts a named field format for the ``time``
+    attribute. Field names map to APScheduler's CronTrigger parameters,
+    enabling support for extended day expressions such as ``last fri``
+    or ``3rd wed``, as well as the ``week`` field for ISO week-based
+    scheduling. See :attr:`pipeline.trigger.timer.time` for details.
+

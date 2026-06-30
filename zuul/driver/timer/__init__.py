@@ -121,6 +121,44 @@ class TimerDriver(Driver, TriggerInterface):
         self.log.debug("Removed %s jobs for %s, %s remain",
                        len(to_remove), tenant, len(new_jobs))
 
+    def _parseTimeSpec(self, timespec, pipeline):
+        """Parse a timespec string into (cron_args, jitter).
+
+        :param str timespec: A whitespace-separated cron expression
+            or a JSON-encoded dict of APScheduler CronTrigger fields.
+        :param pipeline: The pipeline object.
+        :returns: (cron_args, jitter) or (None, None) on error.
+        """
+        # Named fields format (APScheduler extended expressions)
+        try:
+            spec = json.loads(timespec)
+            jitter = spec.pop('jitter', None)
+            jitter = int(jitter) if jitter is not None else None
+            return spec, jitter
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+
+        # Cron string format
+        parts = timespec.split()
+        if len(parts) < 5 or len(parts) > 7:
+            self.log.error(
+                "Unable to parse time value '%s' defined in pipeline %s",
+                timespec, pipeline.name)
+            return None, None
+
+        cron_args = dict(
+            minute=parts[0],
+            hour=parts[1],
+            day=parts[2],
+            month=parts[3],
+            day_of_week=parts[4],
+            second=None,
+        )
+        if len(parts) > 5:
+            cron_args['second'] = parts[5]
+        jitter = int(parts[6]) if len(parts) > 6 else None
+        return cron_args, jitter
+
     def _addJobs(self, tenant):
         jobs = {}
         for manager in tenant.layout.pipeline_managers.values():
@@ -129,31 +167,10 @@ class TimerDriver(Driver, TriggerInterface):
                 if not isinstance(ef.trigger, timertrigger.TimerTrigger):
                     continue
                 for timespec in ef.timespecs:
-                    parts = timespec.split()
-                    if len(parts) < 5 or len(parts) > 7:
-                        self.log.error(
-                            "Unable to parse time value '%s' "
-                            "defined in pipeline %s" % (
-                                timespec,
-                                pipeline.name))
+                    cron_args, jitter = self._parseTimeSpec(timespec, pipeline)
+                    if cron_args is None:
                         continue
                     try:
-                        cron_args = dict(
-                            minute=parts[0],
-                            hour=parts[1],
-                            day=parts[2],
-                            month=parts[3],
-                            day_of_week=parts[4],
-                            second=None,
-                        )
-                        if len(parts) > 5:
-                            cron_args['second'] = parts[5]
-                        if len(parts) > 6:
-                            jitter = int(parts[6])
-                        else:
-                            jitter = None
-                        # Trigger any value errors by creating a
-                        # throwaway object.
                         ZuulCronTrigger(jitter=jitter, **cron_args)
                     except ValueError:
                         self.log.error(

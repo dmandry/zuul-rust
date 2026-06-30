@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import json
 import time
 import datetime
 import zoneinfo
@@ -22,6 +23,43 @@ from tests.base import BaseTestCase, ZuulTestCase, iterate_timeout
 
 
 class TestTimerTrigger(BaseTestCase):
+
+    def test_dict_timespec_parsing(self):
+        # Test that JSON-encoded dict timespecs are parsed correctly.
+        from zuul.driver.timer import TimerDriver
+
+        driver = TimerDriver()
+
+        class FakePipeline:
+            name = 'test'
+
+        pipeline = FakePipeline()
+
+        spec = {
+            'minute': '0',
+            'hour': '6',
+            'day': '3rd wed',
+            'jitter': 60,
+        }
+        timespec = json.dumps(spec, sort_keys=True)
+        cron_args, jitter = driver._parseTimeSpec(timespec, pipeline)
+        self.assertIsNotNone(cron_args)
+        self.assertEqual(cron_args['day'], '3rd wed')
+        self.assertEqual(jitter, 60)
+        self.assertNotIn('jitter', cron_args)
+
+        # 3rd Wednesday of June 2026 is June 17,
+        # we should fire at 06:00
+        trigger = ZuulCronTrigger(jitter=None, **cron_args)
+        tz = zoneinfo.ZoneInfo("Etc/UTC")
+
+        now = datetime.datetime(2026, 6, 1, 0, 0, 0, tzinfo=tz)
+        expected = datetime.datetime(2026, 6, 17, 6, 0, 0, tzinfo=tz)
+
+        nf = trigger.get_next_fire_time(None, now)
+        self.assertEqual(expected, nf)
+
+        driver.stop()
 
     def test_cron_trigger(self):
         cron_args = dict(
@@ -164,3 +202,37 @@ class TestTimerAlwaysDynamicBranches(ZuulTestCase):
             self.assertEqual(job.result, 'SUCCESS')
             self.assertEqual(job.name, 'project-bitrot')
             self.assertIn(job.ref, ('refs/heads/stable', 'refs/heads/master'))
+
+
+class TestTimerNamedFields(ZuulTestCase):
+    tenant_config_file = 'config/dynamic-only-project/dynamic.yaml'
+
+    def test_timer_named_fields(self):
+        # Test that dict-format time spec works through the full pipeline.
+        self.executor_server.hold_jobs_in_build = True
+        self.commitConfigUpdate('common-config',
+                                'layouts/timer-named-fields.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+
+        for _ in iterate_timeout(60, 'jobs started'):
+            if len(self.builds) > 0:
+                break
+
+        self.executor_server.hold_jobs_in_build = False
+
+        self.commitConfigUpdate('common-config', 'layouts/no-timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+
+        # If APScheduler is in mid-event when we remove the job, we
+        # can end up with one more event firing, so give it an extra
+        # second to settle.
+        time.sleep(3)
+        self.waitUntilSettled()
+
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertTrue(len(self.history) > 0)
+        job = self.history[0]
+        self.assertEqual(job.result, 'SUCCESS')
+        self.assertEqual(job.name, 'project-bitrot')

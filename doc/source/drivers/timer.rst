@@ -28,6 +28,10 @@ Zuul implements the timer using `apscheduler`_, Please check the
    .. attr:: time
       :required:
 
+      The time specification, in one of two formats:
+
+      **Cron string format**
+
       The time specification in cron syntax.  Only the 5 part syntax
       is supported, not the symbolic names.  Example: ``0 0 * * *``
       runs at midnight.
@@ -41,6 +45,79 @@ Zuul implements the timer using `apscheduler`_, Please check the
       often be used for a given project-branch combination (in other
       words, it is not guaranteed to vary from one run of the timer
       trigger to the next).
+
+      **Named fields format**
+
+      The field names map to APScheduler's CronTrigger parameters
+      (see `apscheduler documentation`_).  This format supports
+      extended day expressions which contain spaces and cannot be
+      expressed in the cron string format.  It also exposes the
+      ``week`` field which is not available in the cron string format.
+
+      .. attr:: year
+
+         4-digit year or cron expression.
+
+      .. attr:: month
+
+         Month (1-12) or cron expression.  Accepts abbreviated
+         names (``jan`` -- ``dec``).
+
+      .. attr:: day
+
+         Day of month (1-31) or cron expression.  Also supports
+         APScheduler's extended expressions:
+
+         * ``last`` -- last day of the month
+         * ``last fri`` -- last Friday of the month
+         * ``3rd wed`` -- third Wednesday of the month
+
+      .. attr:: hour
+
+         Hour (0-23) or cron expression.
+
+      .. attr:: minute
+
+         Minute (0-59) or cron expression.
+
+      .. attr:: second
+
+         Second (0-59) or cron expression.
+
+      .. attr:: day-of-week
+
+         Day of week (0-6 or ``mon``--``sun``, Monday is 0).
+
+      .. attr:: week
+
+         ISO week number (1-53) or cron expression.
+
+      .. attr:: jitter
+
+         Jitter in seconds (integer).
+
+      Example -- last Friday of every month at 22:00
+
+      .. code-block:: yaml
+
+         trigger:
+           timer:
+             - time:
+                 minute: '0'
+                 hour: '22'
+                 day: 'last fri'
+
+      Example -- every other ISO week on Wednesday at 09:00
+
+      .. code-block:: yaml
+
+         trigger:
+           timer:
+             - time:
+                 minute: '0'
+                 hour: '9'
+                 week: '*/2'
+                 day-of-week: 'wed'
 
    .. attr:: dereference
       :default: false

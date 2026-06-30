@@ -14,6 +14,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import json
+
 import voluptuous as v
 
 from zuul.trigger import BaseTrigger
@@ -29,11 +31,20 @@ class TimerTrigger(BaseTrigger):
         efilters = []
         for trigger in to_list(trigger_conf):
             types = [make_regex('timer')]
+            # Serialize dict timespecs to JSON strings so they
+            # remain hashable and comparable throughout the system.
+            timespecs = []
+            for t in to_list(trigger['time']):
+                if isinstance(t, dict):
+                    t = {k.replace('-', '_'): v for k, v in t.items()}
+                    timespecs.append(json.dumps(t, sort_keys=True))
+                else:
+                    timespecs.append(t)
             f = TimerEventFilter(
                 connection_name=connection_name,
                 trigger=self,
                 types=types,
-                timespecs=to_list(trigger['time']),
+                timespecs=timespecs,
                 dereference=trigger.get('dereference', False),
                 debug=trigger.get('debug'),
             )
@@ -44,8 +55,19 @@ class TimerTrigger(BaseTrigger):
 
 
 def getSchema():
+    cron_fields = {
+        v.Optional('year'): v.Any(str, int),
+        v.Optional('month'): v.Any(str, int),
+        v.Optional('day'): v.Any(str, int),
+        v.Optional('week'): v.Any(str, int),
+        v.Optional('day-of-week'): v.Any(str, int),
+        v.Optional('hour'): v.Any(str, int),
+        v.Optional('minute'): v.Any(str, int),
+        v.Optional('second'): v.Any(str, int),
+        v.Optional('jitter'): int,
+    }
     timer_trigger = {
-        v.Required('time'): str,
+        v.Required('time'): v.Any(str, cron_fields),
         'dereference': bool,
         'debug': bool,
     }
