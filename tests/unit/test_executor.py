@@ -37,7 +37,6 @@ from tests.base import (
 
 from zuul.executor.sensors.startingbuilds import StartingBuildsSensor
 from zuul.executor.sensors.process import ProcessSensor
-from zuul.executor.sensors.ram import RAMSensor
 from zuul.executor.server import squash_variables
 from zuul.model import NodeSet, Group
 
@@ -834,27 +833,35 @@ class TestGovernor(ZuulTestCase):
         vm_mock.return_value = ram
         loadavg_mock.return_value = (0.0, 0.0, 0.0)
 
-        # Set no cgroup limit
-        ram_sensor = [x for x in self.executor_server.sensors
-                      if isinstance(x, RAMSensor)][0]
-        ram_sensor.CGROUP_SELF = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'cgroup.self')
-        ram_sensor.CGROUP_ROOT = os.path.join(
+        self_fixture = os.path.join(FIXTURE_DIR, 'cgroup', 'cgroup.self')
+        nolimit_fixture = os.path.join(
             FIXTURE_DIR, 'cgroup', 'memory.nolimit')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
-
-        # Set cgroup limit 5GiB and ram usage 20%
-        ram_sensor.CGROUP_ROOT = os.path.join(
+        ok_fixture = os.path.join(
             FIXTURE_DIR, 'cgroup', 'memory.ok')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
-
-        # Set cgroup limit 5GiB and ram usage 96%
-        ram_sensor.CGROUP_ROOT = os.path.join(
+        bad_fixture = os.path.join(
             FIXTURE_DIR, 'cgroup', 'memory.bad')
-        self.executor_server.manageLoad()
-        self.assertFalse(self.executor_server.accepting_work)
+
+        with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_SELF',
+                        self_fixture):
+            # Set no cgroup limit
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            nolimit_fixture):
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
+
+            # Set cgroup limit 5GiB and ram usage 20%
+            with mock.patch(
+                    'zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                    ok_fixture):
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
+
+            # Set cgroup limit 5GiB and ram usage 96%
+            with mock.patch(
+                    'zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                    bad_fixture):
+                self.executor_server.manageLoad()
+                self.assertFalse(self.executor_server.accepting_work)
 
     @mock.patch('os.getloadavg')
     @mock.patch('psutil.virtual_memory')
@@ -869,175 +876,123 @@ class TestGovernor(ZuulTestCase):
         vm_mock.return_value = ram
         loadavg_mock.return_value = (0.0, 0.0, 0.0)
 
-        # Test no limit
         process_sensor = [x for x in self.executor_server.sensors
                           if isinstance(x, ProcessSensor)][0]
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.max')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.max')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
 
-        # Test typical runtime values
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.8k')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.8k')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+        self_fixture = os.path.join(FIXTURE_DIR, 'cgroup', 'cgroup.self')
+        with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_SELF',
+                        self_fixture):
+            # Test no limit
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.nolimit')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test within 5%
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.15600')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.15600')
-        self.executor_server.manageLoad()
-        self.assertFalse(self.executor_server.accepting_work)
+            # Test typical runtime values
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.typical')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test within 10 keep running
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.150')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.100')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.150')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.100')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test within 5%
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.5percent')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertFalse(self.executor_server.accepting_work)
 
-        # Test within 10 stop
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.150')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.141')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.150')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.141')
-        self.executor_server.manageLoad()
-        self.assertFalse(self.executor_server.accepting_work)
+            # Test within 10 keep running
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.headrunning')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test at limit
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        self.executor_server.manageLoad()
-        self.assertFalse(self.executor_server.accepting_work)
+            # Test within 10 stop
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.headstop')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertFalse(self.executor_server.accepting_work)
 
-        # Test no limit only root cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.max')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test at limit
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.limit')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertFalse(self.executor_server.accepting_work)
 
-        # Test typical runtime values only root cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.8k')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test no limit only root cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.root.nolimit')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test at limit only root cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        self.executor_server.manageLoad()
-        self.assertFalse(self.executor_server.accepting_work)
+            # Test typical runtime values only root cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.root.typical')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test no limit only user cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.max')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test at limit only root cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.root.limit')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertFalse(self.executor_server.accepting_work)
 
-        # Test typical runtime values only user cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.8k')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test no limit only user cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.user.nolimit')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test at limit only user cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.16k')
-        self.executor_server.manageLoad()
-        self.assertFalse(self.executor_server.accepting_work)
+            # Test typical runtime values only user cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.user.typical')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
-        # Test no cgroup files found
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'doesnotexist')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test at limit only user cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.user.limit')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertFalse(self.executor_server.accepting_work)
 
-        # Test inability to parse cgroup files
-        process_sensor._root_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.foo')
-        process_sensor._root_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.foo')
-        process_sensor._user_cgroup_max_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.foo')
-        process_sensor._user_cgroup_cur_file = os.path.join(
-            FIXTURE_DIR, 'cgroup', 'pids.foo')
-        self.executor_server.manageLoad()
-        self.assertTrue(self.executor_server.accepting_work)
+            # Test no cgroup files found
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.nocgroup')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
+
+            # Test inability to parse cgroup files
+            root = os.path.join(FIXTURE_DIR, 'cgroup', 'pids.parseerr')
+            with mock.patch('zuul.executor.sensors.cgrouputils.CGROUP_ROOT',
+                            root):
+                process_sensor._user_slice_root = os.path.join(root, 'user')
+                self.executor_server.manageLoad()
+                self.assertTrue(self.executor_server.accepting_work)
 
     @mock.patch('os.getloadavg')
     @mock.patch('os.statvfs')

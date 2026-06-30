@@ -1,4 +1,4 @@
-# Copyright 2025 Acme Gating, LLC
+# Copyright 2025-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -17,6 +17,7 @@ import os
 import os.path
 
 from zuul.executor.sensors import SensorInterface
+from zuul.executor.sensors import cgrouputils
 
 
 class ProcessSensor(SensorInterface):
@@ -31,18 +32,16 @@ class ProcessSensor(SensorInterface):
         self._min_headroom = 10
         self._safety_factor = 0.05
         self._uid = os.getuid()
-        self._pid_max = self._get_pid_max()
-        self._root_cgroup_max_file = '/sys/fs/cgroup/pids.max'
-        self._root_cgroup_cur_file = '/sys/fs/cgroup/pids.current'
+        self._pid_max = self._getPidMax()
         # This appears to be systemd specific behavior with cgroups that
         # reflects the ulimit values. This way we don't need to have a
         # separate system for ulimit checking.
-        self._user_cgroup_max_file = f'/sys/fs/cgroup/user.slice' \
-                                     f'/user-{self._uid}.slice/pids.max'
-        self._user_cgroup_cur_file = f'/sys/fs/cgroup/user.slice' \
-                                     f'/user-{self._uid}.slice/pids.current'
+        self._user_slice_root = ('/sys/fs/cgroup/user.slice'
+                                 f'/user-{self._uid}.slice')
+        if cgrouputils.get_cgroup() is None:
+            self.log.warning("cgroups v2 not available")
 
-    def _get_pid_max(self):
+    def _getPidMax(self):
         # Default for x86_64
         default = 2 ** 22
         path = '/proc/sys/kernel/pid_max'
@@ -61,22 +60,19 @@ class ProcessSensor(SensorInterface):
     def isOk(self):
         # Processes running in the root cgroup won't have these values
         # but containers do.
-        # If no max is found assume pid_max. If no current usage is found
-        # assume 1 for the current process.
-        root_max = self._get_root_cgroup_max() or self._pid_max
-        root_current = self._get_root_cgroup_current() or 1
+        cgroup_avail, cgroup_limit = self._getMinAvailProcessCgroup()
         # Processes running under systemd will have these values.
-        user_max = self._get_user_slice_max() or self._pid_max
-        user_current = self._get_user_slice_current() or 1
+        user_avail, user_limit = self._getMinAvailProcessUserSlice()
 
-        limit = min(root_max, user_max)
-        usage = max(root_current, user_current)
+        avail = min(cgroup_avail, user_avail)
+        limit = min(cgroup_limit, user_limit)
         min_headroom = limit * self._safety_factor
         if min_headroom < self._min_headroom:
             min_headroom = self._min_headroom
         # This shouldn't ever be negative but I'm not sure if you can reduce
         # cgroup limits below the current usage at runtime.
-        headroom = max(limit - usage, 0)
+        headroom = max(avail, 0)
+        usage = limit - avail
 
         if self.statsd:
             self.statsd.gauge(self.base_key + '.max_process',
@@ -88,31 +84,69 @@ class ProcessSensor(SensorInterface):
             return False, f'high process utilization: {usage} max: {limit}'
         return True, f'process utilization: {usage} max: {limit}'
 
-    def _get_root_cgroup_max(self):
-        return self._get_cgroup_value(self._root_cgroup_max_file)
+    def _getMinAvailProcessCgroup(self):
+        # If no max is found assume pid_max. If no current usage is found
+        # assume 1 for the current process.
+        min_avail = self._pid_max
+        min_limit = self._pid_max
 
-    def _get_root_cgroup_current(self):
-        return self._get_cgroup_value(self._root_cgroup_cur_file)
+        for path in cgrouputils.walk_cgroups_tree():
+            cur_path = f'{path}/pids.current'
+            try:
+                with open(cur_path) as f:
+                    usage = f.read().strip()
+                usage = int(usage)
+            except ValueError:
+                self.log.exception('Unable to convert cgroup '
+                                   'process value')
+                usage = 1
+            except FileNotFoundError:
+                usage = 1
 
-    def _get_user_slice_max(self):
-        return self._get_cgroup_value(self._user_cgroup_max_file)
+            max_path = f'{path}/pids.max'
+            try:
+                with open(max_path) as f:
+                    limit = f.read().strip()
+                if limit == 'max':
+                    limit = self._pid_max
+                else:
+                    limit = int(limit)
+            except ValueError:
+                self.log.exception('Unable to convert cgroup '
+                                   'process value')
+                limit = self._pid_max
+            except FileNotFoundError:
+                limit = self._pid_max
 
-    def _get_user_slice_current(self):
-        return self._get_cgroup_value(self._user_cgroup_cur_file)
+            level_avail = limit - usage
+            min_avail = min(min_avail, level_avail)
+            min_limit = min(min_limit, limit)
 
-    def _get_cgroup_value(self, path):
-        if os.path.exists(path):
+        return min_avail, min_limit
+
+    def _getMinAvailProcessUserSlice(self):
+        # If no max is found assume pid_max. If no current usage is found
+        # assume 1 for the current process.
+        limit = self._getUserCgroupValue('pids.max')
+        if limit is None:
+            limit = self._pid_max
+        usage = self._getUserCgroupValue('pids.current')
+        if usage is None:
+            usage = 1
+        return limit - usage, limit
+
+    def _getUserCgroupValue(self, path):
+        path = os.path.join(self._user_slice_root, path)
+        try:
             with open(path) as f:
                 s = f.read().strip()
                 if s == 'max':
                     return self._pid_max
                 else:
-                    try:
-                        i = int(s)
-                    except ValueError:
-                        self.log.exception('Unable to convert cgroup '
-                                           'process value')
-                        i = None
-                    return i
-        else:
+                    return int(s)
+        except ValueError:
+            self.log.exception('Unable to convert cgroup '
+                               'process value')
+            return None
+        except FileNotFoundError:
             return None
