@@ -20,6 +20,24 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "7388eafd_1b0a52b9",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-30T15:09:19Z",
+      "side": 1,
+      "message": "Yes, claude was used as an assistant - not as code generator. I use a an IDE that has \"AI\" integrated - so anything I do is aided. And I lean to include the assisted by footer always based on that. Even it\u0027s usage like - \"Read the APSscheduler doc, and provide a summary of the fields\" and \"Can you help me find similar test covarage in the code so that I can add new test coverage\" etc.",
+      "parentUuid": "398f54a3_47e9d698",
+      "revId": "45d7b4c9ad644083912054064d2ad3b46b3a65a7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "5c02093d_def8c496",
         "filename": "doc/source/drivers/timer.rst",
         "patchSetId": 2
@@ -31,6 +49,24 @@
       "writtenOn": "2026-06-30T13:37:19Z",
       "side": 1,
       "message": "This should be `.. code-block:: yaml` to get the best formatting.",
+      "revId": "45d7b4c9ad644083912054064d2ad3b46b3a65a7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "d3720ab6_397dde31",
+        "filename": "doc/source/drivers/timer.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 75,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-30T15:09:19Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "5c02093d_def8c496",
       "revId": "45d7b4c9ad644083912054064d2ad3b46b3a65a7",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
