@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "feff2fc1_cdae542f",
+        "filename": "doc/source/drivers/timer.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 92,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-30T13:33:56Z",
+      "side": 1,
+      "message": "We almost always use hyphens in zuul config, unless we\u0027re passing data through to an underlying system like k8s.  Arguably, this is one of those cases, but this is not a well-knon syntax (we\u0027re not passing the json to apsched, we\u0027re passing arguments to a function).  So I think we should keep with the typical system of using hyphens.  That means translating this field.  I think it\u0027s the only one.\n\nAlso, we should document each attribute field.\n\nThis change does warrant a release note to let users know about the new facility.",
+      "revId": "f7d5140b63aa8c94208af77dee40db132ed8ace0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
