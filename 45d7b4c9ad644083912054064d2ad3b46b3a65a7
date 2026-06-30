@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "398f54a3_47e9d698",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 2
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-30T13:37:19Z",
+      "side": 1,
+      "message": "There\u0027s significant code and docs changes in this patch, I trust those are your own work (and Claude just helped with research so to speak)?",
+      "revId": "45d7b4c9ad644083912054064d2ad3b46b3a65a7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5c02093d_def8c496",
+        "filename": "doc/source/drivers/timer.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 75,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-06-30T13:37:19Z",
+      "side": 1,
+      "message": "This should be `.. code-block:: yaml` to get the best formatting.",
+      "revId": "45d7b4c9ad644083912054064d2ad3b46b3a65a7",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
