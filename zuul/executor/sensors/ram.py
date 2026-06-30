@@ -14,75 +14,90 @@
 
 import logging
 import math
+import pathlib
 import psutil
 
 from zuul.executor.sensors import SensorInterface
 from zuul.lib.config import get_default
 
-CGROUP_STATS_FILE = '/sys/fs/cgroup/memory/memory.stat'
 
-
-def get_avail_mem_pct():
+def getAvailMemPct():
     avail_mem_pct = 100.0 - psutil.virtual_memory().percent
     return avail_mem_pct
 
 
 class RAMSensor(SensorInterface):
     log = logging.getLogger("zuul.executor.sensor.ram")
+    # This is to facilitate unit testing
+    CGROUP_ROOT = '/sys/fs/cgroup'
+    CGROUP_SELF = '/proc/self/cgroup'
 
     def __init__(self, statsd, base_key, config=None):
         super().__init__(statsd, base_key)
         self.min_avail_mem = float(get_default(config, 'executor',
                                                'min_avail_mem', '5.0'))
-        self.cgroup_stats_file = CGROUP_STATS_FILE
+        if self._getCgroup() is None:
+            self.log.warning("cgroups v2 not available")
 
-    def _read_cgroup_stat(self):
-        stat = {}
-        try:
-            with open(self.cgroup_stats_file) as f:
-                for line in f.readlines():
-                    key, value = line.split(' ')
-                    stat[key] = int(value.strip())
-        except Exception:
-            pass
-        return stat
+    def _getCgroup(self):
+        with open(self.CGROUP_SELF) as f:
+            cgroup = f.read().strip()
+            if cgroup[:3] != "0::":
+                return None
+        return f'{self.CGROUP_ROOT}{cgroup[3:]}'
 
-    def _get_cgroup_limit(self):
-        stat = self._read_cgroup_stat()
-        limit = stat.get('hierarchical_memory_limit', math.inf)
-        mem_total = psutil.virtual_memory().total
-        if limit < mem_total:
-            return limit
-        else:
-            return math.inf
+    def _getAvailMemPctCgroup(self):
+        min_pct = 100.0
+        min_limit = math.inf
 
-    def _get_avail_mem_pct_cgroup(self):
-        stat = self._read_cgroup_stat()
-        limit = stat.get('hierarchical_memory_limit', math.inf)
-        usage = stat.get('total_rss', math.inf)
+        cgroup = self._getCgroup()
+        if cgroup is None:
+            return min_pct, min_limit
 
-        if math.isinf(limit) or math.isinf(usage):
-            # pretend we have all memory available if we got infs
-            return 100
+        path = pathlib.Path(cgroup)
+        while len(str(path)) >= len(self.CGROUP_ROOT):
+            cur_path = f'{path}/memory.current'
+            try:
+                with open(cur_path) as f:
+                    usage = f.read().strip()
+                usage = int(usage)
+            except FileNotFoundError:
+                usage = 0
 
-        return 100.0 - usage / limit * 100
+            max_path = f'{path}/memory.max'
+            try:
+                with open(max_path) as f:
+                    limit = f.read().strip()
+                if limit == 'max':
+                    limit = math.inf
+                else:
+                    limit = int(limit)
+            except FileNotFoundError:
+                limit = math.inf
+
+            level_pct = 100.0 - usage / limit * 100
+            min_pct = min(min_pct, level_pct)
+            min_limit = min(min_limit, limit)
+            path = path.parent
+
+        return min_pct, min_limit
 
     def isOk(self):
-        avail_mem_pct = get_avail_mem_pct()
-        avail_mem_pct_cgroup = self._get_avail_mem_pct_cgroup()
+        avail_mem_pct = getAvailMemPct()
+        avail_mem_pct_cgroup, cgroup_limit = self._getAvailMemPctCgroup()
 
         if self.statsd:
             self.statsd.gauge(self.base_key + '.pct_used_ram',
                               int((100.0 - avail_mem_pct) * 100))
-            if math.isfinite(self._get_cgroup_limit()):
+            if math.isfinite(cgroup_limit):
                 self.statsd.gauge(self.base_key + '.pct_used_ram_cgroup',
                                   int((100.0 - avail_mem_pct_cgroup) * 100))
 
         if avail_mem_pct < self.min_avail_mem:
-            return False, "low memory {:3.1f}% < {}".format(
+            return False, "low memory {:3.1f}% < {}%".format(
                 avail_mem_pct, self.min_avail_mem)
 
-        if math.isinf(self._get_cgroup_limit()):
+        if math.isinf(cgroup_limit):
             # we have no cgroup defined limit so we're done now
             return True, "memory {:3.1f}% >= {}%".format(
                 avail_mem_pct, self.min_avail_mem)
