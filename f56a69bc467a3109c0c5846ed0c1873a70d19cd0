@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4df02d48_4153b39b",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 19
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-06-30T13:18:14Z",
+      "side": 1,
+      "message": "I think the author does have a couple of examples where triggers cannot be expressed. I proposed a different approach[1] that would enable expressing the things the author of this change mentions. Zuul already use APSscheduler, and it support things like `last fri`, `3rd wed`, and a ISO `week` field. But, currently Zuul makes these unavailable because of how the time trigger is parsed `timespec.split()` ...\n\n[1] https://review.opendev.org/c/zuul/zuul/+/995505",
+      "revId": "f56a69bc467a3109c0c5846ed0c1873a70d19cd0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
