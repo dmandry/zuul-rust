@@ -20,6 +20,23 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "a14c28a8_4a130523",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 2475
+      },
+      "writtenOn": "2026-06-30T06:03:25Z",
+      "side": 1,
+      "message": "recheck `ERROR: failed to build: failed to solve: failed to compute cache key: short read: expected 211602331 bytes but got 4194304: unexpected EOF`",
+      "revId": "941c7058ad7a7d2fcd85aeaeae46ea0fb8f3ab7a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "97253ecb_4f42e8fc",
         "filename": "zuul/driver/kubernetes/kubernetesendpoint.py",
         "patchSetId": 2
