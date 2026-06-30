@@ -1,0 +1,11 @@
+Verified+2: Zuul
+Workflow+1: Simon Westphahl <simon.westphahl@bmw.de>
+Code-Review+1: Harald Jensås <hjensas@redhat.com>
+Code-Review+2: Simon Westphahl <simon.westphahl@bmw.de>
+Submitted-by: Zuul
+Submitted-at: Tue, 30 Jun 2026 15:54:12 +0000
+Reviewed-on: https://review.opendev.org/c/zuul/zuul/+/994984
+Comments-Total: 7
+Comments-Unresolved: 1
+Project: zuul/zuul
+Branch: refs/heads/master
