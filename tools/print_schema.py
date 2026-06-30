@@ -168,6 +168,11 @@ class SchemaWalker:
                     disc = alt['value']['type']['alts'][0]['value']
                     altname = f"{name}[{disc}]"
                     out += self._attr(indent, altname, alt)
+                # Or k8s label types
+                elif name == 'labels':
+                    disc = alt['value']['kind']['alts'][0]['value']
+                    altname = f"{name}[{disc}]"
+                    out += self._attr(indent, altname, alt)
                 else:
                     out += self._toDoc(indent + 1, alt)
         return out

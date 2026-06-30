@@ -3037,7 +3037,12 @@ class AnsibleJob(object):
                     'namespace': data['namespace'],
                     'context': data['context_name'],
                 }
-                if node.connection_type in ('project', 'namespace'):
+                if (
+                    # Nodepool:
+                    (node.connection_type in ('project', 'namespace')) or
+                    # NIZ:
+                    data['pod'] is None
+                ):
                     # Project are special nodes that are not the inventory
                     pass
                 else:

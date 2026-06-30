@@ -23,6 +23,7 @@ from zuul.lib.voluputil import (
     Optional,
     Required,
     assemble,
+    discriminate,
 )
 
 import voluptuous as vs
@@ -74,11 +75,30 @@ class KubernetesProviderLabel(BaseProviderLabel):
         ): str,
     })
 
-    kubernetes_label_schema = vs.Schema({
+    kubernetes_common_label_schema = vs.Schema({
+        Optional(
+            'image-pull-secrets',
+            default=[],
+            doc="""\
+
+            The imagePullSecrets needed to pull container images from
+            a private registry.  Because Zuul creates pods in a new
+            namespace, and image pull secrets must exist in the
+            namespace of the pods that use them, the referenced
+            secrets will be copied into the temporary namespace that
+            Zuul creates before creating the pod.  The new secrets
+            will have the same name as the old secrets.
+
+            Each entry is a dictionary with the following keys:
+            """,
+        ): AsList(kubernetes_pull_secrets),
+    })
+
+    kubernetes_label_non_inheritable_schema = vs.Schema({
         Required(
             'kind',
             doc="""\
-            The Kubernetes driver supports two types of labels:
+            The type of label:
             """,
         ): vs.Any(
             Constant(
@@ -98,43 +118,13 @@ class KubernetesProviderLabel(BaseProviderLabel):
                 """,
             ),
         ),
-        Required(
-            'spec',
-            doc="""\
-
-            Zuul will supply the contents of this value verbatim to
-            Kubernetes as the ``spec`` attribute of the Kubernetes
-            ``Pod`` definition.
-
-            This attribute allows for the creation of arbitrary
-            complex pod definitions but the user is responsible for
-            ensuring that they are suitable.  The first container in
-            the pod is expected to be a long-running container that
-            hosts a shell environment for running commands.  The
-            following minimal definition is recommended as a starting
-            point:
-
-            .. code-block:: yaml
-
-               labels:
-                 - name: custom-pod
-                   kind: pod
-                   spec:
-                     containers:
-                       - name: custom-pod
-                         image: ubuntu:jammy
-                         imagePullPolicy: IfNotPresent
-                         command: ["/bin/sh", "-c"]
-                         args: ["sleep infinity"]
-            """,
-        ): dict,
     })
 
     kubernetes_label_inheritable_schema = vs.Schema({
         Optional(
             'kind',
             doc="""\
-            The Kubernetes driver supports two types of labels:
+            The type of label:
             """,
         ): Nullable(vs.Any(
             Constant(
@@ -156,7 +146,74 @@ class KubernetesProviderLabel(BaseProviderLabel):
         )),
     })
 
-    kubernetes_label_common_schema = vs.Schema({
+    kubernetes_pod_kind_schema = vs.Schema({
+        Required(
+            'kind',
+            doc="""\
+            The type of label:
+            """,
+        ): vs.Any(
+            Constant(
+                'pod',
+                doc="""\
+                Pod labels provide a dedicated namespace with a single
+                pod and a service account that can exec and get the
+                logs of the pod.
+                """,
+            ),
+        ),
+    })
+
+    kubernetes_label_kind_schema = vs.Schema({
+        Required(
+            'kind',
+            doc="""\
+            The type of label:
+            """,
+        ): vs.Any(
+            Constant(
+                'namespace',
+                doc="""\
+                Namespace labels provide an empty namespace configured
+                with a service account that can create pods, services,
+                configmaps, etc.
+                """,
+            ),
+        ),
+    })
+
+    kubernetes_spec_doc = """\
+    Zuul will supply the contents of this value verbatim to
+    Kubernetes as the ``spec`` attribute of the Kubernetes
+    ``Pod`` definition.
+
+    This attribute allows for the creation of arbitrary
+    complex pod definitions but the user is responsible for
+    ensuring that they are suitable.  The first container in
+    the pod is expected to be a long-running container that
+    hosts a shell environment for running commands.  The
+    following minimal definition is recommended as a starting
+    point:
+
+    .. code-block:: yaml
+
+       labels:
+         - name: custom-pod
+           kind: pod
+           spec:
+             containers:
+               - name: custom-pod
+                 image: ubuntu:jammy
+                 imagePullPolicy: IfNotPresent
+                 command: ["/bin/sh", "-c"]
+                 args: ["sleep infinity"]
+    """
+
+    kubernetes_inheritable_pod_label_schema_extra = vs.Schema({
+        Optional(
+            'spec',
+            doc=kubernetes_spec_doc,
+        ): Nullable(dict),
         Optional(
             'annotations',
             doc="""\
@@ -164,42 +221,83 @@ class KubernetesProviderLabel(BaseProviderLabel):
             metadata.  The value of this field is added to the
             `metadata.annotations` field in Kubernetes.  This field
             contains arbitrary key/value pairs that can be accessed by
-            tools and libraries.  """,
-        ): Nullable(dict),
-        Optional(
-            'image-pull-secrets',
-            default=[],
-            doc="""\
-
-            The imagePullSecrets needed to pull container images from
-            a private registry.  Because Zuul creates pods in a new
-            namespace, and image pull secrets must exist in the
-            namespace of the pods that use them, the referenced
-            secrets will be copied into the temporary namespace that
-            Zuul creates before creating the pod.  The new secrets
-            will have the same name as the old secrets.
-
-            Each entry is a dictionary with the following keys:
+            tools and libraries.
             """,
-        ): AsList(kubernetes_pull_secrets),
+        ): Nullable(dict),
     })
+
+    kubernetes_non_inheritable_pod_label_schema_extra = vs.Schema({
+        Required(
+            'spec',
+            doc=kubernetes_spec_doc,
+        ): dict,
+        Optional(
+            'annotations',
+            doc="""\
+            A dictionary of additional values to be added to the pod
+            metadata.  The value of this field is added to the
+            `metadata.annotations` field in Kubernetes.  This field
+            contains arbitrary key/value pairs that can be accessed by
+            tools and libraries.
+            """,
+        ): Nullable(dict),
+    })
+
+    kubernetes_pod_label_schema = assemble(
+        BaseProviderLabel.schema,
+        kubernetes_label_non_inheritable_schema,
+        kubernetes_common_label_schema,
+        kubernetes_non_inheritable_pod_label_schema_extra,
+        kubernetes_pod_kind_schema,
+        doc="These are the attributes available for a pod label.",
+    )
+
+    internal_kubernetes_pod_label_schema = assemble(
+        BaseProviderLabel.schema,
+        provider_schema.internal_base_label,
+        kubernetes_label_non_inheritable_schema,
+        kubernetes_common_label_schema,
+        kubernetes_non_inheritable_pod_label_schema_extra,
+        kubernetes_pod_kind_schema,
+        extra=vs.ALLOW_EXTRA,
+    )
+
+    kubernetes_namespace_label_schema = assemble(
+        BaseProviderLabel.schema,
+        kubernetes_label_non_inheritable_schema,
+        kubernetes_common_label_schema,
+        kubernetes_label_kind_schema,
+        doc="These are the attributes available for a namespace label.",
+    )
+
+    internal_kubernetes_namespace_label_schema = assemble(
+        BaseProviderLabel.schema,
+        provider_schema.internal_base_label,
+        kubernetes_label_non_inheritable_schema,
+        kubernetes_common_label_schema,
+        kubernetes_label_kind_schema,
+        extra=vs.ALLOW_EXTRA,
+    )
 
     inheritable_schema = assemble(
         BaseProviderLabel.inheritable_schema,
         kubernetes_label_inheritable_schema,
-        kubernetes_label_common_schema,
+        kubernetes_common_label_schema,
+        kubernetes_inheritable_pod_label_schema_extra,
     )
 
-    schema = assemble(
-        BaseProviderLabel.schema,
-        kubernetes_label_schema,
-        kubernetes_label_common_schema,
+    schema = vs.Union(
+        kubernetes_pod_label_schema,
+        kubernetes_namespace_label_schema,
+        discriminant=discriminate(
+            lambda val, alt: val['kind'] == alt['kind'].validators[0])
     )
 
-    internal_schema = assemble(
-        schema,
-        provider_schema.internal_base_label,
-        extra=vs.ALLOW_EXTRA,
+    internal_schema = vs.Union(
+        internal_kubernetes_pod_label_schema,
+        internal_kubernetes_namespace_label_schema,
+        discriminant=discriminate(
+            lambda val, alt: val['kind'] == alt['kind'].validators[0])
     )
 
     image_flavor_inheritable_schema = vs.Schema({})

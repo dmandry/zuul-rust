@@ -34,6 +34,7 @@ from tests.base import (
     BaseTestCase,
     FIXTURE_DIR,
     ZuulTestCase,
+    driver_config,
     iterate_timeout,
     okay_tracebacks,
     simple_layout,
@@ -128,6 +129,18 @@ class BaseKubernetesDriverTest(ZuulTestCase):
                 'KubernetesProviderEndpoint._completeApi', return_value=None)):
             yield
 
+    def check_pod_node_attrs(self, pnode):
+        self.assertIsNotNone(pnode.kubernetes_connection['pod'])
+        self.assertIsNotNone(pnode.kubernetes_connection['namespace'])
+        self.assertEqual(pnode.kubernetes_connection['pod'],
+                         pnode.kubernetes_connection['namespace'])
+        self.assertEqual('kubectl', pnode.connection_type)
+
+    def check_namespace_node_attrs(self, pnode):
+        self.assertIsNone(pnode.kubernetes_connection['pod'])
+        self.assertIsNotNone(pnode.kubernetes_connection['namespace'])
+        self.assertEqual('kubectl', pnode.connection_type)
+
 
 class TestKubernetesDriver(BaseKubernetesDriverTest, BaseCloudDriverTest):
     def _assertProviderNodeAttributes(self, pnode):
@@ -138,8 +151,18 @@ class TestKubernetesDriver(BaseKubernetesDriverTest, BaseCloudDriverTest):
             checks(self, pnode)
 
     @simple_layout('layouts/kubernetes/nodepool.yaml', enable_nodepool=True)
-    def test_kubernetes_node_lifecycle(self):
+    @driver_config('kubernetes',
+                   node_checks=BaseKubernetesDriverTest.
+                   check_pod_node_attrs)
+    def test_kubernetes_node_lifecycle_pod(self):
         self._test_node_lifecycle('debian-normal')
+
+    @simple_layout('layouts/kubernetes/nodepool.yaml', enable_nodepool=True)
+    @driver_config('kubernetes',
+                   node_checks=BaseKubernetesDriverTest.
+                   check_namespace_node_attrs)
+    def test_kubernetes_node_lifecycle_namespace(self):
+        self._test_node_lifecycle('k8s-namespace')
 
     @simple_layout('layouts/kubernetes/more.yaml', enable_nodepool=True)
     def test_kubernetes_node_lifecycle_more(self):
