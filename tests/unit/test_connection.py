@@ -12,6 +12,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
 import configparser
 import os
 import re
@@ -35,7 +36,6 @@ from tests.base import (
     PostgresqlSchemaFixture,
     ZuulTestCase,
     iterate_timeout,
-    okay_tracebacks,
 )
 
 
@@ -745,7 +745,13 @@ class TestMQTTConnection(ZuulTestCase):
     config_file = 'zuul-mqtt-driver.conf'
     tenant_config_file = 'config/mqtt-driver/main.yaml'
 
-    @okay_tracebacks('Connection refused')
+    def setUp(self):
+        from tests import fake_mqtt
+        mqtt_fixture = fake_mqtt.MQTTFixture()
+        self.broker = mqtt_fixture.broker
+        self.useFixture(mqtt_fixture)
+        super().setUp()
+
     def test_mqtt_reporter(self):
         "Test the MQTT reporter"
         # Add a success result
@@ -770,8 +776,8 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
-        success_event_check = self.mqtt_messages.pop()
-        start_event_check = self.mqtt_messages.pop()
+        success_event_check = self.broker.messages.pop()
+        start_event_check = self.broker.messages.pop()
 
         self.assertEqual(start_event_check.get('topic'),
                          'tenant-one/zuul_start/check/org/project/master')
@@ -835,13 +841,12 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.addApproval("Approved", 1))
         self.waitUntilSettled()
 
-        success_event_gate = self.mqtt_messages.pop()
+        success_event_gate = self.broker.messages.pop()
         mqtt_payload = success_event_gate['msg']
         self.assertEqual(mqtt_payload['project'], 'org/project')
         self.assertEqual(mqtt_payload['pipeline'], 'gate')
         self.assertEqual(mqtt_payload['queue'], 'integrated')
 
-    @okay_tracebacks('Connection refused')
     def test_mqtt_paused_job(self):
         self.executor_server.hold_jobs_in_build = True
         A = self.fake_gerrit.addFakeChange("org/project", "master", "A")
@@ -861,7 +866,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.executor_server.release()
         self.waitUntilSettled()
 
-        success_event = self.mqtt_messages.pop()
+        success_event = self.broker.messages.pop()
 
         mqtt_payload = success_event["msg"]
         self.assertEqual(mqtt_payload["project"], "org/project")
@@ -884,7 +889,6 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertGreater(
             resume_event["event_time"], pause_event["event_time"])
 
-    @okay_tracebacks('Connection refused')
     def test_mqtt_retried_builds(self):
         self.executor_server.hold_jobs_in_build = True
         A = self.fake_gerrit.addFakeChange("org/project", "master", "A")
@@ -898,7 +902,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.executor_server.release()
         self.waitUntilSettled()
 
-        success_event = self.mqtt_messages.pop()
+        success_event = self.broker.messages.pop()
         mqtt_payload = success_event["msg"]
         retry_builds = mqtt_payload["buildset"]["retry_builds"]
         self.assertEqual(len(retry_builds), 1)
@@ -916,7 +920,6 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertIn("execute_time", retry_build)
         self.assertIn("log_url", retry_build)
 
-    @okay_tracebacks('Connection refused', 'ERROR: content conflict')
     def test_mqtt_merge_conflict(self):
         M = self.fake_gerrit.addFakeChange('org/project', 'master', 'M',
                                            files={'conflict': 'foo'})
@@ -927,7 +930,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
-        merge_event_check = self.mqtt_messages.pop()
+        merge_event_check = self.broker.messages.pop()
 
         self.assertEqual(merge_event_check.get('topic'),
                          'tenant-one/zuul_buildset/check/org/project/master')
@@ -969,7 +972,6 @@ class TestMQTTConnection(ZuulTestCase):
         changes = mqtt_payload['changes']
         self.assertEqual(len(changes), 1)
 
-    @okay_tracebacks('Connection refused')
     def test_mqtt_invalid_topic(self):
         in_repo_conf = textwrap.dedent(
             """
@@ -992,7 +994,6 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertIn("topic component 'bad' is invalid", A.messages[0],
                       "A should report a syntax error")
 
-    @okay_tracebacks('Connection refused')
     def test_topic_replace_invalid_chars(self):
         # Test that special characters in the topic are replaced
         self.create_branch('org/project', 'weird#+')
@@ -1005,7 +1006,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
-        success_event = self.mqtt_messages.pop()
+        success_event = self.broker.messages.pop()
         self.assertEqual(success_event['topic'],
                          'tenant-one/zuul_buildset/check/org/project/weird__')
 
