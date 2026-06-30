@@ -73,7 +73,7 @@ class MQTTListener(threading.Thread):
 
     def _run(self):
         self._stop_event.clear()
-        while not self.stop_event.is_set():
+        while not self._stop_event.is_set():
             # TODO(clarkb) make this topic subscription configurable
             # This matches the events that Zuul itself will publish to
             # the mqtt broker.
@@ -187,7 +187,7 @@ class MQTTConnection(BaseConnection):
 
     def publish(self, topic, message, qos, zuul_event_id):
         log = get_annotated_logger(self.log, zuul_event_id)
-        if not self.listener_thead or not self.listener_thread.connected:
+        if not self.listener_thread or not self.listener_thread.connected:
             log.warning("MQTT reporter (%s) is disabled", self)
             return
         try:

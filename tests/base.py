@@ -2562,7 +2562,6 @@ class ZuulTestCase(BaseTestCase):
 
         self.poller_events = {}
         self._configureSmtp()
-        self._configureMqtt()
         self._configureElasticsearch()
 
         executor_connections = TestConnectionRegistry(
@@ -2674,18 +2673,6 @@ class ZuulTestCase(BaseTestCase):
             return FakeSMTP(*args, **kw)
 
         self.useFixture(fixtures.MonkeyPatch('smtplib.SMTP', FakeSMTPFactory))
-
-    def _configureMqtt(self):
-        # Set up mqtt related fakes
-        self.mqtt_messages = []
-
-        def fakeMQTTPublish(_, topic, msg, qos, zuul_event_id):
-            log = logging.getLogger('zuul.FakeMQTTPubish')
-            log.info('Publishing message via mqtt')
-            self.mqtt_messages.append({'topic': topic, 'msg': msg, 'qos': qos})
-        self.useFixture(fixtures.MonkeyPatch(
-            'zuul.driver.mqtt.mqttconnection.MQTTConnection.publish',
-            fakeMQTTPublish))
 
     def _configureElasticsearch(self):
         # Set up Elasticsearch related fakes

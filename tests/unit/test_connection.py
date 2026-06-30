@@ -13,16 +13,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import asyncio
 import configparser
 import os
 import re
 import textwrap
-import threading
 import time
 import types
 
-import amqtt.broker
 import sqlalchemy as sa
 
 import zuul
@@ -39,7 +36,6 @@ from tests.base import (
     PostgresqlSchemaFixture,
     ZuulTestCase,
     iterate_timeout,
-    okay_tracebacks,
 )
 
 
@@ -750,67 +746,12 @@ class TestMQTTConnection(ZuulTestCase):
     tenant_config_file = 'config/mqtt-driver/main.yaml'
 
     def setUp(self):
+        from tests import fake_mqtt
+        mqtt_fixture = fake_mqtt.MQTTFixture()
+        self.broker = mqtt_fixture.broker
+        self.useFixture(mqtt_fixture)
         super().setUp()
 
-        # This is the default config with the port modified to be 0
-        # and sys_interval set to 120 to avoid unnecessary work
-        config = {
-            "listeners": {
-                "default": {
-                    "type": "tcp",
-                    # Listen on port 0 then find the socket port later
-                    "bind": "0.0.0.0:0",
-                },
-            },
-            "timeout_disconnect_delay": 0,
-            "plugins": {
-                "amqtt.plugins.logging_amqtt.EventLoggerPlugin": {},
-                "amqtt.plugins.logging_amqtt.PacketLoggerPlugin": {},
-                "amqtt.plugins.authentication.AnonymousAuthPlugin": {
-                    "allow_anonymous": True,
-                },
-                "amqtt.plugins.sys.broker.BrokerSysPlugin": {
-                    "sys_interval": 120
-                },
-            },
-        }
-
-        loop = asyncio.new_event_loop()
-
-        def run_async_amqtt():
-            asyncio.set_event_loop(loop)
-            self.broker = amqtt.broker.Broker(config, loop)
-            loop.run_until_complete(self.broker.start())
-
-        self.amqtt_thread = threading.Thread(target=run_async_amqtt)
-        self.amqtt_thread.start()
-
-        # TODO(clarkb) need to check amqtt broker state machine for
-        # the started state
-        while not hasattr(self, 'broker'):
-            time.sleep(0.1)
-        while not self.broker._servers:
-            time.sleep(0.1)
-        while not self.broker._servers["default"].instance:
-            time.sleep(0.1)
-        instance = self.broker._servers["default"].instance
-        self.amqtt_port = instance.sockets[0].getsockname()[1]
-        # TODO(clarkb) configure our mqtt connection to connect to this
-        # broker. Then we can drop the okay traceback for Connection refused
-        # and do actual publishing of records and read them back.
-        print(self.amqtt_port)
-
-        def amqtt_cleanup():
-            loop.run_until_complete(self.broker.shutdown())
-            self.amqtt_thread.join()
-
-        self.addCleanup(amqtt_cleanup)
-
-    # amqtt imports passlib even when you set up anonymous auth only
-    # this then trips over bcrypt changes. This doesn't affect our testing
-    # because we do anonymous auth only.
-    @okay_tracebacks('Connection refused',
-                     "module 'bcrypt' has no attribute '__about__'")
     def test_mqtt_reporter(self):
         "Test the MQTT reporter"
         # Add a success result
@@ -835,8 +776,8 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
-        success_event_check = self.mqtt_messages.pop()
-        start_event_check = self.mqtt_messages.pop()
+        success_event_check = self.broker.messages.pop()
+        start_event_check = self.broker.messages.pop()
 
         self.assertEqual(start_event_check.get('topic'),
                          'tenant-one/zuul_start/check/org/project/master')
@@ -900,17 +841,12 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.addApproval("Approved", 1))
         self.waitUntilSettled()
 
-        success_event_gate = self.mqtt_messages.pop()
+        success_event_gate = self.broker.messages.pop()
         mqtt_payload = success_event_gate['msg']
         self.assertEqual(mqtt_payload['project'], 'org/project')
         self.assertEqual(mqtt_payload['pipeline'], 'gate')
         self.assertEqual(mqtt_payload['queue'], 'integrated')
 
-    # amqtt imports passlib even when you set up anonymous auth only
-    # this then trips over bcrypt changes. This doesn't affect our testing
-    # because we do anonymous auth only.
-    @okay_tracebacks('Connection refused',
-                     "module 'bcrypt' has no attribute '__about__'")
     def test_mqtt_paused_job(self):
         self.executor_server.hold_jobs_in_build = True
         A = self.fake_gerrit.addFakeChange("org/project", "master", "A")
@@ -930,7 +866,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.executor_server.release()
         self.waitUntilSettled()
 
-        success_event = self.mqtt_messages.pop()
+        success_event = self.broker.messages.pop()
 
         mqtt_payload = success_event["msg"]
         self.assertEqual(mqtt_payload["project"], "org/project")
@@ -953,11 +889,6 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertGreater(
             resume_event["event_time"], pause_event["event_time"])
 
-    # amqtt imports passlib even when you set up anonymous auth only
-    # this then trips over bcrypt changes. This doesn't affect our testing
-    # because we do anonymous auth only.
-    @okay_tracebacks('Connection refused',
-                     "module 'bcrypt' has no attribute '__about__'")
     def test_mqtt_retried_builds(self):
         self.executor_server.hold_jobs_in_build = True
         A = self.fake_gerrit.addFakeChange("org/project", "master", "A")
@@ -971,7 +902,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.executor_server.release()
         self.waitUntilSettled()
 
-        success_event = self.mqtt_messages.pop()
+        success_event = self.broker.messages.pop()
         mqtt_payload = success_event["msg"]
         retry_builds = mqtt_payload["buildset"]["retry_builds"]
         self.assertEqual(len(retry_builds), 1)
@@ -989,11 +920,6 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertIn("execute_time", retry_build)
         self.assertIn("log_url", retry_build)
 
-    # amqtt imports passlib even when you set up anonymous auth only
-    # this then trips over bcrypt changes. This doesn't affect our testing
-    # because we do anonymous auth only.
-    @okay_tracebacks('Connection refused',
-                     "module 'bcrypt' has no attribute '__about__'")
     def test_mqtt_invalid_topic(self):
         in_repo_conf = textwrap.dedent(
             """
@@ -1016,11 +942,6 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertIn("topic component 'bad' is invalid", A.messages[0],
                       "A should report a syntax error")
 
-    # amqtt imports passlib even when you set up anonymous auth only
-    # this then trips over bcrypt changes. This doesn't affect our testing
-    # because we do anonymous auth only.
-    @okay_tracebacks('Connection refused',
-                     "module 'bcrypt' has no attribute '__about__'")
     def test_topic_replace_invalid_chars(self):
         # Test that special characters in the topic are replaced
         self.create_branch('org/project', 'weird#+')
@@ -1033,7 +954,7 @@ class TestMQTTConnection(ZuulTestCase):
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
-        success_event = self.mqtt_messages.pop()
+        success_event = self.broker.messages.pop()
         self.assertEqual(success_event['topic'],
                          'tenant-one/zuul_buildset/check/org/project/weird__')
 
