@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import json
 import time
 import datetime
 import zoneinfo
@@ -22,6 +23,43 @@ from tests.base import BaseTestCase, ZuulTestCase, iterate_timeout
 
 
 class TestTimerTrigger(BaseTestCase):
+
+    def test_dict_timespec_parsing(self):
+        # Test that JSON-encoded dict timespecs are parsed correctly.
+        from zuul.driver.timer import TimerDriver
+
+        driver = TimerDriver()
+
+        class FakePipeline:
+            name = 'test'
+
+        pipeline = FakePipeline()
+
+        spec = {
+            'minute': '0',
+            'hour': '6',
+            'day': '3rd wed',
+            'jitter': 60,
+        }
+        timespec = json.dumps(spec, sort_keys=True)
+        cron_args, jitter = driver._parseTimeSpec(timespec, pipeline)
+        self.assertIsNotNone(cron_args)
+        self.assertEqual(cron_args['day'], '3rd wed')
+        self.assertEqual(jitter, 60)
+        self.assertNotIn('jitter', cron_args)
+
+        # 3rd Wednesday of June 2026 is June 17,
+        # we should fire at 06:00
+        trigger = ZuulCronTrigger(jitter=None, **cron_args)
+        tz = zoneinfo.ZoneInfo("Etc/UTC")
+
+        now = datetime.datetime(2026, 6, 1, 0, 0, 0, tzinfo=tz)
+        expected = datetime.datetime(2026, 6, 17, 6, 0, 0, tzinfo=tz)
+
+        nf = trigger.get_next_fire_time(None, now)
+        self.assertEqual(expected, nf)
+
+        driver.stop()
 
     def test_cron_trigger(self):
         cron_args = dict(
