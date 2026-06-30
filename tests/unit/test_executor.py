@@ -1825,8 +1825,9 @@ class TestExecutorHomedir(AnsibleZuulTestCase):
         for (fn, pb) in warnings:
             msg = (
                 f'File {fn} found in build home directory during playbook '
-                f'review.example.com/org/project/playbooks/{pb}.  Add to '
-                'preserve-home-paths if safe, or otherwise remove.'
+                f'review.example.com/org/project/playbooks/{pb} for '
+                'job preservejob.  Add to preserve-home-paths if safe, '
+                'or otherwise remove.'
             )
             self.assertIn(msg, A.messages[0])
         self.assertEqual(5, A.messages[0].count('File warn/warn'))

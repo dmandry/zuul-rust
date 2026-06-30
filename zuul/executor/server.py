@@ -3429,7 +3429,9 @@ class AnsibleJob(object):
                         self.warnings.append(
                             f"File {rpath} found in build home directory "
                             "during playbook "
-                            f"{playbook.canonical_name_and_path}.  "
+                            f"{playbook.canonical_name_and_path} "
+                            "for job "
+                            f"{self.job.name}.  "
                             "Add to preserve-home-paths if safe, "
                             "or otherwise remove.")
 
