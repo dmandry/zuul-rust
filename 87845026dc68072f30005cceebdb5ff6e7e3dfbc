@@ -157,6 +157,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "f043d308_b402bccb",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1645,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:44:04Z",
+      "side": 1,
+      "message": "It\u0027s complicated, for sure, and easy to miss.  But it\u0027s also a pattern we use in a lot of tests, and the code does start with the \"build jobdir source root\" for the repos, so I don\u0027t think it\u0027s a systemic problem that requires a comment.",
+      "parentUuid": "9b50c18d_c2b33c79",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "18a729f3_505a2d4b",
@@ -206,6 +224,24 @@
       "side": 1,
       "message": "Oh yup if project metadata allowed merged modes is None and we have a merge mode we take it and set it on project metadata then we won\u0027t set an additional value.\n\nI do think this is worth documenting as unlike multiple merge mode request headers users may accidentally set different merge modes on different branches. Its also less clear in that situation as they aren\u0027t all set in one location.",
       "parentUuid": "6f5c1bf1_5a8d5409",
+      "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "532c813d_44f54ed4",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 1528,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:44:04Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "a1a81a40_5b1a840b",
       "revId": "87845026dc68072f30005cceebdb5ff6e7e3dfbc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
