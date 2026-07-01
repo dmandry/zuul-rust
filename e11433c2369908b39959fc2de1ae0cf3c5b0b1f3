@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6aecab6c_9fd24862",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 710,
+      "author": {
+        "id": 2
+      },
+      "writtenOn": "2026-07-01T21:14:20Z",
+      "side": 1,
+      "message": "nit - maybe use self.local_tmp here?",
+      "range": {
+        "startLine": 710,
+        "startChar": 38,
+        "endLine": 710,
+        "endChar": 60
+      },
+      "revId": "e11433c2369908b39959fc2de1ae0cf3c5b0b1f3",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
