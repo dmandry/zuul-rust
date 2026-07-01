@@ -11774,6 +11774,48 @@ class TestDynamicBranchesProject(IncludeBranchesTestCase):
             dict(name='project-dynamic', result='SUCCESS', changes='1,1'),
         ], ordered=False)
 
+    def test_new_dynamic_branch_single_branch(self):
+        # In this test, the repo has only a single branch ("master"),
+        # but since it has always-dynamic-branches set, we treat it
+        # like a normal repo, not a shared-jobs repo, and behave as if
+        # implied-branch-matchers is set to true.
+
+        # Create a new dynamic-only branch.  Since it's dynamic only,
+        # it won't trigger a reconfiguration.
+        self.create_branch('org/project', 'feature/foo')
+        self.fake_gerrit.addEvent(
+            self.fake_gerrit.getFakeBranchCreatedEvent(
+                'org/project', 'feature/foo'))
+        self.waitUntilSettled()
+
+        # Test that we load configuration from the dynamic branch even
+        # though the tenant layout doesn't know about it yet (since
+        # there hasn't been a reconfiguration since it was created).
+        conf = textwrap.dedent(
+            """
+            - job:
+                name: project-test
+                tags: [feature]
+
+            - project:
+                check:
+                  jobs:
+                    - project-test
+            """)
+        file_dict = {'zuul.yaml': conf}
+        A = self.fake_gerrit.addFakeChange('org/project', 'feature/foo', 'A',
+                                           files=file_dict)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='central-test', result='SUCCESS', changes='1,1'),
+            dict(name='project-test', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+        job = self.getJobFromHistory('project-test')
+        self.assertEqual(set(['feature']),
+                         set(job.parameters['zuul']['jobtags']))
+
     def test_post_jobs(self):
         self.create_branch('org/project', 'feature/bar')
         self.fake_gerrit.addEvent(

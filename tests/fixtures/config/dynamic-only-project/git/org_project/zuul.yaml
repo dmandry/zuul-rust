@@ -1,5 +1,6 @@
 - job:
     name: project-test
+    tags: [master]
 
 # Note: this job is not expected to run
 - job:

@@ -307,6 +307,15 @@ configuration. Some examples of tenant definitions are:
             change as if it included a change to a ``zuul.yaml`` file,
             even if the change does not alter the configuration).
 
+            Even though branches specified by
+            `always-dynamic-branches` are not loaded into Zuul's
+            configuration, the fact that they may exist causes Zuul to
+            treat the project as a multi-branch project, and therefore
+            Zuul will use implied branch matchers even if the project
+            has only one permanent branch.  This behavior may be
+            overridden with :attr:`pragma` or
+            :attr:`tenant.untrusted-projects.<project>.implied-branch-matchers`.
+
             With all these caveats in mind, this can be useful for
             repos with large numbers of rarely used branches as it
             allows Zuul to omit their configuration in most
