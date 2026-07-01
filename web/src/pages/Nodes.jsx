@@ -105,7 +105,7 @@ class NodesPage extends React.Component {
         <span style={{color:style.color}}>{node.state}</span>
         {node.next_state &&
          (<>
-            \u2192 <span style={{color:style.color}}>{node.next_state}</span>
+            {'\u2192'} <span style={{color:style.color}}>{node.next_state}</span>
           </>)
         }
       </>
