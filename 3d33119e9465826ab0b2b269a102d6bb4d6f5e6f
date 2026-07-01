@@ -69,6 +69,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "8b4fdd17_06b4a522",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 8275,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:55:21Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "360854ad_87bf8bee",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "ff67f23a_0f841b22",
@@ -82,6 +100,30 @@
       "writtenOn": "2026-06-19T00:24:47Z",
       "side": 1,
       "message": "Nit it looks like we\u0027re always calling run() with a vardict when we expect there might be vars. We don\u0027t call it with vardict in reset() when using hardcoded commands. This means we don\u0027t expect tokens from reset(). I wonder if we should just error below if vardict isn\u0027t set and we\u0027re trying to lookup a token?",
+      "range": {
+        "startLine": 47,
+        "startChar": 8,
+        "endLine": 48,
+        "endChar": 24
+      },
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b00a29e7_e112317f",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 48,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:55:21Z",
+      "side": 1,
+      "message": "See other reply about not failing.",
+      "parentUuid": "ff67f23a_0f841b22",
       "range": {
         "startLine": 47,
         "startChar": 8,
@@ -111,6 +153,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "8db086ce_8111702d",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 54,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:55:21Z",
+      "side": 1,
+      "message": "Well, we would decline the substitution in that case and pass through the variable name.  That should be obvious to any user and we can fix it.  I\u0027d rather this not fail -- it\u0027s better to give the user something 99% complete.",
+      "parentUuid": "aa546b1c_a5e66e0c",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "8cf217d2_d6a05c8e",
         "filename": "zuul/merger/merger.py",
         "patchSetId": 3
@@ -128,6 +188,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "9b085ffd_0c098871",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 844,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:55:21Z",
+      "side": 1,
+      "message": "It\u0027s not a bad idea, but for now, I don\u0027t expect this to change, and I think it\u0027s nice to see all the commands fully in context.  I think I want to keep it like this.  I don\u0027t feel strongly about it, let me know if you do.",
+      "parentUuid": "8cf217d2_d6a05c8e",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "130ecce6_31452b5c",
         "filename": "zuul/model.py",
         "patchSetId": 3
@@ -139,6 +217,24 @@
       "writtenOn": "2026-06-19T00:24:47Z",
       "side": 1,
       "message": "By default connections return ALL_MERGE_MODES from _fetchProjectMergeModes() unless they override this method. GitHub does override the method, but nothing else does. Do we need to override this method so that gitlab et al don\u0027t try to use rebase-first-parent? Similarly should gerrit override it to avoid using rebase?",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a7cddb2c_da05e40f",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 91,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T20:55:21Z",
+      "side": 1,
+      "message": "I think that might be something to look into in the future, but at least for the moment, Zuul will let you configure any merge mode for any system.  I see that as a potential future improvement.",
+      "parentUuid": "130ecce6_31452b5c",
       "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
