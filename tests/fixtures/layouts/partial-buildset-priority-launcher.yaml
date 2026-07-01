@@ -1,0 +1,102 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - name: controller
+          label: ubuntu-xenial
+
+- job:
+    name: build-alpha
+    run: playbooks/test.yaml
+
+- job:
+    name: build-beta
+    run: playbooks/test.yaml
+
+- job:
+    name: build-gamma
+    run: playbooks/test.yaml
+
+# org/project runs two independent jobs so we can test partial-buildset
+# priority boost: once build-alpha's request is accepted, build-beta's
+# pending request should be boosted ahead of fresh, not-yet-started
+# buildsets.
+- project:
+    name: org/project
+    check:
+      jobs:
+        - build-alpha
+        - build-beta
+
+# org/project1 runs three independent jobs, used together with
+# org/project's two-job buildset to verify boosted buildsets are ranked
+# proportionally: a 2-job buildset with 1 of 2 done (50% remaining) is
+# boosted more strongly than a 3-job buildset with 1 of 3 done (67%
+# remaining).
+- project:
+    name: org/project1
+    check:
+      jobs:
+        - build-alpha
+        - build-beta
+        - build-gamma
+
+# org/project2 runs a single job so we can verify its request priority
+# is NOT boosted (its buildset has no partially-accepted sibling).
+- project:
+    name: org/project2
+    check:
+      jobs:
+        - build-alpha
+
+- image:
+    name: ubuntu-xenial
+    type: cloud
+
+- flavor:
+    name: normal
+
+- label:
+    name: ubuntu-xenial
+    image: ubuntu-xenial
+    flavor: normal
+
+- section:
+    name: aws-us-east-1
+    region: us-east-1
+    connection: aws
+    launch-timeout: 600
+    launch-attempts: 2
+    object-storage:
+      bucket-name: zuul
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 300
+      key-name: zuul
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: ubuntu-xenial
+        image-id: ami-1e749f67
+
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: ubuntu-xenial

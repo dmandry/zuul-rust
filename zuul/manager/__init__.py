@@ -2085,15 +2085,7 @@ class PipelineManager(metaclass=ABCMeta):
                       (item, failing_reasons))
         if (item.live and not dequeued
                 and self.sched.globals.use_relative_priority):
-            for job, request_id in item.current_build_set.getNodeRequests():
-                nodeset = item.current_build_set.getJobNodeSetInfo(job)
-                if nodeset is not None:
-                    # No need to revise a completed request
-                    continue
-                if self.sched.nodepool.isNodeRequestID(request_id):
-                    self._reviseNodeRequest(request_id, item, job)
-                else:
-                    self._reviseNodesetRequest(request_id, item, job)
+            self._reviseNodeRequests(item)
         return (changed, bypass, nnfi)
 
     def executeReporterJobs(self, item, start=False):
@@ -2136,8 +2128,67 @@ class PipelineManager(metaclass=ABCMeta):
         if node_request.relative_priority != priority:
             self.sched.nodepool.reviseRequest(node_request, priority)
 
-    def _reviseNodesetRequest(self, request_id, item, job):
-        request = self.sched.launcher.getRequest(request_id)
+    def _reviseNodeRequests(self, item):
+        build_set = item.current_build_set
+        # Fetch each launcher request from ZooKeeper at most once: the
+        # whole set is needed both to compute the partial-buildset
+        # priority boost (an aggregate over the buildset) and to revise
+        # each individual request below.
+        launcher_requests = {
+            request_id: self.sched.launcher.getRequest(request_id)
+            for job, request_id in build_set.getNodeRequests()
+            if build_set.getJobNodeSetInfo(job) is None
+            and not self.sched.nodepool.isNodeRequestID(request_id)
+        }
+        boost = self._getPartialBuildsetBoost(build_set, launcher_requests)
+        for job, request_id in build_set.getNodeRequests():
+            if build_set.getJobNodeSetInfo(job) is not None:
+                # No need to revise a completed request
+                continue
+            if self.sched.nodepool.isNodeRequestID(request_id):
+                self._reviseNodeRequest(request_id, item, job)
+            else:
+                self._reviseNodesetRequest(
+                    launcher_requests.get(request_id), item, job, boost)
+
+    def _getPartialBuildsetBoost(self, build_set, launcher_requests):
+        """Return a relative_priority boost for a partially-started
+        buildset, or None if the feature is disabled or the buildset has
+        not yet had any resources committed to it by a launcher.
+
+        A buildset that has already had resources committed to some of
+        its jobs (a sibling request that is accepted or fulfilled) is
+        ranked ahead of not-yet-started buildsets at the same queue
+        position.  The boost approximates shortest-remaining-work-first:
+        buildsets closer to completion (more committed requests) are
+        boosted more strongly, so nearly-finished buildsets drain before
+        less-complete ones.  This avoids letting a barely-started buildset
+        indefinitely outrank all freshly-submitted work.  The returned
+        value is always strictly negative, so a boosted request always
+        outranks any non-boosted request (whose relative priority is
+        always >= 0), while boosted buildsets are ordered amongst
+        themselves by completion fraction.
+        """
+        if not self.sched.globals.boost_partial_buildset_priority:
+            return None
+        total = committed = 0
+        for job, request_id in build_set.getNodeRequests():
+            total += 1
+            if build_set.getJobNodeSetInfo(job) is not None:
+                # The job already has its nodes.
+                committed += 1
+                continue
+            request = launcher_requests.get(request_id)
+            if request is not None and request.state in (
+                    request.State.ACCEPTED, request.State.FULFILLED):
+                committed += 1
+        if not committed:
+            return None
+        # committed is in [1, total], so the boost is always strictly
+        # negative and ranks by how close the buildset is to completion.
+        return -(committed / total)
+
+    def _reviseNodesetRequest(self, request, item, job, boost=None):
         if not request:
             return
         if request.state not in request.REVISE_STATES:
@@ -2146,6 +2197,10 @@ class PipelineManager(metaclass=ABCMeta):
             return
         relative_priority = self.getNodePriority(
             item, item.getChangeForJob(job))
+        if boost is not None:
+            # A partially-started buildset outranks fresh work at the
+            # same queue position; see _getPartialBuildsetBoost.
+            relative_priority = boost
         if request.relative_priority != relative_priority:
             self.sched.launcher.reviseRequest(request, relative_priority)
 

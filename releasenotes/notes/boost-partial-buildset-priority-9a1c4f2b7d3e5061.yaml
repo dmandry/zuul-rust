@@ -1,0 +1,13 @@
+---
+features:
+  - |
+    A new :attr:`scheduler.boost_partial_buildset_priority` option has been
+    added.  When enabled (and :attr:`scheduler.relative_priority` is also
+    enabled), once any node request in a buildset has had resources
+    committed by a launcher, the remaining pending requests in that
+    buildset are boosted ahead of freshly-submitted buildsets at the same
+    queue position.  The boost is proportional to how close the buildset
+    is to completion, approximating shortest-remaining-work-first
+    scheduling, so nearly-finished buildsets drain before barely-started
+    ones.  This prevents buildsets from stalling indefinitely in saturated
+    clusters.  The option is disabled by default.

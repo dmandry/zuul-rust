@@ -9978,6 +9978,7 @@ class SystemAttributes:
 
     def __init__(self):
         self.use_relative_priority = False
+        self.boost_partial_buildset_priority = False
         self.max_hold_expiration = 0
         self.default_hold_expiration = 0
         self.default_ansible_version = None
@@ -9992,6 +9993,8 @@ class SystemAttributes:
             return False
         return (
             self.use_relative_priority == other.use_relative_priority
+            and (self.boost_partial_buildset_priority ==
+                 other.boost_partial_buildset_priority)
             and self.max_hold_expiration == other.max_hold_expiration
             and self.default_hold_expiration == other.default_hold_expiration
             and self.default_ansible_version == other.default_ansible_version
@@ -10016,6 +10019,12 @@ class SystemAttributes:
         if config.has_option('scheduler', 'relative_priority'):
             if config.getboolean('scheduler', 'relative_priority'):
                 self.use_relative_priority = True
+
+        self.boost_partial_buildset_priority = False
+        if config.has_option('scheduler', 'boost_partial_buildset_priority'):
+            if config.getboolean(
+                    'scheduler', 'boost_partial_buildset_priority'):
+                self.boost_partial_buildset_priority = True
 
         max_hold = get_default(config, 'scheduler', 'max_hold_expiration', 0)
         default_hold = get_default(
@@ -10058,6 +10067,8 @@ class SystemAttributes:
     def toDict(self):
         attributes = {
             "use_relative_priority": self.use_relative_priority,
+            "boost_partial_buildset_priority":
+                self.boost_partial_buildset_priority,
             "max_hold_expiration": self.max_hold_expiration,
             "default_hold_expiration": self.default_hold_expiration,
             "default_ansible_version": self.default_ansible_version,
@@ -10078,6 +10089,8 @@ class SystemAttributes:
     def fromDict(cls, data):
         sys_attrs = cls()
         sys_attrs.use_relative_priority = data["use_relative_priority"]
+        sys_attrs.boost_partial_buildset_priority = data.get(
+            "boost_partial_buildset_priority", False)
         sys_attrs.max_hold_expiration = data["max_hold_expiration"]
         sys_attrs.default_hold_expiration = data["default_hold_expiration"]
         sys_attrs.default_ansible_version = data["default_ansible_version"]

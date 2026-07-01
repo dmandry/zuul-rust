@@ -3549,6 +3549,138 @@ class TestNodesetRequestPriority(LauncherBaseTestCase):
         self.waitUntilSettled()
 
 
+class TestPartialBuildsetPriorityBoost(LauncherBaseTestCase):
+    config_file = 'zuul.conf'
+    tenant_config_file = 'config/single-tenant/main-launcher.yaml'
+
+    def setup_config(self, config_file: str):
+        config = super().setup_config(config_file)
+        config.set('scheduler', 'boost_partial_buildset_priority', 'true')
+        return config
+
+    @simple_layout('layouts/partial-buildset-priority-launcher.yaml',
+                   enable_nodepool=True)
+    def test_partial_buildset_priority_boost(self):
+        """Pending requests are boosted once a buildset sibling is accepted.
+
+        The boost approximates shortest-remaining-work-first: a buildset
+        closer to completion (fewer outstanding requests) is boosted more
+        strongly than one that has only just begun, so that nearly-done
+        buildsets always drain first among boosted buildsets, while a
+        buildset that has not had any request accepted is not boosted at
+        all (and so never outranks fresh work at the same queue
+        position).
+        """
+        self.hold_nodeset_requests_in_queue = True
+
+        # A: org/project, 2-job buildset, left untouched as an unstarted
+        # control at its natural queue position (0).
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # B: org/project, 2-job buildset, second in queue (position 1).
+        # We will accept 1 of 2 requests (50% remaining).
+        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # D: org/project1, 3-job buildset, its own independent queue
+        # (position 0).  We will accept 1 of 3 requests (67% remaining).
+        D = self.fake_gerrit.addFakeChange('org/project1', 'master', 'D')
+        self.fake_gerrit.addEvent(D.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # C: org/project2, single-job buildset, left untouched as a
+        # second unstarted control.
+        C = self.fake_gerrit.addFakeChange('org/project2', 'master', 'C')
+        self.fake_gerrit.addEvent(C.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        reqs = self.launcher.api.getNodesetRequests()
+        self.assertEqual(len(reqs), 2 + 2 + 3 + 1)
+
+        by_buildset = defaultdict(list)
+        for r in reqs:
+            by_buildset[r.buildset_uuid].append(r)
+        # 4 distinct buildsets: A, B, D, C.
+        self.assertEqual(len(by_buildset), 4)
+        a_reqs, b_reqs, d_reqs, c_reqs = None, None, None, None
+        for buildset_reqs in by_buildset.values():
+            if len(buildset_reqs) == 1:
+                c_reqs = buildset_reqs
+            elif len(buildset_reqs) == 3:
+                d_reqs = buildset_reqs
+            elif buildset_reqs[0].relative_priority == 0:
+                a_reqs = buildset_reqs
+            else:
+                b_reqs = buildset_reqs
+        self.assertIsNotNone(a_reqs)
+        self.assertIsNotNone(b_reqs)
+        self.assertIsNotNone(d_reqs)
+        self.assertIsNotNone(c_reqs)
+        self.assertEqual(len(a_reqs), 2)
+        self.assertEqual(len(b_reqs), 2)
+        self.assertEqual(len(d_reqs), 3)
+        self.assertEqual(len(c_reqs), 1)
+        # Sanity check the un-boosted starting priorities.
+        for r in a_reqs:
+            self.assertEqual(r.relative_priority, 0)
+        for r in b_reqs:
+            self.assertEqual(r.relative_priority, 1)
+        for r in d_reqs:
+            self.assertEqual(r.relative_priority, 0)
+        for r in c_reqs:
+            self.assertEqual(r.relative_priority, 0)
+
+        ctx = self.createZKContext(None)
+
+        def accept(req):
+            req.updateAttributes(ctx, state=req.State.REQUESTED)
+            for _ in iterate_timeout(30, f'{req.uuid} accepted'):
+                req.refresh(ctx)
+                if req.state == req.State.ACCEPTED:
+                    break
+
+        # Accept 1 of B's 2 requests (50% remaining) and 1 of D's 3
+        # requests (67% remaining).
+        accept(b_reqs[0])
+        accept(d_reqs[0])
+        self.waitUntilSettled()
+
+        reqs_by_uuid = {
+            r.uuid: r for r in self.launcher.api.getNodesetRequests()}
+
+        # B's pending sibling: boost = -(1 - 1/2) = -0.5
+        b_pending = reqs_by_uuid[b_reqs[1].uuid]
+        self.assertAlmostEqual(b_pending.relative_priority, -0.5)
+
+        # D's two pending siblings: boost = -(1 - 2/3) = -1/3
+        d_pending = [reqs_by_uuid[r.uuid] for r in d_reqs[1:]]
+        for r in d_pending:
+            self.assertAlmostEqual(r.relative_priority, -1.0 / 3.0)
+
+        # A 2-job buildset that is 50% complete is boosted more strongly
+        # (more negative) than a 3-job buildset that is only ~33%
+        # complete, approximating shortest-remaining-work-first: B's
+        # single remaining job is served before either of D's two
+        # remaining jobs.
+        self.assertLess(b_pending.relative_priority,
+                        d_pending[0].relative_priority)
+
+        # Controls: buildsets with no accepted sibling are never boosted.
+        for r in [reqs_by_uuid[x.uuid] for x in a_reqs]:
+            self.assertEqual(r.relative_priority, 0,
+                             "An unstarted buildset must not be boosted")
+        for r in [reqs_by_uuid[x.uuid] for x in c_reqs]:
+            self.assertEqual(r.relative_priority, 0,
+                             "An unstarted buildset must not be boosted")
+
+        self.hold_nodeset_requests_in_queue = False
+        self.releaseNodesetRequests(*self.launcher.api.getNodesetRequests())
+        self.waitUntilSettled()
+
+
 class TestExecutorZone(LauncherBaseTestCase):
     tenant_config_file = 'config/single-tenant/main.yaml'
 

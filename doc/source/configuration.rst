@@ -343,6 +343,31 @@ The following sections of ``zuul.conf`` are used by the scheduler:
       pipeline precedence, followed by relative priority, and finally
       the order in which they were submitted.
 
+   .. attr:: boost_partial_buildset_priority
+      :default: False
+
+      A boolean which, when set to ``True``, boosts the priority of
+      pending node requests that belong to a buildset which has already
+      had at least one request accepted by a launcher.
+
+      In saturated clusters it is common for some jobs in a buildset to
+      obtain nodes immediately while the remainder wait indefinitely
+      because new, higher-priority buildsets continuously arrive.  When
+      this option is enabled, once any sibling request in a buildset
+      transitions to the ``accepted`` (or ``fulfilled``) state, its
+      remaining ``requested`` siblings are boosted ahead of any
+      not-yet-started buildset at the same queue position.  The boost is
+      proportional to how close the buildset is to completion: a
+      buildset with only a few outstanding requests is boosted more
+      strongly than one that has only just begun, approximating
+      shortest-remaining-work-first scheduling.  This lets already
+      partially-served buildsets finish before capacity is given to
+      freshly-submitted work, while not allowing a barely-started
+      buildset to indefinitely block all new work.
+
+      This option has no effect unless ``relative_priority`` is also
+      set to ``True``.
+
    .. attr:: default_hold_expiration
       :default: max_hold_expiration
 
