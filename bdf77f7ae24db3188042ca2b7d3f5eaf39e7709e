@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "26404197_e53c37b9",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 420,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T09:27:46Z",
+      "side": 1,
+      "message": "Mutating list while iterating will skip elements. Use `for upload in uploads[:]:` instead?\n\n```\n\u003e\u003e\u003e foo \u003d [\u0027A\u0027, \u0027B\u0027, \u0027C\u0027]\n\u003e\u003e\u003e for f in foo:\n...     print(f)\n...     foo.remove(f)\n...     \nA\nC\n\u003e\u003e\u003e \n```",
+      "range": {
+        "startLine": 420,
+        "startChar": 24,
+        "endLine": 420,
+        "endChar": 46
+      },
+      "revId": "bdf77f7ae24db3188042ca2b7d3f5eaf39e7709e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
