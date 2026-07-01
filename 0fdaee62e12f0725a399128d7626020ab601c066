@@ -1,0 +1,84 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "fc805914_9bb29b10",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T08:45:34Z",
+      "side": 1,
+      "message": "Looks good, nice code comment to explain. \nMarking -1 because of the nullcontext in base.py, I believe that is a bug.\nA couple other comments as well, but those are not critical.",
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4a764a58_a3208eb6",
+        "filename": "tests/base.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 3276,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T08:45:34Z",
+      "side": 1,
+      "message": "I think you want nullcontext() here? (e.g. like you have it in zuul/launcher/server.py)",
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5fab7cea_9a8ced60",
+        "filename": "zuul/zk/zkobject.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 518,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T08:45:34Z",
+      "side": 1,
+      "message": "Would it be better to check if instances is LockableZKObjectMixin, and use the hasLock helper that exist on these object? Or do the hasattr for hasLock?",
+      "range": {
+        "startLine": 518,
+        "startChar": 0,
+        "endLine": 518,
+        "endChar": 2
+      },
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0b5979b6_ecd7f52a",
+        "filename": "zuul/zk/zkobject.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 520,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T08:45:34Z",
+      "side": 1,
+      "message": "Why not LockException here?",
+      "range": {
+        "startLine": 520,
+        "startChar": 22,
+        "endLine": 520,
+        "endChar": 31
+      },
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
