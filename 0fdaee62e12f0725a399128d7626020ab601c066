@@ -35,6 +35,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b08cf6df_79aed78a",
+        "filename": "tests/base.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 3276,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T16:32:29Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "4a764a58_a3208eb6",
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "5fab7cea_9a8ced60",
@@ -58,6 +76,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b36efad0_fc4a2c4f",
+        "filename": "zuul/zk/zkobject.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 518,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T16:32:29Z",
+      "side": 1,
+      "message": "Checking for hasLock would be fine, using hasLock would be subtly different -- it would check if the lock is still valid.  That\u0027s a slightly different change than this, which was intended to narrowly address an error the preceding changes in this stack (since merged) corrected: we were missing a lock.\n\nIt would probably be okay to also check for lock validity here, though it should typically already be validated in sessionIsInvalid above, so probably isn\u0027t a practical difference.  Let\u0027s consider it separately; I\u0027ll make a followup.",
+      "parentUuid": "5fab7cea_9a8ced60",
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "0b5979b6_ecd7f52a",
@@ -77,6 +113,24 @@
         "endLine": 520,
         "endChar": 31
       },
+      "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c79be5c2_378eb9c5",
+        "filename": "zuul/zk/zkobject.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 520,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-01T16:32:29Z",
+      "side": 1,
+      "message": "This is more of a programming error than something we should try to recover from.  Generally LockException is used for \"oops we didn\u0027t get the lock\"; this is \"programmer forgot to use a lock\".  In other words, if we catch this exception explicitly, we\u0027re probably making a second mistake.",
+      "parentUuid": "0b5979b6_ecd7f52a",
       "revId": "0fdaee62e12f0725a399128d7626020ab601c066",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
