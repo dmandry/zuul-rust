@@ -707,7 +707,7 @@ class JobDir(object):
         self.kube_dir = os.path.join(self.root, "kube")
         os.makedirs(self.kube_dir)
         self.kubeconfig = os.path.join(self.kube_dir, "config")
-        self.kubecache = os.path.join(self.work_root, ".kube", "cache")
+        self.kubecache = os.path.join(self.work_root, "tmp", ".kube", "cache")
         # Create ansible cache directory
         self.ansible_cache_root = os.path.join(self.root, '.ansible')
         self.fact_cache = os.path.join(self.ansible_cache_root, 'fact-cache')
