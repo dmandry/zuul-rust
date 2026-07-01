@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f9e18686_28374885",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T09:09:46Z",
+      "side": 1,
+      "message": "Looks good, minor doc issue - see inline.",
+      "revId": "57978935d7b03ca38bc7ea3db36476be27db1ec5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e95fd49d_ec4b1cbd",
+        "filename": "doc/source/drivers/openstack.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 13,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-01T09:09:46Z",
+      "side": 1,
+      "message": "nit: s/supporting/supported/",
+      "range": {
+        "startLine": 13,
+        "startChar": 18,
+        "endLine": 13,
+        "endChar": 28
+      },
+      "revId": "57978935d7b03ca38bc7ea3db36476be27db1ec5",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
