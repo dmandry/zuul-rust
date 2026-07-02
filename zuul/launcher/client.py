@@ -411,6 +411,8 @@ class LauncherClient:
 
         with self.createZKContext(None, self.log) as ctx:
             for n in nodes:
+                if not n:
+                    continue
                 n.setNextState(ctx, next_state)
 
         return nodes
