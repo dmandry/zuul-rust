@@ -2597,6 +2597,49 @@ class TestLauncher(LauncherBaseTestCase):
                 if request2.state == request2.State.FULFILLED:
                     break
 
+    @simple_layout('layouts/nodepool-multi-provider.yaml', enable_nodepool=True)
+    @driver_config('test_launcher', quotas={
+        'instances': 1,
+    })
+    def test_unassigned_nodes_at_quota(self):
+        # Test that when all providers are at quota, we still assign
+        # unassigned nodes.
+        self.waitUntilSettled()
+
+        request1 = self.requestNodes(["debian-normal"])
+        nodes1 = self.getNodes(request1)
+        self.assertEqual(1, len(nodes1))
+
+        request2 = self.requestNodes(["debian-normal"])
+        nodes2 = self.getNodes(request2)
+        self.assertEqual(1, len(nodes2))
+
+        self.assertNotEqual(nodes1[0].provider, nodes2[0].provider)
+
+        ctx = self.createZKContext(None)
+        request1.delete(ctx)
+        request2.delete(ctx)
+        self.waitUntilSettled()
+
+        nodes = self.launcher.api.nodes_cache.getItems()
+        for node in nodes:
+            if not len(nodes) == 2:
+                continue
+            for _ in iterate_timeout(60, "node to be deallocated"):
+                node.refresh(ctx)
+                if node.request_id is None:
+                    break
+        self.assertTrue(all(n.state == n.State.READY for n in nodes))
+
+        self.log.debug("Starting third request")
+        request3 = self.requestNodes(["debian-normal"])
+        nodes3 = self.getNodes(request3)
+        self.assertEqual(1, len(nodes3))
+        ready_nodes_uuids = set(x.uuid for x in (nodes1 + nodes2))
+        nodes3_uuids = set(x.uuid for x in nodes3)
+        self.assertTrue(ready_nodes_uuids.intersection(nodes3_uuids))
+
+
 
 class TestLauncherTenantLimits(LauncherBaseTestCase):
     # We use a multi-tenant config here to make sure we don't end up
