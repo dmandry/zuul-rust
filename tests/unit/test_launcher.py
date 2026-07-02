@@ -1782,6 +1782,30 @@ class TestLauncher(LauncherBaseTestCase):
 
         self.assertEqual(nodes1[0].provider, nodes2[0].provider)
 
+    @simple_layout('layouts/nodepool-multi-provider.yaml',
+                   enable_nodepool=True)
+    @driver_config('test_launcher', quotas={
+        'instances': 2,
+    })
+    def test_preferred_provider_dne(self):
+        # Test the behavior if a preferred provider does not exist
+        self.waitUntilSettled()
+
+        request1 = self.requestNodes(["debian-normal"])
+        nodes1 = self.getNodes(request1)
+        self.assertEqual(1, len(nodes1))
+
+        # Since the preferred provider does not exist, the node should
+        # come from the other provider.  This ensures that we fall
+        # back to the correctly ordered provider list rather than
+        # using the last provider we considered.
+        request2 = self.requestNodes(
+            ["debian-normal"], provider='doesnotexist')
+        nodes2 = self.getNodes(request2)
+        self.assertEqual(1, len(nodes2))
+
+        self.assertNotEqual(nodes1[0].provider, nodes2[0].provider)
+
     @simple_layout('layouts/nodepool.yaml',
                    enable_nodepool=True)
     @driver_config('test_launcher', quotas={
