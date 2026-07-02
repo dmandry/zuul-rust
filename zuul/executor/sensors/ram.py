@@ -39,18 +39,25 @@ class RAMSensor(SensorInterface):
         if cgrouputils.get_cgroup() is None:
             self.log.warning("cgroups v2 not available")
 
+    def _readCgroupStats(self, path):
+        stat = {}
+        try:
+            with open(path) as f:
+                for line in f.readlines():
+                    key, value = line.split(' ')
+                    stat[key] = int(value.strip())
+        except FileNotFoundError:
+            pass
+        return stat
+
     def _getAvailMemPctCgroup(self):
         min_pct = 100.0
         min_limit = math.inf
 
         for path in cgrouputils.walk_cgroups_tree():
-            cur_path = f'{path}/memory.current'
-            try:
-                with open(cur_path) as f:
-                    usage = f.read().strip()
-                usage = int(usage)
-            except FileNotFoundError:
-                usage = 0
+            stat_path = f'{path}/memory.stat'
+            stats = self._readCgroupStats(stat_path)
+            usage = stats.get('anon', 0)
 
             max_path = f'{path}/memory.max'
             try:
