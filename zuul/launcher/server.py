@@ -1516,7 +1516,7 @@ class Launcher:
                             # accept the request; currently this will
                             # happen only if we can fulfill the first
                             # label immediately.
-                            return
+                            continue
                     self._emitMessages(log, messages)
                     node = self._requestNode(
                         label, request, provider, log, ctx)
