@@ -2621,6 +2621,60 @@ class TestLauncher(LauncherBaseTestCase):
                 if request2.state == request2.State.FULFILLED:
                     break
 
+    @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
+    def test_ready_building_assignment(self):
+        # Test that ready nodes are preferred to building nodes when
+        # considering unassigned nodes.
+        ctx = self.createZKContext(None)
+
+        # This will later be our ready node
+        request1 = self.requestNodes(['debian-normal'])
+        self.assertEqual(request1.State.FULFILLED, request1.state)
+        nodes = self.launcher.api.nodes_cache.getItems()
+        node1 = nodes[0]
+        node1 = model.ProviderNode.fromZK(ctx, path=node1.getPath())
+        self.assertEqual(request1.uuid, node1.request_id)
+
+        with mock.patch(
+            'zuul.driver.aws.awsendpoint.AwsProviderEndpoint._refresh'
+        ) as refresh_mock:
+            # Patch 'endpoint._refresh()' to return w/o updating
+            refresh_mock.side_effect = lambda o: o
+            # Get a building node
+            request2 = self.requestNodes(['debian-normal'], timeout=0)
+            for _ in iterate_timeout(10, "node is building"):
+                nodes = self.launcher.api.nodes_cache.getItems()
+                if len(nodes) != 2:
+                    continue
+                node2 = nodes[1]
+                if node2.state == node2.State.BUILDING:
+                    break
+            node2 = model.ProviderNode.fromZK(ctx, path=node2.getPath())
+            self.assertEqual(request2.uuid, node2.request_id)
+
+            # Make node1 be ready and available
+            with node1.activeContext(ctx):
+                node1.unassign(ctx)
+            # Make node2 be building and available
+            with node2.activeContext(ctx):
+                node2.unassign(ctx)
+
+            # Double check that the internal ordering
+            unassigned = self.launcher._getUnassignedNodes().\
+                getNodesForLabel('debian-normal')
+            self.assertEqual(2, len(unassigned))
+            self.assertEqual(node1.uuid, unassigned[0].uuid)
+            self.assertEqual(node2.uuid, unassigned[1].uuid)
+
+            # We have a ready and building node, make sure that the
+            # next request gets the ready node.
+            request3 = self.requestNodes(['debian-normal'])
+            node_id = request3.nodes[0]
+            node3 = model.ProviderNode.fromZK(
+                ctx, path=model.ProviderNode._getPath(node_id))
+            self.assertEqual(request3.uuid, node3.request_id)
+            self.assertEqual(node1.uuid, node3.uuid)
+
 
 class TestLauncherTenantLimits(LauncherBaseTestCase):
     # We use a multi-tenant config here to make sure we don't end up
