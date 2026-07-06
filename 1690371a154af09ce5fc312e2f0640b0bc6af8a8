@@ -24,6 +24,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "7ea996d8_85d2a1ec",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 2543,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-07-06T12:42:18Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "b43dc566_23d94116",
+      "range": {
+        "startLine": 2543,
+        "startChar": 44,
+        "endLine": 2543,
+        "endChar": 53
+      },
+      "revId": "1690371a154af09ce5fc312e2f0640b0bc6af8a8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c9a1dfc8_ff6a2648",
@@ -37,6 +61,30 @@
       "writtenOn": "2026-07-06T10:48:14Z",
       "side": 1,
       "message": "Do we want to catch YAML parse errors, and raise RoleNotFoundError so that an invalid galaxy.yaml in the project defining the job does not fail the job. Implicit collection should be skipped like regular implicit roles are in L2962?",
+      "range": {
+        "startLine": 2875,
+        "startChar": 16,
+        "endLine": 2875,
+        "endChar": 47
+      },
+      "revId": "1690371a154af09ce5fc312e2f0640b0bc6af8a8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "02a5fd81_332edd55",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 2875,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-07-06T12:42:18Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "c9a1dfc8_ff6a2648",
       "range": {
         "startLine": 2875,
         "startChar": 16,
