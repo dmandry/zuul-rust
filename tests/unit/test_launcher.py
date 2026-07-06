@@ -4098,15 +4098,25 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         with sub1.locked(ctx):
             sub1.updateAttributes(ctx, state_time=0)
 
-        for _ in iterate_timeout(10, "sub1 node to be deleted"):
-            try:
-                sub1.refresh(ctx)
-            except NoNodeError:
+        # Nothing hsould happen yet since not all subnodes have expired:
+        for _ in iterate_timeout(10, "node updates"):
+            if (self.launcher.api.hasNodeExpired(sub1) is False and
+                self.launcher.api.hasNodeExpired(sub2) is False and
+                self.launcher.api.hasNodeExpired(main) is False and
+                sub1._hasExpired() is True and
+                sub2._hasExpired() is False and
+                main._hasExpired() is False):
                 break
 
         sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
         with sub2.locked(ctx):
             sub2.updateAttributes(ctx, state_time=0)
+
+        for _ in iterate_timeout(10, "sub1 node to be deleted"):
+            try:
+                sub1.refresh(ctx)
+            except NoNodeError:
+                break
 
         for _ in iterate_timeout(10, "sub2 node to be deleted"):
             try:
@@ -4146,20 +4156,51 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         ctx = self.createZKContext(None)
 
         main = model.ProviderNode.fromZK(ctx, path=main.getPath())
-
         sub1 = model.ProviderNode.fromZK(ctx, path=sub1.getPath())
+        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
+
         with sub1.locked(ctx):
             sub1.updateAttributes(ctx, request_time=0)
+
+        # Nothing should happen yet since not all subnodes have expired:
+        for _ in iterate_timeout(10, "node updates"):
+            if (self.launcher.api.hasNodeExpired(sub1) is False and
+                self.launcher.api.hasNodeExpired(sub2) is False and
+                self.launcher.api.hasNodeExpired(main) is False and
+                sub1._hasExpired() is True and
+                sub2._hasExpired() is False and
+                main._hasExpired() is False):
+                break
+
+        with sub1.locked(ctx), sub1.activeContext(ctx):
+            sub1.setState(sub1.State.HOLD)
+
+        with sub2.locked(ctx):
+            sub2.updateAttributes(ctx, request_time=0)
+
+        for _ in iterate_timeout(10, "nodes to change state"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            states = Counter(n.state for n in nodes)
+            if states['slot-host'] == 1 and states['hold'] == 1:
+                break
+
+        for _ in iterate_timeout(10, "node updates"):
+            if (self.launcher.api.hasNodeExpired(sub1) is True and
+                self.launcher.api.hasNodeExpired(sub2) is True and
+                self.launcher.api.hasNodeExpired(main) is False and
+                sub1._hasExpired() is True and
+                sub2._hasExpired() is True and
+                main._hasExpired() is False):
+                break
+
+        with sub1.locked(ctx), sub1.activeContext(ctx):
+            sub1.setState(sub1.State.USED)
 
         for _ in iterate_timeout(10, "sub1 node to be deleted"):
             try:
                 sub1.refresh(ctx)
             except NoNodeError:
                 break
-
-        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
-        with sub2.locked(ctx):
-            sub2.updateAttributes(ctx, request_time=0)
 
         for _ in iterate_timeout(10, "sub2 node to be deleted"):
             try:

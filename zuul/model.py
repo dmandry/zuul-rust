@@ -3192,7 +3192,9 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
         self.state = new_state
         self.state_time = time.time()
 
-    def hasExpired(self):
+    def _hasExpired(self):
+        # Note: does not consider subnodes; use
+        # LauncherApi.hasNodeExpired instead
         if self.min_retention_time:
             # Min. retention time takes priority over max-age
             if (self.request_time + self.min_retention_time) > time.time():

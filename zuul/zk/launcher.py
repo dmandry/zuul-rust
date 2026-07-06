@@ -547,3 +547,15 @@ class LauncherApi:
                             pass
                         finally:
                             node.releaseLock(ctx)
+
+    def hasNodeExpired(self, node):
+        nodes = [node]
+        if node.main_node_id:
+            # If the node is part of a group of subnodes, all of the
+            # subnodes must expire together or not at all.
+            if main_node := self.getProviderNode(node.main_node_id):
+                nodes = []
+                for subnode_id in main_node.subnodes:
+                    if subnode := self.getProviderNode(subnode_id):
+                        nodes.append(subnode)
+        return all(n._hasExpired() for n in nodes)
