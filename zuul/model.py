@@ -2901,12 +2901,14 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
     class State(StrEnum):
         REQUESTED = "requested"
         BUILDING = "building"
+        REBUILDING = "rebuilding"
         READY = "ready"
         FAILED = "failed"
         TEMPFAILED = "tempfailed"
         IN_USE = "in-use"
         USED = "used"
         OUTDATED = "outdated"
+        REGISTERING = "registering"
         DEREGISTER = "deregister"
         HOLD = "hold"
         SNAPSHOT = "snapshot"
@@ -2915,10 +2917,12 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
     # States where quota counts
     ALLOCATED_STATES = (
         State.BUILDING,
+        State.REBUILDING,
         State.READY,
         State.IN_USE,
         State.USED,
         State.OUTDATED,
+        State.REGISTERING,
         State.DEREGISTER,
         State.HOLD,
         State.SNAPSHOT,
@@ -2938,15 +2942,19 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
 
     CREATE_STATES = (
         State.REQUESTED,
+        State.REBUILDING,
+        State.REGISTERING,
         State.BUILDING,
     )
 
     LAUNCHER_STATES = (
         State.REQUESTED,
+        State.REBUILDING,
         State.BUILDING,
         State.FAILED,
         State.USED,
         State.OUTDATED,
+        State.REGISTERING,
         State.DEREGISTER,
     )
 

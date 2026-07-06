@@ -128,7 +128,7 @@ class TestStaticDriver(ZuulTestCase):
     def test_static_node_lifecycle(self):
         self._test_static_node_lifecycle('debian-normal')
 
-    @simple_layout('layouts/static/nodepool.yaml', enable_nodepool=True)
+    @simple_layout('layouts/static/nodepool-dereg.yaml', enable_nodepool=True)
     @okay_tracebacks('_checkNodescanRequest')
     def test_static_failure(self):
         # Test failure of a single static node
@@ -140,41 +140,49 @@ class TestStaticDriver(ZuulTestCase):
         with mock.patch.object(
             zuul.launcher.server.NodescanRequest, 'advance', my_advance
         ):
-            request = self.requestNodes(["debian-normal"], timeout=None)
+            self.commitConfigUpdate(
+                "org/common-config", 'layouts/static/nodepool.yaml')
+            self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+            self.waitUntilSettled()
 
-            for _ in iterate_timeout(60, "nodes to be marked failed"):
-                nodes = self.launcher.api.nodes_cache.getItems()
-                states = Counter(n.state for n in nodes)
-                if states['failed'] == 1:
-                    break
+            nodes = self.waitForNodes(failed=1)
 
-        # Node scanning happens normally now
+            # A request should wait for the node to be repaired
+            request = self.requestNodes(["debian-normal"], timeout=0)
+            with mock.patch.object(
+                    zuul.driver.static.staticendpoint,
+                    'DELETE_RECYCLE_TIME', 0
+            ):
+                # Let the delete state machine run for a time
+                time.sleep(10)
+
+            # Verify the node is unassigned
+            self.assertIsNone(nodes[0].request_id)
+
+            request.refresh(ctx)
+            self.assertEqual(request.state,
+                             model.NodesetRequest.State.REQUESTED)
+            # No nodes should be assigned to the request
+            nodes = self.launcher.api.nodes_cache.getItems()
+            self.assertEqual(1, len(nodes))
+            self.assertIsNone(nodes[0].request_id)
+
+            # The node should be in the rebuilding state
+            states = Counter(n.state for n in nodes)
+            self.assertEqual(1, states['rebuilding'])
+
+        # Node scanning happens normally now, and the request should
+        # have the node assigned to it.
         with mock.patch.object(
             zuul.driver.static.staticendpoint, 'DELETE_RECYCLE_TIME', 0
         ):
             for _ in iterate_timeout(60, "nodes to be marked ready"):
-                request2 = self.launcher.api.getNodesetRequest(request.uuid)
+                request.refresh(ctx)
                 nodes = self.launcher.api.nodes_cache.getItems()
                 states = Counter(n.state for n in nodes)
                 if (states['ready'] == 1 and
-                    not request2.is_locked):
+                    request.state == model.NodesetRequest.State.FULFILLED):
                     break
-
-        nodes = self.launcher.api.nodes_cache.getItems()
-        self.assertEqual(1, len(nodes))
-        main = nodes[0]
-        # Get a copy so we're not modifying the launcher's
-        main = model.ProviderNode.fromZK(ctx, path=main.getPath())
-        self.assertEqual(main.State.READY, main.state)
-        self.assertEqual(request2.uuid, main.request_id)
-
-        request.delete(ctx)
-        self.waitUntilSettled()
-
-        for _ in iterate_timeout(60, "nodes to be unassigned"):
-            nodes = self.launcher.api.nodes_cache.getItems()
-            if not any(x.request_id for x in nodes):
-                break
 
     @simple_layout('layouts/static/subnodes.yaml', enable_nodepool=True)
     def test_static_subnodes(self):
@@ -371,11 +379,7 @@ class TestStaticDriver(ZuulTestCase):
                         request.priority += 1
                     sub_used.setState(sub_used.State.USED)
 
-            for _ in iterate_timeout(10, "nodes to be marked failed"):
-                nodes = self.launcher.api.nodes_cache.getItems()
-                states = Counter(n.state for n in nodes)
-                if states['failed'] == 3:
-                    break
+            self.waitForNodes(failed=3)
 
             # Delete the request
             request.delete(ctx)
@@ -383,17 +387,15 @@ class TestStaticDriver(ZuulTestCase):
         with mock.patch.object(
             zuul.driver.static.staticendpoint, 'DELETE_RECYCLE_TIME', 0
         ):
-            for _ in iterate_timeout(10, "nodes to be marked ready"):
-                nodes = self.launcher.api.nodes_cache.getItems()
-                states = Counter(n.state for n in nodes)
-                if (states['ready'] == 2 and states['slot-host'] == 1):
-                    break
+            self.waitForNodes(ready=2, slot_host=1)
 
         # Make sure they are unassigned
-        sub1.refresh(ctx)
-        sub2.refresh(ctx)
-        self.assertIsNone(sub1.request_id)
-        self.assertIsNone(sub2.request_id)
+        for _ in iterate_timeout(10, "nodes to be unassigned"):
+            sub1.refresh(ctx)
+            sub2.refresh(ctx)
+            if (sub1.request_id is None and
+                sub2.request_id is None):
+                break
 
     @simple_layout('layouts/static/nodepool.yaml', enable_nodepool=True)
     def test_static_deregistration(self):
