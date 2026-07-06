@@ -52,7 +52,7 @@ class StaticDeleteStateMachine(statemachine.StateMachine):
         # do that in this method so that it happens whether or not we
         # succeed, or encounter a timeout or other exception.
         if self.reuse:
-            self.node.state = self.node.State.BUILDING
+            self.node.state = self.node.State.REBUILDING
             self.node.state_time = time.time()
         self.state = self.COMPLETE
         self.complete = True

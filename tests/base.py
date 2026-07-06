@@ -4101,6 +4101,21 @@ class ZuulTestCase(BaseTestCase):
                 if request.state == model.NodesetRequest.State.FULFILLED:
                     return
 
+    def waitForNodes(self, **states):
+        for k in list(states.keys()):
+            if '_' in k:
+                new_k = k.replace('_', '-')
+                states[new_k] = states.pop(k)
+        try:
+            for _ in iterate_timeout(60, "nodes states"):
+                nodes = self.launcher.api.nodes_cache.getItems()
+                current_states = Counter(n.state for n in nodes)
+                if current_states == states:
+                    return nodes
+        except Exception:
+            self.log.debug("Nodes: %s", nodes)
+            raise
+
     def waitForLauncherLayoutSync(self, tenant='tenant-one'):
         for _ in iterate_timeout(
                 30, "scheduler and launcher to have the same layout"):
