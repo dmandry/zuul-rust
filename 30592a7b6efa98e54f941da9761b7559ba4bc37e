@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "69645d2a_b92e5eec",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2652,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-06T18:07:21Z",
+      "side": 1,
+      "message": "This looks like dead code? L2649 overwrites node2 on the next iteration?",
+      "range": {
+        "startLine": 2652,
+        "startChar": 16,
+        "endLine": 2652,
+        "endChar": 76
+      },
+      "revId": "30592a7b6efa98e54f941da9761b7559ba4bc37e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "50364d46_8df1047c",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2670,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-06T18:07:21Z",
+      "side": 1,
+      "message": "next request gets the ready node ?",
+      "range": {
+        "startLine": 2670,
+        "startChar": 36,
+        "endLine": 2670,
+        "endChar": 44
+      },
+      "revId": "30592a7b6efa98e54f941da9761b7559ba4bc37e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
