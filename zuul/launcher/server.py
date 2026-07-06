@@ -1416,7 +1416,7 @@ class Launcher:
                     continue
                 if node.state not in node.ASSIGNABLE_STATES:
                     continue
-                if node.hasExpired():
+                if self.api.hasNodeExpired(node):
                     continue
                 # Check to see if this node is valid in this tenant
                 if node.provider in providers:
@@ -2034,7 +2034,7 @@ class Launcher:
         # Mark outdated nodes w/o a request for cleanup when ...
         if not request and (
                 # ... it expired
-                node.hasExpired() or
+                self.api.hasNodeExpired(node) or
                 # ... we are sure that our providers are up-to-date
                 # and we can't find a provider for this node.
                 (not self.layout_updated_event.is_set()
@@ -2145,7 +2145,7 @@ class Launcher:
         if node.request_id:
             request_exists = bool(request)
             return not request_exists
-        elif node.hasExpired():
+        elif self.api.hasNodeExpired(node):
             return True
         elif not self._hasProvider(node):
             if self.layout_updated_event.is_set():

@@ -4098,15 +4098,23 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         with sub1.locked(ctx):
             sub1.updateAttributes(ctx, state_time=0)
 
+        # Nothing hsould happen yet since not all subnodes have expired:
+        self.assertFalse(self.launcher.api.hasNodeExpired(sub1))
+        self.assertFalse(self.launcher.api.hasNodeExpired(sub2))
+        self.assertFalse(self.launcher.api.hasNodeExpired(main))
+        self.assertTrue(sub1._hasExpired())
+        self.assertFalse(sub2._hasExpired())
+        self.assertFalse(main._hasExpired())
+
+        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
+        with sub2.locked(ctx):
+            sub2.updateAttributes(ctx, state_time=0)
+
         for _ in iterate_timeout(10, "sub1 node to be deleted"):
             try:
                 sub1.refresh(ctx)
             except NoNodeError:
                 break
-
-        sub2 = model.ProviderNode.fromZK(ctx, path=sub2.getPath())
-        with sub2.locked(ctx):
-            sub2.updateAttributes(ctx, state_time=0)
 
         for _ in iterate_timeout(10, "sub2 node to be deleted"):
             try:
