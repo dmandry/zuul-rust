@@ -2660,9 +2660,11 @@ class TestLauncher(LauncherBaseTestCase):
                 node2.unassign(ctx)
 
             # Double check that the internal ordering
-            unassigned = self.launcher._getUnassignedNodes().\
-                getNodesForLabel('debian-normal')
-            self.assertEqual(2, len(unassigned))
+            for _ in iterate_timeout(60, "nodes to be unassigned"):
+                unassigned = self.launcher._getUnassignedNodes().\
+                    getNodesForLabel('debian-normal')
+                if len(unassigned) == 2:
+                    break
             self.assertEqual(node1.uuid, unassigned[0].uuid)
             self.assertEqual(node2.uuid, unassigned[1].uuid)
 
