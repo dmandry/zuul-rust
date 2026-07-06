@@ -1723,6 +1723,8 @@ class Launcher:
                     continue
                 if node.uuid in provider.nodes:
                     continue
+                if node.main_node_id and node.main_node_id in provider.nodes:
+                    continue
                 self.log.info("Deregistering %s", node)
                 self._bestEffortLockAndSetNodeState(
                     ctx, node, node.State.DEREGISTER, self.log)
@@ -1735,7 +1737,7 @@ class Launcher:
         if static_node:
             node_uuid = static_node.node_id
             connection_port = static_node.connection_port
-            state = model.ProviderNode.State.BUILDING
+            state = model.ProviderNode.State.REGISTERING
             label_aliases = set(static_node.aliases)
         else:
             node_uuid = uuid.uuid4().hex
@@ -1870,23 +1872,27 @@ class Launcher:
                         else:
                             add_failed_provider = None
 
-                        node = self._assignUnassignedNode(
+                        new_node = self._assignUnassignedNode(
                             ctx, unassigned_nodes, request_unassigned_nodes,
                             request, label, provider, log)
-                        if node is None:
+                        if new_node is None:
                             if provider.driver.name == 'static':
-                                return
-                            node = self._requestNode(
-                                label, request, provider, log, ctx)
-                        requested_nodes[i] = node
+                                new_node = node
+                            else:
+                                new_node = self._requestNode(
+                                    label, request, provider, log, ctx)
+                        if new_node is node:
+                            continue
+                        requested_nodes[i] = new_node
                         # if this was a tempfail, retry again as
                         # normal; otherwise, add to the failed
                         # providers list in the request
                         with request.activeContext(ctx):
                             request.updateProviderNode(
-                                i, node,
+                                i, new_node,
                                 add_failed_provider=add_failed_provider,
                             )
+                        node.unassign(ctx)
 
         if not all(n.state in n.FINAL_STATES for n in requested_nodes):
             return
@@ -1894,9 +1900,11 @@ class Launcher:
         failed = not all(n.state in (model.ProviderNode.State.READY,
                                      model.ProviderNode.State.SLOT_HOST)
                          for n in requested_nodes)
-        # TODO:
-        # * gracefully handle node failures (retry with another connection)
-        # * deallocate ready nodes from the request if finally failed
+
+        if failed:
+            with self.createZKContext(request._lock, log) as ctx:
+                for node in requested_nodes:
+                    node.unassign(ctx)
 
         state = (model.NodesetRequest.State.FAILED if failed
                  else model.NodesetRequest.State.FULFILLED)
@@ -2085,8 +2093,7 @@ class Launcher:
             ok = True
             for subnode_id in node.subnodes:
                 if subnode := self.api.getProviderNode(subnode_id):
-                    if subnode.state not in (subnode.State.REQUESTED,
-                                             subnode.State.BUILDING):
+                    if subnode.state not in subnode.CREATE_STATES:
                         log.debug("Not deleting node %s due to subnode %s",
                                   node, subnode)
                         ok = False
@@ -2444,10 +2451,10 @@ class Launcher:
                 self.nodescan_worker.removeRequest(node.nodescan_request)
                 node.nodescan_request = None
 
+                provider = self._getProviderForNode(node, ignore_label=True)
+
                 if not node.delete_state_machine:
                     log.debug("Cleaning up node %s", node)
-                    provider = self._getProviderForNode(
-                        node, ignore_label=True)
                     # The static driver may choose to reuse the node
                     if (provider.driver.name != 'static' and
                         isinstance(node, SubnodeProviderNode)):
@@ -2479,7 +2486,7 @@ class Launcher:
                     self.wake_event.set()
                     return
 
-                if node.state == node.State.BUILDING:
+                if node.state == node.State.REBUILDING:
                     # Static node going back into the pool
                     node.delete_state_machine = None
                     return

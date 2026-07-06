@@ -68,6 +68,9 @@ class FakeLauncherApi:
     def getMatchingProviderNodes(self):
         return []
 
+    def hasNodeExpired(self, node):
+        return False
+
 
 class TestSelectProviders(LauncherBaseTestCase):
 
