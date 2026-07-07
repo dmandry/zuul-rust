@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "61b1c423_10275124",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2037,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-07T09:40:53Z",
+      "side": 1,
+      "message": "I think we should also set the (next) node state of subnodes to outdated below. Otherwise we could still end up in a situation where we only mark a subset of subnodes as outdated if one of them was assigned to a request in the meantime.",
+      "revId": "c96e603b3e4c892294a2f11c485b7e0a7d7f8f22",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
