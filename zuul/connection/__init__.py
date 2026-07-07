@@ -526,8 +526,15 @@ class ZKBranchCacheMixin:
                 project_name, required_flags, default=None)
 
             if branches is not None:
-                if ((branch_info := branches.get(event.branch)) is None or
-                        branch_info.protected != protected):
+                if (
+                    # We have information about that branch and the
+                    # protected state changed ...
+                    ((branch_info := branches.get(event.branch))
+                        and branch_info.protected != protected)
+                    # ... OR we don't have any branch info, but the
+                    # branch is now protected
+                    or (branch_info is None and protected)
+                ):
                     log = get_annotated_logger(self.log, event)
                     log.info("Project %s branch %s protected state "
                              "changed to %s",
