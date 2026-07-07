@@ -105,6 +105,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b84af28b_ff0c372a",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 170,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-07-07T12:09:14Z",
+      "side": 1,
+      "message": "You were right — and it went deeper than the test. Since timer events are directly assigned via forced_pipeline, pipeline event filters are never consulted for them, so the branch filtering in TimerEventFilter never actually ran. I\u0027ve moved the filtering to _addJobsInner where the periodic APScheduler jobs are created, so jobs are only registered for matching branches. This also avoids firing timer events for branches that would never match. The test now uses a regular branch (dev/experimental) instead of one matching always-dynamic-branches, so the assertion genuinely exercises the filter.",
+      "parentUuid": "7c08d0ff_00fab573",
+      "range": {
+        "startLine": 170,
+        "startChar": 0,
+        "endLine": 170,
+        "endChar": 2
+      },
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "9031286d_88eb12ad",
