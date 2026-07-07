@@ -26,6 +26,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "f1515b03_191aa564",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2652,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-07T09:46:52Z",
+      "side": 1,
+      "message": "I think the indentation might be one level too much.",
+      "parentUuid": "69645d2a_b92e5eec",
+      "range": {
+        "startLine": 2652,
+        "startChar": 16,
+        "endLine": 2652,
+        "endChar": 76
+      },
+      "revId": "30592a7b6efa98e54f941da9761b7559ba4bc37e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "50364d46_8df1047c",
         "filename": "tests/unit/test_launcher.py",
         "patchSetId": 1
