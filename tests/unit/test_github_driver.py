@@ -2069,6 +2069,43 @@ class TestGithubUnprotectedBranches(ZuulTestCase):
             self.waitUntilSettled()
             cache_mock.assert_not_called()
 
+    def test_push_event_unprotected_branch_cache_update(self):
+        # Test that we do not update the branch cache for events on
+        # unprotected branches when exclude-unprotected-branches is
+        # configured.
+        self.create_branch('org/project2', 'feature')
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project('org/project2')
+        repo._set_branch_protection('master', True)
+        repo._create_branch('feature')
+
+        with (mock.patch(
+                "zuul.zk.branch_cache_new.BranchCacheNew.setProtected")
+              as cache_mock):
+            self.fake_github.emitEvent(
+                self.fake_github.getPushEvent(
+                    'org/project2',
+                    ref='refs/heads/feature'))
+            self.waitUntilSettled()
+            cache_mock.assert_not_called()
+
+    def test_push_event_protected_branch_cache_update(self):
+        # Test that we do not update the branch cache for events on
+        # protected branches when the protected state did not change.
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project('org/project2')
+        repo._set_branch_protection('master', True)
+
+        with (mock.patch(
+                "zuul.zk.branch_cache_new.BranchCacheNew.setProtected")
+              as cache_mock):
+            self.fake_github.emitEvent(
+                self.fake_github.getPushEvent(
+                    'org/project2',
+                    ref='refs/heads/master'))
+            self.waitUntilSettled()
+            cache_mock.assert_not_called()
+
     def _test_push_event_reconfigure(self, project, branch,
                                      expect_reconfigure=False,
                                      old_sha=None, new_sha=None,
