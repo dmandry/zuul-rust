@@ -16,6 +16,24 @@
       "message": "nit: unrelated change.",
       "revId": "72125ea49d15dd98f25aa664077e284afc37c9ef",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "aa646beb_eda4901d",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 38,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-07-07T12:05:09Z",
+      "side": 0,
+      "message": "Done, reverted.",
+      "parentUuid": "ffb948c3_a2e0c8be",
+      "revId": "72125ea49d15dd98f25aa664077e284afc37c9ef",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }

@@ -26,6 +26,30 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "c8a6f129_ec37c098",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 7
+      },
+      "lineNbr": 19,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-07-07T12:05:09Z",
+      "side": 1,
+      "message": "Done. The logging was removed in PS5 per Clark\u0027s feedback; the commit message is now updated to match the implementation.",
+      "parentUuid": "e25c59f7_c340fabb",
+      "range": {
+        "startLine": 19,
+        "startChar": 6,
+        "endLine": 19,
+        "endChar": 11
+      },
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "b05352fa_b952b46a",
         "filename": "/PATCHSET_LEVEL",
         "patchSetId": 7
@@ -104,6 +128,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "1cee99ea_648be29b",
+        "filename": "tests/unit/test_timer_driver.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 215,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-07-07T12:05:09Z",
+      "side": 1,
+      "message": "Done — with dev/experimental being a regular branch, this assert now actually verifies the branch filter.",
+      "parentUuid": "9031286d_88eb12ad",
+      "range": {
+        "startLine": 215,
+        "startChar": 13,
+        "endLine": 215,
+        "endChar": 24
+      },
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "0161248f_df0fae94",
@@ -117,6 +165,24 @@
       "writtenOn": "2026-06-25T11:11:04Z",
       "side": 1,
       "message": "May want to add break here as well?\n\nAlso might be good to propose that and the change to use FalseWithReason as a separate change before this to keep general changes/improvements and new feature separate.",
+      "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "7a186eba_078eb14f",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 49,
+      "author": {
+        "id": 37674
+      },
+      "writtenOn": "2026-07-07T12:05:09Z",
+      "side": 1,
+      "message": "Break added. On splitting the FalseWithReason/break changes into a separate change: they\u0027re small and touch the same function this feature modifies, so I\u0027ve kept them here to avoid churn — but happy to split them out into a preparatory change if you\u0027d prefer.",
+      "parentUuid": "0161248f_df0fae94",
       "revId": "6d97e259cbf379dac9cbccccaa669aa887c79f4f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
