@@ -937,12 +937,33 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertEqual(mqtt_payload['queue'], '')
         self.assertEqual(mqtt_payload['branch'], 'master')
         self.assertEqual(mqtt_payload['buildset']['result'], 'MERGE_CONFLICT')
-        self.assertEqual(mqtt_payload['buildset']['builds'], [])
+        builds = mqtt_payload['buildset']['builds']
+        test_job = [b for b in builds if b['job_name'] == 'test'][0]
+        dependent_test_job = [
+            b for b in builds if b['job_name'] == 'dependent-test'
+        ][0]
+        self.assertEqual(test_job['job_name'], 'test')
+        self.assertEqual(test_job['result'], 'SKIPPED')
+        self.assertEqual(test_job['dependencies'], [])
+        self.assertEqual(test_job['job_dependencies'], {})
+        self.assertEqual(test_job['artifacts'], [])
+        self.assertEqual(test_job['log_url'], None)
+        self.assertNotIn('returned_data', test_job)
+        build_id = test_job["uuid"]
+        self.assertEqual(
+            test_job["web_url"],
+            "https://tenant.example.com/t/tenant-one/build/{}".format(
+                build_id
+            ),
+        )
+        self.assertIn('execute_time', test_job)
         self.assertIn('timestamp', mqtt_payload)
         self.assertIn('enqueue_time', mqtt_payload)
         self.assertIn('trigger_time', mqtt_payload)
         self.assertIn('zuul_event_id', mqtt_payload)
         self.assertIn('uuid', mqtt_payload)
+        self.assertEqual(dependent_test_job['dependencies'], ['test'])
+        self.assertIn('test', dependent_test_job['job_dependencies'])
         self.assertEqual(mqtt_payload['tenant_web_root'],
                          'https://tenant.example.com/t/tenant-one/')
         changes = mqtt_payload['changes']
