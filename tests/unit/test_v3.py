@@ -4015,7 +4015,7 @@ class TestNonLiveMerges(ZuulTestCase):
         merge_jobs = self.merge_job_history.get(MergeRequest.MERGE)
         self.assertEqual(len(merge_jobs), 6)
 
-    def test_non_live_merges(self):
+    def test_non_live_merges_swe(self):
         """
         This test checks that we don't do merges for non-live queue items.
 
@@ -4023,11 +4023,11 @@ class TestNonLiveMerges(ZuulTestCase):
           A -> B -> C
         """
 
-        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
-        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
+        A = self.fake_gerrit.addFakeChange('org/project2', 'master', 'A')
+        B = self.fake_gerrit.addFakeChange('org/project2', 'master', 'B')
         B.setDependsOn(A, 1)
 
-        C = self.fake_gerrit.addFakeChange('org/project', 'master', 'C')
+        C = self.fake_gerrit.addFakeChange('org/project2', 'master', 'C')
         C.setDependsOn(B, 1)
 
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
@@ -7044,7 +7044,7 @@ class TestInitJobs(ZuulTestCase):
         self.assertIn('Build succeeded', A.messages[0])
 
     @simple_layout('layouts/init-job-dependency2.yaml')
-    @okay_tracebacks('prepareItem')
+    @okay_tracebacks('_freezeJobGraph')
     def test_init_job_dependency2(self):
         # Test an init job depending on a regular job
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
@@ -7274,7 +7274,7 @@ class TestReporterJobs(ZuulTestCase):
         # The second buildset for the second change:
         self.assertEqual('SUCCESS', buildsets[2].result)
 
-    @okay_tracebacks('prepareItem')
+    @okay_tracebacks('_freezeJobGraph')
     def test_configure_reporter_job_error(self):
         in_repo_conf = textwrap.dedent(
             """
