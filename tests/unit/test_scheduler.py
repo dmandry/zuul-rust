@@ -639,6 +639,15 @@ class TestScheduler(ZuulTestCase):
         self.assertEqual(self.getJobFromHistory('project-test1').result,
                          'SUCCESS')
 
+    @simple_layout('layouts/no-ppc.yaml')
+    def test_skip_merge_no_ppc(self):
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertIsNone(self.merge_job_history.get(
+            zuul.model.MergeRequest.MERGE))
+
     @simple_layout('layouts/branch-repo-state.yaml')
     def test_branch_repo_state(self):
         """

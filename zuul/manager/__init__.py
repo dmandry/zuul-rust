@@ -1770,6 +1770,19 @@ class PipelineManager(metaclass=ABCMeta):
             self.getLayout(item)
             return False
 
+        # If this item is live, change-triggered and doesn't update
+        # any config we can optimistically create a layout and freeze
+        # the job graph. This can save us a merger operation in case
+        # the project is not part of the pipeline.
+        if (item.live
+            and any(isinstance(o, Change) for o in item.changes)
+            and not (item.current_build_set.job_graph or item.updatesConfig())
+        ):
+            if not self.getLayout(item):
+                return False
+            if not self._freezeJobGraph(item):
+                return False
+
         # The next section starts between 0 and 2 remote merger
         # operations in parallel as needed.
         ready = True
@@ -1842,28 +1855,9 @@ class PipelineManager(metaclass=ABCMeta):
 
         # At this point we have a layout for the item, and it's live,
         # so freeze the job graph.
-        log = item.annotateLogger(self.log)
-        if not item.current_build_set.job_graph:
-            try:
-                log.debug("Freezing job graph for %s" % (item,))
-                start = time.time()
-                item.freezeJobGraph(self.getLayout(item),
-                                    self.current_context,
-                                    skip_file_matcher=False,
-                                    redact_secrets_and_keys=False)
-                self.reportPipelineTiming('job_freeze_time', start)
-            except Exception as e:
-                # These errors do not warrant a traceback.
-                if isinstance(e, model.JobConfigurationError):
-                    log.info("Error freezing job graph for %s", item)
-                else:
-                    log.exception("Error freezing job graph for %s", item)
-                item.setConfigError("Unable to freeze job graph: %s" %
-                                    (str(e)))
-                return False
-            if (item.current_build_set.job_graph and
-                len(item.current_build_set.job_graph.job_uuids) > 0):
-                self.sql.reportBuildsetStart(build_set)
+        if not (item.current_build_set.job_graph
+                or self._freezeJobGraph(item)):
+            return False
 
         # At this point we know all frozen jobs and their repos so update the
         # repo state with all missing repos.
@@ -1872,6 +1866,32 @@ class PipelineManager(metaclass=ABCMeta):
         if build_set.repo_state_state == build_set.PENDING:
             return False
 
+        return True
+
+    def _freezeJobGraph(self, item):
+        log = item.annotateLogger(self.log)
+        try:
+            log.debug("Freezing job graph for %s" % (item,))
+            start = time.time()
+            item.freezeJobGraph(self.getLayout(item),
+                                self.current_context,
+                                skip_file_matcher=False,
+                                redact_secrets_and_keys=False)
+            self.reportPipelineTiming('job_freeze_time', start)
+        except Exception as e:
+            # These errors do not warrant a traceback.
+            if isinstance(e, model.JobConfigurationError):
+                log.info("Error freezing job graph for %s", item)
+            else:
+                log.exception("Error freezing job graph for %s", item)
+            item.setConfigError("Unable to freeze job graph: %s" %
+                                (str(e)))
+            return False
+        if (item.current_build_set.job_graph and
+            len(item.current_build_set.job_graph.job_uuids) > 0):
+            self.sql.reportBuildsetStart(item.current_build_set)
+        else:
+            return False
         return True
 
     def _processOneItem(self, item, nnfi):
