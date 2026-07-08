@@ -1032,6 +1032,9 @@ class CleanupWorker:
         unmanaged_resources = collections.Counter()
         for rtype in endpoint.getResourceTypes():
             unmanaged_resources[rtype] = 0
+        leaked_resources = collections.Counter()
+        for rtype in endpoint.getResourceTypes():
+            leaked_resources[rtype] = 0
         for resource in endpoint.listResources(providers):
             if (resource.metadata.get('zuul_system_id') !=
                 self.launcher.system.system_id):
@@ -1050,6 +1053,7 @@ class CleanupWorker:
                     # We've seen this twice now, so it's not a race
                     # condition.
                     try:
+                        leaked_resources[resource.type] += 1
                         endpoint.deleteResource(resource)
                         if self.launcher.statsd:
                             self.launcher.statsd.incr(resource_metric, 1)
@@ -1064,6 +1068,7 @@ class CleanupWorker:
                     # We've seen this twice now, so it's not a race
                     # condition.
                     try:
+                        leaked_resources[resource.type] += 1
                         endpoint.deleteResource(resource)
                         if self.launcher.statsd:
                             self.launcher.statsd.incr(resource_metric, 1)
@@ -1079,7 +1084,10 @@ class CleanupWorker:
                     try:
                         endpoint.deleteResource(resource)
                         # This is a normal expiration (e.g., of an
-                        # upload), don't emit a leaked stat for it.
+                        # upload), don't emit a counter stat for it.
+                        # Do emit a gauge so that failed deletes are
+                        # detected.
+                        leaked_resources[resource.type] += 1
                     except Exception:
                         self.log.exception(
                             "Unable to delete leaked resource")
@@ -1089,6 +1097,7 @@ class CleanupWorker:
                 newly_leaked_resources[resource.unique_id] = resource
                 if resource.unique_id in possibly_leaked_resources:
                     try:
+                        leaked_resources[resource.type] += 1
                         endpoint.deleteResource(resource)
                         if self.launcher.statsd:
                             self.launcher.statsd.incr(resource_metric, 1)
@@ -1107,6 +1116,12 @@ class CleanupWorker:
                 key = (
                     f'zuul.provider_endpoint.{endpoint_statsd_name}.'
                     f'unmanaged.{rtype}'
+                )
+                self.launcher.statsd.gauge(key, value)
+            for rtype, value in leaked_resources.items():
+                key = (
+                    f'zuul.provider_endpoint.{endpoint_statsd_name}.'
+                    f'leaked.{rtype}'
                 )
                 self.launcher.statsd.gauge(key, value)
 

@@ -1034,11 +1034,14 @@ following statsd events:
       The canonical name of the provider endpoint.
 
       .. stat:: leaked.<resource>
-         :type: counter
+         :type: counter, gauge
 
          The number of leaked resources (subsequently deleted) of a
          certain type in this endpoint.  The specific resources are
-         driver-dependent.
+         driver-dependent.  The counter is incremented each time a
+         leaked resource is detected and deletion is attempted.  The
+         gauge represents the current number of leaked resources
+         extant.
 
       .. stat:: unmanaged.<resource>
          :type: gauge
