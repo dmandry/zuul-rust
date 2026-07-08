@@ -80,6 +80,10 @@
     name: template-job
     run: playbooks/template-job.yaml
 
+- job:
+    name: project-test
+    run: playbooks/project-test.yaml
+
 - project-template:
     name: common-config-template
     check:
@@ -93,3 +97,9 @@
     tenant-one-gate:
       jobs:
         - common-config-test
+
+- project:
+    name: org/project2
+    check:
+      jobs:
+        - project-test
