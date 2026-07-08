@@ -863,6 +863,18 @@ class TestAwsDriver(AwsBaseTest):
         self.assertReportedStat(
             'zuul.provider_endpoint.aws_aws-us-west-1.unmanaged.host',
             value='0', kind='g')
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-east-1.leaked.instance',
+            value='1', kind='g')
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-east-1.leaked.volume',
+            value='1', kind='g')
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-east-1.leaked.object',
+            value='1', kind='g')
+        self.assertReportedStat(
+            'zuul.provider_endpoint.aws_aws-us-west-1.unmanaged.host',
+            value='0', kind='g')
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_aws_resource_cleanup_import_snapshot(self):
