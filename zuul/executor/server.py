@@ -37,9 +37,9 @@ import traceback
 from concurrent.futures.process import ProcessPoolExecutor, BrokenProcessPool
 from functools import partial
 
-from kazoo.exceptions import NoNodeError
-
+import cachetools
 import git
+from kazoo.exceptions import NoNodeError
 from urllib.parse import urlsplit
 from opentelemetry import trace
 
@@ -2666,7 +2666,10 @@ class AnsibleJob(object):
             for secret_name, secret_index in secrets.items():
                 if isinstance(secret_index, dict):
                     key = secret_index['blob']
-                    data = blobstore.get(key)
+                    data = self.executor_server.secrets_cache.get(key)
+                    if data is None:
+                        data = blobstore.get(key)
+                        self.executor_server.secrets_cache[key] = data
                     frozen_secret = json.loads(data.decode('utf-8'))
                 else:
                     frozen_secret = self.job.secrets[secret_index]
@@ -4142,6 +4145,7 @@ class ExecutorServer(BaseMergeServer):
             self.zk_client, self.hostname, version=get_version_string())
         self.component_info.register()
         COMPONENT_REGISTRY.create(self.zk_client)
+        self.secrets_cache = cachetools.LFUCache(maxsize=128)
         self.zk_context = ZKContext(self.zk_client, None, None, self.log)
         self.monitoring_server = MonitoringServer(self.config, 'executor',
                                                   self.component_info)
