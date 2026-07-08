@@ -1207,7 +1207,13 @@ class GithubClientManager:
 
     def getGithubClient(self,
                         project_name=None,
-                        zuul_event_id=None):
+                        zuul_event_id=None,
+                        check_existence=False,
+                        ):
+        if check_existence:
+            if project_name in self._unknown_projects:
+                raise Exception(f"Project {project_name} not found")
+
         github = self._createGithubClient(zuul_event_id)
         token = ''
 
@@ -1396,7 +1402,9 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
 
     def getGithubClient(self,
                         project_name=None,
-                        zuul_event_id=None):
+                        zuul_event_id=None,
+                        check_existence=False,
+                        ):
 
         # if app_id is configured but self.app_id is empty we are not
         # authenticated yet against github as app
@@ -1404,7 +1412,8 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             self._github_client_manager.initialize()
 
         return self._github_client_manager.getGithubClient(
-            project_name=project_name, zuul_event_id=zuul_event_id)
+            project_name=project_name, zuul_event_id=zuul_event_id,
+            check_existence=check_existence)
 
     def getChange(self, change_key, refresh=False, event=None):
         if change_key.connection_name != self.connection_name:
@@ -1775,7 +1784,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         return branch_infos
 
     def _fetchProjectBranches(self, project, required_flags):
-        github = self.getGithubClient(project.name)
+        github = self.getGithubClient(project.name, check_existence=True)
 
         valid_flags = BranchFlag.CLEAR
         branch_infos = {}
@@ -1832,7 +1841,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         return branches
 
     def _fetchProjectMergeModes(self, project):
-        github = self.getGithubClient(project.name)
+        github = self.getGithubClient(project.name, check_existence=True)
         url = github.session.build_url('repos', project.name)
         headers = {'Accept': 'application/vnd.github.loki-preview+json'}
         merge_modes = []
@@ -1870,7 +1879,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         return merge_modes
 
     def _fetchProjectDefaultBranch(self, project):
-        github = self.getGithubClient(project.name)
+        github = self.getGithubClient(project.name, check_existence=True)
         url = github.session.build_url('repos', project.name)
         headers = {'Accept': 'application/vnd.github.loki-preview+json'}
 

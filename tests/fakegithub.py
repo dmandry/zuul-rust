@@ -1458,10 +1458,14 @@ class FakeGithubClientManager(GithubClientManager):
 
     def getGithubClient(self,
                         project_name=None,
-                        zuul_event_id=None):
+                        zuul_event_id=None,
+                        check_existence=False,
+                        ):
         client = super().getGithubClient(
             project_name=project_name,
-            zuul_event_id=zuul_event_id)
+            zuul_event_id=zuul_event_id,
+            check_existence=check_existence,
+        )
 
         # Some tests expect the installation id as part of the
         if self.app_id:
