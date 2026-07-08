@@ -4451,7 +4451,7 @@ class Job(ConfigObject):
 
     BASE_JOB_MARKER = object()
     # Secrets larger than this size will be put in the blob store
-    SECRET_BLOB_SIZE = 10 * 1024
+    SECRET_BLOB_SIZE = 128
 
     def isBase(self):
         return self.parent is self.BASE_JOB_MARKER
