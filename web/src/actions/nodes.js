@@ -1,4 +1,5 @@
 // Copyright 2018 Red Hat, Inc
+// Copyright 2026 Acme Gating, LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may
 // not use this file except in compliance with the License. You may obtain
@@ -22,18 +23,52 @@ export const requestNodes = () => ({
   type: NODES_FETCH_REQUEST
 })
 
-export const receiveNodes = (tenant, json) => ({
-  type: NODES_FETCH_SUCCESS,
-  nodes: json,
-  receivedAt: Date.now()
-})
+export const receiveNodes = (tenant, json) => {
+
+  // The list arrives in request order.  Preserve that, but group
+  // subnodes immediately after their main nodes so that it's easier
+  // to create the tree view later.
+  const nodeMap = new Map()
+
+  for (const node of json) {
+    const recordId = node.main_node ? node.main_node : node.id
+
+    let record = nodeMap.get(recordId)
+    if (record === undefined) {
+      record = {
+        node: null,
+        subnodes: [],
+      }
+      nodeMap.set(recordId, record)
+    }
+
+    if (node.main_node) {
+      record.subnodes.push(node)
+    } else {
+      record.node = node
+    }
+  }
+
+  const nodes = []
+  for (const record of nodeMap.values()) {
+    record.node._subnodes = record.subnodes.length
+    nodes.push(record.node)
+    nodes.push(...record.subnodes)
+  }
+
+  return {
+    type: NODES_FETCH_SUCCESS,
+    nodes,
+    receivedAt: Date.now()
+  }
+}
 
 const failedNodes = error => ({
   type: NODES_FETCH_FAIL,
   error
 })
 
-const fetchNodes = (tenant) => dispatch => {
+export const fetchNodes = (tenant) => dispatch => {
   dispatch(requestNodes())
   return API.fetchNodes(tenant.apiPrefix)
     .then(response => dispatch(receiveNodes(tenant.name, response.data)))
