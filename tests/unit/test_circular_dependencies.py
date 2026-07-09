@@ -1209,8 +1209,11 @@ class TestGerritCircularDependencies(ZuulTestCase):
         ], ordered=False)
 
     def test_cycle_merge_conflict(self):
-        self.hold_merge_jobs_in_queue = True
-        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        M = self.fake_gerrit.addFakeChange('org/project', 'master', 'M',
+                                           files={'conflict': 'foo'})
+        M.setMerged()
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files={'conflict': 'bar'})
         B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
 
         # A <-> B (via commit-depends)
@@ -1226,18 +1229,6 @@ class TestGerritCircularDependencies(ZuulTestCase):
         B.addApproval("Approved", 1)
 
         self.fake_gerrit.addEvent(A.addApproval("Approved", 1))
-        self.waitUntilSettled()
-
-        # We only want to have a merge failure for the first item in the queue
-        items = self.getAllItems('tenant-one', 'gate')
-        with self.createZKContext() as context:
-            items[0].current_build_set.updateAttributes(context,
-                                                        unable_to_merge=True)
-
-        self.waitUntilSettled()
-
-        self.hold_merge_jobs_in_queue = False
-        self.merger_api.release()
         self.waitUntilSettled()
 
         self.assertEqual(A.reported, 1)
