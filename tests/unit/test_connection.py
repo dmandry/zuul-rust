@@ -916,6 +916,38 @@ class TestMQTTConnection(ZuulTestCase):
         self.assertIn("execute_time", retry_build)
         self.assertIn("log_url", retry_build)
 
+    @okay_tracebacks('Connection refused', 'ERROR: content conflict')
+    def test_mqtt_merge_conflict(self):
+        M = self.fake_gerrit.addFakeChange('org/project', 'master', 'M',
+                                           files={'conflict': 'foo'})
+        M.setMerged()
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files={'conflict': 'bar'})
+
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        merge_event_check = self.mqtt_messages.pop()
+
+        self.assertEqual(merge_event_check.get('topic'),
+                         'tenant-one/zuul_buildset/check/org/project/master')
+        mqtt_payload = merge_event_check['msg']
+        self.assertEqual(mqtt_payload['project'], 'org/project')
+        self.assertEqual(mqtt_payload['pipeline'], 'check')
+        self.assertEqual(mqtt_payload['queue'], '')
+        self.assertEqual(mqtt_payload['branch'], 'master')
+        self.assertEqual(mqtt_payload['buildset']['result'], 'MERGE_CONFLICT')
+        self.assertEqual(mqtt_payload['buildset']['builds'], [])
+        self.assertIn('timestamp', mqtt_payload)
+        self.assertIn('enqueue_time', mqtt_payload)
+        self.assertIn('trigger_time', mqtt_payload)
+        self.assertIn('zuul_event_id', mqtt_payload)
+        self.assertIn('uuid', mqtt_payload)
+        self.assertEqual(mqtt_payload['tenant_web_root'],
+                         'https://tenant.example.com/t/tenant-one/')
+        changes = mqtt_payload['changes']
+        self.assertEqual(len(changes), 1)
+
     @okay_tracebacks('Connection refused')
     def test_mqtt_invalid_topic(self):
         in_repo_conf = textwrap.dedent(
