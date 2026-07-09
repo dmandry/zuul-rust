@@ -87,7 +87,7 @@ class Executor(zuul.cmd.ZuulDaemonApp):
         if os.getuid() != 0:
             return
 
-        self.log.info("Changing to user %s", user)
+        print(f"Changing to user {user}")
         pw = pwd.getpwnam(user)
 
         # Change owner on our pid file so it can be removed by us after
@@ -100,6 +100,11 @@ class Executor(zuul.cmd.ZuulDaemonApp):
         os.setgid(pw.pw_gid)
         os.setuid(pw.pw_uid)
         os.umask(0o022)
+
+        # Update environment to reflect the new user
+        os.environ['HOME'] = pw.pw_dir
+        os.environ['USER'] = pw.pw_name
+        os.environ['LOGNAME'] = pw.pw_name
 
     def run(self):
         self.handleCommands()
