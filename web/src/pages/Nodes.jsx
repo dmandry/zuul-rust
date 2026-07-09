@@ -1,4 +1,4 @@
-// Copyright 2018 Red Hat, Inc
+// Copyright 2024, 2026 Acme Gating, LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may
 // not use this file except in compliance with the License. You may obtain
@@ -12,230 +12,55 @@
 // License for the specific language governing permissions and limitations
 // under the License.
 
-import * as React from 'react'
-import PropTypes from 'prop-types'
-import { connect } from 'react-redux'
+import React, { useEffect } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
+import { withRouter } from 'react-router-dom'
 import {
-  Table,
-  TableVariant,
-  TableHeader,
-  TableBody,
-  ActionsColumn,
-} from '@patternfly/react-table'
-import moment from 'moment'
-import moment_tz from 'moment-timezone'
-import {
+  Level,
+  LevelItem,
   PageSection,
   PageSectionVariants,
-  Tooltip,
+  Title,
 } from '@patternfly/react-core'
-import {
-  BuildIcon,
-  LockIcon,
-  OutlinedCalendarAltIcon,
-  PencilAltIcon,
-  RunningIcon,
-  TagIcon,
-  ZoneIcon,
-} from '@patternfly/react-icons'
-import {
-  formatProviderName,
-  getNodeStyle,
-  isAuthorized,
-} from '../Misc'
-import {
-  IconProperty,
-} from '../MiscComponents'
+import { fetchNodes, fetchNodesIfNeeded } from '../actions/nodes'
+import NodeTable from '../containers/nodes/NodeTable'
+import { ReloadButton } from '../containers/Fetching'
 
-import { setNodeState } from '../api'
-import { addNotification } from '../actions/notifications'
-import { addApiError } from '../actions/adminActions'
-import { fetchNodesIfNeeded } from '../actions/nodes'
-import { Fetchable } from '../containers/Fetching'
+function NodesPageComponent() {
+  const tenant = useSelector((state) => state.tenant)
+  const nodes = useSelector((state) => state.nodes.nodes)
+  const isFetching = useSelector((state) => state.status.isFetching)
+  const darkMode = useSelector((state) => state.preferences.darkMode)
+  const dispatch = useDispatch()
 
-class NodesPage extends React.Component {
-  static propTypes = {
-    tenant: PropTypes.object,
-    user: PropTypes.object,
-    remoteData: PropTypes.object,
-    timezone: PropTypes.string,
-    dispatch: PropTypes.func
-  }
-
-  updateData = (force) => {
-    this.props.dispatch(fetchNodesIfNeeded(this.props.tenant, force))
-  }
-
-  componentDidMount () {
+  useEffect(() => {
     document.title = 'Zuul Nodes'
-    if (this.props.tenant.name) {
-      this.updateData()
-    }
-  }
+    dispatch(fetchNodesIfNeeded(tenant))
+  }, [tenant, dispatch])
 
-  componentDidUpdate (prevProps) {
-    if (this.props.tenant.name !== prevProps.tenant.name) {
-      this.updateData()
-    }
-  }
-
-  handleStateChange(nodeId, state) {
-    setNodeState(this.props.tenant.apiPrefix, nodeId, state)
-      .then(() => {
-        this.props.dispatch(addNotification(
-          {
-            text: 'Node state updated.',
-            type: 'success',
-            status: '',
-            url: '',
-          }))
-        this.props.dispatch(fetchNodesIfNeeded(this.props.tenant, true))
-      })
-      .catch(error => {
-        this.props.dispatch(addApiError(error))
-      })
-  }
-
-  renderNodeState(node) {
-    const style = getNodeStyle(node)
-
-    // 2192 is right arrow
-    return (
-      <>
-        <span style={{color:style.color}}>{node.state}</span>
-        {node.next_state &&
-         (<>
-            {'\u2192'} <span style={{color:style.color}}>{node.next_state}</span>
-          </>)
-        }
-      </>
-    )
-  }
-
-  render () {
-    const { remoteData } = this.props
-    const nodes = remoteData.nodes
-
-    const columns = [
-      {
-        title: (
-          <IconProperty icon={<BuildIcon />} value="ID" />
-        ),
-        dataLabel: 'id',
-      },
-      {
-        title: (
-          <IconProperty icon={<TagIcon />} value="Label" />
-        ),
-        dataLabel: 'label',
-      },
-      {
-        title: (
-          <IconProperty icon={<RunningIcon />} value="State" />
-        ),
-        dataLabel: 'state',
-      },
-      {
-        title: (
-          <IconProperty icon={<OutlinedCalendarAltIcon />} value="Age" />
-        ),
-        dataLabel: 'age',
-      },
-      {
-        title: (
-          <IconProperty icon={<LockIcon />} value="Locked" />
-        ),
-        dataLabel: 'locked',
-      },
-      {
-        title: (
-          <IconProperty icon={<ZoneIcon />} value="Provider" />
-        ),
-        dataLabel: 'provider',
-      },
-      {
-        title: (
-          <IconProperty icon={<PencilAltIcon />} value="Comment" />
-        ),
-        dataLabel: 'comment',
-      },
-      {
-        title: '',
-        dataLabel: 'action',
-      },
-    ]
-    let rows = []
-    nodes.forEach((node) => {
-        const state_time = typeof(node.state_time) === 'string' ?
-              moment_tz.utc(node.state_time) :
-              moment.unix(node.state_time)
-        const r = [
-          {title: node.id, props: {column: 'ID'}},
-          {title: node.type.join(','), props: {column: 'Label' }},
-          {title: this.renderNodeState(node), props: {column: 'State'}},
-          {
-            title: <Tooltip
-                     content={
-                       moment_tz
-                         .utc(state_time)
-                         .tz(this.props.timezone)
-                         .format('YYYY-MM-DD HH:mm:ss')}>
-                     <span>{state_time.fromNow()}</span>
-                    </Tooltip>,
-            props: {column: 'Age'}
-          },
-          {title: node.lock_holder, props: {column: 'Locked'}},
-          {title: formatProviderName(node.provider), props: {column: 'Provider'}},
-          {title: node.comment, props: {column: 'Comment'}},
-        ]
-      if (node.uuid && isAuthorized(this.props.user, 'modify-node')) {
-        r.push({title:
-                <ActionsColumn items={[
-                  {
-                    title: 'Set to HOLD',
-                    onClick: () => this.handleStateChange(node.uuid, 'hold')
-                  },
-                  {
-                    title: 'Set to OUTDATED',
-                    onClick: () => this.handleStateChange(node.uuid, 'outdated')
-                  },
-                  {
-                    title: 'Set to USED',
-                    onClick: () => this.handleStateChange(node.uuid, 'used')
-                  },
-                ]}/>
-               })
-      }
-      rows.push({cells: r})
-    })
-
-    return (
-      <PageSection variant={PageSectionVariants.light}>
-        <PageSection style={{paddingRight: '5px'}}>
-          <Fetchable
-            isFetching={remoteData.isFetching}
-            fetchCallback={this.updateData}
-          />
-        </PageSection>
-
-        <Table
-          aria-label="Nodes Table"
-          variant={TableVariant.compact}
-          cells={columns}
-          rows={rows}
-          className="zuul-table"
-        >
-          <TableHeader />
-          <TableBody />
-        </Table>
+  return (
+    <>
+      <PageSection variant={darkMode ? PageSectionVariants.dark : PageSectionVariants.light}>
+        <Level>
+          <LevelItem>
+          </LevelItem>
+          <LevelItem>
+            <ReloadButton
+              isReloading={isFetching}
+              reloadCallback={() => {dispatch(fetchNodes(tenant))}}
+            />
+          </LevelItem>
+        </Level>
+        <Title headingLevel="h2">
+          Nodes
+        </Title>
+        <NodeTable
+          nodes={nodes}
+          fetching={isFetching} />
       </PageSection>
-    )
-  }
+    </>
+  )
 }
 
-export default connect(state => ({
-  tenant: state.tenant,
-  remoteData: state.nodes,
-  user: state.user,
-  timezone: state.timezone,
-}))(NodesPage)
+const NodesPage = withRouter(NodesPageComponent)
+export default NodesPage
