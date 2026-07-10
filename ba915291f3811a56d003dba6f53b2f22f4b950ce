@@ -16,6 +16,24 @@
       "message": "This caused me consider consternation.  :)\n\nWithout this change, tests.unit.test_circular_dependencies.TestGerritCircularDependencies.test_cycle_merge_conflict failed.  I looked into that and realized that it only failed because it was an unrealistic test.  I proposed   https://review.opendev.org/c/zuul/zuul/+/996690 to address that.\n\nThe reason this piqued my interest is that I think generally we are very careful to always have a build and result for every job in the job graph.  So the only time this would be an issue is if we had somehow accidentally caused that not to be the case.  The test failure above shows us that this change will produce a job graph in more cases than we otherwise would have.  That is: merge conflicts will now create job graphs where they would not have before.  That is going to cause additional data to be generated for all reporters (code review, mqtt, sql).  That\u0027s okay though -- that will only happen in cases where we would run jobs if there were no merge conflict, so I don\u0027t think it\u0027s going to cause a huge amount of increased data, or reports where we don\u0027t want them.\n\nThe test mentioned above is a false positive -- it only failed because, yes, we do now add the job links to that report, but the only reason we can\u0027t correctly generate them is because the test itself manipulated zookeeper data behind the scenes in an unrealistic manner.  With the change to make the test more realistic, this error is not hit, and we do now report the skipped jobs as expected.\n\nThat means we don\u0027t need this check, and while it might look like a nice thing to add for safety, I would rather continue to rely on the fact that we always create builds for every job, and if we somehow create a programming error in the future where that doesn\u0027t happen, that we still raise an exception here so that we notice it.  In other words, I don\u0027t want to mask that programming error.\n\nFinally, I also grew concerned about the MQTT driver and merge conflicts.  We had no testing of that, so I have added a test in another change.  We can use that to see how this change affects it.\n\nTLDR: -1 please remove these lines.  :)",
       "revId": "ba915291f3811a56d003dba6f53b2f22f4b950ce",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "41f624b0_44b8f772",
+        "filename": "zuul/reporter/__init__.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 322,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-10T05:40:51Z",
+      "side": 1,
+      "message": "Ack, that\u0027s a good point! I was also a little suspicious about that test, but then figured it might be best to add the `build is not None` check in case that might also happen some other way. But I\u0027m fine with removing it if this was just due to us reaching too deep into engine room ;)",
+      "parentUuid": "5b562f20_ab7dcd88",
+      "revId": "ba915291f3811a56d003dba6f53b2f22f4b950ce",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
