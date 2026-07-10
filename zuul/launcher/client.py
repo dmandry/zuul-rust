@@ -411,6 +411,9 @@ class LauncherClient:
 
         with self.createZKContext(None, self.log) as ctx:
             for n in nodes:
+                if n is None:
+                    # Subnode no longer exists
+                    continue
                 n.setNextState(ctx, next_state)
 
         return nodes
