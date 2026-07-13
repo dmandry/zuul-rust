@@ -299,13 +299,15 @@ class BaseMergeServer(metaclass=ABCMeta):
                       repo_state=None,
                       zuul_event_id=zuul_event_id,
                       errors=errors)
-        for item in args['items']:
+
+        # Create a deduplicated set of projects that we need to update
+        # before performing any merges.
+        to_update = {(i['connection'], i['project']) for i in args['items']}
+        for connection, project in to_update:
             try:
-                self._update(item['connection'], item['project'])
+                self._update(connection, project)
             except Exception:
-                msg = (f"Unable to update {item['connection']}/"
-                       f"{item['project']}")
-                errors.append(msg)
+                errors.append(f"Unable to update {connection}/{project}")
                 return result
 
         ret = self.merger.mergeChanges(
