@@ -344,12 +344,20 @@ class TestAwsDriver(AwsBaseTest):
         self.assertTrue(pnode.node_properties['instance_id'].startswith('i-'))
         self.assertTrue(
             pnode.node_properties['ebs_volume_id'].startswith('vol-'))
-        instance = self.ec2_client.describe_instance_attribute(
-            InstanceId=pnode.aws_instance_id,
-            Attribute='userData',
-        )
         expected = base64.b64encode(b'testuserdata').decode('utf8')
-        self.assertEqual(expected, instance['UserData']['Value'])
+        # TODO: if this PR is merged:
+        #   https://github.com/getmoto/moto/pull/10245
+        # instance = self.ec2_client.describe_instance_attribute(
+        #     InstanceId=pnode.aws_instance_id,
+        #     Attribute='userData',
+        # )
+        # Then remove the following assertion and replace with this:
+        #   self.assertEqual(expected, instance['UserData']['Value'])
+        self.assertEqual(
+            expected,
+            self.create_fleet_calls[0]['LaunchTemplateConfigs'][0][
+                'LaunchTemplateSpecification'][
+                    'LaunchTemplateSpecificationUserData'])
 
     @simple_layout('layouts/aws/fleet.yaml', enable_nodepool=True)
     @okay_tracebacks('MissingParameter')
