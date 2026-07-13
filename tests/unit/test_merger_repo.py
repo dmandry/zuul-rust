@@ -23,7 +23,7 @@ from zuul.lib import yamlutil as yaml
 import git
 import testtools
 
-from zuul.merger.merger import MergerTree, Repo
+from zuul.merger.merger import MergerTree, Repo, SparsePaths
 import zuul.model
 from zuul.model import MergeRequest
 from tests.base import (
@@ -1256,6 +1256,54 @@ class TestMerger(ZuulTestCase):
         result = merger.getFilesChanges(
             'gerrit', 'org/project', 'refs/heads/stable', 'stable')
         self.assertIsNotNone(result)
+
+    def test_merger_sparse_upgrade(self):
+        # This tests the behavior of an old merger with full checkouts
+        # after restarting and upgrading to the new behavior with
+        # sparse checkouts.
+        merger_root = os.path.join(self.test_root, 'test-merger')
+        project_root = os.path.join(merger_root, 'review.example.com',
+                                    'common-config', 'common-config')
+        merger = self.executor_server._getMerger(
+            merger_root, None, execution_context=False)
+
+        # With our first merger, clone the repo with a non-sparse
+        # checkout.
+        merger.getRepo('gerrit', 'common-config',
+                       sparse_paths=SparsePaths.FULL)
+        ls = os.listdir(project_root)
+
+        # Assert it is not a sparse checkout
+        self.assertIn('zuul.yaml', ls)
+        self.assertIn('playbooks', ls)
+
+        files = ['zuul.yaml', '.zuul.yaml']
+        dirs = ['zuul.d', '.zuul.d']
+
+        # Now use a new merger (as would happen after a zuul-merger or
+        # zuul-executor component restarts with the same filesystem.
+        # It should update the checkout after the merge operation to
+        # be a non-sparse checkout.
+        merger = self.executor_server._getMerger(
+            merger_root, None, execution_context=False)
+
+        file_dict_a = {'zuul.d/a.yaml': 'a'}
+        A = self.fake_gerrit.addFakeChange('common-config', 'master', 'A',
+                                           files=file_dict_a)
+        item_a = self._item_from_fake_change(A)
+        result = merger.mergeChanges([item_a], files=files, dirs=dirs)
+        self.assertIsNotNone(result)
+        hexsha, read_files, repo_state, ret_recent, orig_commit, ops = result
+        self.assertEqual(len(read_files), 1)
+        self.assertEqual(read_files[0]['project'], 'common-config')
+        self.assertEqual(read_files[0]['branch'], 'master')
+        self.assertEqual(read_files[0]['files']['zuul.d/a.yaml'], 'a')
+
+        # Assert that after our new merger did work, we ended up with
+        # a sparse checkout.
+        ls = os.listdir(project_root)
+        self.assertIn('zuul.yaml', ls)
+        self.assertNotIn('playbooks', ls)
 
 
 class TestMergerTree(BaseTestCase):
