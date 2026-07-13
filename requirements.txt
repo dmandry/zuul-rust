@@ -50,4 +50,4 @@ rackspaceauth
 # For openshift driver
 openshift
 # For AWS driver
-boto3>=1.42.48
+boto3>=1.43.46
