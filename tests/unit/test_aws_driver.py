@@ -349,7 +349,15 @@ class TestAwsDriver(AwsBaseTest):
             Attribute='userData',
         )
         expected = base64.b64encode(b'testuserdata').decode('utf8')
-        self.assertEqual(expected, instance['UserData']['Value'])
+        # TODO: if this PR is merged:
+        #   https://github.com/getmoto/moto/pull/10245
+        # Then remove the following assertion and replace with this:
+        #   self.assertEqual(expected, instance['UserData']['Value'])
+        self.assertEqual(
+            expected,
+            self.create_fleet_calls[0]['LaunchTemplateConfigs'][0][
+                'LaunchTemplateSpecification'][
+                    'LaunchTemplateSpecificationUserData'])
 
     @simple_layout('layouts/aws/fleet.yaml', enable_nodepool=True)
     @okay_tracebacks('MissingParameter')
