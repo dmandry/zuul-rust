@@ -10484,6 +10484,22 @@ class ParsedConfig:
             raise TypeError()
 
 
+class QueueConfigRegistry:
+    def __init__(self):
+        self.mappings = []
+
+    def register(self, branch_matcher, queue):
+        self.mappings.append((branch_matcher, queue))
+
+    def getQueueForBranch(self, branch):
+        for (branch_matcher, queue) in self.mappings:
+            if branch_matcher is None:
+                return queue
+            if branch_matcher.matchesBranch(branch):
+                return queue
+        return None
+
+
 class Layout(object):
     """Holds all of the Pipelines."""
 
@@ -10528,6 +10544,8 @@ class Layout(object):
         self.provider_configs = {}
         self.providers = {}
         self.loading_errors = LoadingErrors()
+        self.default_queue_config = {}
+        self.branch_assigned_queue_configs = {}
 
     def getJob(self, name):
         if name in self.jobs:
@@ -10815,11 +10833,48 @@ class Layout(object):
         if (md.default_branch is None and
             project_config.default_branch is not None):
             md.default_branch = project_config.default_branch
+
+    def updateProjectQueueConfig(self, project_canonical_name,
+                                 project_config):
+        md = self.project_metadata[project_canonical_name]
         if (
             md.queue_name is None
             and project_config.queue_name is not None
         ):
             md.queue_name = project_config.queue_name
+            queue = self.queues.get(md.queue_name)
+
+            if queue is None:
+                queue = Queue(md.queue_name, type=Queue.Type.ALL_BRANCHES)
+                self.queues[md.queue_name] = queue
+
+            if queue.type != Queue.Type.BRANCH_ASSIGNED:
+                self.default_queue_config[project_canonical_name] = queue
+
+        if project_config.queue_name is not None:
+            if ((queue := self.queues.get(project_config.queue_name)) and
+                queue.type == Queue.Type.BRANCH_ASSIGNED):
+
+                registry = self.branch_assigned_queue_configs.get(
+                    project_canonical_name)
+                if registry is None:
+                    registry = QueueConfigRegistry()
+                    self.branch_assigned_queue_configs[
+                        project_canonical_name] = registry
+                bm = project_config.getBranchMatcher(
+                    self.tenant,
+                    project_canonical_name,
+                )
+                registry.register(bm, queue)
+
+    def getQueueForProjectBranch(self, project_canonical_name, branch):
+        if registry := self.branch_assigned_queue_configs.get(
+                project_canonical_name):
+            if queue := registry.getQueueForBranch(branch):
+                return queue
+        if queue := self.default_queue_config.get(project_canonical_name):
+            return queue
+        return None
 
     def getProjectConfigs(self, name):
         return self.project_configs.get(name, [])

@@ -186,7 +186,7 @@ class TestGerritToGithubCRD(ZuulTestCase):
             A.messages[0],
             "Build failed.\n\n\nWarning:\n  "
             "Dependency cycle detected and project github/project2 "
-            "doesn't allow circular dependencies\n")
+            "doesn't allow circular dependencies on master\n")
         self.assertEqual(len(B.comments), 0)
         self.assertEqual(A.data['status'], 'NEW')
         self.assertFalse(B.is_merged)

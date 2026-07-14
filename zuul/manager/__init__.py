@@ -269,7 +269,7 @@ class PipelineManager(metaclass=ABCMeta):
                         change.commit_needs_changes is None)
                     update_topic_dependencies = (
                         change.topic_needs_changes is None
-                        and self.useDependenciesByTopic(change.project))
+                        and self.useDependenciesByTopic(change))
                     if (update_commit_dependencies
                             or update_topic_dependencies):
                         self.updateCommitDependencies(change, event=None)
@@ -290,7 +290,7 @@ class PipelineManager(metaclass=ABCMeta):
             for change in item.changes:
                 if isinstance(change, model.Change):
                     referenced_change_keys.update(change.getNeedsChanges(
-                        self.useDependenciesByTopic(change.project)))
+                        self.useDependenciesByTopic(change)))
                     referenced_change_keys.update(
                         change.getNeededByChanges())
 
@@ -331,7 +331,7 @@ class PipelineManager(metaclass=ABCMeta):
                 return True
         if isinstance(change, model.Change):
             for dep_change_ref in change.getNeedsChanges(
-                    self.useDependenciesByTopic(change.project)):
+                    self.useDependenciesByTopic(change)):
                 dep_change_key = ChangeKey.fromReference(dep_change_ref)
                 for change_key in self.change_list.getChangeKeys():
                     if change_key.isSameChange(dep_change_key):
@@ -576,7 +576,7 @@ class PipelineManager(metaclass=ABCMeta):
         for item_change in item.changes:
             for needed_change in self.resolveChangeReferences(
                     item_change.getNeedsChanges(
-                        self.useDependenciesByTopic(item_change.project))):
+                        self.useDependenciesByTopic(item_change))):
                 for removed_change in changes_removed:
                     if needed_change.equals(removed_change):
                         log.debug("Change %s depends on abandoned change %s, "
@@ -765,13 +765,15 @@ class PipelineManager(metaclass=ABCMeta):
 
             if len(cycle) > 1:
                 for cycle_change in cycle:
-                    if not self.canProcessCycle(cycle_change.project):
+                    if not self.canProcessCycle(cycle_change):
                         log.info("Not enqueueing change %s since the project "
-                                 "does not allow circular dependencies",
+                                 "does not allow circular dependencies "
+                                 "on this branch",
                                  cycle_change)
                         warnings = ["Dependency cycle detected and project "
                                     f"{cycle_change.project.name} "
-                                    "doesn't allow circular dependencies"]
+                                    "doesn't allow circular dependencies on "
+                                    f"{cycle_change.branch}"]
                         self._reportNonEnqueuedItem(
                             change_queue, change, event, warnings)
                         return False
@@ -953,7 +955,7 @@ class PipelineManager(metaclass=ABCMeta):
             self.updateCommitDependencies(change, event)
         for needed_change in self.resolveChangeReferences(
                 change.getNeedsChanges(
-                    self.useDependenciesByTopic(change.project))):
+                    self.useDependenciesByTopic(change))):
             if not quiet:
                 log.debug("%sChange %s needs change %s:",
                           indent, change, needed_change)
@@ -982,36 +984,25 @@ class PipelineManager(metaclass=ABCMeta):
                                         update_deps,
                                         history, quiet, indent + '  ')
 
-    def getQueueConfig(self, project):
-        layout = self.tenant.layout
-        queue_name = None
-        for project_config in layout.getAllProjectConfigs(
-            project.canonical_name
-        ):
-            if not queue_name:
-                queue_name = project_config.queue_name
+    def canProcessCycle(self, change):
+        queue_config = self.tenant.layout.getQueueForProjectBranch(
+            change.project.canonical_name,
+            change.branch,
+        )
+        if queue_config:
+            return queue_config.allow_circular_dependencies
+        return False
 
-            project_pipeline_config = project_config.pipelines.get(
-                self.pipeline.name)
-
-            if project_pipeline_config is None:
-                continue
-
-        return layout.queues.get(queue_name)
-
-    def canProcessCycle(self, project):
-        queue_config = self.getQueueConfig(project)
-        if queue_config is None:
-            return False
-
-        return queue_config.allow_circular_dependencies
-
-    def useDependenciesByTopic(self, project):
-        source = self.sched.connections.getSource(project.connection_name)
+    def useDependenciesByTopic(self, change):
+        source = self.sched.connections.getSource(
+            change.project.connection_name)
         if source.useDependenciesByTopic():
             return True
 
-        queue_config = self.getQueueConfig(project)
+        queue_config = self.tenant.layout.getQueueForProjectBranch(
+            change.project.canonical_name,
+            change.branch,
+        )
         if queue_config is None:
             return False
 
@@ -1132,7 +1123,7 @@ class PipelineManager(metaclass=ABCMeta):
             topic_out_of_date = True
 
         must_update_topic_deps = (
-            self.useDependenciesByTopic(change.project) and (
+            self.useDependenciesByTopic(change) and (
                 not hasattr(event, "zuul_event_ltime")
                 or change.topic_needs_changes is None
                 or topic_out_of_date

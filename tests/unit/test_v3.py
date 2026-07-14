@@ -12749,6 +12749,8 @@ class TestIncludeExcludeProjects(ZuulTestCase):
 
 
 class TestBranchAssignedQueues(ZuulTestCase):
+    config_file = "zuul-gerrit-web.conf"
+
     @simple_layout('layouts/branch-assigned.yaml')
     def test_branch_assigned_queues(self):
         self.executor_server.hold_jobs_in_build = True
@@ -12914,3 +12916,79 @@ class TestBranchAssignedQueues(ZuulTestCase):
             dict(name='test-job', result='SUCCESS', changes='5,1'),
             dict(name='test-job', result='SUCCESS', changes='5,1 6,1'),
         ], ordered=False)
+
+    @gerrit_config(submit_whole_topic=True)
+    @simple_layout('layouts/branch-assigned.yaml')
+    def test_branch_assigned_queues_circular_dependencies(self):
+        self.executor_server.hold_jobs_in_build = True
+        self.create_branch('org/project1', 'red-one')
+        self.create_branch('org/project1', 'gold-one')
+        self.create_branch('org/project2', 'red-two')
+        self.create_branch('org/project2', 'gold-two')
+
+        # 1
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A',
+                                           topic='master-branch')
+        A.addApproval('Code-Review', 2)
+        A.addApproval('Approved', 1)
+        # 2
+        B = self.fake_gerrit.addFakeChange('org/project2', 'master', 'B',
+                                           topic='master-branch')
+        B.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(B.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        # 3
+        C = self.fake_gerrit.addFakeChange('org/project1', 'red-one', 'C',
+                                           topic='red-branch')
+        C.addApproval('Code-Review', 2)
+        C.addApproval('Approved', 1)
+        # 4
+        D = self.fake_gerrit.addFakeChange('org/project2', 'red-two', 'D',
+                                           topic='red-branch')
+        D.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(D.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        # 5
+        E = self.fake_gerrit.addFakeChange('org/project1', 'gold-one', 'E',
+                                           topic='gold-branch')
+        E.addApproval('Code-Review', 2)
+        E.addApproval('Approved', 1)
+        # 6
+        F = self.fake_gerrit.addFakeChange('org/project2', 'gold-two', 'F',
+                                           topic='gold-branch')
+        F.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(F.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        gate_manager = tenant.layout.pipeline_managers['gate']
+        self.assertEqual(3, len(gate_manager.state.queues))
+        self.assertEqual('org/project2', gate_manager.state.queues[0].name)
+        self.assertEqual('red-queue', gate_manager.state.queues[1].name)
+        self.assertEqual('gold-queue', gate_manager.state.queues[2].name)
+        self.assertEqual(0, len(gate_manager.state.queues[0].queue))
+        self.assertEqual(1, len(gate_manager.state.queues[1].queue))
+        self.assertEqual(0, len(gate_manager.state.queues[2].queue))
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS', changes='3,1 4,1'),
+            dict(name='test-job', result='SUCCESS', changes='3,1 4,1'),
+        ], ordered=False)
+
+        self.assertEqual(A.data['status'], 'NEW')
+        self.assertEqual(B.data['status'], 'NEW')
+        self.assertEqual(C.data['status'], 'MERGED')
+        self.assertEqual(D.data['status'], 'MERGED')
+        self.assertEqual(E.data['status'], 'NEW')
+        self.assertEqual(F.data['status'], 'NEW')
+
+        self.assertEqual(0, len(A.messages))
+        self.assertIn('allow circular dependencies', B.messages[0])
+        self.assertEqual(0, len(E.messages))
+        self.assertIn('allow circular dependencies', F.messages[0])
