@@ -2858,7 +2858,11 @@ class TestGithubAppDriver(ZuulGithubAppTestCase):
         # Hold the merge job so we can observe the queued state
         self.hold_merge_jobs_in_queue = True
 
-        A = self.fake_github.openFakePullRequest(project, "master", "A")
+        # Modify Zuul config so we trigger a merge request before
+        # building a job graph and noticing that there are no jobs.
+        files = {'zuul.yaml': '# dummy'}
+        A = self.fake_github.openFakePullRequest(project, "master", "A",
+                                                 files=files)
         self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
         self.waitUntilSettled()
 
