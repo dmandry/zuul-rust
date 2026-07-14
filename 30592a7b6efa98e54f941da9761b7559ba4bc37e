@@ -48,6 +48,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "de0b3548_8d385e18",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2652,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-14T15:43:18Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "f1515b03_191aa564",
+      "range": {
+        "startLine": 2652,
+        "startChar": 16,
+        "endLine": 2652,
+        "endChar": 76
+      },
+      "revId": "30592a7b6efa98e54f941da9761b7559ba4bc37e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "50364d46_8df1047c",
@@ -61,6 +85,30 @@
       "writtenOn": "2026-07-06T18:07:21Z",
       "side": 1,
       "message": "next request gets the ready node ?",
+      "range": {
+        "startLine": 2670,
+        "startChar": 36,
+        "endLine": 2670,
+        "endChar": 44
+      },
+      "revId": "30592a7b6efa98e54f941da9761b7559ba4bc37e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "773d47df_b0906dac",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2670,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-14T15:43:18Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "50364d46_8df1047c",
       "range": {
         "startLine": 2670,
         "startChar": 36,
