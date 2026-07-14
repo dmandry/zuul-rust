@@ -289,7 +289,7 @@ class DependentPipelineManager(SharedQueuePipelineManager):
             if not isinstance(change, model.Change):
                 continue
             needs_changes = change.getNeedsChanges(
-                self.useDependenciesByTopic(change.project))
+                self.useDependenciesByTopic(change))
             if not needs_changes:
                 continue
             for needed_change in self.resolveChangeReferences(needs_changes):
