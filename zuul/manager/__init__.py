@@ -18,6 +18,7 @@ import logging
 import textwrap
 import time
 import urllib
+from uuid import uuid4
 from abc import ABCMeta, abstractmethod
 
 from zuul import exceptions
@@ -1193,7 +1194,7 @@ class PipelineManager(metaclass=ABCMeta):
         if update_attrs:
             source.setChangeAttributes(change, **update_attrs)
 
-    def provisionNodes(self, item):
+    def provisionNodes(self, item, queue_run_id):
         log = item.annotateLogger(self.log)
         jobs = item.findJobsToRequest(self.tenant.semaphore_handler)
         if not jobs:
@@ -1213,7 +1214,7 @@ class PipelineManager(metaclass=ABCMeta):
                         log, build_set, job, relative_priority)
                 else:
                     self._makeLauncherRequest(
-                        log, build_set, job, relative_priority)
+                        log, build_set, job, relative_priority, queue_run_id)
         return True
 
     def _useNodepoolFallback(self, log, job):
@@ -1247,12 +1248,14 @@ class PipelineManager(metaclass=ABCMeta):
         else:
             job.setWaitingStatus(f'node request: {req.id}')
 
-    def _makeLauncherRequest(self, log, build_set, job, relative_priority):
+    def _makeLauncherRequest(self, log, build_set, job, relative_priority,
+                             queue_run_id):
         provider = self._getPausedParentProvider(build_set, job)
         priority = self._calculateNodeRequestPriority(build_set, job)
         item = build_set.item
         req = self.sched.launcher.requestNodeset(
-            item, job, priority, relative_priority, provider)
+            item, job, priority, relative_priority, provider,
+            queue_run_id)
         log.debug("Adding nodeset request %s for job %s to item %s",
                   req, job, item)
         build_set.setJobNodeRequestID(job, req.uuid)
@@ -1894,7 +1897,7 @@ class PipelineManager(metaclass=ABCMeta):
             return False
         return True
 
-    def _processOneItem(self, item, nnfi):
+    def _processOneItem(self, item, nnfi, queue_run_id):
         # Return: changed, bypass, nnfi
         log = item.annotateLogger(self.log)
         changed = False
@@ -1904,7 +1907,7 @@ class PipelineManager(metaclass=ABCMeta):
         failing_reasons = []  # Reasons this item is failing
 
         if item.reporter_jobs_state:
-            bypass = self.executeReporterJobs(item)
+            bypass = self.executeReporterJobs(item, queue_run_id)
             if bypass:
                 return (changed, bypass, nnfi)
             self.dequeueItem(item)
@@ -2009,7 +2012,7 @@ class PipelineManager(metaclass=ABCMeta):
                     failing_reasons.append("it has a merge conflict")
                 if item.current_build_set.has_blocking_errors:
                     failing_reasons.append("it has an invalid configuration")
-                if ready and self.provisionNodes(item):
+                if ready and self.provisionNodes(item, queue_run_id):
                     changed = True
         if ready and self.executeJobs(item):
             changed = True
@@ -2070,7 +2073,8 @@ class PipelineManager(metaclass=ABCMeta):
                 if is_cycle and succeeded:
                     self.sendReport(self.pipeline.failure_actions, item)
             if succeeded and not failing_reasons:
-                bypass = self.executeReporterJobs(item, start=True)
+                bypass = self.executeReporterJobs(item, queue_run_id,
+                                                  start=True)
                 if bypass:
                     return (changed, bypass, nnfi)
             self.dequeueItem(item)
@@ -2096,7 +2100,7 @@ class PipelineManager(metaclass=ABCMeta):
                     self._reviseNodesetRequest(request_id, item, job)
         return (changed, bypass, nnfi)
 
-    def executeReporterJobs(self, item, start=False):
+    def executeReporterJobs(self, item, queue_run_id, start=False):
         # Return bypass signal
         log = get_annotated_logger(self.log, item.event)
         if start:
@@ -2105,7 +2109,7 @@ class PipelineManager(metaclass=ABCMeta):
             log.info("Starting reporter jobs for %s", item)
             item.updateAttributes(self.current_context,
                                   reporter_jobs_state=item.State.PENDING)
-        self.provisionNodes(item)
+        self.provisionNodes(item, queue_run_id)
         self.executeJobs(item)
         if item.areAllReporterJobsComplete():
             if not item.didAllReporterJobsSucceed():
@@ -2154,6 +2158,7 @@ class PipelineManager(metaclass=ABCMeta):
         self.log.debug("Starting queue processor: %s" % self.pipeline.name)
         changed = False
         change_keys = set()
+        queue_run_id = uuid4().hex
         for queue in self.state.queues[:]:
             queue_changed = False
             # queue_bypass means bypass further queue processing as
@@ -2165,7 +2170,7 @@ class PipelineManager(metaclass=ABCMeta):
                 self.sched.abortIfPendingReconfig(tenant_lock)
                 if not queue_bypass:
                     item_changed, queue_bypass, nnfi = self._processOneItem(
-                        item, nnfi)
+                        item, nnfi, queue_run_id)
                     if item_changed:
                         queue_changed = True
                     self.reportStats(item)
@@ -2418,8 +2423,9 @@ class PipelineManager(metaclass=ABCMeta):
             self._makeNodepoolRequest(
                 log, build_set, job, relative_priority)
         else:
+            # No queue_run_id available in this context
             self._makeLauncherRequest(
-                log, build_set, job, relative_priority)
+                log, build_set, job, relative_priority, None)
         return True
 
     def onNodesProvisioned(self, request, nodeset_info, build_set):
