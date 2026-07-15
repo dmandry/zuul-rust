@@ -13,10 +13,10 @@
 # under the License.
 
 import logging
-import multiprocessing
 import os
 
 from zuul.executor.sensors import SensorInterface
+from zuul.lib.cgroup import cpu_count
 from zuul.lib.config import get_default
 
 
@@ -27,7 +27,7 @@ class CPUSensor(SensorInterface):
         super().__init__(statsd, base_key)
         load_multiplier = float(get_default(config, 'executor',
                                             'load_multiplier', '2.5'))
-        self.max_load_avg = multiprocessing.cpu_count() * load_multiplier
+        self.max_load_avg = cpu_count() * load_multiplier
 
     def isOk(self):
         load_avg = os.getloadavg()[0]

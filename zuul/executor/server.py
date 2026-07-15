@@ -45,6 +45,7 @@ from opentelemetry import trace
 
 from zuul.exceptions import VariableNameError
 from zuul.lib.ansible import AnsibleManager
+from zuul.lib.cgroup import cpu_count
 from zuul.lib.result_data import get_warnings_from_result_data
 from zuul.lib import yamlutil as yaml
 from zuul.lib.config import get_default
@@ -4202,8 +4203,7 @@ class ExecutorServer(BaseMergeServer):
                 self.config.items(section_name)
             )
 
-        # TODO(tobiash): Take cgroups into account
-        self.update_workers = multiprocessing.cpu_count()
+        self.update_workers = cpu_count()
         self.update_threads = []
         # If the execution driver ever becomes configurable again,
         # this is where it would happen.

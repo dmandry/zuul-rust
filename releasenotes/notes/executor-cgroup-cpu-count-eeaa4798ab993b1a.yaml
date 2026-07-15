@@ -1,0 +1,13 @@
+---
+fixes:
+  - |
+    The executor's :attr:`update_workers` sizing and the load governor's
+    :attr:`CPUSensor` now take the process's cgroup cpu bandwidth quota
+    into account instead of relying solely on
+    ``multiprocessing.cpu_count()``.  Previously, when an executor ran
+    in a container with a cgroup cpu limit set lower than the host's
+    total core count (e.g. a Kubernetes pod with ``resources.limits.cpu``
+    less than the node's core count), the executor would size its
+    Ansible fork count and load threshold based on the host's full core
+    count rather than the quota actually available to it, leading to
+    CFS throttling under load.
