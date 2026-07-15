@@ -12,9 +12,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import datetime
 import logging
 import threading
 import time
+from uuid import uuid4
 
 from collections import defaultdict
 from zuul.model import (
@@ -55,15 +57,23 @@ class LauncherClient:
         labels = [n.label for n in job.nodeset.getNodes()]
 
         buildset = item.current_build_set
-        parent_span = tracing.restoreSpan(buildset.span_info)
+        image_names = getattr(item.event, "image_names", None)
+        image_upload_uuid = getattr(item.event, "image_upload_uuid", None)
         request_time = time.time()
+
+        layout = item.manager.tenant.layout
+        slot_labels = list(set(labels) & layout.slot_labels)
+        if slot_labels:
+            dt = datetime.datetime.fromtimestamp(request_time).replace(
+                second=0, microsecond=0).isoformat()
+            hash_key = f'{dt}-{slot_labels[0]}'
+        else:
+            hash_key = uuid4().hex
+        parent_span = tracing.restoreSpan(buildset.span_info)
         with trace.use_span(parent_span):
             request_span = self.tracer.start_span(
                 "NodesetRequest", start_time=request_time)
         span_info = tracing.getSpanInfo(request_span)
-
-        image_names = getattr(item.event, "image_names", None)
-        image_upload_uuid = getattr(item.event, "image_upload_uuid", None)
 
         with self.createZKContext(None, self.log) as ctx:
             request = NodesetRequest.new(
@@ -83,6 +93,7 @@ class LauncherClient:
                 image_names=image_names,
                 image_upload_uuid=image_upload_uuid,
                 preferred_provider=preferred_provider,
+                hash_key=hash_key,
             )
             log.info("Submitted nodeset request %s", request)
         return request
