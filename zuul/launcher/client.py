@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import datetime
 import logging
 import threading
 import time
@@ -52,7 +51,7 @@ class LauncherClient:
         self.stop_event = stop_event
 
     def requestNodeset(self, item, job, priority, relative_priority,
-                       preferred_provider):
+                       preferred_provider, queue_run_id):
         log = get_annotated_logger(self.log, item.event)
         labels = [n.label for n in job.nodeset.getNodes()]
 
@@ -63,10 +62,8 @@ class LauncherClient:
 
         layout = item.manager.tenant.layout
         slot_labels = list(set(labels) & layout.slot_labels)
-        if slot_labels:
-            dt = datetime.datetime.fromtimestamp(request_time).replace(
-                second=0, microsecond=0).isoformat()
-            hash_key = f'{dt}-{slot_labels[0]}'
+        if slot_labels and queue_run_id:
+            hash_key = f'{queue_run_id}-{slot_labels[0]}'
         else:
             hash_key = uuid4().hex
         parent_span = tracing.restoreSpan(buildset.span_info)
