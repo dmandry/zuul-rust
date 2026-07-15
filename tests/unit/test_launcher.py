@@ -32,7 +32,7 @@ import zuul.driver.aws.awsendpoint
 from zuul.launcher.client import LauncherClient
 import zuul.launcher.server
 from zuul.zk.event_queues import PipelineResultEventQueue
-from zuul.zk.launcher import RequestCache
+import zuul.zk.launcher
 from zuul.zk.locks import pipeline_lock
 
 import cachetools
@@ -1126,6 +1126,31 @@ class TestLauncher(LauncherBaseTestCase):
         launcher2.stop()
         launcher2.join()
 
+    @simple_layout('layouts/nodepool-subnodes-and-others.yaml',
+                   enable_nodepool=True)
+    def test_launcher_request_hash(self):
+        self.hold_nodeset_requests_in_queue = True
+        launcher_score = zuul.zk.launcher.launcher_score
+
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        A.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        reqs = self.launcher.api.getNodesetRequests()
+        score1 = launcher_score('name', reqs[0])
+        score2 = launcher_score('name', reqs[1])
+        score3 = launcher_score('name', reqs[2])
+        self.assertNotEqual(score1, score2)
+        self.assertEqual(score2, score3)
+        self.assertNotIn('debian', reqs[0].hash_key)
+        self.assertIn('debian', reqs[1].hash_key)
+        self.assertIn('debian', reqs[2].hash_key)
+
+        self.hold_nodeset_requests_in_queue = False
+        self.releaseNodesetRequests(*reqs)
+        self.waitUntilSettled()
+
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_launcher_connection_filter_match(self):
         # Wait until everything is fully initialized before stopping
@@ -1347,7 +1372,7 @@ class TestLauncher(LauncherBaseTestCase):
         go_event = threading.Event()
         go_event.set()
 
-        class MyCache(RequestCache):
+        class MyCache(zuul.zk.launcher.RequestCache):
             @property
             def max_zxid(self):
                 waiting_event.set()
