@@ -29,7 +29,7 @@ import pickle
 import random
 import re
 from collections import defaultdict, namedtuple
-from queue import Queue
+from queue import Queue, Empty
 from typing import Generator, List
 from unittest.case import skipIf
 import zlib
@@ -335,6 +335,46 @@ def copyConfig(config):
     new_config = ConfigParser()
     new_config.read_file(config_data)
     return new_config
+
+
+class PauseableQueue:
+    def __init__(self):
+        self._real_queue = Queue()
+        self._paused_queue = Queue()
+        self._lock = threading.Lock()
+        self._paused = False
+        self._done_count = -1
+
+    def put(self, obj):
+        with self._lock:
+            if self._paused:
+                self._paused_queue.put(obj)
+            else:
+                self._real_queue.put(obj)
+
+    def get(self, *args, **kw):
+        return self._real_queue.get(*args, **kw)
+
+    def pause(self):
+        with self._lock:
+            self._paused = True
+
+    def task_done(self):
+        self._done_count += 1
+        if self._done_count:
+            self._real_queue.task_done()
+
+    def qsize(self):
+        return self._real_queue.qsize()
+
+    def unpause(self):
+        with self._lock:
+            self._paused = False
+            while True:
+                try:
+                    self._real_queue.put(self._paused_queue.get_nowait())
+                except Empty:
+                    break
 
 
 class FakeChangeDB:

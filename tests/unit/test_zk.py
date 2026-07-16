@@ -74,6 +74,7 @@ from tests.base import (
     BaseTestCase,
     HoldableExecutorApi,
     HoldableMergerApi,
+    PauseableQueue,
     iterate_timeout,
     model_version,
     ZOOKEEPER_SESSION_TIMEOUT,
@@ -3567,6 +3568,88 @@ class TestLockableZKObjectCache(ZooKeeperBaseTestCase):
     def test_is_locked_contenders_expandable(self):
         with mock.patch("zuul.zk.sharding.NODE_BYTE_SIZE_LIMIT", 5):
             self._test_is_locked_contenders(DummyLockableExpandable)
+
+    def test_cache_insert_before(self):
+        # Test inserting an object in the cache before the event arrives
+        event = threading.Event()
+
+        cache = LockableZKObjectCache(
+            self.zk_client,
+            event.set,
+            root=DummyLockable.ROOT,
+            items_path=DummyLockable.DUMMY_PATH,
+            locks_path=DummyLockable.LOCKS_PATH,
+            zkobject_class=DummyLockable)
+
+        cache.ensureReady()
+        # Replace the cache event queue
+        old_queue = cache._event_queue
+        cache._event_queue = PauseableQueue()
+        old_queue.put(None)
+
+        # Pause the event queue
+        cache._event_queue.pause()
+
+        # Create our new object (the event should be pending in the queue)
+        ctx = ZKContext(self.zk_client, None, None, self.log)
+        dummy = DummyLockable.new(ctx)
+
+        # Insert the object directly
+        cache.insert(dummy)
+        items = cache.getItems()
+        self.assertEqual(1, len(items))
+        obj = items[0]
+        self.assertIs(dummy, obj)
+
+        # Ensure the cache has not processed any events yet
+        self.assertFalse(event.is_set())
+
+        # Unpause the queue and wait for the cache to process the event
+        cache._event_queue.unpause()
+        event.wait()
+
+        # Check that the object in the cache is what we inserted
+        items = cache.getItems()
+        self.assertEqual(1, len(items))
+        obj = items[0]
+        self.assertIs(dummy, obj)
+
+    def test_cache_insert_after(self):
+        # Test inserting an object in the cache after the event arrives
+        event = threading.Event()
+
+        cache = LockableZKObjectCache(
+            self.zk_client,
+            event.set,
+            root=DummyLockable.ROOT,
+            items_path=DummyLockable.DUMMY_PATH,
+            locks_path=DummyLockable.LOCKS_PATH,
+            zkobject_class=DummyLockable)
+
+        cache.ensureReady()
+
+        # Ensure the cache has not processed any events yet
+        self.assertFalse(event.is_set())
+
+        # Create our new object and wait for it to be added
+        ctx = ZKContext(self.zk_client, None, None, self.log)
+        dummy = DummyLockable.new(ctx)
+        event.wait()
+
+        # Check the cache contents (a separate equivalent object)
+        items = cache.getItems()
+        self.assertEqual(1, len(items))
+        obj = items[0]
+        self.assertIsNot(dummy, obj)
+        self.assertEqual(dummy.uuid, obj.uuid)
+
+        # Insert the object directly
+        inserted_obj = cache.insert(dummy)
+        items = cache.getItems()
+        self.assertEqual(1, len(items))
+        obj = items[0]
+        self.assertIs(inserted_obj, obj)
+        self.assertIsNot(dummy, inserted_obj)
 
 
 class TestRendezvousElection(ZooKeeperBaseTestCase):

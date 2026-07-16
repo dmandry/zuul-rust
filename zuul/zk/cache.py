@@ -511,3 +511,22 @@ class ZuulTreeCache(abc.ABC):
 
         """
         return data
+
+    def insert(self, obj):
+        """Add an object to the cache immediately
+
+        This avoids waiting for a ZK round-trip; the cached object
+        appears immediately.
+
+        :param object obj: The object
+
+        Returns the object in the cache, which may be the supplied
+        object, or a new object if the ZK event arrived already.
+
+        """
+        path = obj.getPath()
+        key, should_fetch, shard_index = self.parsePath(path)
+        cached_obj = self._cached_objects.setdefault(key, obj)
+        if obj is cached_obj:
+            self._cached_paths.add(path)
+        return cached_obj
