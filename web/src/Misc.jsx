@@ -143,11 +143,19 @@ const NODE_STYLES = {
     variant: 'active',
     color: 'var(--zuul-color-active)',
   },
+  registering: {
+    variant: 'active',
+    color: 'var(--zuul-color-active)',
+  },
   ready: {
     variant: 'success',
     color: 'var(--pf-global--success-color--100)',
   },
   failed: {
+    variant: 'danger',
+    color: 'var(--pf-global--danger-color--100)',
+  },
+  rebuilding: {
     variant: 'danger',
     color: 'var(--pf-global--danger-color--100)',
   },
