@@ -76,17 +76,19 @@ class Repo(object):
     def __init__(self, remote, local, email, username, speed_limit, speed_time,
                  sshkey=None, cache_path=None, logger=None, git_timeout=300,
                  zuul_event_id=None, retry_timeout=None, skip_refs=False,
-                 sparse_paths=SparsePaths.EMPTY, workspace_project_path=None):
-        # The default for sparse_paths is that we set the
-        # sparse-checkout to the top dir only; that's the minimal
-        # checkout that we can perform and still do index-based
-        # merges.
+                 sparse_paths=None, workspace_project_path=None):
         if logger is None:
             self.log = logging.getLogger("zuul.Repo")
         else:
             self.log = logger
         log = get_annotated_logger(self.log, zuul_event_id)
         self.skip_refs = skip_refs
+        # The default for sparse_paths is that we set the
+        # sparse-checkout to the top dir only; that's the minimal
+        # checkout that we can perform and still do index-based
+        # merges.
+        if sparse_paths is None:
+            sparse_paths = SparsePaths.EMPTY
         self.sparse_paths = sparse_paths
         self.env = {
             'GIT_HTTP_LOW_SPEED_LIMIT': speed_limit,
