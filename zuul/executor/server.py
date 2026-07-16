@@ -707,6 +707,7 @@ class JobDir(object):
         self.kube_dir = os.path.join(self.root, "kube")
         os.makedirs(self.kube_dir)
         self.kubeconfig = os.path.join(self.kube_dir, "config")
+        self.kubecache = os.path.join(self.work_root, ".kube", "cache")
         # Create ansible cache directory
         self.ansible_cache_root = os.path.join(self.root, '.ansible')
         self.fact_cache = os.path.join(self.ansible_cache_root, 'fact-cache')
@@ -3467,6 +3468,7 @@ class AnsibleJob(object):
                 self.executor_server.log_console_port)
         env_copy['TMP'] = self.jobdir.local_tmp
         env_copy['KUBECONFIG'] = self.jobdir.kubeconfig
+        env_copy['KUBECACHEDIR'] = self.jobdir.kubecache
         env_copy['ZUUL_ANSIBLE_SPLIT_STREAMS'] = str(
             self.ansible_split_streams)
         pythonpath = env_copy.get('PYTHONPATH')
