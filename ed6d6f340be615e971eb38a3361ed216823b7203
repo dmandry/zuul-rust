@@ -22,6 +22,24 @@
       },
       "revId": "ed6d6f340be615e971eb38a3361ed216823b7203",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4e3909f0_d5c033f5",
+        "filename": "zuul/launcher/client.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 71,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-17T14:06:48Z",
+      "side": 1,
+      "message": "I thought about both of those and wrote code to do both, but:\n\n* If we always generate it, then the hash method can be simpler once we are past the upgrade since we can just directly reference .hash_key unconditionally\n  * We would need to use a different method for requests vs nodes, but that\u0027s easy to do\n* If we generate the request uuid, the updates to the NodeRequest initializer seemed a little too intrusive for no real benefit, so I went with this\n\nMore uuids doesn\u0027t bother me, but if you really want to keep it, we can do one of those approaches.",
+      "parentUuid": "74939abc_a600dc9a",
+      "revId": "ed6d6f340be615e971eb38a3361ed216823b7203",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
