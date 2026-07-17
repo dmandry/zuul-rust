@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "74939abc_a600dc9a",
+        "filename": "zuul/launcher/client.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 71,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-17T09:44:47Z",
+      "side": 1,
+      "message": "Could we keep `hash_key\u003dNone` for non-slot labels? I\u0027d rather rely on the already existing request UUID than to create yet another one. Or generate the request UUID in here and re-use it for the `hash_key` here.\n\nIn any case, I\u0027d try to avoid confusion with multiple UUIDs.",
+      "range": {
+        "startLine": 70,
+        "startChar": 0,
+        "endLine": 71,
+        "endChar": 34
+      },
+      "revId": "ed6d6f340be615e971eb38a3361ed216823b7203",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
