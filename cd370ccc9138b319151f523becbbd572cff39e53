@@ -24,6 +24,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "498c073d_dc6d90d8",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1819,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-17T13:56:25Z",
+      "side": 1,
+      "message": "Yep!",
+      "parentUuid": "a5443379_a4fd8dae",
+      "revId": "cd370ccc9138b319151f523becbbd572cff39e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "c6e97aba_04401d3d",
@@ -43,6 +61,24 @@
         "endLine": 1859,
         "endChar": 22
       },
+      "revId": "cd370ccc9138b319151f523becbbd572cff39e53",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2f6e8f44_95165341",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1859,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-17T13:56:25Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "c6e97aba_04401d3d",
       "revId": "cd370ccc9138b319151f523becbbd572cff39e53",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
