@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b10ae178_458dc79a",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 4203,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-07-18T13:37:29Z",
+      "side": 1,
+      "message": "nit, Should use finally block or or addCleanup(cache._event_queue.unpause) for the unpause? If the assert fails the queue stays paused even after ZuulTestCase.shutdown()",
+      "range": {
+        "startLine": 4202,
+        "startChar": 0,
+        "endLine": 4203,
+        "endChar": 36
+      },
+      "revId": "3fa3bae530d816697785a117035a68c85b893042",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
