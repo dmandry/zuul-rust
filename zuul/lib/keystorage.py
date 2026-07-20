@@ -355,7 +355,7 @@ class KeyStorage(ZooKeeperBase):
         self.saveProjectSSHKeys(connection_name, project_name, keydata)
 
     def getTenantSSHKeysPath(self, tenant_name):
-        name = strings.safe_tenant_name(tenant_name)
+        name = strings.safe_name(tenant_name)
         key_path = self.TENANT_SSH_PATH.format(name)
         return key_path
 
