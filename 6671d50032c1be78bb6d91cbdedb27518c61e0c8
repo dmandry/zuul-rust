@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "86dbf513_3c47c2f9",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 710,
+      "author": {
+        "id": 39345
+      },
+      "writtenOn": "2026-07-20T16:13:11Z",
+      "side": 1,
+      "message": "Hey!\nJust wanted to say that I think this will fix a pretty annoying bug, where if I use a k8s connection on the latest executor image (with the preserve-home-paths feature), the kube cache is in said home directory and causes a lot of verbose warnings:\n\n```\nWarning:\nFile .kube/cache/http/aa8d5d64c5abdd27066a17e721d6f900 found in build home directory during playbook gerrit.gung-hook.net/services/zuul-config/playbooks/base/pre.yaml for job services-zuul-smoke-test. Add to preserve-home-paths if safe, or otherwise remove.\nFile .kube/cache/http/d772aef737ee37f27da0354a15665bf6 found in build home directory during playbook gerrit.gung-hook.net/services/zuul-config/playbooks/base/pre.yaml for job services-zuul-smoke-test. Add to preserve-home-paths if safe, or otherwise remove.\n...\n```",
+      "range": {
+        "startLine": 710,
+        "startChar": 8,
+        "endLine": 710,
+        "endChar": 71
+      },
+      "revId": "6671d50032c1be78bb6d91cbdedb27518c61e0c8",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
