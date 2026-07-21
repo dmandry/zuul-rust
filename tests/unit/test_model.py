@@ -15,7 +15,6 @@
 
 
 import configparser
-import os
 import textwrap
 import uuid
 from unittest import mock
@@ -26,11 +25,10 @@ import voluptuous
 
 from zuul import model
 from zuul import configloader
-from zuul.lib import encryption
 from zuul.lib import yamlutil as yaml
 import zuul.lib.connections
 
-from tests.base import BaseTestCase, FIXTURE_DIR
+from tests.base import BaseTestCase
 from zuul.lib.ansible import AnsibleManager
 from zuul.lib import tracing
 from zuul.lib.re2util import ZuulRegex
@@ -90,11 +88,6 @@ class TestJob(BaseTestCase):
         self.pcontext = configloader.ParseContext(
             self.connections, None, None, AnsibleManager())
 
-        private_key_file = os.path.join(FIXTURE_DIR, 'private.pem')
-        with open(private_key_file, "rb") as f:
-            priv, pub = encryption.deserialize_rsa_keypair(f.read())
-            self.project.private_secrets_key = priv
-            self.project.public_secrets_key = pub
         m = yaml.Mark('name', 0, 0, 0, '', 0)
         self.start_mark = model.ZuulMark(m, m, '')
         config = configparser.ConfigParser()
