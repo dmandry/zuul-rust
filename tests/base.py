@@ -2908,6 +2908,13 @@ class ZuulTestCase(BaseTestCase):
         if self.create_project_keys:
             return
 
+        password = self.config.get("keystore", "password")
+        keystore = zuul.lib.keystorage.KeyStorage(
+            self.zk_client, password=password, start_cache=False)
+
+        # This is only needed for the keystore1 -> keystore3 migration
+        COMPONENT_REGISTRY.create(self.zk_client)
+
         path = config.get('scheduler', 'tenant_config')
         with open(os.path.join(FIXTURE_DIR, path)) as f:
             tenant_config = yaml.safe_load(f.read())
@@ -2918,19 +2925,17 @@ class ZuulTestCase(BaseTestCase):
             self.setupTenantKeys(tenant['tenant']['name'])
             for source, conf in sources.items():
                 for project in conf.get('config-projects', []):
-                    self.setupProjectKeys(source, project)
+                    self.setupProjectKeys(keystore, source, project)
                 for project in conf.get('untrusted-projects', []):
-                    self.setupProjectKeys(source, project)
+                    self.setupProjectKeys(keystore, source, project)
+        keystore.stop()
 
-    def setupProjectKeys(self, source, project):
+    def setupProjectKeys(self, keystore, source, project):
         # Make sure we set up an RSA key for the project so that we
         # don't spend time generating one:
         if isinstance(project, dict):
             project = list(project.keys())[0]
 
-        password = self.config.get("keystore", "password")
-        keystore = zuul.lib.keystorage.KeyStorage(
-            self.zk_client, password=password, start_cache=False)
         import_keys = {}
         import_data = {'keys': import_keys}
 
@@ -2944,7 +2949,6 @@ class ZuulTestCase(BaseTestCase):
             import_keys[path] = json.load(i)
 
         keystore.importKeys(import_data, False)
-        keystore.stop()
 
     def setupTenantKeys(self, tenant_name):
         # Make sure we set up an RSA key for the tenant so that we
