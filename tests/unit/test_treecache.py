@@ -15,6 +15,8 @@
 import threading
 import json
 
+import testtools
+
 from zuul.zk import ZooKeeperClient
 from zuul.zk.cache import ZuulTreeCache
 from zuul.zk.components import (
@@ -366,3 +368,46 @@ class TestTreeCache(BaseTestCase):
         self.assertIsNone(obj._zstat)
         self.assertIsNotNone(cached_obj._zstat)
         self.assertIsNot(obj, cached_obj)
+
+    def test_tree_cache_no_auto_reinit(self):
+        client = self.zk_client.client
+        data = b'{}'
+        client.create('/test', data)
+        client.create('/test/foo', data)
+        cache = SimpleTreeCache(self.zk_client, "/test",
+                                auto_reinit=False)
+        self.waitForCache(cache, {
+            '/test/foo': {},
+        })
+        client.create('/test/bar', data)
+        self.waitForCache(cache, {
+            '/test/foo': {},
+            '/test/bar': {},
+        })
+        client.set('/test/bar', b'{"value":1}')
+        self.waitForCache(cache, {
+            '/test/foo': {},
+            '/test/bar': {'value': 1},
+        })
+        client.delete('/test/bar')
+        self.waitForCache(cache, {
+            '/test/foo': {},
+        })
+
+        # Simulate a change happening while the state was lost
+        cache._cached_paths.add('/test/bar')
+        cache._sessionListener(KazooState.LOST)
+        cache._sessionListener(KazooState.CONNECTED)
+        with testtools.ExpectedException(Exception):
+            for _ in iterate_timeout(10, 'cache to sync'):
+                cached_paths = cache._cached_paths.copy()
+                cached_paths.discard(cache.root)
+                if cached_paths == set('/test/foo'):
+                    break
+
+        # But a later update works
+        client.create('/test/bar', b'{"value":2}')
+        self.waitForCache(cache, {
+            '/test/foo': {},
+            '/test/bar': {'value': 2},
+        })
