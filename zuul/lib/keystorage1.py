@@ -13,7 +13,6 @@
 # under the License.
 
 import io
-import itertools
 import json
 import logging
 import time
@@ -86,16 +85,20 @@ class KeyStorage1(ZooKeeperBase):
 
     def exportKeys(self):
         keys = {}
-        for (path, data) in itertools.chain(
-                self._walk('/keystorage'),
-                self._walk('/keystorage2'),
-        ):
-            self.log.info(f"Exported: {path}")
-            keys[path] = data
+        if self.kazoo_client.exists('/keystorage'):
+            for (path, data) in self._walk('/keystorage'):
+                self.log.info(f"Exported: {path}")
+                keys[path] = data
+        if self.kazoo_client.exists('/keystorage2'):
+            for (path, data) in self._walk('/keystorage2'):
+                self.log.info(f"Exported: {path}")
+                keys[path] = data
         return {'keys': keys}
 
     def importKeys(self, import_data, overwrite):
         for path, data in import_data['keys'].items():
+            if path.startswith('/keystorage3/'):
+                continue
             # This includes /keystorage2
             if not path.startswith('/keystorage'):
                 self.log.error(f"Invalid path: {path}")
@@ -116,10 +119,12 @@ class KeyStorage1(ZooKeeperBase):
         key_path = self.SSH_PATH.format(connection_name, prefix, name)
         return key_path
 
-    def getProjectSSHKeyInfo(self, connection_name, project_name):
+    def getProjectSSHKeyInfo(self, connection_name, project_name, create=True):
         """Return the public and private keys"""
         key = self._getProjectSSHKey(connection_name, project_name)
         if key is None:
+            if not create:
+                return None
             self.log.info("Generating a new SSH key for %s/%s",
                           connection_name, project_name)
             key = paramiko.RSAKey.generate(bits=RSA_KEY_SIZE)
@@ -204,10 +209,12 @@ class KeyStorage1(ZooKeeperBase):
         key_path = self.TENANT_SSH_PATH.format(name)
         return key_path
 
-    def getTenantSSHKeyInfo(self, tenant_name):
+    def getTenantSSHKeyInfo(self, tenant_name, create=True):
         """Return the public and private keys"""
         key = self._getTenantSSHKey(tenant_name)
         if key is None:
+            if not create:
+                return None
             self.log.info("Generating a new SSH key for %s",
                           tenant_name)
             key = paramiko.RSAKey.generate(bits=RSA_KEY_SIZE)
@@ -288,10 +295,13 @@ class KeyStorage1(ZooKeeperBase):
         key_path = self.SECRETS_PATH.format(connection_name, prefix, name)
         return key_path
 
-    def getProjectSecretsKeyInfo(self, connection_name, project_name):
+    def getProjectSecretsKeyInfo(self, connection_name, project_name,
+                                 create=True):
         """Return the public and private keys"""
         pem_private_key = self._getSecretsKey(connection_name, project_name)
         if pem_private_key is None:
+            if not create:
+                return None
             self.log.info("Generating a new secrets key for %s/%s",
                           connection_name, project_name)
             private_key, public_key = encryption.generate_rsa_keypair()
