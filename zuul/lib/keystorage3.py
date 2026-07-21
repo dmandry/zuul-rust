@@ -359,6 +359,18 @@ class KeyStorage3(ZooKeeperBase):
                     connection_name, project_name)
         return key
 
+    def copyProjectSSHKeys(self,
+                           src_connection_name,
+                           src_project_name,
+                           dest_connection_name,
+                           dest_project_name):
+        info = self.getProjectSSHKeyInfo(
+            src_connection_name, src_project_name, create=False)
+        with self.createZKContext() as context:
+            self.keystorage_cache.createProjectSSHKeyInfo(
+                context, dest_connection_name, dest_project_name,
+                info.keys)
+
     def deleteProjectSSHKeys(self, connection_name, project_name):
         key = self.keystorage_cache.getProjectSSHKeyInfo(
             connection_name, project_name)
@@ -390,6 +402,14 @@ class KeyStorage3(ZooKeeperBase):
                     tenant_name)
         return key
 
+    def copyTenantSSHKeys(self,
+                          src_tenant_name,
+                          dest_tenant_name):
+        info = self.getTenantSSHKeyInfo(src_tenant_name, create=False)
+        with self.createZKContext() as context:
+            self.keystorage_cache.createTenantSSHKeyInfo(
+                context, dest_tenant_name, info.keys)
+
     def deleteTenantSSHKeys(self, tenant_name):
         key = self.keystorage_cache.getTenantSSHKeyInfo(tenant_name)
         if key is not None:
@@ -420,6 +440,18 @@ class KeyStorage3(ZooKeeperBase):
                 key = self.keystorage_cache.getProjectSecretsKeyInfo(
                     connection_name, project_name)
         return key
+
+    def copyProjectSecretsKeys(self,
+                               src_connection_name,
+                               src_project_name,
+                               dest_connection_name,
+                               dest_project_name):
+        info = self.getProjectSecretsKeyInfo(
+            src_connection_name, src_project_name, create=False)
+        with self.createZKContext() as context:
+            self.keystorage_cache.createProjectSecretsKeyInfo(
+                context, dest_connection_name, dest_project_name,
+                info.keys)
 
     def deleteProjectSecretsKeys(self, connection_name, project_name):
         key = self.keystorage_cache.getProjectSecretsKeyInfo(
