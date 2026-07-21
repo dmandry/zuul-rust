@@ -322,7 +322,6 @@ class KeyStorage3(ZooKeeperBase):
                 if not path.startswith(self.ROOT_PATH):
                     self.log.error(f"Invalid path: {path}")
                     return
-
                 if path.endswith('ssh'):
                     cls = ZuulSSHKeyInfo
                 elif path.endswith('secrets'):
@@ -347,11 +346,14 @@ class KeyStorage3(ZooKeeperBase):
         return KeystorageCache._makeProjectSSHPath(
             self.ROOT_PATH, connection_name, project_name)
 
-    def getProjectSSHKeyInfo(self, connection_name, project_name):
+    def getProjectSSHKeyInfo(self, connection_name, project_name,
+                             create=True):
         self.keystorage_cache.ensureReady()
         key = self.keystorage_cache.getProjectSSHKeyInfo(
             connection_name, project_name)
         if key is None:
+            if not create:
+                return None
             self.log.info("Generating a new SSH key for %s/%s",
                           connection_name, project_name)
             zuul_key = ZuulSSHKey.new(self.password, version=0)
@@ -379,6 +381,15 @@ class KeyStorage3(ZooKeeperBase):
                 context, dest_connection_name, dest_project_name,
                 info.keys)
 
+    def upgradeProjectSSHKeyInfo(self,
+                                 connection_name,
+                                 project_name,
+                                 old_keys):
+        with self.createZKContext() as context:
+            return self.keystorage_cache.createProjectSSHKeyInfo(
+                context, connection_name, project_name,
+                old_keys)
+
     def deleteProjectSSHKeys(self, connection_name, project_name):
         key = self.keystorage_cache.getProjectSSHKeyInfo(
             connection_name, project_name)
@@ -391,10 +402,12 @@ class KeyStorage3(ZooKeeperBase):
         return KeystorageCache._makeTenantSSHPath(
             self.ROOT_PATH, tenant_name)
 
-    def getTenantSSHKeyInfo(self, tenant_name):
+    def getTenantSSHKeyInfo(self, tenant_name, create=True):
         self.keystorage_cache.ensureReady()
         key = self.keystorage_cache.getTenantSSHKeyInfo(tenant_name)
         if key is None:
+            if not create:
+                return None
             self.log.info("Generating a new SSH key for %s",
                           tenant_name)
             zuul_key = ZuulSSHKey.new(self.password, version=0)
@@ -418,6 +431,11 @@ class KeyStorage3(ZooKeeperBase):
             self.keystorage_cache.createTenantSSHKeyInfo(
                 context, dest_tenant_name, info.keys)
 
+    def upgradeTenantSSHKeyInfo(self, tenant_name, old_keys):
+        with self.createZKContext() as context:
+            return self.keystorage_cache.createTenantSSHKeyInfo(
+                context, tenant_name, old_keys)
+
     def deleteTenantSSHKeys(self, tenant_name):
         key = self.keystorage_cache.getTenantSSHKeyInfo(tenant_name)
         if key is not None:
@@ -429,11 +447,14 @@ class KeyStorage3(ZooKeeperBase):
         return KeystorageCache._makeProjectSecretsPath(
             self.ROOT_PATH, connection_name, project_name)
 
-    def getProjectSecretsKeyInfo(self, connection_name, project_name):
+    def getProjectSecretsKeyInfo(self, connection_name, project_name,
+                                 create=True):
         self.keystorage_cache.ensureReady()
         key = self.keystorage_cache.getProjectSecretsKeyInfo(
             connection_name, project_name)
         if key is None:
+            if not create:
+                return None
             self.log.info("Generating a new secrets key for %s/%s",
                           connection_name, project_name)
             zuul_key = ZuulSecretKey.new(self.password_bytes, version=0)
@@ -460,6 +481,15 @@ class KeyStorage3(ZooKeeperBase):
             self.keystorage_cache.createProjectSecretsKeyInfo(
                 context, dest_connection_name, dest_project_name,
                 info.keys)
+
+    def upgradeProjectSecretsKeyInfo(self,
+                                     connection_name,
+                                     project_name,
+                                     old_keys):
+        with self.createZKContext() as context:
+            return self.keystorage_cache.createProjectSecretsKeyInfo(
+                context, connection_name, project_name,
+                old_keys)
 
     def deleteProjectSecretsKeys(self, connection_name, project_name):
         key = self.keystorage_cache.getProjectSecretsKeyInfo(

@@ -258,7 +258,7 @@ class TestKeyOperations(ZuulTestCase):
             self.config.write(f)
 
         # Save a copy of the keys in ZK
-        old_data = self.getZKTree('/keystorage')
+        old_data = self.getZKTree('/keystorage3')
 
         # Export keys
         p = subprocess.Popen(
@@ -271,11 +271,11 @@ class TestKeyOperations(ZuulTestCase):
         self.assertEqual(p.returncode, 0)
 
         # Delete keys from ZK
-        self.zk_client.client.delete('/keystorage', recursive=True)
+        self.zk_client.client.delete('/keystorage3', recursive=True)
 
         # Make sure it's really gone
         with testtools.ExpectedException(NoNodeError):
-            self.getZKTree('/keystorage')
+            self.getZKTree('/keystorage3')
 
         # Import keys
         p = subprocess.Popen(
@@ -288,7 +288,7 @@ class TestKeyOperations(ZuulTestCase):
         self.assertEqual(p.returncode, 0)
 
         # Make sure the new data matches the original
-        new_data = self.getZKTree('/keystorage')
+        new_data = self.getZKTree('/keystorage3')
         self.assertEqual(new_data, old_data)
 
     def test_copy_delete(self):
@@ -308,13 +308,17 @@ class TestKeyOperations(ZuulTestCase):
         self.log.debug(out.decode('utf8'))
         self.assertEqual(p.returncode, 0)
 
-        data = self.getZKTree('/keystorage')
+        data = self.getZKTree('/keystorage3')
         self.assertEqual(
-            data['/keystorage/gerrit/org/org%2Fproject/secrets'],
-            data['/keystorage/gerrit/neworg/neworg%2Fnewproject/secrets'])
+            data['/keystorage3/connection/gerrit/project'
+                 '/org%2Fproject/secrets'],
+            data['/keystorage3/connection/gerrit/project'
+                 '/neworg%2Fnewproject/secrets'])
         self.assertEqual(
-            data['/keystorage/gerrit/org/org%2Fproject/ssh'],
-            data['/keystorage/gerrit/neworg/neworg%2Fnewproject/ssh'])
+            data['/keystorage3/connection/gerrit/project'
+                 '/org%2Fproject/ssh'],
+            data['/keystorage3/connection/gerrit/project'
+                 '/neworg%2Fnewproject/ssh'])
 
         p = subprocess.Popen(
             [os.path.join(sys.prefix, 'bin/zuul-admin'),
@@ -327,21 +331,21 @@ class TestKeyOperations(ZuulTestCase):
         self.log.debug(out.decode('utf8'))
         self.assertEqual(p.returncode, 0)
 
-        data = self.getZKTree('/keystorage')
+        data = self.getZKTree('/keystorage3')
         self.assertIsNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject/secrets'))
+            data.get('/keystorage3/connection/gerrit/project'
+                     '/org%2Fproject/secrets'))
         self.assertIsNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject/ssh'))
+            data.get('/keystorage3/connection/gerrit/project'
+                     '/org%2Fproject/ssh'))
         self.assertIsNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject'))
+            data.get('/keystorage3/connection/gerrit/project/org%2Fproject'))
         # Ensure that deleting one project in a tree doesn't remove other
         # projects in that tree.
         self.assertIsNotNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject1'))
+            data.get('/keystorage3/connection/gerrit/project/org%2Fproject1'))
         self.assertIsNotNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject2'))
-        self.assertIsNotNone(
-            data.get('/keystorage/gerrit/org'))
+            data.get('/keystorage3/connection/gerrit/project/org%2Fproject2'))
 
         p = subprocess.Popen(
             [os.path.join(sys.prefix, 'bin/zuul-admin'),
@@ -365,15 +369,11 @@ class TestKeyOperations(ZuulTestCase):
         self.log.debug(out.decode('utf8'))
         self.assertEqual(p.returncode, 0)
 
-        data = self.getZKTree('/keystorage')
-        # Ensure that the last project being removed also removes its
-        # org prefix entry.
+        data = self.getZKTree('/keystorage3')
         self.assertIsNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject1'))
+            data.get('/keystorage3/connection/gerrit/project/org%2Fproject1'))
         self.assertIsNone(
-            data.get('/keystorage/gerrit/org/org%2Fproject2'))
-        self.assertIsNone(
-            data.get('/keystorage/gerrit/org'))
+            data.get('/keystorage3/connection/gerrit/project/org%2Fproject2'))
 
 
 class TestOIDCSigningKeyOperation(ZuulTestCase):
@@ -452,7 +452,7 @@ class TestOfflineZKOperations(ZuulTestCase):
             self.config.write(f)
 
         # Save a copy of the keys in ZK
-        old_data = self.getZKTree('/keystorage')
+        old_data = self.getZKTree('/keystorage3')
 
         p = subprocess.Popen(
             [os.path.join(sys.prefix, 'bin/zuul-admin'),
@@ -465,7 +465,7 @@ class TestOfflineZKOperations(ZuulTestCase):
         self.log.debug(out.decode('utf8'))
 
         # Make sure the keys are still around
-        new_data = self.getZKTree('/keystorage')
+        new_data = self.getZKTree('/keystorage3')
         self.assertEqual(new_data, old_data)
 
         # Make sure we really deleted everything
@@ -489,7 +489,7 @@ class TestOfflineZKOperations(ZuulTestCase):
             self.config.write(f)
 
         # Save a copy of the things we keep in ZK
-        old_keys = self.getZKTree('/keystorage')
+        old_keys = self.getZKTree('/keystorage3')
         old_config = self.getZKTree('/zuul/config')
 
         p = subprocess.Popen(
@@ -503,7 +503,7 @@ class TestOfflineZKOperations(ZuulTestCase):
         self.log.debug(out.decode('utf8'))
 
         # Make sure the keys are still around
-        new_keys = self.getZKTree('/keystorage')
+        new_keys = self.getZKTree('/keystorage3')
         self.assertEqual(new_keys, old_keys)
         new_config = self.getZKTree('/zuul/config')
         self.assertEqual(new_config, old_config)
