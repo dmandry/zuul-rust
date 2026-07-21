@@ -74,6 +74,9 @@ class TestKeyStorage3(BaseTestCase):
         # Make sure it's encrypted with the password
         with io.StringIO(pk) as o:
             paramiko.RSAKey.from_private_key(o, self.password)
+        # Ensure the key info returns the right keys
+        self.assertEqual(key1.public_key, info.public_key)
+        self.assertEqual([key1.private_key], info.private_keys)
 
         # Make sure we get the same object if we look it up again
         info2 = ks.getProjectSSHKeyInfo('gerrit', 'org/project')
@@ -111,6 +114,9 @@ class TestKeyStorage3(BaseTestCase):
         # Make sure it's encrypted with the password
         with io.StringIO(pk) as o:
             paramiko.RSAKey.from_private_key(o, self.password)
+        # Ensure the key info returns the right keys
+        self.assertEqual(key1.public_key, info.public_key)
+        self.assertEqual([key1.private_key], info.private_keys)
 
         # Make sure we get the same object if we look it up again
         info2 = ks.getTenantSSHKeyInfo('tenant1')
@@ -148,6 +154,9 @@ class TestKeyStorage3(BaseTestCase):
         # Make sure it's encrypted with the password
         encryption.deserialize_rsa_keypair(pk.encode('utf8'),
                                            self.password.encode('utf8'))
+        # Ensure the key info returns the right keys
+        self.assertEqual(key1.public_key, info.public_key)
+        self.assertEqual([key1.private_key], info.private_keys)
 
         # Make sure we get the same object if we look it up again
         info2 = ks.getProjectSecretsKeyInfo('gerrit', 'org/project')
