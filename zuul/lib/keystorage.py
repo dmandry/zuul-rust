@@ -54,8 +54,8 @@ class KeyStorage:
         return self.keystorage1.getProjectSSHKeysPath(
             connection_name, project_name)
 
-    def getProjectSSHKeys(self, connection_name, project_name):
-        return self.keystorage1.getProjectSSHKeys(
+    def getProjectSSHKeyInfo(self, connection_name, project_name):
+        return self.keystorage1.getProjectSSHKeyInfo(
             connection_name, project_name)
 
     def copyProjectSSHKeys(self,
@@ -76,8 +76,8 @@ class KeyStorage:
     def getTenantSSHKeysPath(self, tenant_name):
         return self.keystorage1.getTenantSSHKeysPath(tenant_name)
 
-    def getTenantSSHKeys(self, tenant_name):
-        return self.keystorage1.getTenantSSHKeys(tenant_name)
+    def getTenantSSHKeyInfo(self, tenant_name):
+        return self.keystorage1.getTenantSSHKeyInfo(tenant_name)
 
     def copyTenantSSHKeys(self,
                           src_tenant_name,
@@ -93,8 +93,8 @@ class KeyStorage:
         return self.keystorage1.getProjectSecretsKeysPath(
             connection_name, project_name)
 
-    def getProjectSecretsKeys(self, connection_name, project_name):
-        return self.keystorage1.getProjectSecretsKeys(
+    def getProjectSecretsKeyInfo(self, connection_name, project_name):
+        return self.keystorage1.getProjectSecretsKeyInfo(
             connection_name, project_name)
 
     def copyProjectSecretsKeys(self,
