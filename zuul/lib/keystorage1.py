@@ -30,6 +30,20 @@ from zuul.zk.zkobject import ZKContext
 RSA_KEY_SIZE = 2048
 
 
+class ZuulKeyInfo:
+    def __init__(self, private_key, public_key):
+        self._private_key = private_key
+        self._public_key = public_key
+
+    @property
+    def public_key(self):
+        return self._public_key
+
+    @property
+    def private_keys(self):
+        return [self._private_key]
+
+
 class KeyStorage1(ZooKeeperBase):
     log = logging.getLogger("zuul.KeyStorage")
     # /keystorage/connection/orgname
@@ -46,10 +60,10 @@ class KeyStorage1(ZooKeeperBase):
         self.password = password
         self.password_bytes = password.encode("utf-8")
 
-        self.getProjectSSHKeys = cachetools.func.lru_cache(maxsize=None)(
-            self.getProjectSSHKeys)
-        self.getProjectSecretsKeys = cachetools.func.lru_cache(maxsize=None)(
-            self.getProjectSecretsKeys)
+        self.getProjectSSHKeyInfo = cachetools.func.lru_cache(maxsize=None)(
+            self.getProjectSSHKeyInfo)
+        self.getProjectSecretsKeyInfo = cachetools.func.lru_cache(
+            maxsize=None)(self.getProjectSecretsKeyInfo)
 
     def createZKContext(self):
         return ZKContext(self.client, None, None, self.log)
@@ -102,7 +116,7 @@ class KeyStorage1(ZooKeeperBase):
         key_path = self.SSH_PATH.format(connection_name, prefix, name)
         return key_path
 
-    def getProjectSSHKeys(self, connection_name, project_name):
+    def getProjectSSHKeyInfo(self, connection_name, project_name):
         """Return the public and private keys"""
         key = self._getProjectSSHKey(connection_name, project_name)
         if key is None:
@@ -125,7 +139,7 @@ class KeyStorage1(ZooKeeperBase):
             private_key = o.getvalue()
         public_key = "ssh-rsa {}".format(key.get_base64())
 
-        return private_key, public_key
+        return ZuulKeyInfo(private_key, public_key)
 
     def loadProjectSSHKeys(self, connection_name, project_name):
         """Return the complete internal data structure"""
@@ -190,7 +204,7 @@ class KeyStorage1(ZooKeeperBase):
         key_path = self.TENANT_SSH_PATH.format(name)
         return key_path
 
-    def getTenantSSHKeys(self, tenant_name):
+    def getTenantSSHKeyInfo(self, tenant_name):
         """Return the public and private keys"""
         key = self._getTenantSSHKey(tenant_name)
         if key is None:
@@ -213,7 +227,7 @@ class KeyStorage1(ZooKeeperBase):
             private_key = o.getvalue()
         public_key = "ssh-rsa {}".format(key.get_base64())
 
-        return private_key, public_key
+        return ZuulKeyInfo(private_key, public_key)
 
     def loadTenantSSHKeys(self, tenant_name):
         """Return the complete internal data structure"""
@@ -274,7 +288,7 @@ class KeyStorage1(ZooKeeperBase):
         key_path = self.SECRETS_PATH.format(connection_name, prefix, name)
         return key_path
 
-    def getProjectSecretsKeys(self, connection_name, project_name):
+    def getProjectSecretsKeyInfo(self, connection_name, project_name):
         """Return the public and private keys"""
         pem_private_key = self._getSecretsKey(connection_name, project_name)
         if pem_private_key is None:
@@ -299,7 +313,7 @@ class KeyStorage1(ZooKeeperBase):
         private_key, public_key = encryption.deserialize_rsa_keypair(
             pem_private_key, self.password_bytes)
 
-        return private_key, public_key
+        return ZuulKeyInfo(private_key, public_key)
 
     def loadProjectSecretsKeys(self, connection_name, project_name):
         """Return the complete internal data structure"""
