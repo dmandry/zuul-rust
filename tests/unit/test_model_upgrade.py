@@ -15,6 +15,8 @@
 import json
 import os
 
+import kazoo.exceptions
+
 from zuul.zk.components import (
     ComponentRegistry,
 )
@@ -26,6 +28,7 @@ from tests.base import (
     model_version,
     FIXTURE_DIR,
 )
+import testtools
 from zuul import model
 from zuul.zk.locks import management_queue_lock
 
@@ -474,3 +477,80 @@ class TestOidcSecretSupport(ZuulTestCase):
         self.assertHistory([
             dict(name='project2-secret', result='SUCCESS', changes='1,1'),
         ])
+
+
+class TestModel38Upgrade(ZuulTestCase):
+    tenant_config_file = "config/single-tenant/main-model-upgrade.yaml"
+    scheduler_count = 1
+    create_project_keys = True
+
+    @model_version(37)
+    @simple_layout('layouts/simple.yaml')
+    def test_model_upgrade_37_38(self):
+        component_registry = ComponentRegistry(self.zk_client)
+        keystore = self.scheds.first.sched.keystore
+        client = self.zk_client.client
+        # Get the secret through the api
+        old_secrets_key_info = keystore.getProjectSecretsKeyInfo(
+            "gerrit", "org/project")
+        old_ssh_key_info = keystore.getProjectSSHKeyInfo(
+            "gerrit", "org/project")
+        old_tenant_ssh_key_info = keystore.getTenantSSHKeyInfo(
+            "tenant-one")
+        # Read the secret from old zk to assert it exists
+        client.get('/keystorage/gerrit/org/org%2Fproject/secrets')
+        client.get('/keystorage/gerrit/org/org%2Fproject/ssh')
+        client.get('/keystorage2/tenant/tenant-one/ssh')
+        # Read the secret from new zk to assert it does not exist
+        # make sure it's not there
+        with testtools.ExpectedException(kazoo.exceptions.NoNodeError):
+            client.get('/keystorage3/connection/gerrit/project/'
+                       'org%2Fproject/secrets')
+        with testtools.ExpectedException(kazoo.exceptions.NoNodeError):
+            client.get('/keystorage3/connection/gerrit/project/'
+                       'org%2Fproject/ssh')
+        with testtools.ExpectedException(kazoo.exceptions.NoNodeError):
+            client.get('/keystorage3/tenant/tenant-one/ssh')
+        # Upgrade our component
+        self.model_test_component_info.model_api = 38
+
+        for _ in iterate_timeout(30, "model api to update"):
+            if component_registry.model_api == 38:
+                break
+
+        # Get the secret through the api
+        new_secrets_key_info = keystore.getProjectSecretsKeyInfo(
+            "gerrit", "org/project")
+        new_ssh_key_info = keystore.getProjectSSHKeyInfo(
+            "gerrit", "org/project")
+        new_tenant_ssh_key_info = keystore.getTenantSSHKeyInfo(
+            "tenant-one")
+
+        # Read the secret from new zk to assert it exists
+        client.get('/keystorage3/connection/gerrit/project/'
+                   'org%2Fproject/secrets')
+        client.get('/keystorage3/connection/gerrit/project/'
+                   'org%2Fproject/ssh')
+        client.get('/keystorage3/tenant/tenant-one/ssh')
+
+        # Make sure old and new are the same
+        self.assertEqual(
+            old_secrets_key_info.public_key.public_numbers(),
+            new_secrets_key_info.public_key.public_numbers())
+        self.assertEqual(
+            old_secrets_key_info.private_keys[0].private_numbers(),
+            new_secrets_key_info.private_keys[0].private_numbers())
+
+        self.assertEqual(
+            old_ssh_key_info.public_key,
+            new_ssh_key_info.public_key)
+        self.assertEqual(
+            old_ssh_key_info.private_keys[0],
+            new_ssh_key_info.private_keys[0])
+
+        self.assertEqual(
+            old_tenant_ssh_key_info.public_key,
+            new_tenant_ssh_key_info.public_key)
+        self.assertEqual(
+            old_tenant_ssh_key_info.private_keys[0],
+            new_tenant_ssh_key_info.private_keys[0])

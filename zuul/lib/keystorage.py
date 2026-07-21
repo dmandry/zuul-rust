@@ -1,5 +1,6 @@
 # Copyright 2018 Red Hat, Inc.
 # Copyright 2025 BMW Group
+# Copyright 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -17,7 +18,9 @@ import logging
 
 from zuul.lib import encryption
 from zuul.lib.keystorage1 import KeyStorage1
+from zuul.lib.keystorage3 import KeyStorage3, ZuulSecretKey, ZuulSSHKey
 from zuul.lib.keystorage_oidc import OIDCSigningKeysCache, OIDCSigningKeys
+from zuul.zk.components import COMPONENT_REGISTRY
 from zuul.zk.zkobject import ZKContext
 
 RSA_KEY_SIZE = 2048
@@ -31,10 +34,19 @@ class KeyStorage:
         self.password_bytes = password.encode('utf8')
         self.client = zookeeper_client
         self.keystorage1 = KeyStorage1(zookeeper_client, password)
+        self.keystorage3 = KeyStorage3(zookeeper_client, password)
         if start_cache:
             self.oidc_signing_keys_cache = OIDCSigningKeysCache(self.client)
         else:
             self.oidc_signing_keys_cache = None
+
+    @property
+    def _keystorage(self):
+        # TODO: When we remove this backwards compat code, we
+        # should add a migration to rmtree the old cache.
+        if COMPONENT_REGISTRY.model_api < 38:
+            return self.keystorage1
+        return self.keystorage3
 
     def createZKContext(self):
         return ZKContext(self.client, None, None, self.log)
@@ -43,77 +55,120 @@ class KeyStorage:
         if self.oidc_signing_keys_cache:
             self.oidc_signing_keys_cache.stop()
         self.keystorage1.stop()
+        self.keystorage3.stop()
 
     def exportKeys(self):
-        return self.keystorage1.exportKeys()
+        data = self.keystorage1.exportKeys()
+        data3 = self.keystorage3.exportKeys()
+        data['keys'].update(data3['keys'])
+        return data
 
     def importKeys(self, import_data, overwrite):
         self.keystorage1.importKeys(import_data, overwrite)
+        self.keystorage3.importKeys(import_data, overwrite)
 
     def getProjectSSHKeysPath(self, connection_name, project_name):
-        return self.keystorage1.getProjectSSHKeysPath(
+        return self._keystorage.getProjectSSHKeysPath(
             connection_name, project_name)
 
     def getProjectSSHKeyInfo(self, connection_name, project_name):
-        return self.keystorage1.getProjectSSHKeyInfo(
+        if COMPONENT_REGISTRY.model_api < 38:
+            return self._keystorage.getProjectSSHKeyInfo(
+                connection_name, project_name)
+        info = self.keystorage3.getProjectSSHKeyInfo(
+            connection_name, project_name, create=False)
+        if info is not None:
+            return info
+        old_data = self.keystorage1.loadProjectSSHKeys(
             connection_name, project_name)
+        if old_data is None:
+            return self.keystorage3.getProjectSSHKeyInfo(
+                connection_name, project_name)
+        keys = [ZuulSSHKey.fromDict(k, self.password)
+                for k in old_data['keys']]
+        return self.keystorage3.upgradeProjectSSHKeyInfo(
+            connection_name, project_name, keys)
 
     def copyProjectSSHKeys(self,
                            src_connection_name,
                            src_project_name,
                            dest_connection_name,
                            dest_project_name):
-        return self.keystorage1.copyProjectSSHKeys(
+        return self._keystorage.copyProjectSSHKeys(
             src_connection_name,
             src_project_name,
             dest_connection_name,
             dest_project_name)
 
     def deleteProjectSSHKeys(self, connection_name, project_name):
-        return self.keystorage1.deleteProjectSSHKeys(
+        return self._keystorage.deleteProjectSSHKeys(
             connection_name, project_name)
 
     def getTenantSSHKeysPath(self, tenant_name):
-        return self.keystorage1.getTenantSSHKeysPath(tenant_name)
+        return self._keystorage.getTenantSSHKeysPath(tenant_name)
 
     def getTenantSSHKeyInfo(self, tenant_name):
-        return self.keystorage1.getTenantSSHKeyInfo(tenant_name)
+        if COMPONENT_REGISTRY.model_api < 38:
+            return self._keystorage.getTenantSSHKeyInfo(tenant_name)
+        info = self.keystorage3.getTenantSSHKeyInfo(tenant_name, create=False)
+        if info is not None:
+            return info
+        old_data = self.keystorage1.loadTenantSSHKeys(tenant_name)
+        if old_data is None:
+            return self.keystorage3.getTenantSSHKeyInfo(tenant_name)
+        keys = [ZuulSSHKey.fromDict(k, self.password)
+                for k in old_data['keys']]
+        return self.keystorage3.upgradeTenantSSHKeyInfo(tenant_name, keys)
 
     def copyTenantSSHKeys(self,
                           src_tenant_name,
                           dest_tenant_name):
-        return self.keystorage1.copyTenantSSHKeys(
+        return self._keystorage.copyTenantSSHKeys(
             src_tenant_name,
             dest_tenant_name)
 
     def deleteTenantSSHKeys(self, tenant_name):
-        return self.keystorage1.deleteTenantSSHKeys(tenant_name)
+        return self._keystorage.deleteTenantSSHKeys(tenant_name)
 
     def getProjectSecretsKeysPath(self, connection_name, project_name):
-        return self.keystorage1.getProjectSecretsKeysPath(
+        return self._keystorage.getProjectSecretsKeysPath(
             connection_name, project_name)
 
     def getProjectSecretsKeyInfo(self, connection_name, project_name):
-        return self.keystorage1.getProjectSecretsKeyInfo(
+        if COMPONENT_REGISTRY.model_api < 38:
+            return self._keystorage.getProjectSecretsKeyInfo(
+                connection_name, project_name)
+        info = self.keystorage3.getProjectSecretsKeyInfo(
+            connection_name, project_name, create=False)
+        if info is not None:
+            return info
+        old_data = self.keystorage1.loadProjectSecretsKeys(
             connection_name, project_name)
+        if old_data is None:
+            return self.keystorage3.getProjectSecretsKeyInfo(
+                connection_name, project_name)
+        keys = [ZuulSecretKey.fromDict(k, self.password_bytes)
+                for k in old_data['keys']]
+        return self.keystorage3.upgradeProjectSecretsKeyInfo(
+            connection_name, project_name, keys)
 
     def copyProjectSecretsKeys(self,
                                src_connection_name,
                                src_project_name,
                                dest_connection_name,
                                dest_project_name):
-        return self.keystorage1.copyProjectSecretsKeys(
+        return self._keystorage.copyProjectSecretsKeys(
             src_connection_name,
             src_project_name,
             dest_connection_name,
             dest_project_name)
 
     def deleteProjectSecretsKeys(self, connection_name, project_name):
-        return self.keystorage1.deleteProjectSecretsKeys(
+        return self._keystorage.deleteProjectSecretsKeys(
             connection_name, project_name)
 
     def deleteProjectDir(self, connection_name, project_name):
-        return self.keystorage1.deleteProjectDir(
+        return self._keystorage.deleteProjectDir(
             connection_name, project_name)
 
     def rotateOidcSigningKeys(self, algorithm, rotation_interval, max_ttl):
