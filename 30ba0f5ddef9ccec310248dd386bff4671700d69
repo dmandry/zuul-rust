@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bdd4fd80_dc391c8b",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 11481,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-07-21T14:50:27Z",
+      "side": 1,
+      "message": "note to reviewers, this is where the traceback happens",
+      "range": {
+        "startLine": 11481,
+        "startChar": 8,
+        "endLine": 11481,
+        "endChar": 36
+      },
+      "revId": "30ba0f5ddef9ccec310248dd386bff4671700d69",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
