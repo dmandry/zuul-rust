@@ -5570,7 +5570,7 @@ class TestProjectKeys(ZuulTestCase):
 
         with io.StringIO(private_ssh_key) as o:
             ssh_key = paramiko.RSAKey.from_private_key(
-                o, password=keystore.password)
+                o, password=keystore.keystorage1.password)
 
         # Make sure it's the right length
         self.assertEqual(2048, ssh_key.get_bits())
