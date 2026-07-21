@@ -3319,7 +3319,12 @@ class TenantParser(object):
         # sets the default branch, merge mode, etc; and that should be
         # an explicit project if it exists.
         for regex, parsed_projects in parsed_config.projects_by_regex.items():
-            projects_matching_regex = tenant.getProjectsByRegex(regex)
+            # In case of a regex compile error, we only report the first
+            # stanza that is broken.
+            with parse_context.errorContext(stanza='project',
+                                            conf=parsed_projects[0]):
+                with parse_context.accumulator.catchErrors():
+                    projects_matching_regex = tenant.getProjectsByRegex(regex)
 
             for trusted, project in projects_matching_regex:
                 for parsed_project in parsed_projects:
