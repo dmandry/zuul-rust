@@ -169,7 +169,7 @@ class KeystorageCache(ZuulTreeCache):
     def __init__(self, *args, **kw):
         self.password = kw.pop('password')
         self.password_bytes = self.password.encode('utf8')
-        super().__init__(*args, **kw)
+        super().__init__(*args, **kw, auto_reinit=False)
 
     def objectFromRaw(self, key, data, zstat):
         extra = dict(password=self.password,

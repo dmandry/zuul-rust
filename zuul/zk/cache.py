@@ -50,7 +50,8 @@ class ZuulTreeCache(abc.ABC):
     event_log = logging.getLogger("zuul.zk.cache.event")
     qsize_warning_threshold = 1024
 
-    def __init__(self, zk_client, root, async_worker=True):
+    def __init__(self, zk_client, root, async_worker=True,
+                 auto_reinit=True):
         """Use watchers to keep a cache of local objects up to date.
 
         Typically this is used with async worker threads so that we
@@ -65,7 +66,8 @@ class ZuulTreeCache(abc.ABC):
         :param ZookeeperClient zk_client: The Zuul ZookeeperClient object
         :param str root: The root of the cache
         :param bool async_worker: Whether to start async worker threads
-
+        :param bool auto_reinit: On reconnection, walk the cache again
+            (setting this to False could lose events)
         """
         self.zk_client = zk_client
         self.client = zk_client.client
@@ -84,10 +86,14 @@ class ZuulTreeCache(abc.ABC):
         self._event_worker = None
         self._playback_worker = None
         self._async_worker = async_worker
+        self._auto_reinit = auto_reinit
         self._zk_context = ZKContext(self.zk_client, None, None, self.log)
         # The maximum zxid seen for any object creations or
         # modifications.  This is not updated on delete transactions.
         self._max_zxid = WatchedEvent.NO_ZXID
+        # Whether we have completed the first initialization (not
+        # reset on reconnects).
+        self._initialized = False
 
         self.client.add_listener(self._sessionListener)
         self._start()
@@ -163,7 +169,8 @@ class ZuulTreeCache(abc.ABC):
                     self.root, self._cacheListener,
                     AddWatchMode.PERSISTENT_RECURSIVE)
                 self.client.ensure_path(self.root)
-                self._walkTree()
+                if self._auto_reinit or not self._initialized:
+                    self._walkTree()
                 # Transfer sentinel events
                 for (old_queue, new_queue) in [
                         (old_event_queue, self._event_queue),
@@ -179,6 +186,7 @@ class ZuulTreeCache(abc.ABC):
                             break
                 self.waitForSync()
                 self._ready.set()
+                self._initialized = True
                 self.log.debug("Cache at %s is ready", self.root)
             except Exception:
                 self.log.exception("Error initializing cache at %s", self.root)
