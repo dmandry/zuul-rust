@@ -321,6 +321,16 @@ class KeyStorage(ZooKeeperBase):
         data = json.dumps(keydata, sort_keys=True).encode("utf-8")
         self.kazoo_client.create(key_path, value=data, makepath=True)
 
+    def copyProjectSSHKeys(self,
+                           src_connection_name,
+                           src_project_name,
+                           dest_connection_name,
+                           dest_project_name):
+        secrets = self.loadProjectSSHKeys(src_connection_name,
+                                          src_project_name)
+        self.saveProjectSSHKeys(dest_connection_name,
+                                dest_project_name, secrets)
+
     def deleteProjectSSHKeys(self, connection_name, project_name):
         """Delete the complete internal data structure"""
         key_path = self.getProjectSSHKeysPath(connection_name, project_name)
@@ -399,6 +409,12 @@ class KeyStorage(ZooKeeperBase):
         data = json.dumps(keydata, sort_keys=True).encode("utf-8")
         self.kazoo_client.create(key_path, value=data, makepath=True)
 
+    def copyTenantSSHKeys(self,
+                          src_tenant_name,
+                          dest_tenant_name):
+        secrets = self.loadTenantSSHKeys(src_tenant_name)
+        self.saveTenantSSHKeys(dest_tenant_name, secrets)
+
     def deleteTenantSSHKeys(self, tenant_name):
         """Delete the complete internal data structure"""
         key_path = self.getTenantSSHKeysPath(tenant_name)
@@ -464,7 +480,7 @@ class KeyStorage(ZooKeeperBase):
 
         return private_key, public_key
 
-    def loadProjectsSecretsKeys(self, connection_name, project_name):
+    def loadProjectSecretsKeys(self, connection_name, project_name):
         """Return the complete internal data structure"""
         key_path = self.getProjectSecretsKeysPath(
             connection_name, project_name)
@@ -474,14 +490,24 @@ class KeyStorage(ZooKeeperBase):
         except kazoo.exceptions.NoNodeError:
             return None
 
-    def saveProjectsSecretsKeys(self, connection_name, project_name, keydata):
+    def saveProjectSecretsKeys(self, connection_name, project_name, keydata):
         """Store the complete internal data structure"""
         key_path = self.getProjectSecretsKeysPath(
             connection_name, project_name)
         data = json.dumps(keydata, sort_keys=True).encode("utf-8")
         self.kazoo_client.create(key_path, value=data, makepath=True)
 
-    def deleteProjectsSecretsKeys(self, connection_name, project_name):
+    def copyProjectSecretsKeys(self,
+                               src_connection_name,
+                               src_project_name,
+                               dest_connection_name,
+                               dest_project_name):
+        secrets = self.loadProjectSecretsKeys(src_connection_name,
+                                              src_project_name)
+        self.saveProjectSecretsKeys(dest_connection_name,
+                                    dest_project_name, secrets)
+
+    def deleteProjectSecretsKeys(self, connection_name, project_name):
         """Delete the complete internal data structure"""
         key_path = self.getProjectSecretsKeysPath(
             connection_name, project_name)
@@ -490,7 +516,7 @@ class KeyStorage(ZooKeeperBase):
 
     def _getSecretsKey(self, connection_name, project_name):
         """Load and return the private key"""
-        keydata = self.loadProjectsSecretsKeys(
+        keydata = self.loadProjectSecretsKeys(
             connection_name, project_name)
         if keydata is None:
             return None
@@ -509,7 +535,7 @@ class KeyStorage(ZooKeeperBase):
             'schema': 1,
             'keys': keys
         }
-        self.saveProjectsSecretsKeys(connection_name, project_name, keydata)
+        self.saveProjectSecretsKeys(connection_name, project_name, keydata)
 
     def deleteProjectDir(self, connection_name, project_name):
         prefix, name = strings.unique_project_name(project_name)
