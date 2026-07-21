@@ -2393,20 +2393,15 @@ class TenantParser(object):
             tpc.project, tenant, min_ltime)
 
     def _loadProjectKeys(self, connection_name, project):
-        project.private_secrets_key, project.public_secrets_key = (
-            self.keystorage.getProjectSecretsKeys(
-                connection_name, project.name
-            )
+        project.secrets_key_info = self.keystorage.getProjectSecretsKeyInfo(
+            connection_name, project.name
         )
-
-        project.private_ssh_key, project.public_ssh_key = (
-            self.keystorage.getProjectSSHKeys(connection_name, project.name)
+        project.ssh_key_info = self.keystorage.getProjectSSHKeyInfo(
+            connection_name, project.name
         )
 
     def _loadTenantKeys(self, tenant):
-        tenant.private_ssh_key, tenant.public_ssh_key = (
-            self.keystorage.getTenantSSHKeys(tenant.name)
-        )
+        tenant.ssh_key_info = self.keystorage.getTenantSSHKeyInfo(tenant.name)
 
     @staticmethod
     def _getProject(source, conf, current_include):

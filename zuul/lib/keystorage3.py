@@ -134,6 +134,14 @@ class ZuulKeyInfo(ZKObject):
     def serialize(self, context):
         return json.dumps(self.toDict(), sort_keys=True).encode("utf8")
 
+    @property
+    def public_key(self):
+        return self.keys[-1].public_key
+
+    @property
+    def private_keys(self):
+        return [k.private_key for k in self.keys]
+
 
 class ZuulSSHKeyInfo(ZuulKeyInfo):
     def deserialize(self, data, context, extra=None):

@@ -1294,17 +1294,18 @@ class AnsibleJob(object):
             self.ssh_agent.add(self.private_key_file)
             for key in self.arguments.get('ssh_keys', []):
                 if 'tenant_name' in key:
-                    private_ssh_key, public_ssh_key = \
-                        self.executor_server.keystore.getTenantSSHKeys(
+                    ssh_key_info = \
+                        self.executor_server.keystore.getTenantSSHKeyInfo(
                             key['tenant_name'])
                     name = '%s tenant key' % (key['tenant_name'])
                 else:
-                    private_ssh_key, public_ssh_key = \
-                        self.executor_server.keystore.getProjectSSHKeys(
+                    ssh_key_info = \
+                        self.executor_server.keystore.getProjectSSHKeyInfo(
                             key['connection_name'],
                             key['project_name'])
                     name = '%s project key' % (key['project_name'])
-                self.ssh_agent.addData(name, private_ssh_key)
+                for private_ssh_key in ssh_key_info.private_keys:
+                    self.ssh_agent.addData(name, private_ssh_key)
             self.jobdir = JobDir(self.executor_server.jobdir_root,
                                  self.executor_server.keep_jobdir,
                                  str(self.build_request.uuid))
@@ -2684,11 +2685,11 @@ class AnsibleJob(object):
                     secret.secret_oidc = decrypted_dict['secret_oidc']
 
                 if secret.secret_data:
-                    private_secrets_key, public_secrets_key = \
-                        self.executor_server.keystore.getProjectSecretsKeys(
+                    secrets_key_info = \
+                        self.executor_server.keystore.getProjectSecretsKeyInfo(
                             frozen_secret['connection_name'],
                             frozen_secret['project_name'])
-                    secret = secret.decrypt(private_secrets_key)
+                    secret = secret.decrypt(secrets_key_info)
                     ret_secret_data[secret_name] = secret.secret_data
                 else:
                     ret_secret_oidc[secret_name] = secret.secret_oidc
