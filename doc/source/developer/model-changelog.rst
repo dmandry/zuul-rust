@@ -270,3 +270,9 @@ Version 38
 :Prior Zuul version: 14.2.0
 :Description: Add secret_exposure to FrozenJob.
               Affects schedulers and executors.
+
+Version 39
+----------
+:Prior Zuul version: 14.2.0
+:Description: Upgrade to keystorage3.
+              Affects schedulers, web, and executors.
