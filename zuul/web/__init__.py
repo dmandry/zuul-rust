@@ -2978,7 +2978,8 @@ class ZuulWebAPI(object):
     def key(self, tenant_name, tenant, auth, project_name):
         project = self._getProjectOrRaise(tenant, project_name)
 
-        key = encryption.serialize_rsa_public_key(project.public_secrets_key)
+        key = encryption.serialize_rsa_public_key(
+            project.secrets_key_info.public_key)
         resp = cherrypy.response
         resp.headers['Content-Type'] = 'text/plain'
         return key
@@ -3000,7 +3001,7 @@ class ZuulWebAPI(object):
     def project_ssh_key(self, tenant_name, tenant, auth, project_name):
         project = self._getProjectOrRaise(tenant, project_name)
 
-        key = f"{project.public_ssh_key}\n"
+        key = f"{project.ssh_key_info.public_key}\n"
         resp = cherrypy.response
         resp.headers['Content-Type'] = 'text/plain'
         return key
@@ -3020,7 +3021,7 @@ class ZuulWebAPI(object):
     )
     @openapi_response(404, 'Tenant or Project not found')
     def tenant_ssh_key(self, tenant_name, tenant, auth):
-        key = f"{tenant.public_ssh_key}\n"
+        key = f"{tenant.ssh_key_info.public_key}\n"
         resp = cherrypy.response
         resp.headers['Content-Type'] = 'text/plain'
         return key

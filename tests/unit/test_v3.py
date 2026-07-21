@@ -5548,9 +5548,9 @@ class TestProjectKeys(ZuulTestCase):
                 test_keys.append(i.read())
 
         keystore = self.scheds.first.sched.keystore
-        private_secrets_key, public_secrets_key = (
-            keystore.getProjectSecretsKeys("gerrit", "org/project")
-        )
+        secrets_key_info = keystore.getProjectSecretsKeyInfo(
+            "gerrit", "org/project")
+        private_secrets_key = secrets_key_info.private_keys[0]
 
         # Make sure that we didn't just end up with the static fixture
         # key
@@ -5560,9 +5560,9 @@ class TestProjectKeys(ZuulTestCase):
         self.assertEqual(4096, private_secrets_key.key_size)
 
         # Make sure that a proper key was created on startup
-        private_ssh_key, public_ssh_key = (
-            keystore.getProjectSSHKeys("gerrit", "org/project")
-        )
+        ssh_key_info = keystore.getProjectSSHKeyInfo(
+            "gerrit", "org/project")
+        private_ssh_key = ssh_key_info.private_keys[0]
 
         # Make sure that we didn't just end up with the static fixture
         # key
