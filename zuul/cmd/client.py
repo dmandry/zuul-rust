@@ -1082,16 +1082,14 @@ class Client(zuul.cmd.ZuulApp):
             raise RuntimeError("No key store password configured!")
         keystore = KeyStorage(zk_client, password=password)
         args = self.args
-        # Load
-        ssh = keystore.loadProjectSSHKeys(args.src_connection,
-                                          args.src_project)
-        secrets = keystore.loadProjectsSecretsKeys(args.src_connection,
-                                                   args.src_project)
-        # Save
-        keystore.saveProjectSSHKeys(args.dest_connection,
-                                    args.dest_project, ssh)
-        keystore.saveProjectsSecretsKeys(args.dest_connection,
-                                         args.dest_project, secrets)
+        keystore.copyProjectSSHKeys(args.src_connection,
+                                    args.src_project,
+                                    args.dest_connection,
+                                    args.dest_project)
+        keystore.copyProjectSecretsKeys(args.src_connection,
+                                        args.src_project,
+                                        args.dest_connection,
+                                        args.dest_project)
         self.log.info("Copied keys from %s %s to %s %s",
                       args.src_connection, args.src_project,
                       args.dest_connection, args.dest_project)
@@ -1109,7 +1107,7 @@ class Client(zuul.cmd.ZuulApp):
         keystore = KeyStorage(zk_client, password=password)
         args = self.args
         keystore.deleteProjectSSHKeys(args.connection, args.project)
-        keystore.deleteProjectsSecretsKeys(args.connection, args.project)
+        keystore.deleteProjectSecretsKeys(args.connection, args.project)
         keystore.deleteProjectDir(args.connection, args.project)
         self.log.info("Delete keys from %s %s",
                       args.connection, args.project)
