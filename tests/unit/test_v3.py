@@ -2312,7 +2312,7 @@ class TestInRepoConfig(ZuulTestCase):
         self.assertEqual(A.data['status'], 'NEW')
         self.assertEqual(A.reported, 1,
                          "A should report failure")
-        self.assertIn('syntax error', A.messages[0],
+        self.assertIn('nonsense', A.messages[0],
                       "A should have a syntax error reported")
 
     def test_untrusted_yaml_error(self):
