@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1c1b3ebe_d2ac9f84",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3324,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-07-22T08:57:44Z",
+      "side": 1,
+      "message": "note to self: missed this in my earlier tests because this variable leaked from the previous iteration.\n\nIn case of an exception, the loop continued, but didn\u0027t have this variable defined, leading to a different exception.\n\nClearing it, prior to testing it, skips the next loop. This follows the \"skip as much broken config and continue\" pattern.",
+      "range": {
+        "startLine": 3324,
+        "startChar": 12,
+        "endLine": 3324,
+        "endChar": 40
+      },
+      "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
