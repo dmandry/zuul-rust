@@ -1344,6 +1344,7 @@ class Launcher:
 
     def _processRequests(self):
         unassigned_nodes = self._getUnassignedNodes()
+        pending_labels = set()
         for request in self.api.getMatchingRequests():
             log = get_annotated_logger(self.log, request, request=request.uuid)
             try:
@@ -1368,14 +1369,17 @@ class Launcher:
                 if not self._cachesReadyForRequest(request):
                     self.log.debug("Caches are not up-to-date for %s", request)
                     continue
-                self._processNodesetRequest(request, unassigned_nodes, log)
+                self._processNodesetRequest(request, unassigned_nodes,
+                                            pending_labels, log)
             except Exception:
                 log.exception("Failed to process request %s", request)
 
-    def _processNodesetRequest(self, request, unassigned_nodes, log):
+    def _processNodesetRequest(self, request, unassigned_nodes,
+                               pending_labels, log):
         try:
             if request.state == model.NodesetRequest.State.REQUESTED:
-                self._acceptRequest(request, log, unassigned_nodes)
+                self._acceptRequest(request, log, unassigned_nodes,
+                                    pending_labels)
             elif request.state == model.NodesetRequest.State.ACCEPTED:
                 self._checkRequest(request, log, unassigned_nodes)
         except NodesetRequestError as err:
@@ -1490,7 +1494,7 @@ class Launcher:
                     node.releaseLock(ctx)
         return None
 
-    def _acceptRequest(self, request, log, unassigned_nodes):
+    def _acceptRequest(self, request, log, unassigned_nodes, pending_labels):
         messages = []
         request_unassigned_nodes = self._filterUnassignedNodes(
             unassigned_nodes, request)
@@ -1515,6 +1519,9 @@ class Launcher:
                     # request we don't have to proceed if there is no
                     # quota.
                     if not bool(request.provider_node_data):
+                        if (provider.name, label) in pending_labels:
+                            # A request ahead of us should get this label first
+                            return
                         try:
                             has_quota = self.doesProviderHaveQuotaForLabel(
                                 request.tenant_name, provider, label, messages)
@@ -1525,6 +1532,7 @@ class Launcher:
                             raise NodesetRequestError(
                                 "Unable to determine quota")
                         if not has_quota:
+                            pending_labels.add((provider.name, label))
                             # TODO: We may want to consider all the
                             # labels at once so that if we can
                             # fulfill any label immediately, we

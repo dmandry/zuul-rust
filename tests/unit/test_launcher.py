@@ -1317,6 +1317,118 @@ class TestLauncher(LauncherBaseTestCase):
         # Node should be re-used as part of the new request
         self.assertEqual(set(request.nodes), {n.uuid for n in provider_nodes})
 
+    @simple_layout('layouts/nodepool-request-order.yaml', enable_nodepool=True)
+    @driver_config('test_launcher', quotas={
+        'instances': 1,
+    })
+    def test_launcher_request_order(self):
+        # This tests a race condition that could happen at quota: When
+        # at quota, we avoid accepting requests, so that they can wait
+        # for the next available provider and node (rather than
+        # assigning a node to a provider immediately).  If there are
+        # many more requests than quota, we may spend enough time in
+        # the request loop that another launcher could release a node
+        # in the middle of the loop.  In that case, we could accept a
+        # later request rather than an earlier one.  This test
+        # confirms we don't do that.
+        ctx = self.createZKContext(None)
+        launcher0_wins = {'launcher-0': 0, 'launcher-1': 1}
+        launcher1_wins = {'launcher-0': 1, 'launcher-1': 0}
+
+        def launcher_score(name, item):
+            if isinstance(item, model.NodesetRequest):
+                # launcher1 handles the fulfilled request
+                if item.labels[0] == 'debian-block':
+                    return launcher1_wins[name]
+                # launcher0 handles the pending requests
+                return launcher0_wins[name]
+            # launcher1 handles all the nodes
+            return launcher1_wins[name]
+
+        self.useFixture(fixtures.MonkeyPatch(
+            'zuul.zk.launcher.launcher_score',
+            launcher_score))
+
+        launcher0 = self.launcher
+        launcher1 = self.createLauncher(instance_id=1)
+
+        def cleanup():
+            launcher1.stop()
+            launcher1.join()
+        self.addCleanup(cleanup)
+
+        self.waitUntilSettled()
+        launcher0.log = logging.getLogger("zuul.Launcher-0")
+        launcher1.log = logging.getLogger("zuul.Launcher-1")
+
+        # Let launcher1 handle the quota-filling request
+        with launcher0._run_lock:
+            request1 = self.requestNodes(['debian-block'])
+
+        client = LauncherClient(self.zk_client, None)
+        self.assertEqual(request1.state, request1.State.FULFILLED)
+        self.assertEqual(len(request1.nodes), 1)
+
+        for _ in iterate_timeout(60, "node to appear in cache"):
+            if launcher0.api.nodes_cache.getItems():
+                break
+
+        nodeset = model.NodeSet()
+        nodeset.addNode(model.Node("node", "debian-block"))
+        client.acceptNodeset(request1, nodeset)
+        self.waitUntilSettled()
+        request2 = self.requestNodes(['debian-normal'], timeout=0)
+        request3 = self.requestNodes(['debian-normal'], timeout=0)
+
+        waiting_event = threading.Event()
+        go_event = threading.Event()
+
+        orig_accept = self.launcher._acceptRequest
+
+        def _acceptRequest(*args, **kw):
+            waiting_event.set()
+            self.log.debug("Waiting for test request event %s", args[0])
+            go_event.wait()
+            go_event.clear()
+            self.log.debug("Got test request event %s", args[0])
+            orig_accept(*args, **kw)
+
+        self.log.debug("Trigger out of bound wake")
+        with launcher0._run_lock:
+            self.patch(launcher0, '_acceptRequest', _acceptRequest)
+            # trigger update out of band
+            launcher0.wake_event.set()
+
+        # pause in request handler after first request
+        self.log.debug("Step through to after first request")
+        waiting_event.wait()
+        waiting_event.clear()
+        go_event.set()
+        waiting_event.wait()
+
+        # release node (we're still waiting in the main loop of launcher 0)
+        self.log.debug("Release node and quota")
+        client.useNodeset(nodeset)
+        client.returnNodeset(nodeset)
+        for _ in iterate_timeout(60, "node to disappear from cache"):
+            if not launcher0.api.nodes_cache.getItems():
+                break
+
+        # resume request handler
+        self.log.debug("Resume handling second request")
+        self.patch(launcher0, '_acceptRequest', orig_accept)
+        go_event.set()
+
+        for _ in iterate_timeout(10, "request to be fulfilled"):
+            request2.refresh(ctx)
+            request3.refresh(ctx)
+            if (request2.state == request2.State.FULFILLED or
+                request3.state == request3.State.FULFILLED):
+                break
+
+        self.assertEqual(request2.State.FULFILLED, request2.state)
+        self.assertEqual(request3.State.REQUESTED, request3.state)
+
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_multi_launcher_assignment(self):
         # Test that if a node is assigned to a request and our request
