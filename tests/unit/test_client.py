@@ -375,6 +375,165 @@ class TestKeyOperations(ZuulTestCase):
         self.assertIsNone(
             data.get('/keystorage3/connection/gerrit/project/org%2Fproject2'))
 
+    def test_rotate_project_ssh_keys(self):
+        config_file = os.path.join(self.test_root, 'zuul.conf')
+        with open(config_file, 'w') as f:
+            self.config.write(f)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'new-project-ssh-key',
+             'gerrit', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'list-project-ssh-keys',
+             'gerrit', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+        # The timestamp from the test fixture's key
+        self.assertIn(b'1626909706', out)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'delete-project-ssh-key',
+             'gerrit', 'org/project', '0',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'list-project-ssh-keys',
+             'gerrit', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+        # The timestamp from the test fixture's key
+        self.assertNotIn(b'1626909706', out)
+
+    def test_rotate_project_secrets_keys(self):
+        config_file = os.path.join(self.test_root, 'zuul.conf')
+        with open(config_file, 'w') as f:
+            self.config.write(f)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'new-project-secrets-key',
+             'gerrit', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'list-project-secrets-keys',
+             'gerrit', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+        # The timestamp from the test fixture's key
+        self.assertIn(b'1626909706', out)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'delete-project-secrets-key',
+             'gerrit', 'org/project', '0',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'list-project-secrets-keys',
+             'gerrit', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+        # The timestamp from the test fixture's key
+        self.assertNotIn(b'1626909706', out)
+
+    def test_rotate_tenant_ssh_keys(self):
+        config_file = os.path.join(self.test_root, 'zuul.conf')
+        with open(config_file, 'w') as f:
+            self.config.write(f)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'new-tenant-ssh-key',
+             'tenant-one',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'list-tenant-ssh-keys',
+             'tenant-one',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+        # The timestamp from the test fixture's key
+        self.assertIn(b'1626909706', out)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'delete-tenant-ssh-key',
+             'tenant-one', '0',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', config_file,
+             'list-tenant-ssh-keys',
+             'tenant-one',
+             ],
+            stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.log.debug(out.decode('utf8'))
+        self.assertEqual(p.returncode, 0)
+        # The timestamp from the test fixture's key
+        self.assertNotIn(b'1626909706', out)
+
 
 class TestOIDCSigningKeyOperation(ZuulTestCase):
     tenant_config_file = 'config/single-tenant/main.yaml'

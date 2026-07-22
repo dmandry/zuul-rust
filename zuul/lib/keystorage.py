@@ -71,13 +71,14 @@ class KeyStorage:
         return self._keystorage.getProjectSSHKeysPath(
             connection_name, project_name)
 
-    def getProjectSSHKeyInfo(self, connection_name, project_name):
+    def getProjectSSHKeyInfo(self, connection_name, project_name,
+                             create=True):
         if COMPONENT_REGISTRY.model_api < 38:
             return self._keystorage.getProjectSSHKeyInfo(
                 connection_name, project_name)
         info = self.keystorage3.getProjectSSHKeyInfo(
             connection_name, project_name, create=False)
-        if info is not None:
+        if info is not None or create is False:
             return info
         old_data = self.keystorage1.loadProjectSSHKeys(
             connection_name, project_name)
@@ -88,6 +89,12 @@ class KeyStorage:
                 for k in old_data['keys']]
         return self.keystorage3.upgradeProjectSSHKeyInfo(
             connection_name, project_name, keys)
+
+    def addProjectSSHKey(self, connection_name, project_name):
+        if COMPONENT_REGISTRY.model_api < 38:
+            raise Exception("Unsupported operation: "
+                            "all Zuul components must be upgraded")
+        self.keystorage3.addProjectSSHKey(connection_name, project_name)
 
     def copyProjectSSHKeys(self,
                            src_connection_name,
@@ -100,6 +107,13 @@ class KeyStorage:
             dest_connection_name,
             dest_project_name)
 
+    def deleteProjectSSHKey(self, connection_name, project_name, version):
+        if COMPONENT_REGISTRY.model_api < 38:
+            raise Exception("Unsupported operation: "
+                            "all Zuul components must be upgraded")
+        self.keystorage3.deleteProjectSSHKey(
+            connection_name, project_name, version)
+
     def deleteProjectSSHKeys(self, connection_name, project_name):
         return self._keystorage.deleteProjectSSHKeys(
             connection_name, project_name)
@@ -107,11 +121,11 @@ class KeyStorage:
     def getTenantSSHKeysPath(self, tenant_name):
         return self._keystorage.getTenantSSHKeysPath(tenant_name)
 
-    def getTenantSSHKeyInfo(self, tenant_name):
+    def getTenantSSHKeyInfo(self, tenant_name, create=True):
         if COMPONENT_REGISTRY.model_api < 38:
             return self._keystorage.getTenantSSHKeyInfo(tenant_name)
         info = self.keystorage3.getTenantSSHKeyInfo(tenant_name, create=False)
-        if info is not None:
+        if info is not None or create is False:
             return info
         old_data = self.keystorage1.loadTenantSSHKeys(tenant_name)
         if old_data is None:
@@ -120,12 +134,24 @@ class KeyStorage:
                 for k in old_data['keys']]
         return self.keystorage3.upgradeTenantSSHKeyInfo(tenant_name, keys)
 
+    def addTenantSSHKey(self, tenant_name):
+        if COMPONENT_REGISTRY.model_api < 38:
+            raise Exception("Unsupported operation: "
+                            "all Zuul components must be upgraded")
+        self.keystorage3.addTenantSSHKey(tenant_name)
+
     def copyTenantSSHKeys(self,
                           src_tenant_name,
                           dest_tenant_name):
         return self._keystorage.copyTenantSSHKeys(
             src_tenant_name,
             dest_tenant_name)
+
+    def deleteTenantSSHKey(self, tenant_name, version):
+        if COMPONENT_REGISTRY.model_api < 38:
+            raise Exception("Unsupported operation: "
+                            "all Zuul components must be upgraded")
+        self.keystorage3.deleteTenantSSHKey(tenant_name, version)
 
     def deleteTenantSSHKeys(self, tenant_name):
         return self._keystorage.deleteTenantSSHKeys(tenant_name)
@@ -134,13 +160,14 @@ class KeyStorage:
         return self._keystorage.getProjectSecretsKeysPath(
             connection_name, project_name)
 
-    def getProjectSecretsKeyInfo(self, connection_name, project_name):
+    def getProjectSecretsKeyInfo(self, connection_name, project_name,
+                                 create=True):
         if COMPONENT_REGISTRY.model_api < 38:
             return self._keystorage.getProjectSecretsKeyInfo(
                 connection_name, project_name)
         info = self.keystorage3.getProjectSecretsKeyInfo(
             connection_name, project_name, create=False)
-        if info is not None:
+        if info is not None or create is False:
             return info
         old_data = self.keystorage1.loadProjectSecretsKeys(
             connection_name, project_name)
@@ -152,6 +179,12 @@ class KeyStorage:
         return self.keystorage3.upgradeProjectSecretsKeyInfo(
             connection_name, project_name, keys)
 
+    def addProjectSecretsKey(self, connection_name, project_name):
+        if COMPONENT_REGISTRY.model_api < 38:
+            raise Exception("Unsupported operation: "
+                            "all Zuul components must be upgraded")
+        self.keystorage3.addProjectSecretsKey(connection_name, project_name)
+
     def copyProjectSecretsKeys(self,
                                src_connection_name,
                                src_project_name,
@@ -162,6 +195,13 @@ class KeyStorage:
             src_project_name,
             dest_connection_name,
             dest_project_name)
+
+    def deleteProjectSecretsKey(self, connection_name, project_name, version):
+        if COMPONENT_REGISTRY.model_api < 38:
+            raise Exception("Unsupported operation: "
+                            "all Zuul components must be upgraded")
+        self.keystorage3.deleteProjectSecretsKey(
+            connection_name, project_name, version)
 
     def deleteProjectSecretsKeys(self, connection_name, project_name):
         return self._keystorage.deleteProjectSecretsKeys(

@@ -515,6 +515,152 @@ class Client(zuul.cmd.ZuulApp):
         cmd_delete_oidc_signing_keys.set_defaults(
             func=self.delete_oidc_signing_keys)
 
+        # New keys
+        cmd_new_project_ssh_key = subparsers.add_parser(
+            'new-project-ssh-key',
+            help='generate a new ssh key for a project',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+            Generate a new project SSH key
+
+            This generates a new SSH key for a project and adds it to
+            the list of supported keys.  Existing keys will continue
+            to function.'''))
+        cmd_new_project_ssh_key.set_defaults(command='new-project-ssh-key')
+        cmd_new_project_ssh_key.add_argument('connection', type=str,
+                                             help='connection name')
+        cmd_new_project_ssh_key.add_argument('project', type=str,
+                                             help='project name')
+        cmd_new_project_ssh_key.set_defaults(func=self.new_project_ssh_key)
+
+        cmd_new_project_secrets_key = subparsers.add_parser(
+            'new-project-secrets-key',
+            help='generate a new secrets key for a project',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+            Generate a new project secrets key
+
+            This generates a new secrets key for a project and adds it to
+            the list of supported keys.  Existing keys will continue
+            to function.'''))
+        cmd_new_project_secrets_key.set_defaults(
+            command='new-project-secrets-key')
+        cmd_new_project_secrets_key.add_argument('connection', type=str,
+                                                 help='connection name')
+        cmd_new_project_secrets_key.add_argument('project', type=str,
+                                                 help='project name')
+        cmd_new_project_secrets_key.set_defaults(
+            func=self.new_project_secrets_key)
+
+        cmd_new_tenant_ssh_key = subparsers.add_parser(
+            'new-tenant-ssh-key',
+            help='generate a new ssh key for a tenant',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+            Generate a new tenant SSH key
+
+            This generates a new SSH key for a tenant and adds it to
+            the list of supported keys.  Existing keys will continue
+            to function.'''))
+        cmd_new_tenant_ssh_key.set_defaults(command='new-tenant-ssh-key')
+        cmd_new_tenant_ssh_key.add_argument('tenant', type=str,
+                                            help='tenant name')
+        cmd_new_tenant_ssh_key.set_defaults(func=self.new_tenant_ssh_key)
+
+        # List keys
+        cmd_list_project_ssh_keys = subparsers.add_parser(
+            'list-project-ssh-keys',
+            help='list ssh keys for a project',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description='List project SSH keys',
+        )
+        cmd_list_project_ssh_keys.set_defaults(command='list-project-ssh-keys')
+        cmd_list_project_ssh_keys.add_argument('connection', type=str,
+                                               help='connection name')
+        cmd_list_project_ssh_keys.add_argument('project', type=str,
+                                               help='project name')
+        cmd_list_project_ssh_keys.set_defaults(func=self.list_project_ssh_keys)
+
+        cmd_list_project_secrets_keys = subparsers.add_parser(
+            'list-project-secrets-keys',
+            help='list secrets key for a project',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description='List project secrets keys',
+        )
+        cmd_list_project_secrets_keys.set_defaults(
+            command='list-project-secrets-keys')
+        cmd_list_project_secrets_keys.add_argument('connection', type=str,
+                                                   help='connection name')
+        cmd_list_project_secrets_keys.add_argument('project', type=str,
+                                                   help='project name')
+        cmd_list_project_secrets_keys.set_defaults(
+            func=self.list_project_secrets_keys)
+
+        cmd_list_tenant_ssh_keys = subparsers.add_parser(
+            'list-tenant-ssh-keys',
+            help='list ssh keys for a tenant',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description='List tenant SSH keys',
+        )
+        cmd_list_tenant_ssh_keys.set_defaults(command='list-tenant-ssh-keys')
+        cmd_list_tenant_ssh_keys.add_argument('tenant', type=str,
+                                              help='tenant name')
+        cmd_list_tenant_ssh_keys.set_defaults(func=self.list_tenant_ssh_keys)
+
+        # Delete keys
+        cmd_delete_project_ssh_key = subparsers.add_parser(
+            'delete-project-ssh-key',
+            help='delete an ssh key for a project',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+            Delete a project SSH key
+
+            This deletes an existing SSH key for a project.'''))
+        cmd_delete_project_ssh_key.set_defaults(
+            command='delete-project-ssh-key')
+        cmd_delete_project_ssh_key.add_argument('connection', type=str,
+                                                help='connection name')
+        cmd_delete_project_ssh_key.add_argument('project', type=str,
+                                                help='project name')
+        cmd_delete_project_ssh_key.add_argument('version', type=int,
+                                                help='key version number')
+        cmd_delete_project_ssh_key.set_defaults(
+            func=self.delete_project_ssh_key)
+
+        cmd_delete_project_secrets_key = subparsers.add_parser(
+            'delete-project-secrets-key',
+            help='delete a secrets key for a project',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+            Delete a project secrets key
+
+            This deletes an existing secrets key for a project.'''))
+        cmd_delete_project_secrets_key.set_defaults(
+            command='delete-project-secrets-key')
+        cmd_delete_project_secrets_key.add_argument('connection', type=str,
+                                                    help='connection name')
+        cmd_delete_project_secrets_key.add_argument('project', type=str,
+                                                    help='project name')
+        cmd_delete_project_secrets_key.add_argument('version', type=int,
+                                                    help='key version number')
+        cmd_delete_project_secrets_key.set_defaults(
+            func=self.delete_project_secrets_key)
+
+        cmd_delete_tenant_ssh_key = subparsers.add_parser(
+            'delete-tenant-ssh-key',
+            help='delete an ssh key for a tenant',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+            Delete a tenant SSH key
+
+            This deletes an existing SSH key for a tenant.'''))
+        cmd_delete_tenant_ssh_key.set_defaults(command='delete-tenant-ssh-key')
+        cmd_delete_tenant_ssh_key.add_argument('tenant', type=str,
+                                               help='tenant name')
+        cmd_delete_tenant_ssh_key.add_argument('version', type=int,
+                                               help='key version number')
+        cmd_delete_tenant_ssh_key.set_defaults(func=self.delete_tenant_ssh_key)
+
         # image storage
         cmd_import_images = subparsers.add_parser(
             'import-images',
@@ -1117,6 +1263,148 @@ class Client(zuul.cmd.ZuulApp):
         keystore.deleteProjectDir(args.connection, args.project)
         self.log.info("Delete keys from %s %s",
                       args.connection, args.project)
+        sys.exit(0)
+
+    def new_project_ssh_key(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        keystore.addProjectSSHKey(args.connection, args.project)
+        sys.exit(0)
+
+    def new_project_secrets_key(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        keystore.addProjectSecretsKey(args.connection, args.project)
+        sys.exit(0)
+
+    def new_tenant_ssh_key(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        keystore.addTenantSSHKey(args.tenant)
+        sys.exit(0)
+
+    def list_project_ssh_keys(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        info = keystore.getProjectSSHKeyInfo(args.connection, args.project,
+                                             create=False)
+        table = prettytable.PrettyTable(field_names=['Version', 'Created'])
+        for key in info.keys:
+            table.add_row([key.version, key.created])
+        print(table)
+        sys.exit(0)
+
+    def list_project_secrets_keys(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        info = keystore.getProjectSecretsKeyInfo(args.connection, args.project,
+                                                 create=False)
+        table = prettytable.PrettyTable(field_names=['Version', 'Created'])
+        for key in info.keys:
+            table.add_row([key.version, key.created])
+        print(table)
+        sys.exit(0)
+
+    def list_tenant_ssh_keys(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        info = keystore.getTenantSSHKeyInfo(args.tenant, create=False)
+        table = prettytable.PrettyTable(field_names=['Version', 'Created'])
+        for key in info.keys:
+            table.add_row([key.version, key.created])
+        print(table)
+        sys.exit(0)
+
+    def delete_project_ssh_key(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        keystore.deleteProjectSSHKey(
+            args.connection, args.project, args.version)
+        sys.exit(0)
+
+    def delete_project_secrets_key(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        keystore.deleteProjectSecretsKey(
+            args.connection, args.project, args.version)
+        sys.exit(0)
+
+    def delete_tenant_ssh_key(self):
+        logging.basicConfig(level=logging.INFO)
+        zk_client = ZooKeeperClient.fromConfig(self.config)
+        zk_client.connect()
+        COMPONENT_REGISTRY.create(zk_client)
+        try:
+            password = self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        keystore = KeyStorage(zk_client, password=password)
+        args = self.args
+        keystore.deleteTenantSSHKey(args.tenant, args.version)
         sys.exit(0)
 
     def delete_oidc_signing_keys(self):

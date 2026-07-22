@@ -196,7 +196,9 @@ class KeystorageCache(ZuulTreeCache):
             raise Exception("Unknown key class")
 
     def updateFromRaw(self, obj, key, data, zstat):
-        obj._updateFromRaw(self._zk_context, data, zstat, None)
+        extra = dict(password=self.password,
+                     password_bytes=self.password_bytes)
+        obj._updateFromRaw(self._zk_context, data, zstat, extra)
 
     def parsePath(self, path):
         key = None
@@ -369,6 +371,37 @@ class KeyStorage3(ZooKeeperBase):
                     connection_name, project_name)
         return key
 
+    def addProjectSSHKey(self, connection_name, project_name):
+        self.keystorage_cache.ensureReady()
+        info = self.getProjectSSHKeyInfo(connection_name, project_name,
+                                         create=False)
+        if info is None:
+            raise Exception("Key not found")
+
+        self.log.info("Generating a new SSH key for %s/%s",
+                      connection_name, project_name)
+        keys = info.keys.copy()
+        version = len(keys)
+        zuul_key = ZuulSSHKey.new(self.password_bytes, version=version)
+        keys.append(zuul_key)
+        with self.createZKContext() as context:
+            info.updateAttributes(context, keys=keys)
+
+    def deleteProjectSSHKey(self, connection_name, project_name, version):
+        self.keystorage_cache.ensureReady()
+        info = self.getProjectSSHKeyInfo(connection_name, project_name,
+                                         create=False)
+        if info is None:
+            raise Exception("Key not found")
+
+        self.log.info("Deleting SSH key version %s for %s/%s",
+                      version, connection_name, project_name)
+        keys = [k for k in info.keys if k.version != version]
+        if not keys:
+            raise Exception("Unable to delete last remaining key")
+        with self.createZKContext() as context:
+            info.updateAttributes(context, keys=keys)
+
     def copyProjectSSHKeys(self,
                            src_connection_name,
                            src_project_name,
@@ -423,6 +456,34 @@ class KeyStorage3(ZooKeeperBase):
                     tenant_name)
         return key
 
+    def addTenantSSHKey(self, tenant_name):
+        self.keystorage_cache.ensureReady()
+        info = self.getTenantSSHKeyInfo(tenant_name, create=False)
+        if info is None:
+            raise Exception("Key not found")
+
+        self.log.info("Generating a new SSH key for %s", tenant_name)
+        keys = info.keys.copy()
+        version = len(keys)
+        zuul_key = ZuulSSHKey.new(self.password_bytes, version=version)
+        keys.append(zuul_key)
+        with self.createZKContext() as context:
+            info.updateAttributes(context, keys=keys)
+
+    def deleteTenantSSHKey(self, tenant_name, version):
+        self.keystorage_cache.ensureReady()
+        info = self.getTenantSSHKeyInfo(tenant_name, create=False)
+        if info is None:
+            raise Exception("Key not found")
+
+        self.log.info("Deleting SSH key version %s for %s",
+                      version, tenant_name)
+        keys = [k for k in info.keys if k.version != version]
+        if not keys:
+            raise Exception("Unable to delete last remaining key")
+        with self.createZKContext() as context:
+            info.updateAttributes(context, keys=keys)
+
     def copyTenantSSHKeys(self,
                           src_tenant_name,
                           dest_tenant_name):
@@ -469,6 +530,37 @@ class KeyStorage3(ZooKeeperBase):
                 key = self.keystorage_cache.getProjectSecretsKeyInfo(
                     connection_name, project_name)
         return key
+
+    def addProjectSecretsKey(self, connection_name, project_name):
+        self.keystorage_cache.ensureReady()
+        info = self.getProjectSecretsKeyInfo(connection_name, project_name,
+                                             create=False)
+        if info is None:
+            raise Exception("Key not found")
+
+        self.log.info("Generating a new secrets key for %s/%s",
+                      connection_name, project_name)
+        keys = info.keys.copy()
+        version = len(keys)
+        zuul_key = ZuulSecretKey.new(self.password_bytes, version=version)
+        keys.append(zuul_key)
+        with self.createZKContext() as context:
+            info.updateAttributes(context, keys=keys)
+
+    def deleteProjectSecretsKey(self, connection_name, project_name, version):
+        self.keystorage_cache.ensureReady()
+        info = self.getProjectSecretsKeyInfo(connection_name, project_name,
+                                             create=False)
+        if info is None:
+            raise Exception("Key not found")
+
+        self.log.info("Deleting secrets key version %s for %s/%s",
+                      version, connection_name, project_name)
+        keys = [k for k in info.keys if k.version != version]
+        if not keys:
+            raise Exception("Unable to delete last remaining key")
+        with self.createZKContext() as context:
+            info.updateAttributes(context, keys=keys)
 
     def copyProjectSecretsKeys(self,
                                src_connection_name,
