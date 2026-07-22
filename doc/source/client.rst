@@ -104,6 +104,87 @@ Example::
 
   zuul-admin delete-keys gerrit old_project
 
+new-project-ssh-key
+^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin new-project-ssh-key --help
+
+Example::
+
+  zuul-admin new-project-ssh-key gerrit project
+
+new-project-secrets-key
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin new-project-secrets-key --help
+
+Example::
+
+  zuul-admin new-project-secrets-key gerrit project
+
+new-tenant-ssh-key
+^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin new-tenant-ssh-key --help
+
+Example::
+
+  zuul-admin new-tenant-ssh-key example-tenant
+
+list-project-ssh-keys
+^^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin list-project-ssh-keys --help
+
+Example::
+
+  zuul-admin list-project-ssh-keys gerrit project
+
+list-project-secrets-keys
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin list-project-secrets-key --help
+
+Example::
+
+  zuul-admin list-project-secrets-keys gerrit project
+
+list-tenant-ssh-keys
+^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin list-tenant-ssh-keys --help
+
+Example::
+
+  zuul-admin list-tenant-ssh-keys example-tenant
+
+delete-project-ssh-key
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin delete-project-ssh-key --help
+
+Example::
+
+  zuul-admin delete-project-ssh-key gerrit project 0
+
+delete-project-secrets-key
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin delete-project-secrets-key --help
+
+Example::
+
+  zuul-admin delete-project-secrets-key gerrit project 0
+
+delete-tenant-ssh-key
+^^^^^^^^^^^^^^^^^^^^^
+
+.. program-output:: zuul-admin delete-tenant-ssh-key --help
+
+Example::
+
+  zuul-admin delete-tenant-ssh-key example-tenant
+
 delete-oidc-signing-keys
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
