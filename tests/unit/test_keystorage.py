@@ -177,3 +177,87 @@ class TestKeyStorage3(BaseTestCase):
                          ks2_key1.public_key.public_numbers())
         self.assertEqual(key1.private_key.private_numbers(),
                          ks2_key1.private_key.private_numbers())
+
+    def test_rotate_project_ssh_keys(self):
+        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        self.addCleanup(ks.stop)
+        # This will generate a new secrets key
+        info = ks.getProjectSSHKeyInfo('gerrit', 'org/project')
+        self.assertEqual(1, len(info.keys))
+        key1 = info.keys[0]
+        self.assertIn('ssh-rsa', key1.public_key)
+        pk1 = key1.toDict()['private_key']
+
+        ks.addProjectSSHKey('gerrit', 'org/project')
+        self.assertEqual(2, len(info.keys))
+        key2 = info.keys[1]
+        self.assertIn('ssh-rsa', key2.public_key)
+        pk2 = key2.toDict()['private_key']
+        self.assertNotEqual(pk1, pk2)
+        self.assertEqual(0, key1.version)
+        self.assertEqual(1, key2.version)
+
+        self.assertEqual(key2.public_key, info.public_key)
+        self.assertEqual([key1.private_key, key2.private_key],
+                         info.private_keys)
+
+        ks.deleteProjectSSHKey('gerrit', 'org/project', 0)
+        self.assertEqual(1, len(info.keys))
+        key3 = info.keys[0]
+        self.assertEqual(1, key3.version)
+
+    def test_rotate_tenant_ssh_keys(self):
+        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        self.addCleanup(ks.stop)
+        # This will generate a new secrets key
+        info = ks.getTenantSSHKeyInfo('tenant-one')
+        self.assertEqual(1, len(info.keys))
+        key1 = info.keys[0]
+        self.assertIn('ssh-rsa', key1.public_key)
+        pk1 = key1.toDict()['private_key']
+
+        ks.addTenantSSHKey('tenant-one')
+        self.assertEqual(2, len(info.keys))
+        key2 = info.keys[1]
+        self.assertIn('ssh-rsa', key2.public_key)
+        pk2 = key2.toDict()['private_key']
+        self.assertNotEqual(pk1, pk2)
+        self.assertEqual(0, key1.version)
+        self.assertEqual(1, key2.version)
+
+        self.assertEqual(key2.public_key, info.public_key)
+        self.assertEqual([key1.private_key, key2.private_key],
+                         info.private_keys)
+
+        ks.deleteTenantSSHKey('tenant-one', 0)
+        self.assertEqual(1, len(info.keys))
+        key3 = info.keys[0]
+        self.assertEqual(1, key3.version)
+
+    def test_rotate_project_secret_keys(self):
+        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        self.addCleanup(ks.stop)
+        # This will generate a new secrets key
+        info = ks.getProjectSecretsKeyInfo('gerrit', 'org/project')
+        self.assertEqual(1, len(info.keys))
+        key1 = info.keys[0]
+        self.assertTrue(isinstance(key1.public_key, RSAPublicKey))
+        pk1 = key1.toDict()['private_key']
+
+        ks.addProjectSecretsKey('gerrit', 'org/project')
+        self.assertEqual(2, len(info.keys))
+        key2 = info.keys[1]
+        self.assertTrue(isinstance(key2.public_key, RSAPublicKey))
+        pk2 = key2.toDict()['private_key']
+        self.assertNotEqual(pk1, pk2)
+        self.assertEqual(0, key1.version)
+        self.assertEqual(1, key2.version)
+
+        self.assertEqual(key2.public_key, info.public_key)
+        self.assertEqual([key1.private_key, key2.private_key],
+                         info.private_keys)
+
+        ks.deleteProjectSecretsKey('gerrit', 'org/project', 0)
+        self.assertEqual(1, len(info.keys))
+        key3 = info.keys[0]
+        self.assertEqual(1, key3.version)
