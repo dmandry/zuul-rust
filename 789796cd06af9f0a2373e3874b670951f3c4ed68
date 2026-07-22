@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "a8b8ca15_ea5afbd9",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3323,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-22T22:46:43Z",
+      "side": 1,
+      "message": "I\u0027m having trouble understanding what you\u0027re trying to convey with this comment.  Can you elaborate?",
+      "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1c1b3ebe_d2ac9f84",
