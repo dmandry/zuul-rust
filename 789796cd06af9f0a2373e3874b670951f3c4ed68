@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "bf54f5c5_e8e57f0c",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3323,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-07-22T22:56:07Z",
+      "side": 1,
+      "message": "At this point, there might be multiple project config elements that have the same regex that miscompiles. The regex is only compiled once for all the project stanzas that share it.\n\n\n    - project:\n        name: ^miscompile\n        ...some...config...\n      \n    - project:\n        name: ^miscompile\n        ...some...other...config\n\n\nThis just reports the first one that failed, so the user won\u0027t get a comprehensive list of all stanzas that share the same regex.\n\nThe user will, however get a separate error for each unique miscompilation.",
+      "parentUuid": "a8b8ca15_ea5afbd9",
+      "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1c1b3ebe_d2ac9f84",
