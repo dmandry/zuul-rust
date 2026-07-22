@@ -36,7 +36,7 @@ class KubernetesConnection(BaseConnection):
         self.context = self.connection_config.get('context')
 
         # Rate limit: requests/second
-        self.rate = self.connection_config.get('rate', 2)
+        self.rate = float(self.connection_config.get('rate', 2))
         # Use openshift projects instead of namespaces
         self.use_openshift_projects = any_to_bool(self.connection_config.get(
             'use_openshift_projects', False))

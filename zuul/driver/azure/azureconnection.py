@@ -48,4 +48,4 @@ class AzureConnection(BaseConnection):
             'subscription_id', credential.get('subscriptionId'))
 
         # Rate limit: requests/second
-        self.rate = self.connection_config.get('rate', 2)
+        self.rate = float(self.connection_config.get('rate', 2))
