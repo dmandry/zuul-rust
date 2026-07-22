@@ -1281,6 +1281,55 @@ sections of ``zuul.conf`` are used by the launcher:
 
       Path to log config file for the launcher process.
 
+   .. attr:: quota_admission_threshold
+
+      A fraction (0.0-1.0) of a provider's quota usage at or above
+      which the launcher will stop admitting nodes for additional
+      buildsets, and instead concentrate reusable or newly freed capacity on
+      the highest-priority buildsets in the same tenant requesting the
+      same label.  This is intended to prevent a large backlog of
+      similarly-prioritized requests (e.g. during a capacity crunch)
+      from causing newer, lower-priority requests to intermittently
+      win a race for a freed node ahead of older, higher-priority
+      requests simply because the launcher happened to process them
+      first.
+
+      This setting is disabled (unset) by default, which preserves
+      Zuul's traditional behavior.  Request ordering still considers
+      relative priority when this setting is disabled, but allocation
+      is not serialized across launcher processes.
+
+   .. attr:: quota_admission_buildset_window
+      :default: 1
+
+      When :attr:`launcher.quota_admission_threshold` is reached for
+      a provider, this is the number of the highest-ranked buildsets
+      (ranked by the same precedence, relative priority, and request
+      time used elsewhere) in the same tenant requesting that label
+      which are allowed to be assigned reusable nodes or have new nodes
+      started.  Requests belonging to any other buildset are deferred
+      (not failed) until they enter this window.  Admission is calculated
+      independently for each label, so an unavailable large flavor does
+      not block requests for a different label on the same provider.  If
+      several providers offer the same label, they share this conservative
+      tenant-and-label admission ranking because pending requests do not
+      have a persisted provider selection.  Admission is evaluated before
+      assigning the first node of a request; once admitted, a multi-node
+      request may acquire its remaining nodes without being split by a
+      later admission-window change.
+
+      All launchers must use the same quota admission settings.  When
+      quota admission is enabled, launchers coordinate node reservations
+      for each provider endpoint through ZooKeeper so that independently
+      operating launchers cannot admit lower-ranked buildsets concurrently.
+      Providers sharing an endpoint also share this lock because they
+      consume the same cloud quota.  This serializes the short ZooKeeper
+      reservation operation for an endpoint, but does not serialize the
+      subsequent cloud node-creation operation.
+      Enabling the feature therefore requires a coordinated configuration
+      rollout; an older or disabled launcher does not participate in this
+      coordination.
+
 Client
 ------
 

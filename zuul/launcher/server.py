@@ -31,7 +31,7 @@ import subprocess
 import threading
 import time
 import uuid
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 import cachetools
 import mmh3
@@ -1166,6 +1166,31 @@ class Launcher:
         # launcher
         self.endpoints = {}
 
+        # Quota admission control: when a provider's usage is at or
+        # above this fraction of its quota, stop admitting nodes for
+        # additional buildsets until the highest-priority
+        # buildsets currently competing for that provider/label have
+        # had all of their outstanding requests admitted.  This
+        # prevents newly-arriving, lower-priority requests from
+        # continually consuming capacity that frees up while older,
+        # higher-priority buildsets are still partially unfulfilled.
+        # Disabled (None) by default for backward compatibility.
+        self.quota_admission_threshold = get_default(
+            self.config, "launcher", "quota_admission_threshold", None)
+        if self.quota_admission_threshold is not None:
+            self.quota_admission_threshold = float(
+                self.quota_admission_threshold)
+            if not 0 <= self.quota_admission_threshold <= 1:
+                raise ValueError(
+                    "launcher.quota_admission_threshold must be between "
+                    "0 and 1")
+        self.quota_admission_buildset_window = int(get_default(
+            self.config, "launcher", "quota_admission_buildset_window", 1))
+        if self.quota_admission_buildset_window < 1:
+            raise ValueError(
+                "launcher.quota_admission_buildset_window must be at "
+                "least 1")
+
         self.hostname = _hostname or socket.getfqdn()
         statsd_extra_keys = {'hostname': self.hostname}
         self.statsd = get_statsd(config, statsd_extra_keys)
@@ -1504,43 +1529,128 @@ class Launcher:
                 # a node for this slot.
                 if i < len(request.provider_node_data):
                     continue
-                node = self._assignUnassignedNode(
-                    ctx, unassigned_nodes, request_unassigned_nodes,
-                    request, label, provider, log)
-                if node is None:
-                    # We need to request a new node
-                    if provider.driver.name == 'static':
+                admission_lock = None
+                if self.quota_admission_threshold is not None:
+                    quota_domain = provider.getEndpoint().canonical_name
+                    safe_quota_domain = quote_plus(quota_domain)
+                    lock_path = ("/zuul/launcher/quota-admission/" +
+                                 safe_quota_domain)
+                    admission_lock = self.zk_client.client.Lock(
+                        lock_path, identifier=self.hostname)
+                    if not admission_lock.acquire(blocking=False):
+                        log.debug(
+                            "Deferring request %s while another launcher "
+                            "is admitting a node for provider %s",
+                            request, provider)
                         return
-                    # If we have not assigned any nodes to this
-                    # request we don't have to proceed if there is no
-                    # quota.
-                    if not bool(request.provider_node_data):
-                        try:
-                            has_quota = self.doesProviderHaveQuotaForLabel(
-                                request.tenant_name, provider, label, messages)
-                        except Exception:
-                            self.log.exception(
-                                "Error checking quota for label %s "
-                                "in provider %s", label, provider)
-                            raise NodesetRequestError(
-                                "Unable to determine quota")
-                        if not has_quota:
-                            # TODO: We may want to consider all the
-                            # labels at once so that if we can
-                            # fulfill any label immediately, we
-                            # accept the request; currently this will
-                            # happen only if we can fulfill the first
-                            # label immediately.
+                    # The lock serializes assignments and reservations,
+                    # but each launcher's request and node caches are
+                    # updated asynchronously.  Synchronize both caches
+                    # before making a quota or admission decision so this
+                    # lock holder observes work admitted by the previous
+                    # holder and requests created before lock acquisition.
+                    self.zk_client.client.sync(model.ProviderNode.ROOT)
+                    self.api.nodes_cache.waitForSync()
+                    self.zk_client.client.sync(model.NodesetRequest.ROOT)
+                    self.api.requests_cache.waitForSync()
+                try:
+                    if (not bool(request.provider_node_data) and
+                        not self._admitNodeForBuildset(
+                            request, provider, label, log, messages)):
+                        # The provider is near its quota limit and this
+                        # request's buildset is outside the admission
+                        # window.  Defer before assigning a reusable node
+                        # or reserving a new one.
+                        return
+                    node = self._assignUnassignedNode(
+                        ctx, unassigned_nodes, request_unassigned_nodes,
+                        request, label, provider, log)
+                    if node is None:
+                        # We need to request a new node
+                        if provider.driver.name == 'static':
                             return
-                    self._emitMessages(log, messages)
-                    node = self._requestNode(
-                        label, request, provider, log, ctx)
-                    log.debug("Requested node %s", node.uuid)
+                        # If we have not assigned any nodes to this
+                        # request we don't have to proceed if there is no
+                        # quota.
+                        if not bool(request.provider_node_data):
+                            try:
+                                has_quota = self.doesProviderHaveQuotaForLabel(
+                                    request.tenant_name, provider, label,
+                                    messages)
+                            except Exception:
+                                self.log.exception(
+                                    "Error checking quota for label %s "
+                                    "in provider %s", label, provider)
+                                raise NodesetRequestError(
+                                    "Unable to determine quota")
+                            if not has_quota:
+                                # TODO: We may want to consider all the
+                                # labels at once so that if we can
+                                # fulfill any label immediately, we
+                                # accept the request; currently this will
+                                # happen only if we can fulfill the first
+                                # label immediately.
+                                return
+                        self._emitMessages(log, messages)
+                        node = self._requestNode(
+                            label, request, provider, log, ctx)
+                        log.debug("Requested node %s", node.uuid)
+                finally:
+                    if admission_lock is not None:
+                        admission_lock.release()
                 request.addProviderNode(node)
             if request.provider_node_data:
                 self._emitMessages(log, messages)
                 log.debug("Accepting request %s", request)
                 request.state = model.NodesetRequest.State.ACCEPTED
+
+    def _admitNodeForBuildset(self, request, provider, label, log, messages):
+        # Opt-in quota admission control.  See the [launcher]
+        # quota_admission_* settings.  Disabled by default.
+        threshold = self.quota_admission_threshold
+        if threshold is None:
+            return True
+
+        pct = self.getQuotaPercentage(provider, messages, rounded=False)
+        if pct < threshold:
+            return True
+
+        # Rank buildsets requesting this label in the same tenant by the
+        # same (priority, relative_priority, request_time) order used
+        # elsewhere.  Provider selection is not persisted on pending
+        # requests, so the tenant/label admission domain is deliberately
+        # conservative when several providers offer the same label.  A
+        # scarce large flavor must not prevent the provider from satisfying
+        # an unrelated small-flavor request.
+        admitted_buildsets = []
+        for other in self.api.getNodesetRequests():
+            if other.tenant_name != request.tenant_name:
+                continue
+            if other.state != model.NodesetRequest.State.REQUESTED:
+                continue
+            if label.name not in other.labels:
+                continue
+            if other.buildset_uuid not in admitted_buildsets:
+                admitted_buildsets.append(other.buildset_uuid)
+            if (len(admitted_buildsets) >=
+                    self.quota_admission_buildset_window):
+                break
+
+        admitted = request.buildset_uuid in admitted_buildsets
+        messages.append(
+            f"Provider {provider} quota admission: usage factor {pct} "
+            f">= threshold {threshold}; buildset {request.buildset_uuid} "
+            f"{'admitted' if admitted else 'deferred'} "
+            f"(window={self.quota_admission_buildset_window}, "
+            f"admitted_buildsets={admitted_buildsets})")
+        if not admitted:
+            log.debug(
+                "Deferring request %s: provider %s is at %.0f%% of "
+                "quota threshold and buildset %s is not in the "
+                "admitted window %s",
+                request, provider, pct * 100, request.buildset_uuid,
+                admitted_buildsets)
+        return admitted
 
     def _shuffleProviders(self, providers):
         # This is to allow unit test control of this process.
@@ -3266,7 +3376,7 @@ class Launcher:
         quota.min(provider_limits)
         return quota
 
-    def getQuotaPercentage(self, provider, messages):
+    def getQuotaPercentage(self, provider, messages, rounded=True):
         try:
             total = self.getProviderQuotaAvailable(
                 provider, messages, include_requested=True)
@@ -3293,7 +3403,7 @@ class Launcher:
                 pct = max(used_r / total_r, pct)
         messages.append(
             f"Provider {provider} usage factor: {pct}")
-        if pct < 1.0:
+        if rounded and pct < 1.0:
             # If we are below 100% usage, lose precision so that we only
             # consider 10% gradiations.  This may help us avoid
             # thundering herds by allowing some randomization among

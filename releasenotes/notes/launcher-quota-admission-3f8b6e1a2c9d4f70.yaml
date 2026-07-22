@@ -1,0 +1,29 @@
+---
+features:
+  - |
+    New opt-in launcher options,
+    :attr:`launcher.quota_admission_threshold`,
+    and :attr:`launcher.quota_admission_buildset_window`, can be used
+    to favor high-priority buildsets consistently during a provider
+    capacity crunch.
+
+    Previously, when a provider's quota was nearly exhausted, the
+    launcher would attempt every outstanding node request in
+    priority order but independently across launcher processes.  Near
+    capacity, concurrently processed requests could therefore claim
+    newly available quota in an order different from the global
+    request ordering.
+
+    When :attr:`launcher.quota_admission_threshold` is configured and
+    a provider's usage reaches that fraction of its quota, the
+    launcher will now only admit nodes for the highest-ranked
+    ``quota_admission_buildset_window`` buildsets (by the existing
+    precedence, relative priority, and request time ordering)
+    in the same tenant requesting that label, deferring (not failing)
+    requests from other buildsets.  Admission is calculated independently
+    for each label, and launchers coordinate reusable-node assignments and
+    new-node reservations through ZooKeeper.  All launchers must be updated
+    and configured consistently before enabling the feature.
+
+    This feature is disabled by default; existing deployments are
+    unaffected unless ``quota_admission_threshold`` is explicitly set.

@@ -2337,6 +2337,106 @@ class TestLauncher(LauncherBaseTestCase):
         request1_p2.refresh(ctx)
         self.assertEqual(request1_p2.State.REQUESTED, request1_p2.state)
 
+    @simple_layout('layouts/nodepool.yaml',
+                   enable_nodepool=True)
+    def test_quota_admission_window(self):
+        # Test the quota admission window algorithm directly: once a
+        # provider is at/above the configured quota admission
+        # threshold, only the highest ranked buildset(s) (within the
+        # configured window) should be admitted to start new nodes,
+        # even if quota happens to be technically available for
+        # others. This is what prevents a steady trickle of freed
+        # capacity from being spread across every competing buildset
+        # instead of being concentrated on the highest priority ones.
+        self.waitUntilSettled()
+
+        client = LauncherClient(self.zk_client, None)
+        provider = self.launcher._getProvider(
+            'tenant-one', 'aws-us-east-1-main')
+        label = provider.labels['debian-normal']
+
+        self.launcher._run_lock.acquire()
+        run_lock_held = [True]
+
+        def release_run_lock():
+            if run_lock_held[0]:
+                run_lock_held[0] = False
+                self.launcher._run_lock.release()
+
+        self.addCleanup(release_run_lock)
+        ctx = self.createZKContext(None)
+        requests = []
+        for _ in range(3):
+            request = model.NodesetRequest.new(
+                ctx,
+                tenant_name="tenant-one",
+                pipeline_name="test",
+                buildset_uuid=uuid.uuid4().hex,
+                job_uuid=uuid.uuid4().hex,
+                job_name="foobar",
+                labels=["debian-normal"],
+                priority=100,
+                request_time=time.time(),
+                zuul_event_id=uuid.uuid4().hex,
+                span_info=None,
+            )
+            requests.append(request)
+        request_a, request_b, request_c = requests
+
+        # Rank: a (best) < b < c (worst)
+        client.reviseRequest(request_a, relative_priority=1)
+        client.reviseRequest(request_b, relative_priority=2)
+        client.reviseRequest(request_c, relative_priority=3)
+
+        expected_priorities = {
+            request_a.uuid: 1,
+            request_b.uuid: 2,
+            request_c.uuid: 3,
+        }
+        for _ in iterate_timeout(10, "requests to sync to launcher cache"):
+            cached_requests = {
+                request.uuid: request
+                for request in self.launcher.api.getNodesetRequests()
+            }
+            if all(
+                request_id in cached_requests and
+                cached_requests[request_id].relative_priority == priority
+                for request_id, priority in expected_priorities.items()
+            ):
+                break
+
+        # Force the admission-control path to always engage regardless
+        # of actual quota usage, so we can test the ranking/window
+        # logic in isolation.
+        self.launcher.quota_admission_threshold = 0.0
+
+        try:
+            self.launcher.quota_admission_buildset_window = 1
+            messages = []
+            self.assertTrue(self.launcher._admitNodeForBuildset(
+                request_a, provider, label, self.launcher.log, messages))
+            self.assertFalse(self.launcher._admitNodeForBuildset(
+                request_b, provider, label, self.launcher.log, messages))
+            self.assertFalse(self.launcher._admitNodeForBuildset(
+                request_c, provider, label, self.launcher.log, messages))
+
+            self.launcher.quota_admission_buildset_window = 2
+            self.assertTrue(self.launcher._admitNodeForBuildset(
+                request_a, provider, label, self.launcher.log, messages))
+            self.assertTrue(self.launcher._admitNodeForBuildset(
+                request_b, provider, label, self.launcher.log, messages))
+            self.assertFalse(self.launcher._admitNodeForBuildset(
+                request_c, provider, label, self.launcher.log, messages))
+
+            # Disabling the feature (the default) always admits.
+            self.launcher.quota_admission_threshold = None
+            self.assertTrue(self.launcher._admitNodeForBuildset(
+                request_c, provider, label, self.launcher.log, messages))
+        finally:
+            for request in requests:
+                request.delete(ctx)
+            release_run_lock()
+
     @simple_layout('layouts/launcher-noop.yaml',
                    enable_nodepool=True)
     def test_noop_job(self):
