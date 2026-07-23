@@ -1,0 +1,43 @@
+- secret:
+    name: old_secret
+    data:
+      username: test-username
+      password: !encrypted/pkcs1-oaep |
+        BFhtdnm8uXx7kn79RFL/zJywmzLkT1GY78P3bOtp4WghUFWobkifSu7ZpaV4NeO0s71YUsi1wGZZ
+        L0LveZjUN0t6OU1VZKSG8R5Ly7urjaSo1pPVIq5Rtt/H7W14Lecd+cUeKb4joeusC9drN3AA8a4o
+        ykcVpt1wVqUnTbMGC9ARMCQP6eopcs1l7tzMseprW4RDNhIuz3CRgd0QBMPl6VDoFgBPB8vxtJw+
+        3m0rqBYZCLZgCXekqlny8s2s92nJMuUABbJOEcDRarzibDsSXsfJt1y+5n7yOURsC7lovMg4GF/v
+        Cl/0YMKjBO5bpv9EM5fToeKYyPGSKQoHOnCYceb3cAVcv5UawcCic8XjhEhp4K7WPdYf2HVAC/qt
+        xhbpjTxG4U5Q/SoppOJ60WqEkQvbXs6n5Dvy7xmph6GWmU/bAv3eUK3pdD3xa2Ue1lHWz3U+rsYr
+        aI+AKYsMYx3RBlfAmCeC1ve2BXPrqnOo7G8tnUvfdYPbK4Aakk0ds/AVqFHEZN+S6hRBmBjLaRFW
+        Z3QSO1NjbBxWnaHKZYT7nkrJm8AMCgZU0ZArFLpaufKCeiK5ECSsDxic4FIsY1OkWT42qEUfL0Wd
+        +150AKGNZpPJnnP3QYY4W/MWcKH/zdO400+zWN52WevbSqZy90tqKDJrBkMl1ydqbuw1E4ZHvIs=
+
+- secret:
+    name: new_secret
+    data:
+      username: test-username
+      password: !encrypted/pkcs1-oaep
+        - ImOulf2gpF5/dwi80modSvTEJxqLBS6HnJuBsalmwjyDncbl6TrZt9U5r6Bb4tvZi/bKA
+          CuiPD9y+KcLfv46fzSTCbblB7FPbiI2UD+aVy7nvdQnIhPl1OChWHJA9qvAYdcEaA1QyC
+          mcJ1547+kbnySGonPz9BpMQ0cOHfNrRh7PzGZ2aWrm8H6y50iMmoH9JCPjqrPwoeu8+4R
+          vf61eqEIc/q174QJcHpGyq7zbh75JuEJmGZNjYbPDRT9HA8ht/obT24lNZxO1umj8sttH
+          YkuweNWZ3tigMMIgvxWvbfLKxO9+NQUzQhLD/nSpfnCChBgbNhIJXek481iRGqIgnUUcg
+          8Ox10g2mwf1mjyxxvV5Nc0J8EK2avUEXSGyisWAmAR6SUNUFmv5o1J71GRjDHWu8jokFz
+          t/VLJrq5/hQJaROtx3gxlsIc9pQBVK6fgjGguOAUuzw45Td4bKRmzbEkdMRwHKEXsdqHc
+          38K4N77zCUfCwW9lG3zgxFewdy8ZnCfAmUwpoppTv5UIEPEiJwcU1jn1LEcIYUPmRBaNS
+          QeeSDZ642CdS20LdzAP3VVtKx2ywxjugEZW+7QaKzQyZJCjseqKUMny/PLbVwMmCqBBlb
+          8nJMjxCdH3+KtRn0dJZus5t1zjkjqEqNWFFD3RpAq5iZXZdRLjCWuFahX7Y8VQ=
+
+- job:
+    parent: base
+    name: project1-secret
+    run: playbooks/secret.yaml
+    secrets:
+      - old_secret
+      - new_secret
+
+- project:
+    check:
+      jobs:
+        - project1-secret
