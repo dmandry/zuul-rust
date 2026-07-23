@@ -1,4 +1,5 @@
 # Copyright 2020 BMW Group
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -151,17 +152,27 @@ class BaseComponent(ZooKeeperBase):
 class SchedulerComponent(BaseComponent):
     kind = "scheduler"
 
+    def __init__(self, *args, **kwargs):
+        keystore_passwords = kwargs.pop('keystore_passwords', [])
+        super().__init__(*args, **kwargs)
+        self.initial_state = {
+            "keystore_passwords": keystore_passwords
+        }
+        self.content.update(self.initial_state)
+
 
 class ExecutorComponent(BaseComponent):
     kind = "executor"
 
     def __init__(self, *args, **kwargs):
+        keystore_passwords = kwargs.pop('keystore_passwords', [])
         super().__init__(*args, **kwargs)
         self.initial_state = {
             "accepting_work": False,
             "zone": None,
             "allow_unzoned": False,
             "process_merge_jobs": False,
+            "keystore_passwords": keystore_passwords,
         }
         self.content.update(self.initial_state)
 
@@ -185,6 +196,14 @@ class FingerGatewayComponent(BaseComponent):
 
 class WebComponent(BaseComponent):
     kind = "web"
+
+    def __init__(self, *args, **kwargs):
+        keystore_passwords = kwargs.pop('keystore_passwords', [])
+        super().__init__(*args, **kwargs)
+        self.initial_state = {
+            "keystore_passwords": keystore_passwords
+        }
+        self.content.update(self.initial_state)
 
 
 class LauncherComponent(BaseComponent):
@@ -244,6 +263,15 @@ class ComponentRegistry(ZooKeeperBase):
         # call the onConnect callback.
         if self.client.connected:
             self._onConnect()
+
+    def waitForComponent(self, wait_component):
+        while True:
+            for kind, components in self.all():
+                if wait_component.kind != kind:
+                    continue
+                for component in components:
+                    if component.hostname == wait_component.hostname:
+                        return
 
     def _getComponentRoot(self, kind):
         return '/'.join([COMPONENTS_ROOT, kind])
@@ -344,7 +372,8 @@ class ComponentRegistry(ZooKeeperBase):
 
         if kind is None:
             return [(kind, list(components.values()))
-                    for (kind, components) in self._cached_components.items()]
+                    for (kind, components) in
+                    list(self._cached_components.items())]
 
         # Filter the cached components for the given kind
         return self._cached_components.get(kind, {}).values()
@@ -400,7 +429,7 @@ class ComponentRegistry(ZooKeeperBase):
         self.model_api = version
 
     def _handleCallbacks(self):
-        for cb in self.callbacks:
+        for cb in list(self.callbacks):
             try:
                 cb()
             except Exception:
