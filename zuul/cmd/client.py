@@ -38,6 +38,7 @@ from zuul.model import (
     Abide,
     ImageBuildArtifact,
     ImageUpload,
+    KeystorePasswordManager,
     Pipeline,
     PipelineChangeList,
     PipelineState,
@@ -1186,16 +1187,21 @@ class Client(zuul.cmd.ZuulApp):
         finally:
             sys.exit(err_code)
 
+    def getKeystore(self, zk_client):
+        try:
+            self.config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        kpm = KeystorePasswordManager(self.config)
+        kpm.setPassword(set(kpm.password_hashes))
+        return KeyStorage(zk_client, kpm)
+
     def export_keys(self):
         logging.basicConfig(level=logging.INFO)
 
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         export = keystore.exportKeys()
         with open(os.open(self.args.path,
                           os.O_CREAT | os.O_WRONLY, 0o600), 'w') as f:
@@ -1207,11 +1213,7 @@ class Client(zuul.cmd.ZuulApp):
 
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         with open(self.args.path, 'r') as f:
             import_data = json.load(f)
         keystore.importKeys(import_data, self.args.force)
@@ -1225,11 +1227,7 @@ class Client(zuul.cmd.ZuulApp):
 
         COMPONENT_REGISTRY.create(zk_client)
 
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.copyProjectSSHKeys(args.src_connection,
                                     args.src_project,
@@ -1251,12 +1249,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client.connect()
 
         COMPONENT_REGISTRY.create(zk_client)
-
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.deleteProjectSSHKeys(args.connection, args.project)
         keystore.deleteProjectSecretsKeys(args.connection, args.project)
@@ -1270,11 +1263,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.addProjectSSHKey(args.connection, args.project)
         sys.exit(0)
@@ -1284,11 +1273,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.addProjectSecretsKey(args.connection, args.project)
         sys.exit(0)
@@ -1298,11 +1283,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.addTenantSSHKey(args.tenant)
         sys.exit(0)
@@ -1312,11 +1293,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         info = keystore.getProjectSSHKeyInfo(args.connection, args.project,
                                              create=False)
@@ -1331,11 +1308,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         info = keystore.getProjectSecretsKeyInfo(args.connection, args.project,
                                                  create=False)
@@ -1350,11 +1323,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         info = keystore.getTenantSSHKeyInfo(args.tenant, create=False)
         table = prettytable.PrettyTable(field_names=['Version', 'Created'])
@@ -1368,11 +1337,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.deleteProjectSSHKey(
             args.connection, args.project, args.version)
@@ -1383,11 +1348,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.deleteProjectSecretsKey(
             args.connection, args.project, args.version)
@@ -1398,11 +1359,7 @@ class Client(zuul.cmd.ZuulApp):
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
         COMPONENT_REGISTRY.create(zk_client)
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         args = self.args
         keystore.deleteTenantSSHKey(args.tenant, args.version)
         sys.exit(0)
@@ -1412,11 +1369,7 @@ class Client(zuul.cmd.ZuulApp):
 
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
-        try:
-            password = self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
-        keystore = KeyStorage(zk_client, password=password)
+        keystore = self.getKeystore(zk_client)
         algorithm = self.args.algorithm
         keystore.deleteOidcSigningKeys(algorithm)
         self.log.info("Delete OIDC signing keys for %s", algorithm)
