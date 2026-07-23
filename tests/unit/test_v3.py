@@ -2295,6 +2295,26 @@ class TestInRepoConfig(ZuulTestCase):
         self.assertIn('syntax error', A.messages[0],
                       "A should have a syntax error reported")
 
+    def test_trusted_project_regex_compile_error(self):
+        in_repo_conf = textwrap.dedent(
+            """
+            - project:
+                name: ^(?!example-broken-regex
+            """)
+
+        file_dict = {'zuul.yaml': in_repo_conf}
+        A = self.fake_gerrit.addFakeChange('common-config', 'master', 'A',
+                                           files=file_dict)
+        A.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        self.assertEqual(A.data['status'], 'NEW')
+        self.assertEqual(A.reported, 1,
+                         "A should report failure")
+        self.assertIn('syntax error', A.messages[0],
+                      "A should have a syntax error reported")
+
     def test_untrusted_yaml_error(self):
         in_repo_conf = textwrap.dedent(
             """
