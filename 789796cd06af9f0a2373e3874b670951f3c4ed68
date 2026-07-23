@@ -36,6 +36,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "1291a2ca_ecf0ed8e",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3323,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-07-23T14:03:32Z",
+      "side": 1,
+      "message": "How about:\n\n    # Multiple project stanzas may share the same regex.  We only reference\n    # the first stanza in the error message.  All stanzas associated with a\n    # broken regex are skipped and parsing continues.",
+      "parentUuid": "bf54f5c5_e8e57f0c",
+      "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1c1b3ebe_d2ac9f84",
