@@ -462,6 +462,19 @@ class MultipleProjectConfigurations(ConfigurationSyntaxWarning):
         super().__init__(message)
 
 
+class SecretEncryptedWithObsoleteKey(ConfigurationSyntaxWarning):
+    zuul_error_name = 'Secret Encrypted With Obsolete Key'
+    zuul_error_problem = 'deprecated encryption'
+
+    def __init__(self, secret):
+        message = textwrap.dedent(f"""\
+        The secret {secret.name} in {secret.source_context.path} is encrypted
+        with an old version of the project's key.  Re-encrypt the secret
+        with the current public key.""")
+        message = textwrap.fill(message)
+        super().__init__(message)
+
+
 class DeprecationWarning(ConfigurationSyntaxWarning):
     zuul_error_problem = 'deprecated syntax'
 
