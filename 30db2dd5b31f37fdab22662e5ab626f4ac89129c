@@ -34,6 +34,24 @@
       "parentUuid": "36cfe91e_361baa60",
       "revId": "30db2dd5b31f37fdab22662e5ab626f4ac89129c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0875e2fe_60e41676",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2428,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-23T13:19:08Z",
+      "side": 1,
+      "message": "Yep, seems like I swallowed some words :)",
+      "parentUuid": "7ce48bfd_f720e9f6",
+      "revId": "30db2dd5b31f37fdab22662e5ab626f4ac89129c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
