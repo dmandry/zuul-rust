@@ -27,7 +27,12 @@ from zuul.configloader import (
     ConfigLoader, safe_load_yaml
 )
 from zuul.exceptions import AuthZRoleNotFoundError, AuthZRuleNotFoundError
-from zuul.model import Abide, MergeRequest, SourceContext
+from zuul.model import (
+    Abide,
+    KeystorePasswordManager,
+    MergeRequest,
+    SourceContext,
+)
 from zuul.zk.components import COMPONENT_REGISTRY
 from zuul.zk.locks import tenant_read_lock
 
@@ -121,9 +126,11 @@ class TenantParserTestCase(ZuulTestCase):
     CONFIG_SET = UNTRUSTED_SET | PROVIDER_SET
 
     def setupAllProjectKeys(self, config: ConfigParser):
-        password = self.config.get("keystore", "password")
+        kpm = KeystorePasswordManager(self.config)
+        kpm.setPassword(set(kpm.password_hashes))
+
         keystore = zuul.lib.keystorage.KeyStorage(
-            self.zk_client, password=password, start_cache=False)
+            self.zk_client, kpm, start_cache=False)
 
         # This is only needed for the keystore1 -> keystore3 migration
         COMPONENT_REGISTRY.create(self.zk_client)

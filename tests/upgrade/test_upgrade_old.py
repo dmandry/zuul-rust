@@ -45,8 +45,9 @@ class TestUpgradeOld(LauncherBaseTestCase):
             self.merge_server.stop()
             self.merge_server.join()
 
-        self.executor_server.stop()
-        self.executor_server.join()
+        if self.executor_server._running:
+            self.executor_server.stop()
+            self.executor_server.join()
         self.launcher.stop()
         self.launcher.join()
         self.statsd.stop()

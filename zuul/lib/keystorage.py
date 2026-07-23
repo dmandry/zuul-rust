@@ -29,16 +29,27 @@ RSA_KEY_SIZE = 2048
 class KeyStorage:
     log = logging.getLogger("zuul.KeyStorage")
 
-    def __init__(self, zookeeper_client, password, start_cache=True):
-        self.password = password
-        self.password_bytes = password.encode('utf8')
+    def __init__(self, zookeeper_client, keystore_password_manager,
+                 start_cache=True):
+        self.kp_manager = keystore_password_manager
+        passwords = self.kp_manager.passwords
+        self.all_passwords = passwords
+        self.all_passwords_bytes = [x.encode('utf8') for x in passwords]
         self.client = zookeeper_client
-        self.keystorage1 = KeyStorage1(zookeeper_client, password)
-        self.keystorage3 = KeyStorage3(zookeeper_client, password)
+        self.keystorage1 = KeyStorage1(zookeeper_client, self.password)
+        self.keystorage3 = KeyStorage3(zookeeper_client, self.kp_manager)
         if start_cache:
             self.oidc_signing_keys_cache = OIDCSigningKeysCache(self.client)
         else:
             self.oidc_signing_keys_cache = None
+
+    @property
+    def password(self):
+        return self.kp_manager.password
+
+    @property
+    def password_bytes(self):
+        return self.kp_manager.password_bytes
 
     @property
     def _keystorage(self):
@@ -258,10 +269,16 @@ class KeyStorage:
         pem_private_key = latest_key["private_key"].encode("utf-8")
         version = latest_key["version"]
 
-        private_key, public_key = encryption.deserialize_rsa_keypair(
-            pem_private_key, self.password_bytes)
-
-        return private_key, public_key, version
+        # TODO use old keys:
+        for password_bytes in self.all_passwords_bytes:
+            try:
+                private_key, public_key =\
+                    encryption.deserialize_rsa_keypair(
+                        pem_private_key, password_bytes)
+                return private_key, public_key, version
+            except ValueError:
+                pass
+        raise ValueError("Decryption failed")
 
     def deleteOidcSigningKeys(self, algorithm):
         """Delete the complete internal data structure"""

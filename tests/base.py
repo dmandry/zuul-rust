@@ -71,7 +71,7 @@ from kazoo.exceptions import NoNodeError
 
 from zuul import model
 from zuul.model import (
-    BuildRequest, MergeRequest, WebInfo, HoldRequest
+    BuildRequest, MergeRequest, WebInfo, HoldRequest, KeystorePasswordManager
 )
 
 from zuul.driver.zuul import ZuulDriver
@@ -2605,29 +2605,9 @@ class ZuulTestCase(BaseTestCase):
         self._configureMqtt()
         self._configureElasticsearch()
 
-        executor_connections = TestConnectionRegistry(
-            self.config, self.test_config,
-            self.additional_event_queues,
-            self.upstream_root, self.poller_events,
-            self.git_url_with_auth, self.addCleanup)
-        executor_connections.configure(self.config, sources=True)
         self.executor_api = TestingExecutorApi(self.zk_client)
         self.merger_api = TestingMergerApi(self.zk_client)
-        self.executor_server = RecordingExecutorServer(
-            self.config,
-            executor_connections,
-            jobdir_root=self.jobdir_root,
-            _run_ansible=self.run_ansible,
-            _test_root=self.test_root,
-            keep_jobdir=KEEP_TEMPDIRS,
-            log_console_port=self.log_console_port)
-        for return_data in self.test_config.return_data:
-            self.executor_server.returnData(
-                return_data['job'],
-                return_data['ref'],
-                return_data['data'],
-            )
-        self.executor_server.start()
+        self.executor_server = self.createExecutor(self.config)
         self.history = self.executor_server.build_history
         self.builds = self.executor_server.running_builds
 
@@ -2685,6 +2665,40 @@ class ZuulTestCase(BaseTestCase):
         launcher._stats_interval = 1
         launcher.start()
         return launcher
+
+    def createExecutor(self, config=None):
+        if config is None:
+            config = self.config
+        executor_config = copyConfig(config)
+        executor_connections = TestConnectionRegistry(
+            self.config, self.test_config,
+            self.additional_event_queues,
+            self.upstream_root, self.poller_events,
+            self.git_url_with_auth, self.addCleanup)
+        executor_connections.configure(executor_config, sources=True)
+        executor = RecordingExecutorServer(
+            executor_config,
+            connections=executor_connections,
+            jobdir_root=self.jobdir_root,
+            _run_ansible=self.run_ansible,
+            _test_root=self.test_root,
+            log_console_port=self.log_console_port)
+        for return_data in self.test_config.return_data:
+            executor.returnData(
+                return_data['job'],
+                return_data['ref'],
+                return_data['data'],
+            )
+        executor.start()
+
+        def shutdown_executor():
+            if executor._running:
+                executor.hold_jobs_in_build = False
+                executor.release()
+                executor.stop()
+                executor.join()
+        self.addCleanup(shutdown_executor)
+        return executor
 
     def createZKContext(self, lock=None):
         if lock is None:
@@ -2908,9 +2922,11 @@ class ZuulTestCase(BaseTestCase):
         if self.create_project_keys:
             return
 
-        password = self.config.get("keystore", "password")
+        keystore_password_manager = KeystorePasswordManager(self.config)
+        keystore_password_manager.setPassword(
+            keystore_password_manager.password_hashes)
         keystore = zuul.lib.keystorage.KeyStorage(
-            self.zk_client, password=password, start_cache=False)
+            self.zk_client, keystore_password_manager, start_cache=False)
 
         # This is only needed for the keystore1 -> keystore3 migration
         COMPONENT_REGISTRY.create(self.zk_client)
@@ -2953,9 +2969,11 @@ class ZuulTestCase(BaseTestCase):
     def setupTenantKeys(self, tenant_name):
         # Make sure we set up an RSA key for the tenant so that we
         # don't spend time generating one:
-        password = self.config.get("keystore", "password")
+        keystore_password_manager = KeystorePasswordManager(self.config)
+        keystore_password_manager.setPassword(
+            keystore_password_manager.password_hashes)
         keystore = zuul.lib.keystorage.KeyStorage(
-            self.zk_client, password=password, start_cache=False)
+            self.zk_client, keystore_password_manager, start_cache=False)
         import_keys = {}
         import_data = {'keys': import_keys}
 
@@ -3125,8 +3143,9 @@ class ZuulTestCase(BaseTestCase):
             self.merge_server.stop()
             self.merge_server.join()
 
-        self.executor_server.stop()
-        self.executor_server.join()
+        if self.executor_server._running:
+            self.executor_server.stop()
+            self.executor_server.join()
         self.launcher.stop()
         self.launcher.join()
         if self.validate_tenants is None:

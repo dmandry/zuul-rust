@@ -79,6 +79,7 @@ from zuul.model import (
     BuildStatusEvent,
     FrozenJob,
     Job,
+    KeystorePasswordManager,
     RepoState,
 )
 import zuul.model
@@ -4133,19 +4134,28 @@ class ExecutorServer(BaseMergeServer):
 
         self.keep_jobdir = keep_jobdir
         self.jobdir_root = jobdir_root
-        self.keystore = KeyStorage(
-            self.zk_client,
-            password=self._get_key_store_password())
         self._running = False
         self._command_running = False
         # TODOv3(mordred): make the executor name more unique --
         # perhaps hostname+pid.
         self.hostname = get_default(self.config, 'executor', 'hostname',
                                     socket.getfqdn())
+
+        self.keystore_password_manager = KeystorePasswordManager(self.config)
         self.component_info = ExecutorComponent(
-            self.zk_client, self.hostname, version=get_version_string())
+            self.zk_client, self.hostname, version=get_version_string(),
+            keystore_passwords=self.keystore_password_manager.password_hashes,
+        )
         self.component_info.register()
-        COMPONENT_REGISTRY.create(self.zk_client)
+        component_registry = COMPONENT_REGISTRY.create(self.zk_client)
+        # This is mostly for unit tests, where we can have an empty,
+        # initialized registry object.
+        component_registry.waitForComponent(self.component_info)
+        self.keystore_password_manager.connectToRegistry(component_registry)
+        self.keystore = KeyStorage(
+            self.zk_client,
+            self.keystore_password_manager)
+
         self.secrets_cache = cachetools.LFUCache(maxsize=128)
         self.zk_context = ZKContext(self.zk_client, None, None, self.log)
         self.monitoring_server = MonitoringServer(self.config, 'executor',
