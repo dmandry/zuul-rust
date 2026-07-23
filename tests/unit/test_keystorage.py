@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from configparser import ConfigParser
 import io
 import time
 
@@ -21,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (
     RSAPrivateKey,
 )
 
+from zuul.model import KeystorePasswordManager
 from zuul.lib import encryption
 from zuul.lib import keystorage3
 from zuul.zk import ZooKeeperClient
@@ -30,7 +32,9 @@ from zuul.zk.components import (
 )
 
 from tests.base import (
+    copyConfig,
     BaseTestCase,
+    ZuulTestCase,
     ZOOKEEPER_SESSION_TIMEOUT,
 )
 
@@ -56,9 +60,15 @@ class TestKeyStorage3(BaseTestCase):
         COMPONENT_REGISTRY.create(self.zk_client)
         self.password = 'keystorage_password'
 
+        self.config = ConfigParser()
+        self.config.add_section('keystore')
+        self.config['keystore']['password'] = self.password
+        self.kpm = KeystorePasswordManager(self.config)
+        self.kpm.setPassword(set(self.kpm.password_hashes))
+
     def test_project_ssh_keys(self):
         start_time = int(time.time())
-        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks.stop)
         # This will generate a new ssh key
         info = ks.getProjectSSHKeyInfo('gerrit', 'org/project')
@@ -83,7 +93,7 @@ class TestKeyStorage3(BaseTestCase):
         self.assertTrue(info is info2)
 
         # Another client to read it from ZK
-        ks2 = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks2 = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks2.stop)
         ks2_info = ks2.getProjectSSHKeyInfo('gerrit', 'org/project')
 
@@ -98,7 +108,7 @@ class TestKeyStorage3(BaseTestCase):
 
     def test_tenant_ssh_keys(self):
         start_time = int(time.time())
-        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks.stop)
         # This will generate a new ssh key
         info = ks.getTenantSSHKeyInfo('tenant1')
@@ -123,7 +133,7 @@ class TestKeyStorage3(BaseTestCase):
         self.assertTrue(info is info2)
 
         # Another client to read it from ZK
-        ks2 = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks2 = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks2.stop)
         ks2_info = ks2.getTenantSSHKeyInfo('tenant1')
 
@@ -138,7 +148,7 @@ class TestKeyStorage3(BaseTestCase):
 
     def test_project_secret_keys(self):
         start_time = int(time.time())
-        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks.stop)
         # This will generate a new secrets key
         info = ks.getProjectSecretsKeyInfo('gerrit', 'org/project')
@@ -163,7 +173,7 @@ class TestKeyStorage3(BaseTestCase):
         self.assertTrue(info is info2)
 
         # Another client to read it from ZK
-        ks2 = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks2 = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks2.stop)
         ks2_info = ks2.getProjectSecretsKeyInfo('gerrit', 'org/project')
 
@@ -179,7 +189,7 @@ class TestKeyStorage3(BaseTestCase):
                          ks2_key1.private_key.private_numbers())
 
     def test_rotate_project_ssh_keys(self):
-        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks.stop)
         # This will generate a new secrets key
         info = ks.getProjectSSHKeyInfo('gerrit', 'org/project')
@@ -207,7 +217,7 @@ class TestKeyStorage3(BaseTestCase):
         self.assertEqual(1, key3.version)
 
     def test_rotate_tenant_ssh_keys(self):
-        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks.stop)
         # This will generate a new secrets key
         info = ks.getTenantSSHKeyInfo('tenant-one')
@@ -235,7 +245,7 @@ class TestKeyStorage3(BaseTestCase):
         self.assertEqual(1, key3.version)
 
     def test_rotate_project_secret_keys(self):
-        ks = keystorage3.KeyStorage3(self.zk_client, self.password)
+        ks = keystorage3.KeyStorage3(self.zk_client, self.kpm)
         self.addCleanup(ks.stop)
         # This will generate a new secrets key
         info = ks.getProjectSecretsKeyInfo('gerrit', 'org/project')
@@ -261,3 +271,61 @@ class TestKeyStorage3(BaseTestCase):
         self.assertEqual(1, len(info.keys))
         key3 = info.keys[0]
         self.assertEqual(1, key3.version)
+
+
+class TestKeystorePasswordRotation(ZuulTestCase):
+    tenant_config_file = 'config/one-project/main.yaml'
+
+    def test_keystore_password_rotation(self):
+        first = self.scheds.first
+        ks = first.sched.keystore
+        info = ks.getProjectSecretsKeyInfo('gerrit', 'org/project')
+        key = info.keys[0]
+        encryption.deserialize_rsa_keypair(
+            key._encrypted_private_key.encode('utf8'), b'keystorepassword')
+
+        ssh_info = ks.getProjectSSHKeyInfo('gerrit', 'org/project')
+        ssh_key = ssh_info.keys[0]
+        with io.StringIO(ssh_key._encrypted_private_key) as o:
+            paramiko.RSAKey.from_private_key(o, 'keystorepassword')
+
+        new_pw = "newpassword\nkeystorepassword\n"
+        self.config['keystore']['password'] = new_pw
+
+        # Replace scheduler
+        first.sched.stop()
+        first.sched.join()
+        self.createScheduler()
+        self.scheds.instances.pop(0)
+        first = self.scheds.first
+        first.start()
+        self.waitUntilSettled()
+
+        # Replace Executor
+        self.executor_server.stop()
+        self.executor_server.join()
+        self.executor_server = self.createExecutor()
+
+        # Verify that the item has been re-keyed
+        ks = first.sched.keystore
+        info = ks.getProjectSecretsKeyInfo('gerrit', 'org/project')
+        key = info.keys[0]
+        encryption.deserialize_rsa_keypair(
+            key._encrypted_private_key.encode('utf8'), b'newpassword')
+
+        # Also verify we wrote the update to zk
+        config = copyConfig(self.config)
+        config['keystore']['password'] = "newpassword"
+        kpm = KeystorePasswordManager(config)
+        kpm.setPassword(set(kpm.password_hashes))
+        ks = keystorage3.KeyStorage3(self.zk_client, kpm)
+        extra = dict(keystore_password_manager=kpm)
+        ctx = ks.createZKContext()
+
+        data, zstat = self.zk_client.client.get(info._path)
+        keystorage3.ZuulSecretKeyInfo._fromRaw(ctx, data, zstat, extra=extra)
+
+        data, zstat = self.zk_client.client.get(ssh_info._path)
+        keystorage3.ZuulSSHKeyInfo._fromRaw(ctx, data, zstat, extra=extra)
+
+        self.waitUntilSettled()
