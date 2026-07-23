@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "36cfe91e_361baa60",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2428,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-23T06:51:41Z",
+      "side": 1,
+      "message": "Would it make sense to generate a pipeline and set it directly on the manager before we start processing the pipeline, e.g. around here https://opendev.org/zuul/zuul/src/branch/master/zuul/scheduler.py#L2467?\n\nThis way we would also not need to thread the id through all the methods.",
+      "revId": "30db2dd5b31f37fdab22662e5ab626f4ac89129c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
