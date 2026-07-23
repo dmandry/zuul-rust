@@ -54,6 +54,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "54457a8a_d5346d5f",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3323,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-23T14:16:57Z",
+      "side": 1,
+      "message": "That makes a lot more sense, thanks.  Another thing that would help is moving it down one line so it\u0027s a bit closer to the parsed_projects[0].  As it stands, it looks a bit like it\u0027s explaining what the projects_matching_regex list is for.",
+      "parentUuid": "bf54f5c5_e8e57f0c",
+      "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "1c1b3ebe_d2ac9f84",
