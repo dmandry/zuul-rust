@@ -53,6 +53,7 @@ from zuul.exceptions import (
     ProjectNotFoundError,
     ProjectNotPermittedError,
     ReporterJobNotPermittedError,
+    SecretEncryptedWithObsoleteKey,
     UnknownConnection,
 )
 from zuul.lib.re2util import filter_allowed_disallowed
@@ -3511,16 +3512,21 @@ class Secret(ConfigObject):
 
         return secret_data
 
-    def decrypt(self, key_info):
+    def decrypt(self, key_info, accumulator=None):
         """Return a copy of this secret with any encrypted data decrypted.
         Note that the original remains encrypted."""
 
         r = Secret(self.name, self.source_context)
-        for private_key in key_info.private_keys:
-            # TODO: Handle multiple key with an exception handler
-            r.secret_data = self._decrypt(private_key, self.secret_data)
-            break
-        return r
+        for i, private_key in enumerate(key_info.private_keys):
+            try:
+                r.secret_data = self._decrypt(private_key, self.secret_data)
+                if accumulator and i < len(key_info.private_keys) - 1:
+                    accumulator.addError(
+                        SecretEncryptedWithObsoleteKey(self))
+                return r
+            except ValueError:
+                pass
+        raise ValueError("Decryption failed")
 
     def serialize(self, layout):
         # The output of this method is used by the executor
@@ -3735,7 +3741,7 @@ class PlaybookContext(ConfigObject):
                             self.cleanup)
         return r
 
-    def validateReferences(self, layout):
+    def validateReferences(self, layout, accumulator=None):
         # Verify that references to other objects in the layout are
         # valid.
         for secret_use in self.secrets:
@@ -3754,7 +3760,7 @@ class PlaybookContext(ConfigObject):
             project = layout.tenant.getProject(
                 self.source_context.project_canonical_name)[1]
             # Decrypt a copy of the secret to verify it can be done
-            secret.decrypt(project.secrets_key_info)
+            secret.decrypt(project.secrets_key_info, accumulator=accumulator)
         # TODO: if we remove the implicit max=1 semaphore, validate
         # references here.
 
@@ -5078,7 +5084,8 @@ class Job(ConfigObject):
             return ns
         return self.nodeset
 
-    def validateReferences(self, layout, project_config=False):
+    def validateReferences(self, layout, project_config=False,
+                           accumulator=None):
         # Verify that references to other objects in the layout are
         # valid.
         if not self.isBase() and self.parent:
@@ -5135,7 +5142,7 @@ class Job(ConfigObject):
         for dependency in self.dependencies:
             layout.getJob(dependency.name)
         for pb in self.all_playbooks:
-            pb.validateReferences(layout)
+            pb.validateReferences(layout, accumulator=accumulator)
 
         if not layout.tenant.use_nodepool:
             if isinstance(self.nodeset, NodeSet):
