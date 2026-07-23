@@ -8819,6 +8819,63 @@ class TestSecrets(ZuulTestCase):
         self.assertEqual(expected_ttl, payload['exp'] - payload['iat'])
 
 
+class TestSecretRotation(ZuulTestCase):
+    tenant_config_file = 'config/secret-rotation/main.yaml'
+
+    def _getSecrets(self, job, pbtype):
+        secrets = []
+        build = self.getJobFromHistory(job)
+        for pb in getattr(build.jobdir, pbtype):
+            if pb.secrets_content:
+                secrets.append(
+                    yamlutil.ansible_unsafe_load(pb.secrets_content))
+            else:
+                secrets.append({})
+        return secrets
+
+    def test_secret_rotation(self):
+        # Test that we can use secrets encrypted with multiple keys
+        keystore = self.scheds.first.sched.keystore
+        import_keys = {}
+        import_data = {'keys': import_keys}
+        path = keystore.getProjectSecretsKeysPath('gerrit', 'org/project1')
+        with open(os.path.join(
+                FIXTURE_DIR, 'config', 'secret-rotation', 'secrets.json'),
+                  'rb') as i:
+            import_keys[path] = json.load(i)
+        keystore.importKeys(import_data, True)
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        project = tenant.getProject('review.example.com/org/project1')[1]
+        for _ in iterate_timeout(60, 'keys in cache'):
+            if len(project.secrets_key_info.keys) == 2:
+                break
+
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertEqual(A.reported, 1, "A should report success")
+        self.assertHistory([
+            dict(name='project1-secret', result='SUCCESS', changes='1,1'),
+        ])
+        secret0 = {'password': 'test-password',
+                   'username': 'test-username'}
+        secret1 = {'password': 'test-key1',
+                   'username': 'test-username'}
+        self.assertEqual(
+            [{'new_secret': secret1, 'old_secret': secret0}],
+            self._getSecrets('project1-secret', 'playbooks'))
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        errors = tenant.layout.loading_errors
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].name, 'Secret Encrypted With Obsolete Key')
+        self.assertEqual(errors[0].severity, SEVERITY_WARNING)
+
+
 class TestSecretInheritance(ZuulTestCase):
     tenant_config_file = 'config/secret-inheritance/main.yaml'
 

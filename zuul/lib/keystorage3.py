@@ -150,6 +150,12 @@ class ZuulSSHKeyInfo(ZuulKeyInfo):
                         for k in data['keys']]
         return data
 
+    def updateFromDict(self, context, extra=None, **data):
+        if 'keys' in data:
+            data['keys'] = [ZuulSSHKey.fromDict(k, extra['password'])
+                            for k in data['keys']]
+        self.updateAttributes(context, **data)
+
     @classmethod
     def newFromDict(klass, context, extra=None, **data):
         if 'keys' in data:
@@ -164,6 +170,12 @@ class ZuulSecretKeyInfo(ZuulKeyInfo):
         data['keys'] = [ZuulSecretKey.fromDict(k, extra['password_bytes'])
                         for k in data['keys']]
         return data
+
+    def updateFromDict(self, context, extra=None, **data):
+        if 'keys' in data:
+            data['keys'] = [ZuulSecretKey.fromDict(k, extra['password_bytes'])
+                            for k in data['keys']]
+        self.updateAttributes(context, **data)
 
     @classmethod
     def newFromDict(klass, context, extra=None, **data):
@@ -333,15 +345,16 @@ class KeyStorage3(ZooKeeperBase):
 
                 if existing := self.keystorage_cache._cached_objects.get(path):
                     if overwrite:
-                        existing.delete(context)
-                        self.log.info("Deleted key at %s", path)
+                        existing.updateFromDict(
+                            context, extra=extra, **data)
+                        self.log.info("Overwrote key at %s", path)
                     else:
                         self.log.warning(
                             "Not overwriting existing key at %s", path)
                         continue
-
-                cls.newFromDict(context, extra=extra, _path=path, **data)
-                self.log.info("Imported key at %s", path)
+                else:
+                    cls.newFromDict(context, extra=extra, _path=path, **data)
+                    self.log.info("Imported key at %s", path)
 
     def getProjectSSHKeysPath(self, connection_name, project_name):
         # This is only used by the unit tests
