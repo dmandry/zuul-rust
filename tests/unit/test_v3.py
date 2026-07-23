@@ -4343,7 +4343,7 @@ class FunctionalAnsibleMixIn(object):
         # Add a site variables file, used by check-vars
         path = os.path.join(FIXTURE_DIR, 'config', 'ansible',
                             'variables.yaml')
-        self.config.set('executor', 'variables', path)
+        self.executor_server.config.set('executor', 'variables', path)
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()

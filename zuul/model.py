@@ -12200,3 +12200,52 @@ class TenantEventState(zkobject.ZKObject):
                 self._save(context, data, create=True)
             except NodeExistsError:
                 self._save(context, data)
+
+
+class KeystorePasswordManager:
+    def __init__(self, config):
+        try:
+            passwords = config["keystore"]["password"]
+        except KeyError:
+            raise RuntimeError("No key store password configured!")
+        passwords = [x.strip() for x in passwords.split('\n')]
+
+        self.password = None
+        self.password_bytes = None
+        self.passwords_by_hash = {}
+        # We rely on dict order; we will use the first password that
+        # all components have.
+        for password in passwords:
+            hasher = hashlib.sha256()
+            hasher.update(password.encode('utf8'))
+            pw_hash = hasher.hexdigest()
+            self.passwords_by_hash[pw_hash] = password
+        self.password_hashes = list(self.passwords_by_hash.keys())
+        self.passwords = passwords
+        self.passwords_bytes = [x.encode('utf8') for x in passwords]
+
+    def setPassword(self, common_hashes):
+        "Set the current password to the first common one"
+        for pw_hash, password in self.passwords_by_hash.items():
+            if pw_hash in common_hashes:
+                self.password = password
+                self.password_bytes = password.encode('utf8')
+                return
+
+    def connectToRegistry(self, component_registry):
+        component_registry.registerCallback(
+            lambda: self.registryCallback(component_registry))
+        self.registryCallback(component_registry)
+
+    def registryCallback(self, registry):
+        common_hashes = set()
+        for ctype, components in registry.all():
+            for component in components:
+                # Ignore components without passwords or the empty list
+                # (the component could be initializing).
+                if hashes := getattr(component, 'keystore_passwords', []):
+                    if not common_hashes:
+                        common_hashes = set(hashes)
+                    else:
+                        common_hashes &= set(hashes)
+        self.setPassword(common_hashes)

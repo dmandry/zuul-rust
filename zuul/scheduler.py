@@ -67,6 +67,7 @@ from zuul.model import (
     HoldRequest,
     ImageBuildArtifact,
     ImageUpload,
+    KeystorePasswordManager,
     MergeCompletedEvent,
     NodeRequest,
     NodesProvisionedEvent,
@@ -289,10 +290,18 @@ class Scheduler(threading.Thread):
 
         self.zuul_version = get_version_string()
 
+        self.keystore_password_manager = KeystorePasswordManager(self.config)
         self.component_info = SchedulerComponent(
-            self.zk_client, self.hostname, version=self.zuul_version)
+            self.zk_client, self.hostname, version=self.zuul_version,
+            keystore_passwords=self.keystore_password_manager.password_hashes,
+        )
         self.component_info.register()
         self.component_registry = COMPONENT_REGISTRY.create(self.zk_client)
+        # This is mostly for unit tests, where we can have an empty,
+        # initialized registry object.
+        self.component_registry.waitForComponent(self.component_info)
+        self.keystore_password_manager.connectToRegistry(
+            self.component_registry)
         self.system_config_cache = SystemConfigCache(self.zk_client,
                                                      self.wake_event.set)
         self.unparsed_config_cache = UnparsedConfigCache(self.zk_client)
@@ -337,7 +346,7 @@ class Scheduler(threading.Thread):
 
         self.keystore = KeyStorage(
             self.zk_client,
-            password=self._get_key_store_password())
+            self.keystore_password_manager)
 
         self.abide = Abide()
         self.unparsed_abide = UnparsedAbideConfig()
@@ -1324,12 +1333,6 @@ class Scheduler(threading.Thread):
         log.debug("Waiting for enqueue")
         result.wait()
         log.debug("Enqueue complete")
-
-    def _get_key_store_password(self):
-        try:
-            return self.config["keystore"]["password"]
-        except KeyError:
-            raise RuntimeError("No key store password configured!")
 
     def runTenantLayoutUpdates(self):
         log = logging.getLogger("zuul.Scheduler.LayoutUpdate")

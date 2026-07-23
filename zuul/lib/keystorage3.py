@@ -38,6 +38,11 @@ class ZuulSSHKey:
         self.created = None
         self.version = None
 
+    def _rekey(self, password):
+        with io.StringIO() as o:
+            self._key_object.write_private_key(o, password)
+            self._encrypted_private_key = o.getvalue()
+
     @classmethod
     def new(cls, password, version):
         self = cls()
@@ -84,6 +89,10 @@ class ZuulSecretKey:
         self.private_key = None
         self.created = None
         self.version = None
+
+    def _rekey(self, password):
+        self._encrypted_private_key = encryption.serialize_rsa_private_key(
+            self.private_key, password).decode("utf-8")
 
     @classmethod
     def new(cls, password, version):
@@ -142,75 +151,94 @@ class ZuulKeyInfo(ZKObject):
     def private_keys(self):
         return [k.private_key for k in self.keys]
 
-
-class ZuulSSHKeyInfo(ZuulKeyInfo):
     def deserialize(self, data, context, extra=None):
         data = super().deserialize(data, context, extra)
-        data['keys'] = [ZuulSSHKey.fromDict(k, extra['password'])
-                        for k in data['keys']]
+        self._handleKeys(data, extra)
         return data
 
     def updateFromDict(self, context, extra=None, **data):
-        if 'keys' in data:
-            data['keys'] = [ZuulSSHKey.fromDict(k, extra['password'])
-                            for k in data['keys']]
+        self._handleKeys(data, extra)
         self.updateAttributes(context, **data)
 
     @classmethod
-    def newFromDict(klass, context, extra=None, **data):
-        if 'keys' in data:
-            data['keys'] = [ZuulSSHKey.fromDict(k, extra['password'])
-                            for k in data['keys']]
+    def newFromDict(cls, context, extra=None, **data):
+        cls._handleKeys(data, extra)
         return super().new(context, **data)
+
+
+class ZuulSSHKeyInfo(ZuulKeyInfo):
+    @classmethod
+    def _handleKeys(cls, data, extra):
+        kp_manager = extra['keystore_password_manager']
+        keys = []
+        for keydata in data.get('keys', []):
+            key = None
+            error = None
+            for password in kp_manager.passwords:
+                try:
+                    key = ZuulSSHKey.fromDict(keydata, password)
+                    break
+                except paramiko.ssh_exception.SSHException as e:
+                    error = e
+            if key is None:
+                raise error
+            if password != kp_manager.password:
+                data['_rekey'] = True
+                key._rekey(kp_manager.password)
+            keys.append(key)
+        data['keys'] = keys
 
 
 class ZuulSecretKeyInfo(ZuulKeyInfo):
-    def deserialize(self, data, context, extra=None):
-        data = super().deserialize(data, context, extra)
-        data['keys'] = [ZuulSecretKey.fromDict(k, extra['password_bytes'])
-                        for k in data['keys']]
-        return data
-
-    def updateFromDict(self, context, extra=None, **data):
-        if 'keys' in data:
-            data['keys'] = [ZuulSecretKey.fromDict(k, extra['password_bytes'])
-                            for k in data['keys']]
-        self.updateAttributes(context, **data)
-
     @classmethod
-    def newFromDict(klass, context, extra=None, **data):
-        if 'keys' in data:
-            data['keys'] = [ZuulSecretKey.fromDict(k, extra['password_bytes'])
-                            for k in data['keys']]
-        return super().new(context, **data)
+    def _handleKeys(cls, data, extra):
+        kp_manager = extra['keystore_password_manager']
+        keys = []
+        for keydata in data.get('keys', []):
+            key = None
+            error = None
+            for password in kp_manager.passwords_bytes:
+                try:
+                    key = ZuulSecretKey.fromDict(keydata, password)
+                    break
+                except ValueError as e:
+                    error = e
+            if key is None:
+                raise error
+            if password != kp_manager.password_bytes:
+                data['_rekey'] = True
+                key._rekey(kp_manager.password_bytes)
+            keys.append(key)
+        data['keys'] = keys
 
 
 class KeystorageCache(ZuulTreeCache):
     def __init__(self, *args, **kw):
-        self.password = kw.pop('password')
-        self.password_bytes = self.password.encode('utf8')
+        self.extra = kw.pop('extra')
         super().__init__(*args, **kw, auto_reinit=False)
 
     def objectFromRaw(self, key, data, zstat):
-        extra = dict(password=self.password,
-                     password_bytes=self.password_bytes)
         if key.endswith('/ssh'):
             info = ZuulSSHKeyInfo._fromRaw(
-                self._zk_context, data, zstat, extra)
+                self._zk_context, data, zstat, self.extra)
             info._set(_path=key)
+            if getattr(info, '_rekey', False):
+                self.log.info("Re-encrypting %s with new password", key)
+                info.updateAttributes(self._zk_context)
             return info
         elif key.endswith('/secrets'):
             info = ZuulSecretKeyInfo._fromRaw(
-                self._zk_context, data, zstat, extra)
+                self._zk_context, data, zstat, self.extra)
             info._set(_path=key)
+            if getattr(info, '_rekey', False):
+                self.log.info("Re-encrypting %s with new password", key)
+                info.updateAttributes(self._zk_context)
             return info
         else:
             raise Exception("Unknown key class")
 
     def updateFromRaw(self, obj, key, data, zstat):
-        extra = dict(password=self.password,
-                     password_bytes=self.password_bytes)
-        obj._updateFromRaw(self._zk_context, data, zstat, extra)
+        obj._updateFromRaw(self._zk_context, data, zstat, self.extra)
 
     def parsePath(self, path):
         key = None
@@ -299,13 +327,20 @@ class KeyStorage3(ZooKeeperBase):
     log = logging.getLogger("zuul.KeyStorage")
     ROOT_PATH = "/keystorage3"
 
-    def __init__(self, zookeeper_client, password, start_cache=True):
+    def __init__(self, zookeeper_client, keystore_password_manager,
+                 start_cache=True):
         super().__init__(zookeeper_client)
-        self.password = password
-        self.password_bytes = password.encode("utf-8")
+        self.kp_manager = keystore_password_manager
+        passwords = self.kp_manager.passwords
+        self.all_passwords = passwords
+        self.all_passwords_bytes = [x.encode('utf8') for x in passwords]
+        self.extra = dict(
+            keystore_password_manager=keystore_password_manager,
+        )
+
         if start_cache:
             self.keystorage_cache = KeystorageCache(
-                self.client, self.ROOT_PATH, password=self.password)
+                self.client, self.ROOT_PATH, extra=self.extra)
         else:
             self.keystorage_cache = None
 
@@ -326,8 +361,6 @@ class KeyStorage3(ZooKeeperBase):
 
     def importKeys(self, import_data, overwrite):
         self.keystorage_cache.ensureReady()
-        extra = dict(password=self.password,
-                     password_bytes=self.password_bytes)
         with self.createZKContext() as context:
             for path, data in import_data['keys'].items():
                 if (path.startswith('/keystorage/') or
@@ -346,14 +379,15 @@ class KeyStorage3(ZooKeeperBase):
                 if existing := self.keystorage_cache._cached_objects.get(path):
                     if overwrite:
                         existing.updateFromDict(
-                            context, extra=extra, **data)
+                            context, extra=self.extra, **data)
                         self.log.info("Overwrote key at %s", path)
                     else:
                         self.log.warning(
                             "Not overwriting existing key at %s", path)
                         continue
                 else:
-                    cls.newFromDict(context, extra=extra, _path=path, **data)
+                    cls.newFromDict(context, extra=self.extra,
+                                    _path=path, **data)
                     self.log.info("Imported key at %s", path)
 
     def getProjectSSHKeysPath(self, connection_name, project_name):
@@ -371,7 +405,7 @@ class KeyStorage3(ZooKeeperBase):
                 return None
             self.log.info("Generating a new SSH key for %s/%s",
                           connection_name, project_name)
-            zuul_key = ZuulSSHKey.new(self.password, version=0)
+            zuul_key = ZuulSSHKey.new(self.kp_manager.password, version=0)
             keys = [zuul_key]
             try:
                 with self.createZKContext() as context:
@@ -395,7 +429,8 @@ class KeyStorage3(ZooKeeperBase):
                       connection_name, project_name)
         keys = info.keys.copy()
         version = len(keys)
-        zuul_key = ZuulSSHKey.new(self.password_bytes, version=version)
+        zuul_key = ZuulSSHKey.new(
+            self.kp_manager.password_bytes, version=version)
         keys.append(zuul_key)
         with self.createZKContext() as context:
             info.updateAttributes(context, keys=keys)
@@ -456,7 +491,7 @@ class KeyStorage3(ZooKeeperBase):
                 return None
             self.log.info("Generating a new SSH key for %s",
                           tenant_name)
-            zuul_key = ZuulSSHKey.new(self.password, version=0)
+            zuul_key = ZuulSSHKey.new(self.kp_manager.password, version=0)
             keys = [zuul_key]
             try:
                 with self.createZKContext() as context:
@@ -478,7 +513,8 @@ class KeyStorage3(ZooKeeperBase):
         self.log.info("Generating a new SSH key for %s", tenant_name)
         keys = info.keys.copy()
         version = len(keys)
-        zuul_key = ZuulSSHKey.new(self.password_bytes, version=version)
+        zuul_key = ZuulSSHKey.new(
+            self.kp_manager.password_bytes, version=version)
         keys.append(zuul_key)
         with self.createZKContext() as context:
             info.updateAttributes(context, keys=keys)
@@ -531,7 +567,8 @@ class KeyStorage3(ZooKeeperBase):
                 return None
             self.log.info("Generating a new secrets key for %s/%s",
                           connection_name, project_name)
-            zuul_key = ZuulSecretKey.new(self.password_bytes, version=0)
+            zuul_key = ZuulSecretKey.new(
+                self.kp_manager.password_bytes, version=0)
             keys = [zuul_key]
             try:
                 with self.createZKContext() as context:
@@ -555,7 +592,8 @@ class KeyStorage3(ZooKeeperBase):
                       connection_name, project_name)
         keys = info.keys.copy()
         version = len(keys)
-        zuul_key = ZuulSecretKey.new(self.password_bytes, version=version)
+        zuul_key = ZuulSecretKey.new(
+            self.kp_manager.password_bytes, version=version)
         keys.append(zuul_key)
         with self.createZKContext() as context:
             info.updateAttributes(context, keys=keys)
