@@ -4489,6 +4489,38 @@ class TestScheduler(ZuulTestCase):
         self.assertEqual(A.reported, 2)
         self.assertEqual(B.reported, 2)
 
+    def test_skip_reconfiguration_non_config_change(self):
+        """Test that we don't trigger a reconfiguration for a tenant
+        when the change doesn't modify any Zuul configuration."""
+        file_dict = {'zuul.d/README': '# Test'}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+
+        sched = self.scheds.first.sched
+        layout_state = sched.local_layout_state["tenant-one"]
+
+        A.setMerged()
+        self.fake_gerrit.addEvent(A.getChangeMergedEvent())
+        self.waitUntilSettled()
+        self.assertEqual(sched.local_layout_state["tenant-one"], layout_state)
+
+    def test_reconfiguration_zuul_ignore(self):
+        """Test that we trigger a reconfiguration for a tenant
+        when the change touches a .zuul-ignore file."""
+        file_dict = {'zuul.d/.zuul.ignore': ''}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+
+        sched = self.scheds.first.sched
+        layout_state = sched.local_layout_state["tenant-one"]
+
+        A.setMerged()
+        self.fake_gerrit.addEvent(A.getChangeMergedEvent())
+        self.waitUntilSettled()
+        self.assertNotEqual(
+            sched.local_layout_state["tenant-one"], layout_state)
+
+
     def test_delayed_repo_init(self):
         self.init_repo("org/new-project")
         files = {'README': ''}
