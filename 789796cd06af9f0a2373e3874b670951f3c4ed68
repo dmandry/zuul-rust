@@ -93,6 +93,30 @@
       },
       "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "57d01792_63b8b1a4",
+        "filename": "zuul/configloader.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 3324,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-07-24T09:12:33Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "1c1b3ebe_d2ac9f84",
+      "range": {
+        "startLine": 3324,
+        "startChar": 12,
+        "endLine": 3324,
+        "endChar": 40
+      },
+      "revId": "789796cd06af9f0a2373e3874b670951f3c4ed68",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
