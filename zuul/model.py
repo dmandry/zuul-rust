@@ -8654,15 +8654,15 @@ class Ref(object):
                 return True
             if fn == '.zuul.yaml':
                 return True
-            if fn.startswith("zuul.d/"):
+            if fn.startswith("zuul.d/") and fn.endswith(".yaml"):
                 return True
-            if fn.startswith(".zuul.d/"):
+            if fn.startswith(".zuul.d/") and fn.endswith(".yaml"):
                 return True
             for ef in tpc.extra_config_files:
                 if fn.startswith(ef):
                     return True
             for ed in tpc.extra_config_dirs:
-                if fn.startswith(ed):
+                if fn.startswith(ed) and fn.endswith(".yaml"):
                     return True
         return False
 
