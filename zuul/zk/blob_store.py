@@ -92,12 +92,11 @@ class BlobStore:
         if self.context.sessionIsInvalid():
             raise Exception("ZooKeeper session or lock not valid")
 
-        ret = self._retry(self.context, self.context.client.exists,
-                          flag)
-        if not ret:
+        try:
+            self._retry(self.context, self.context.client.set,
+                        flag, b'')
+        except NoNodeError:
             return False
-        self._retry(self.context, self.context.client.set,
-                    flag, b'')
         return True
 
     @staticmethod
@@ -126,6 +125,10 @@ class BlobStore:
 
         path = self._getPath(key)
         flag = self._getFlagPath(key)
+
+        if self._checkKey(key):
+            return key
+
         lock_path = self._getLockPath(key)
         with locked(
                 SessionAwareLock(
@@ -133,13 +136,15 @@ class BlobStore:
                     lock_path),
                 blocking=True
         ) as lock:
-            if self._checkKey(key):
-                return key
-
             # make a new context based on the old one
             with ZKContext(self.context.client, lock,
                            self.context.stop_event,
                            self.context.log) as locked_context:
+                # Check for existence again to avoid create races
+                ret = self._retry(self.context, self.context.client.exists,
+                                  flag)
+                if ret:
+                    return key
                 self._retry(
                     locked_context,
                     self._retryableSave,
@@ -147,44 +152,25 @@ class BlobStore:
                 self.context.updateStatsFromOtherContext(locked_context)
         return key
 
-    def delete(self, key, ltime):
+    def delete(self, key, version):
         path = self._getRootPath(key)
-        flag = self._getFlagPath(key)
+        data_path = self._getPath(key)
+        flag_path = self._getFlagPath(key)
         lock_path = self._getLockPath(key)
         if self.context.sessionIsInvalid():
             raise Exception("ZooKeeper session or lock not valid")
-        deleted = False
         try:
-            with locked(
-                    SessionAwareLock(
-                        self.context.client,
-                        lock_path),
-                    blocking=True
-            ) as lock:
-                # make a new context based on the old one
-                with ZKContext(self.context.client, lock,
-                               self.context.stop_event,
-                               self.context.log) as locked_context:
+            tr = self.context.client.transaction()
+            tr.delete(flag_path, version)
+            for shard in self.context.client.get_children(data_path):
+                tr.delete('/'.join([data_path, shard]))
+            tr.delete(data_path)
+            tr.delete(path)
+            tr.delete(lock_path)
 
-                    # Double check that it hasn't been used since we
-                    # decided to delete it
-                    data, zstat = self._retry(locked_context,
-                                              self.context.client.get,
-                                              flag)
-                    if zstat.last_modified_transaction_id < ltime:
-                        self._retry(locked_context, self.context.client.delete,
-                                    path, recursive=True)
-                        deleted = True
+            self._retry(self.context, tr.commit)
         except NoNodeError:
             raise KeyError(key)
-        if deleted:
-            try:
-                lock_path = self._getLockPath(key)
-                self._retry(self.context, self.context.client.delete,
-                            lock_path)
-            except Exception:
-                self.context.log.exception(
-                    "Error deleting lock path %s:", lock_path)
 
     def __iter__(self):
         try:
@@ -204,13 +190,13 @@ class BlobStore:
         return len([x for x in self])
 
     def getKeysLastUsedBefore(self, ltime):
-        ret = set()
+        ret = {}
         for key in self:
             flag = self._getFlagPath(key)
             data, zstat = self._retry(self.context, self.context.client.get,
                                       flag)
             if zstat.last_modified_transaction_id < ltime:
-                ret.add(key)
+                ret[key] = zstat.version
         return ret
 
     def cleanupLockDirs(self, start_ltime, live_blobs):
@@ -281,10 +267,14 @@ class BlobStore:
         # get the set of blob keys unused since the start time
         # (ie, we have already filtered any newly added keys)
         unused_blobs = self.getKeysLastUsedBefore(start_ltime)
-        # remove the current refences
-        unused_blobs -= live_blobs
-        # delete what's left
-        for key in unused_blobs:
+        for key, version in unused_blobs.items():
+            if key in live_blobs:
+                # skip current refences
+                continue
+            # delete what's left
             self.context.log.debug("Deleting unused blob: %s", key)
-            self.delete(key, start_ltime)
+            try:
+                self.delete(key, version)
+            except Exception:
+                self.log.execption("Error deleting blob %s:", key)
         self.cleanupLockDirs(start_ltime, live_blobs)
