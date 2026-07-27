@@ -2712,6 +2712,7 @@ class Scheduler(threading.Thread):
                 ].put(event.driver_name, event)
 
     def process_pipeline_trigger_queue(self, tenant, tenant_lock, manager):
+        tenant_state = self.event_watcher.tenant_state[tenant.name]
         for event in self.pipeline_trigger_events[tenant.name][
                 manager.pipeline.name]:
             log = get_annotated_logger(self.log, event.zuul_event_id)
@@ -2736,7 +2737,10 @@ class Scheduler(threading.Thread):
                     if isinstance(event, SupercedeEvent):
                         self._doSupercedeEvent(event)
                     else:
-                        self._process_trigger_event(tenant, manager, event)
+                        if not tenant_state.trigger_queue_discarding:
+                            self._process_trigger_event(tenant, manager, event)
+                        else:
+                            log.debug("Discarding trigger event %s", event)
             except Exception:
                 log.exception("Failed to process trigger event %s", event)
             finally:
