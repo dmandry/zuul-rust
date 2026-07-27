@@ -93,6 +93,7 @@ class PipelineManager(metaclass=ABCMeta):
         self.summary._set(manager=self)
         self.state = None
         self.change_list = None
+        self.pipeline_run_id = None
 
         if sched:
             self.sql = sched.sql
@@ -1252,7 +1253,8 @@ class PipelineManager(metaclass=ABCMeta):
         priority = self._calculateNodeRequestPriority(build_set, job)
         item = build_set.item
         req = self.sched.launcher.requestNodeset(
-            item, job, priority, relative_priority, provider)
+            item, job, priority, relative_priority, provider,
+            self.pipeline_run_id)
         log.debug("Adding nodeset request %s for job %s to item %s",
                   req, job, item)
         build_set.setJobNodeRequestID(job, req.uuid)

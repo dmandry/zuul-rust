@@ -2465,6 +2465,9 @@ class Scheduler(threading.Thread):
             manager.state.refresh(ctx)
 
         manager.state.setDirty(self.zk_client.client)
+        # Generate a new run id for use by nodeset requests before we
+        # start performing any work.
+        manager.pipeline_run_id = uuid.uuid4().hex
         if manager.state.old_queues:
             self._reenqueuePipeline(tenant, manager, ctx)
 
