@@ -3102,7 +3102,7 @@ class Launcher:
                 self.log.warning("Unable to find artifact %s for upload %s",
                                  upload.artifact_uuid, upload.uuid)
                 continue
-            if iba.state == iba.State.DELETING:
+            if iba.state != iba.State.READY:
                 continue
             if upload.state == upload.State.UPLOADING:
                 # If there is an unlocked upload in uploading state,
