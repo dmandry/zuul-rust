@@ -3072,21 +3072,36 @@ class Launcher:
         # already sorted by timestamp)
         newest_valid_uploads = valid_uploads[-image.retain_count:]
         keep_uploads.update(set(newest_valid_uploads))
-        # And also keep uploads (regardless of validation) newer than
-        # that (since they may have validation jobs running).
+        # And also keep uploads newer than that (since they may have
+        # validation jobs running or uploads pending).
         if newest_valid_uploads:
             oldest_good_timestamp = newest_valid_uploads[0].timestamp
         else:
             oldest_good_timestamp = 0
-        new_uploads = [
+        unvalidated_ready_uploads = [
             upload for upload in uploads
             if (upload.isPermittedForProvider(image, provider) and
-                upload.timestamp > oldest_good_timestamp)
+                upload.timestamp > oldest_good_timestamp and
+                upload.state == upload.State.READY and
+                not upload.validated and
+                upload.external_id)
         ]
         # But only keep the same number of unvalidated uploads as
         # validated ones, so that if a validation job is continuously
         # failing, we don't store unlimited images.
-        new_uploads = new_uploads[-image.retain_count:]
+        unvalidated_ready_uploads = unvalidated_ready_uploads[
+            -image.retain_count:]
+        keep_uploads.update(set(unvalidated_ready_uploads))
+
+        # And keep any new uploads that are not ready since we may
+        # have yet to upload them or they may have failed.
+        new_uploads = [
+            upload for upload in uploads
+            if (upload.isPermittedForProvider(image, provider) and
+                upload.timestamp > oldest_good_timestamp and
+                (upload.state != upload.State.READY or
+                not upload.external_id))
+        ]
         keep_uploads.update(set(new_uploads))
 
     def checkMissingUploads(self):
