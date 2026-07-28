@@ -1819,6 +1819,7 @@ class Launcher:
             self.system.system_id, label, node_uuid, request)
         node_class = provider.driver.getProviderNodeClass()
         node = node_class.new(ctx, **args)
+        node = self.api.nodes_cache.insert(node)
         log.debug("Requested node %s", node)
         retnode = node
 
@@ -1857,6 +1858,7 @@ class Launcher:
             create_state_machine=SubnodeStateMachine(),
             **args,
         )
+        subnode = self.api.nodes_cache.insert(subnode)
         return subnode
 
     def _checkRequest(self, request, log, unassigned_nodes):

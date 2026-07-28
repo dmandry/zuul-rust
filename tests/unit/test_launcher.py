@@ -48,6 +48,7 @@ import boto3
 from tests.base import (
     ResponsesFixture,
     AnsibleZuulTestCase,
+    PauseableQueue,
     ZuulTestCase,
     driver_config,
     iterate_timeout,
@@ -4275,6 +4276,52 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
             nodes = self.launcher.api.nodes_cache.getItems()
             if any(n.state == n.State.SLOT_HOST for n in nodes):
                 break
+
+    @simple_layout('layouts/nodepool-subnodes.yaml', enable_nodepool=True)
+    def test_subnodes_cache_insert(self):
+        # Test that the direct cache insert is effective for utilizing
+        # subnodes.
+        cache = self.launcher.api.nodes_cache
+        cache.ensureReady()
+
+        def waitForSync(timeout=None):
+            pass
+
+        cache.waitForSync = waitForSync
+        # Replace the cache event queue
+        old_queue = cache._event_queue
+        cache._event_queue = PauseableQueue()
+        old_queue.put(None)
+
+        # Pause the event queue
+        cache._event_queue.pause()
+
+        self.requestNodes(['debian-normal'], timeout=0)
+        for _ in iterate_timeout(60, "nodes to be created"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            if len(nodes) == 3:
+                break
+
+        # Get a list with the main node first and the subnodes last
+        nodes.sort(key=lambda x: len(x.subnodes))
+        nodes.reverse()
+        sub1 = nodes[1]
+        sub2 = nodes[2]
+        self.assertTrue(sub1.request_id or sub2.request_id)
+        self.assertFalse(sub1.request_id and sub2.request_id)
+
+        self.requestNodes(['debian-normal'], timeout=0)
+        for _ in iterate_timeout(60, "nodes to be created"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            nodes.sort(key=lambda x: len(x.subnodes))
+            nodes.reverse()
+            sub1 = nodes[1]
+            sub2 = nodes[2]
+            if sub1.request_id and sub2.request_id:
+                break
+
+        self.assertNotEqual(sub1.request_id, sub2.request_id)
+        cache._event_queue.unpause()
 
     @simple_layout('layouts/nodepool-reuse.yaml', enable_nodepool=True)
     def test_reuse(self):
