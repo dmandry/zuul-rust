@@ -42,6 +42,9 @@ class SimpleTreeCacheObject:
         self.data = json.loads(data)
         self._zstat = zstat
 
+    def getPath(self):
+        return self.path
+
 
 class SimpleTreeCache(ZuulTreeCache):
     def objectFromRaw(self, key, data, zstat):
@@ -305,3 +308,61 @@ class TestTreeCache(BaseTestCase):
             '/test/foo': {},
             '/test/bar': {},
         })
+
+    def test_tree_cache_insert_before(self):
+        # Test inserting an object into the treecache before the
+        # corresponding event arrives.
+        client = self.zk_client.client
+        data = b'{}'
+        cache = SimpleTreeCache(self.zk_client, "/test")
+        cache.ensureReady()
+
+        # Create the object in memory
+        obj = SimpleTreeCacheObject('/test', ('foo',), data, None)
+
+        # Add the object to the cache
+        inserted_obj = cache.insert(obj)
+        self.assertIsNone(obj._zstat)
+        self.assertIs(obj, inserted_obj)
+
+        # Check that it's added
+        cached_obj = cache._cached_objects[('foo',)]
+        self.assertIsNone(cached_obj._zstat)
+        self.assertIs(obj, cached_obj)
+
+        # Create the object in ZK
+        client.create('/test/foo', data)
+
+        # Check that the existing object is updated with a zstat
+        for _ in iterate_timeout(10, 'cache to sync'):
+            cached_obj = cache._cached_objects[('foo',)]
+            if cached_obj._zstat:
+                break
+        self.assertIsNotNone(cached_obj._zstat)
+        self.assertIs(obj, cached_obj)
+
+    def test_tree_cache_insert_after(self):
+        # Test inserting an object into the treecache after the
+        # corresponding event arrives.
+        client = self.zk_client.client
+        data = b'{}'
+        cache = SimpleTreeCache(self.zk_client, "/test")
+        cache.ensureReady()
+
+        # Create the object in memory
+        obj = SimpleTreeCacheObject('/test', ('foo',), data, None)
+
+        # Create the object in ZK
+        client.create('/test/foo', data)
+        self.waitForCache(cache, {
+            '/test/foo': {},
+        })
+
+        # Add the object to the cache
+        cached_obj = cache.insert(obj)
+
+        # Our original object should remain unused by the cache, and
+        # the insert should have returned the cached object.
+        self.assertIsNone(obj._zstat)
+        self.assertIsNotNone(cached_obj._zstat)
+        self.assertIsNot(obj, cached_obj)
