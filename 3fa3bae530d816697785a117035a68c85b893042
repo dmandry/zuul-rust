@@ -22,6 +22,24 @@
       },
       "revId": "3fa3bae530d816697785a117035a68c85b893042",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a9d65272_bbfaba41",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 4203,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-07-28T15:45:25Z",
+      "side": 1,
+      "message": "The test still finishes without hanging in that case.",
+      "parentUuid": "b10ae178_458dc79a",
+      "revId": "3fa3bae530d816697785a117035a68c85b893042",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
