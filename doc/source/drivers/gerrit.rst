@@ -155,7 +155,7 @@ If using Gerrit 2.7 or later, make sure the user is a member of a group
 that is granted the ``Stream Events`` permission, otherwise it will not
 be able to invoke the ``gerrit stream-events`` command over SSH.
 
-.. attr:: <gerrit ssh connection>
+.. attr:: <gerrit connection>
 
    .. attr:: ssh_server
 
@@ -190,7 +190,7 @@ be able to invoke the ``gerrit stream-events`` command over SSH.
 HTTP Configuration
 ~~~~~~~~~~~~~~~~~~
 
-.. attr:: <gerrit ssh connection>
+.. attr:: <gerrit connection>
 
    .. attr:: password
 
