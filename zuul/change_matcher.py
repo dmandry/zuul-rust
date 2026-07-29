@@ -130,6 +130,9 @@ class AbstractMatcherCollection(AbstractChangeMatcher):
     def __eq__(self, other):
         return str(self) == str(other)
 
+    def __hash__(self):
+        return hash(json.dumps(sorted([hash(x) for x in self.matchers])))
+
     def __str__(self):
         return '{%s:%s}' % (self.__class__.__name__,
                             ','.join([str(x) for x in self.matchers]))
