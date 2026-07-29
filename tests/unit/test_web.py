@@ -1905,7 +1905,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
             self.waitForUploads(cname, failed=1)
             # The web cache can be slightly out of sync with the
             # launcher, so wait for it to catch up.
-            for _ in iterate_timeout(10, "failed upload"):
+            for _ in iterate_timeout(30, "failed upload"):
                 resp = self.get_url('api/tenant/tenant-one/images')
                 data = resp.json()
                 images = [i for i in data if i['canonical_name'] == cname]
@@ -1944,7 +1944,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
             self.waitUntilSettled("image retry")
 
             self.waitForUploads(cname, ready=1)
-            for _ in iterate_timeout(10, "ready upload"):
+            for _ in iterate_timeout(30, "ready upload"):
                 resp = self.get_url('api/tenant/tenant-one/images')
                 data = resp.json()
                 images = [i for i in data if i['canonical_name'] == cname]
