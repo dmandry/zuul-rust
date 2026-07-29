@@ -155,7 +155,7 @@ If using Gerrit 2.7 or later, make sure the user is a member of a group
 that is granted the ``Stream Events`` permission, otherwise it will not
 be able to invoke the ``gerrit stream-events`` command over SSH.
 
-.. attr:: <gerrit ssh connection>
+.. attr:: <gerrit connection>
 
    .. attr:: ssh_server
 
@@ -190,7 +190,7 @@ be able to invoke the ``gerrit stream-events`` command over SSH.
 HTTP Configuration
 ~~~~~~~~~~~~~~~~~~
 
-.. attr:: <gerrit ssh connection>
+.. attr:: <gerrit connection>
 
    .. attr:: password
 
@@ -255,7 +255,7 @@ are some implications for event delivery:
 * Events should generally arrive in order, however some events in
   rapid succession may be received by Zuul out of order.
 
-.. attr:: <gerrit kafka connection>
+.. attr:: <gerrit connection>
 
    .. attr:: kafka_bootstrap_servers
       :required:
@@ -318,7 +318,7 @@ some implications for event delivery:
   disrupted, it may take Zuul some time to catch up to the latest
   events.
 
-.. attr:: <gerrit aws kinesis connection>
+.. attr:: <gerrit connection>
 
    .. attr:: aws_kinesis_region
       :required:
@@ -360,7 +360,7 @@ There are some implications for event delivery:
   received by Zuul out of order.  Since this behavior is under the
   control of the Gerrit plugin, it may change in the future.
 
-.. attr:: <gerrit gcloud pubsub connection>
+.. attr:: <gerrit connection>
 
    .. attr:: gcloud_pubsub_project
       :required:
