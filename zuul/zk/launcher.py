@@ -41,7 +41,8 @@ def _bytesToDict(raw_data):
 
 
 def launcher_score(name, item):
-    return mmh3.hash(f"{name}-{item.uuid}", signed=False)
+    hash_key = getattr(item, 'hash_key', None) or item.uuid
+    return mmh3.hash(f"{name}-{hash_key}", signed=False)
 
 
 class LockableZKObjectCache(ZuulTreeCache):

@@ -2719,6 +2719,7 @@ class NodesetRequest(zkobject.LockableZKObject):
             image_names=None,
             image_upload_uuid=None,
             preferred_provider=None,
+            hash_key=None,
             # Revisable attributes
             _relative_priority=0,
             # A dict of info about the node we have assigned to each label
@@ -2837,6 +2838,7 @@ class NodesetRequest(zkobject.LockableZKObject):
             preferred_provider=self.preferred_provider,
             provider_node_data=self.provider_node_data,
             _relative_priority=self.relative_priority,
+            hash_key=self.hash_key,
         )
         return json.dumps(data, sort_keys=True).encode("utf-8")
 
@@ -10541,6 +10543,8 @@ class Layout(object):
         self.provider_configs = {}
         self.providers = {}
         self.loading_errors = LoadingErrors()
+        # A list of labels that are slot hosts on at least one provider
+        self.slot_labels = set()
 
     def getJob(self, name):
         if name in self.jobs:
@@ -10751,6 +10755,9 @@ class Layout(object):
             raise Exception(
                 "Provider %s is already defined" % provider.name)
         self.providers[provider.name] = provider
+        for label in provider.labels.values():
+            if label.slots > 1:
+                self.slot_labels.add(label.name)
 
     def addPipelineManager(self, manager):
         if manager.pipeline.name in self.pipeline_managers:
