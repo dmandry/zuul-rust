@@ -3003,6 +3003,7 @@ class Scheduler(threading.Thread):
 
         with build.activeContext(manager.current_context):
             build.start_time = event.data["start_time"]
+            build.url = event.data.get('url', build.url)
 
             log = get_annotated_logger(
                 self.log, build.zuul_event_id, build=build.uuid)
