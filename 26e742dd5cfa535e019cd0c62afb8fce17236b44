@@ -34,6 +34,24 @@
       "parentUuid": "aa726006_67d15e4b",
       "revId": "26e742dd5cfa535e019cd0c62afb8fce17236b44",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f1337cee_091249ff",
+        "filename": "zuul/change_matcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 134,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-30T13:12:22Z",
+      "side": 1,
+      "message": "Ok, I was just wondering as we also perform the `__eq__` check using string cmp",
+      "parentUuid": "a955de06_96e64336",
+      "revId": "26e742dd5cfa535e019cd0c62afb8fce17236b44",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
