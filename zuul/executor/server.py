@@ -1477,6 +1477,15 @@ class AnsibleJob(object):
         }
         if self.executor_server.zone:
             data['worker_zone'] = self.executor_server.zone
+        if self.executor_server.log_streaming_port != DEFAULT_FINGER_PORT:
+            data['url'] = "finger://{hostname}:{port}/{uuid}".format(
+                hostname=self.executor_server.hostname,
+                port=self.executor_server.log_streaming_port,
+                uuid=self.build_request.uuid)
+        else:
+            data['url'] = 'finger://{hostname}/{uuid}'.format(
+                hostname=self.executor_server.hostname,
+                uuid=self.build_request.uuid)
         return data
 
     def _send_aborted(self):
@@ -1750,19 +1759,6 @@ class AnsibleJob(object):
             if self.aborted:
                 self._send_aborted()
                 return
-
-            data = self._base_job_data()
-            if self.executor_server.log_streaming_port != DEFAULT_FINGER_PORT:
-                data['url'] = "finger://{hostname}:{port}/{uuid}".format(
-                    hostname=self.executor_server.hostname,
-                    port=self.executor_server.log_streaming_port,
-                    uuid=self.build_request.uuid)
-            else:
-                data['url'] = 'finger://{hostname}/{uuid}'.format(
-                    hostname=self.executor_server.hostname,
-                    uuid=self.build_request.uuid)
-
-            self.executor_server.updateBuildStatus(self.build_request, data)
 
         # job_output is out of scope now; playbook methods may open
         # the file again on their own.
