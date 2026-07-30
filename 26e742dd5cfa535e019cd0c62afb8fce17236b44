@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "aa726006_67d15e4b",
+        "filename": "zuul/change_matcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 134,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-07-30T11:04:43Z",
+      "side": 1,
+      "message": "Couldn\u0027t we just `hash(str(self))`?",
+      "revId": "26e742dd5cfa535e019cd0c62afb8fce17236b44",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
