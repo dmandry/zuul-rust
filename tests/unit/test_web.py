@@ -226,11 +226,6 @@ class TestWeb(BaseTestWeb):
                 uuid=status_jobs[0]['uuid']),
             status_jobs[0]['url'])
         self.assertEqual(
-            'finger://{hostname}/{uuid}'.format(
-                hostname=self.executor_server.hostname,
-                uuid=status_jobs[0]['uuid']),
-            status_jobs[0]['finger_url'])
-        self.assertEqual(
             'https://zuul.example.com/t/tenant-one/build/{uuid}'.format(
                 uuid=status_jobs[0]['uuid']),
             status_jobs[0]['report_url'])
@@ -239,11 +234,6 @@ class TestWeb(BaseTestWeb):
             'stream/{uuid}?logfile=console.log'.format(
                 uuid=status_jobs[1]['uuid']),
             status_jobs[1]['url'])
-        self.assertEqual(
-            'finger://{hostname}/{uuid}'.format(
-                hostname=self.executor_server.hostname,
-                uuid=status_jobs[1]['uuid']),
-            status_jobs[1]['finger_url'])
         self.assertEqual(
             'https://zuul.example.com/t/tenant-one/build/{uuid}'.format(
                 uuid=status_jobs[1]['uuid']),
@@ -254,11 +244,6 @@ class TestWeb(BaseTestWeb):
             'stream/{uuid}?logfile=console.log'.format(
                 uuid=status_jobs[2]['uuid']),
             status_jobs[2]['url'])
-        self.assertEqual(
-            'finger://{hostname}/{uuid}'.format(
-                hostname=self.executor_server.hostname,
-                uuid=status_jobs[2]['uuid']),
-            status_jobs[2]['finger_url'])
         self.assertEqual(
             'https://zuul.example.com/t/tenant-one/build/{uuid}'.format(
                 uuid=status_jobs[2]['uuid']),

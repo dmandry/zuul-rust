@@ -8310,11 +8310,9 @@ class QueueItem(zkobject.ZKObject):
             remaining = None
             result = None
             build_url = None
-            finger_url = None
             report_url = None
             if build:
                 result = build.result
-                finger_url = build.url
                 # TODO(tobiash): add support for custom web root
                 urlformat = 'stream/{build.uuid}?' \
                             'logfile=console.log'
@@ -8347,7 +8345,6 @@ class QueueItem(zkobject.ZKObject):
                 'elapsed_time': elapsed,
                 'remaining_time': remaining,
                 'url': build_url,
-                'finger_url': finger_url,
                 'report_url': report_url,
                 'result': result,
                 'voting': job.voting,

@@ -1281,11 +1281,7 @@ class AnsibleJob(object):
     def do_execute(self):
         try:
             self.time_starting_build = time.monotonic()
-
-            # report that job has been taken
-            self.executor_server.startBuild(
-                self.build_request, self._base_job_data()
-            )
+            start_time = time.time()
 
             self.setNodeInfo()
             self.loadRepoState()
@@ -1309,6 +1305,8 @@ class AnsibleJob(object):
             self.jobdir = JobDir(self.executor_server.jobdir_root,
                                  self.executor_server.keep_jobdir,
                                  str(self.build_request.uuid))
+            # report that job has been taken
+            self.executor_server.startBuild(self.build_request, start_time)
             self.lockNodes()
             self._execute()
         except NodeRequestError:
@@ -1463,21 +1461,6 @@ class AnsibleJob(object):
                         if remote_name not in connection_state:
                             project_state[remote_name] = hexsha
         self.repo_state = d
-
-    def _base_job_data(self):
-        data = {
-            # TODO(mordred) worker_name is needed as a unique name for the
-            # client to use for cancelling jobs on an executor. It's
-            # defaulting to the hostname for now, but in the future we
-            # should allow setting a per-executor override so that one can
-            # run more than one executor on a host.
-            'worker_name': self.executor_server.hostname,
-            'worker_hostname': self.executor_server.hostname,
-            'worker_log_port': self.executor_server.log_streaming_port,
-        }
-        if self.executor_server.zone:
-            data['worker_zone'] = self.executor_server.zone
-        return data
 
     def _send_aborted(self):
         result = dict(result='ABORTED')
@@ -1750,19 +1733,6 @@ class AnsibleJob(object):
             if self.aborted:
                 self._send_aborted()
                 return
-
-            data = self._base_job_data()
-            if self.executor_server.log_streaming_port != DEFAULT_FINGER_PORT:
-                data['url'] = "finger://{hostname}:{port}/{uuid}".format(
-                    hostname=self.executor_server.hostname,
-                    port=self.executor_server.log_streaming_port,
-                    uuid=self.build_request.uuid)
-            else:
-                data['url'] = 'finger://{hostname}/{uuid}'.format(
-                    hostname=self.executor_server.hostname,
-                    uuid=self.build_request.uuid)
-
-            self.executor_server.updateBuildStatus(self.build_request, data)
 
         # job_output is out of scope now; playbook methods may open
         # the file again on their own.
@@ -5013,9 +4983,8 @@ class ExecutorServer(BaseMergeServer):
                 return True
         return False
 
-    def startBuild(self, build_request, data):
-        data["start_time"] = time.time()
-
+    def startBuild(self, build_request, start_time):
+        data = {"start_time": start_time}
         event = BuildStartedEvent(
             build_request.uuid, build_request.build_set_uuid,
             build_request.job_uuid,

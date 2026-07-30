@@ -3028,8 +3028,6 @@ class Scheduler(threading.Thread):
             return
 
         with build.activeContext(manager.current_context):
-            if 'url' in event.data:
-                build.url = event.data['url']
             if 'pre_fail' in event.data:
                 build.pre_fail = event.data['pre_fail']
             if (snapshot := event.data.get('snapshot')) is not None:
