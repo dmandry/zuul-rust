@@ -893,6 +893,8 @@ class AwsProvider(BaseProvider, subclass_id='aws'):
                           image_format, metadata, md5, sha256):
         # TODO this needs to move to the section or connection config
         # since it's used by endpoints.
+        if self.object_storage is None:
+            return None
         bucket_name = self.object_storage.get('bucket_name')
         return self.endpoint.getImageUploadJob(
             provider_image, image_name,
