@@ -3484,7 +3484,7 @@ class TestGithubGraphQL(ZuulTestCase):
                                "PullRequest", str(A.number), str(A.head_sha))
         change = conn.getChange(change_key, refresh=True)
         result = self.fake_github.graphql_client.fetch_canmerge(
-            github, change)
+            github, change_key, 'master')
         self.assertTrue(result['protected'])
         # We should have one run from each app; the duplicate runs are
         # dropped by github.
@@ -3515,7 +3515,7 @@ class TestGithubGraphQL(ZuulTestCase):
                                "PullRequest", str(A.number), str(A.head_sha))
         change = conn.getChange(change_key, refresh=True)
         result = self.fake_github.graphql_client.fetch_canmerge(
-            github, change)
+            github, change_key, 'master')
         self.assertTrue(result['protected'])
         self.assertTrue(result['requiresConversationResolution'])
         self.assertTrue(result['unresolvedConversations'])
