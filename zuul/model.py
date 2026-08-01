@@ -163,6 +163,28 @@ def filter_severity(error_list, errors=True, warnings=True):
             )]
 
 
+class PerfCollector:
+    def __init__(self):
+        self.phase_times = defaultdict(lambda: 0)
+        self.phase_counts = defaultdict(lambda: 0)
+        self.phase_starts = {}
+
+    def startPhase(self, phase):
+        self.phase_starts[phase] = time.perf_counter_ns()
+
+    def endPhase(self, phase):
+        elapsed = time.perf_counter_ns() - self.phase_starts[phase]
+        self.phase_times[phase] += elapsed
+        self.phase_counts[phase] += 1
+
+    def summarize(self, msg):
+        ret = [msg]
+        for phase in self.phase_times:
+            ret.append(f'[{phase}] total: {self.phase_times[phase]} ns '
+                       f'count:{self.phase_counts[phase]}')
+        return ' '.join(ret)
+
+
 class QuotaInformation:
     def __init__(self, default=0, **kw):
         '''
@@ -7544,17 +7566,28 @@ class QueueItem(zkobject.ZKObject):
         """Find or create actual matching jobs for this item's changes and
         store the resulting job tree."""
 
+        perf_collector = PerfCollector()
         try:
+            perf_collector.startPhase('create jobgraph in ram')
             results = layout.createJobGraph(context, self, live_blobs,
+                                            perf_collector,
                                             skip_file_matcher,
                                             redact_secrets_and_keys)
             job_graph = results['job_graph']
+            perf_collector.endPhase('create jobgraph in ram')
 
             # Write the jobs out to ZK
             for frozen_job in job_graph._job_map.values():
+                perf_collector.startPhase('write job to zk')
                 frozen_job.internalCreate(context)
+                perf_collector.endPhase('write job to zk')
 
+            perf_collector.startPhase('update bs attrs')
             self.current_build_set.updateAttributes(context, **results)
+            perf_collector.endPhase('update bs attrs')
+
+            self.log.debug(perf_collector.summarize(
+                "Freeze job graph:"))
         except Exception:
             self.current_build_set.updateAttributes(
                 context, job_graph=None, _old_job_graph=None)
@@ -8532,8 +8565,9 @@ class QueueItem(zkobject.ZKObject):
             if self.current_build_set._old_job_graph is None:
                 try:
                     log.debug("Creating job graph for config change detection")
+                    perf_collector = PerfCollector()
                     results = layout_ahead.createJobGraph(
-                        None, self, None,
+                        None, self, None, perf_collector,
                         skip_file_matcher=True,
                         redact_secrets_and_keys=False,
                         old=True)
@@ -8541,6 +8575,8 @@ class QueueItem(zkobject.ZKObject):
                         _old_job_graph=results['job_graph'])
                     log.debug("Done creating job graph for "
                               "config change detection")
+                    log.debug(perf_collector.summarize(
+                        "Job graph for config change detection:"))
                 except Exception as e:
                     self.log.debug(
                         "Error freezing job graph in job update check:",
@@ -11160,15 +11196,15 @@ class Layout(object):
         return parameters
 
     def extendJobGraph(self, context, item, change, ppc, job_graph,
-                       live_blobs, skip_file_matcher,
-                       redact_secrets_and_keys, debug_messages,
-                       pending_errors):
+                       live_blobs, skip_file_matcher, redact_secrets_and_keys,
+                       debug_messages, pending_errors, perf_collector):
         log = item.annotateLogger(self.log)
         semaphore_handler = item.manager.tenant.semaphore_handler
         job_list = ppc.job_list
         pipeline = item.manager.pipeline
         add_debug_line(debug_messages, "Freezing job graph")
         for jobname in job_list.jobs:
+            perf_collector.startPhase('collect jobs')
             # This is the final job we are constructing
             final_job = None
             log.debug("Collecting jobs %s for %s", jobname, change)
@@ -11190,6 +11226,7 @@ class Layout(object):
             except NoMatchingParentError:
                 variants = None
             log.debug("Collected jobs %s for %s", jobname, change)
+            perf_collector.endPhase('collect jobs')
             if not variants:
                 # A change must match at least one defined job variant
                 # (that is to say that it must match more than just
@@ -11198,6 +11235,7 @@ class Layout(object):
                                "No matching variants for {jobname}".format(
                                    jobname=jobname), indent=2)
                 continue
+            perf_collector.startPhase('apply variants')
             for variant in variants:
                 if final_job is None:
                     final_job = variant.copy()
@@ -11222,11 +11260,13 @@ class Layout(object):
                 final_job.ansible_version = \
                     self.tenant.default_ansible_version
 
+            perf_collector.endPhase('apply variants')
             log.debug("Froze job %s for %s", jobname, change)
             # Whether the change matches any of the project pipeline
             # variants
             matched = False
             reporter_job_ok = False
+            perf_collector.startPhase('apply pipeline variants')
             for variant in job_list.jobs[jobname]:
                 if variant.changeMatchesBranch(self.tenant, change):
                     final_job.applyVariant(variant, self, semaphore_handler)
@@ -11261,6 +11301,7 @@ class Layout(object):
                     add_debug_line(debug_messages,
                                    "Pipeline variant {variant} did not match".
                                    format(variant=repr(variant)), indent=2)
+            perf_collector.endPhase('apply pipeline variants')
             if not matched:
                 # A change must match at least one project pipeline
                 # job variant.
@@ -11274,6 +11315,7 @@ class Layout(object):
                                f"Job {jobname} did not match images",
                                indent=2)
                 continue
+            perf_collector.startPhase('freeze')
             updates_job_config = False
             if not skip_file_matcher and \
                not final_job.changeMatchesFiles(change):
@@ -11330,8 +11372,9 @@ class Layout(object):
                 pending_errors[frozen_job.uuid] = JobConfigurationError(
                     "Job %s does not specify a run playbook" % (
                         final_job.name,))
+            perf_collector.endPhase('freeze')
 
-    def createJobGraph(self, context, item, live_blobs,
+    def createJobGraph(self, context, item, live_blobs, perf_collector,
                        skip_file_matcher,
                        redact_secrets_and_keys,
                        old=False):
@@ -11351,17 +11394,21 @@ class Layout(object):
         job_graph = JobGraph(job_map)
         pending_errors = {}
         for change in item.changes:
+            perf_collector.startPhase('get ppc for change')
             ppc = self.getProjectPipelineConfig(item, change)
+            perf_collector.endPhase('get ppc for change')
             if not ppc:
                 continue
             if ppc.debug:
                 # Any ppc that sets debug=True enables debugging
                 enable_debug = True
                 debug_messages.extend(ppc.debug_messages)
+            perf_collector.startPhase('extend jobgraph')
             self.extendJobGraph(
                 context, item, change, ppc, job_graph, live_blobs,
                 skip_file_matcher, redact_secrets_and_keys, debug_messages,
-                pending_errors)
+                pending_errors, perf_collector)
+            perf_collector.endPhase('extend jobgraph')
             if ppc.fail_fast is not None:
                 # Any explicit setting of fail_fast takes effect,
                 # last one wins.
