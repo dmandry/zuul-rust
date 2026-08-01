@@ -50,11 +50,17 @@ from zuul.connection import (
 from zuul.driver.github.graphql import GraphQLClient
 from zuul.lib import tracing
 from zuul.web.handler import BaseWebController
+from zuul.lib.changenetwork import (
+    ChangeNetworkFuture,
+    ChangeNetworkConflict,
+    ChangeNetworkManager,
+)
 from zuul.lib.logutil import get_annotated_logger
 from zuul import model
 from zuul.model import Ref, Branch, Tag, Project, FalseWithReason
 from zuul.exceptions import MergeFailure
 from zuul.driver.github.githubmodel import (
+    GithubChangeData,
     GithubTriggerEvent,
     PullRequest,
     check_as_tuple,
@@ -357,6 +363,7 @@ class GithubEventProcessor(object):
     def __init__(self, connector, event_tuple, connection_event):
         self.connector = connector
         self.connection = connector.connection
+        self.zk_client = self.connection.sched.zk_client
         (
             self.ts,
             span_context,
@@ -440,6 +447,7 @@ class GithubEventProcessor(object):
             # retrigger.
             self.log.exception('Exception when handling event:')
 
+        min_change_ltime = self.zk_client.getCurrentLtime()
         for event in events:
             # Note we limit parallel requests per installation id to avoid
             # triggering abuse detection.
@@ -457,9 +465,11 @@ class GithubEventProcessor(object):
                 change = None
                 if event.change_number:
                     change_key = self.connection.source.getChangeKey(event)
-                    change = self.connection._getChange(change_key,
-                                                        refresh=True,
-                                                        event=event)
+                    change = self.connection._getChange(
+                        change_key,
+                        refresh=True,
+                        event=event,
+                        update_if_older_than=min_change_ltime)
                     self.log.debug("Refreshed change %s,%s",
                                    event.change_number, event.patch_number)
 
@@ -1272,7 +1282,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
     def __init__(self, driver, connection_name, connection_config):
         super(GithubConnection, self).__init__(driver, connection_name,
                                                connection_config)
-        self._change_update_lock = {}
+        self.change_network_manager = ChangeNetworkManager()
         self.projects = {}
         self.git_ssh_key = self.connection_config.get('sshkey')
         self.server = self.connection_config.get('server', 'github.com')
@@ -1424,7 +1434,9 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         elif change_key.change_type == 'Ref':
             return self._getRef(change_key, refresh=refresh, event=event)
 
-    def _getChange(self, change_key, refresh=False, event=None):
+    def _getChange(self, change_key, refresh=False,
+                   network_future=None, event=None,
+                   update_if_older_than=None):
         # Note(tobiash): We force the pull request number to int centrally here
         # because it can originate from different sources (github event, manual
         # enqueue event) where some might just parse the string and forward it.
@@ -1438,50 +1450,79 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             change.project = project
             change.number = number
             change.patchset = change_key.revision
-
-        return self._updateChange(change_key, change, event)
-
-    def _updateChange(self, change_key, change, event):
-        log = get_annotated_logger(self.log, event)
-        log.info("Updating %s" % (change,))
-        # This can be called multi-threaded during github event
-        # preprocessing. In order to avoid data races perform locking
-        # by cached key. Try to acquire the lock non-blocking at first.
-        # If the lock is already taken we're currently updating the very
-        # same chnange right now and would likely get the same data again.
-        lock = self._change_update_lock.setdefault(change_key,
-                                                   threading.Lock())
-        if lock.acquire(blocking=False):
+        network_start = network_future is None
+        while True:
+            if network_future is None:
+                network_future = ChangeNetworkFuture(update_if_older_than)
+            network_future.add(change_key)
             try:
-                pull = self.getPull(change.project.name, change.number,
-                                    event=event)
-
-                def _update_change(c):
-                    branch = pull[0].get('base').get('ref')
-                    reviews = self.getPullReviews(
-                        pull[1], change.project, change.number, event)
-                    canmerge_data = self.getCanMergeData(
-                        change_key, branch, event)
-                    c.update(self.server, log, pull, reviews, canmerge_data)
-
-                change = self._change_cache.updateChangeWithRetry(
-                    change_key, change, _update_change)
+                self.change_network_manager.permissionToProceed(network_future)
+                return self._updateChange(change_key, change, event,
+                                          network_future)
+            except ChangeNetworkConflict as e:
+                if network_start:
+                    # This is the top of the stack.  We wait for the
+                    # future and try again.
+                    e.future.wait()
+                    self.change_network_manager.setComplete(network_future)
+                    # Start a new future but copy over the query cache
+                    # results from the winner.  In case we decide that
+                    # the winning network did not update our change(s)
+                    # recently enough, we may still be able to benefit
+                    # from some of the previously run queries.
+                    network_future = ChangeNetworkFuture(update_if_older_than)
+                    network_future.query_results = e.future.query_results
+                    change = self._change_cache.get(change_key) or change
+                    continue
+                else:
+                    raise
             finally:
-                # We need to remove the lock here again so we don't leak
-                # them.
-                del self._change_update_lock[change_key]
-                lock.release()
-        else:
-            # We didn't get the lock so we don't need to update the same
-            # change again, but to be correct we should at least wait until
-            # the other thread is done updating the change.
-            log = get_annotated_logger(self.log, event)
-            log.debug("Change %s is currently being updated, "
-                      "waiting for it to finish", change)
-            with lock:
-                change = self._change_cache.get(change_key)
-                log.debug('Finished updating change %s', change)
+                if network_start:
+                    self.change_network_manager.setComplete(network_future)
+
+    def _updateChange(self, change_key, change, event, network_future):
+        log = get_annotated_logger(self.log, event)
+        if (network_future.min_ltime and
+            change.zuul_query_ltime and
+            change.zuul_query_ltime > network_future.min_ltime):
+            # The change was updated in another thread while we were
+            # processing this change network.
+            log.debug("Change %s is up to date", change)
+            return change
+
+        log.info("Updating %s" % (change,))
+        data = self.queryChange(change_key, change, event,
+                                network_future.min_ltime)
+
+        def _update_change(c):
+            c.update(self.server, log, data)
+
+        change = self._change_cache.updateChangeWithRetry(
+            change_key, change, _update_change)
+        log.debug('Finished updating change %s', change)
         return change
+
+    def queryChange(self, change_key, change, event, min_ltime):
+        number = change_key.stable_id
+        lock = self.change_network_manager.getQueryLock(number)
+        with lock:
+            if min_ltime:
+                data = self.change_network_manager.getQueryResult(number)
+                if data and data.zuul_query_ltime > min_ltime:
+                    return data
+            zuul_query_ltime = self.sched.zk_client.getCurrentLtime()
+            pull = self.getPull(change.project.name, change.number,
+                                event=event)
+            branch = pull[0].get('base').get('ref')
+            reviews = self.getPullReviews(
+                pull[1], change.project, change.number, event)
+            canmerge_data = self.getCanMergeData(
+                change_key, branch, event)
+            ret = GithubChangeData(
+                pull, reviews, canmerge_data,
+                zuul_query_ltime=zuul_query_ltime)
+            self.change_network_manager.updateQueryResult(number, ret)
+            return ret
 
     def _getTag(self, change_key, refresh=False, event=None):
         tag = change_key.stable_id
