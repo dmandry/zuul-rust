@@ -3482,9 +3482,8 @@ class TestGithubGraphQL(ZuulTestCase):
         conn = self.scheds.first.sched.connections.connections["github"]
         change_key = ChangeKey(conn.connection_name, "org/project",
                                "PullRequest", str(A.number), str(A.head_sha))
-        change = conn.getChange(change_key, refresh=True)
         result = self.fake_github.graphql_client.fetch_canmerge(
-            github, change)
+            github, change_key, 'master')
         self.assertTrue(result['protected'])
         # We should have one run from each app; the duplicate runs are
         # dropped by github.
@@ -3501,6 +3500,9 @@ class TestGithubGraphQL(ZuulTestCase):
                                     protected=True)
 
         A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
+        # The test infrastructure requires this pull_request call in
+        # order to initialize the data structures used by graphql
+        github.pull_request('org', 'project', 1)
         num_threads = 102
         for thread_no in range(num_threads):
             review = A.addReview('user', 'COMMENTED')
@@ -3513,9 +3515,8 @@ class TestGithubGraphQL(ZuulTestCase):
         conn = self.scheds.first.sched.connections.connections["github"]
         change_key = ChangeKey(conn.connection_name, "org/project",
                                "PullRequest", str(A.number), str(A.head_sha))
-        change = conn.getChange(change_key, refresh=True)
         result = self.fake_github.graphql_client.fetch_canmerge(
-            github, change)
+            github, change_key, 'master')
         self.assertTrue(result['protected'])
         self.assertTrue(result['requiresConversationResolution'])
         self.assertTrue(result['unresolvedConversations'])
