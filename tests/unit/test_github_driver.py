@@ -19,7 +19,6 @@ import re
 from testtools.matchers import MatchesRegex, Not, StartsWith
 import urllib
 import socket
-import threading
 import time
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
@@ -1664,20 +1663,18 @@ class TestGithubDriver(ZuulTestCase):
 
         # Acquire the update lock so the concurrent get task needs to
         # wait for the lock to be release.
-        lock = conn._change_update_lock.setdefault(change_key,
-                                                   threading.Lock())
-        lock.acquire()
         try:
             executor = ThreadPoolExecutor(max_workers=1)
-            task = executor.submit(conn.getChange, change_key, refresh=True)
-            for _ in iterate_timeout(5, "task to be running"):
-                if task.running():
-                    break
-            # Add the change back so the waiting task can get the
-            # change from the cache.
-            conn._change_cache.set(change_key, change)
+            with conn.change_network_manager.lock:
+                task = executor.submit(conn.getChange, change_key,
+                                       refresh=True)
+                for _ in iterate_timeout(5, "task to be running"):
+                    if task.running():
+                        break
+                # Add the change back so the waiting task can get the
+                # change from the cache.
+                conn._change_cache.set(change_key, change)
         finally:
-            lock.release()
             executor.shutdown()
 
         other_change = task.result()
