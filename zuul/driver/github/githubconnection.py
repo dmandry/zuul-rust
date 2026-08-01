@@ -54,7 +54,13 @@ from zuul.lib.logutil import get_annotated_logger
 from zuul import model
 from zuul.model import Ref, Branch, Tag, Project, FalseWithReason
 from zuul.exceptions import MergeFailure
-from zuul.driver.github.githubmodel import PullRequest, GithubTriggerEvent
+from zuul.driver.github.githubmodel import (
+    GithubTriggerEvent,
+    PullRequest,
+    check_as_tuple,
+    gh_timestamp_to_date,
+    status_as_tuple,
+)
 from zuul.model import DequeueEvent
 from zuul.zk.branch_cache import (BranchCache, BranchFlag, BranchInfo)
 from zuul.zk.change_cache import (
@@ -595,7 +601,7 @@ class GithubEventProcessor(object):
         # 'sender', but API call to get status puts it in 'creator'.
         # Duplicate the data so our code can look in one place
         self.body['creator'] = self.body['sender']
-        event.status = "%s:%s:%s" % _status_as_tuple(self.body)
+        event.status = "%s:%s:%s" % status_as_tuple(self.body)
         return event
 
     def _event_check_run(self):
@@ -663,7 +669,7 @@ class GithubEventProcessor(object):
 
         event.action = action
 
-        check_run_tuple = "%s:%s:%s" % _check_as_tuple(check_run)
+        check_run_tuple = "%s:%s:%s" % check_as_tuple(check_run)
         event.check_run = check_run_tuple
         return event
 
@@ -1433,6 +1439,11 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             change.number = number
             change.patchset = change_key.revision
 
+        return self._updateChange(change_key, change, event)
+
+    def _updateChange(self, change_key, change, event):
+        log = get_annotated_logger(self.log, event)
+        log.info("Updating %s" % (change,))
         # This can be called multi-threaded during github event
         # preprocessing. In order to avoid data races perform locking
         # by cached key. Try to acquire the lock non-blocking at first.
@@ -1446,7 +1457,12 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
                                     event=event)
 
                 def _update_change(c):
-                    self._updateChange(c, event, pull)
+                    branch = pull[0].get('base').get('ref')
+                    reviews = self.getPullReviews(
+                        pull[1], change.project, change.number, event)
+                    canmerge_data = self.getCanMergeData(
+                        change_key, branch, event)
+                    c.update(self.server, log, pull, reviews, canmerge_data)
 
                 change = self._change_cache.updateChangeWithRetry(
                     change_key, change, _update_change)
@@ -1599,93 +1615,15 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
 
         return changes
 
-    def _updateChange(self, change, event, pull):
-        log = get_annotated_logger(self.log, event)
-        log.info("Updating %s" % (change,))
-        change.pr, pr_obj = pull
-        change.is_current_patchset = (change.pr.get('head').get('sha') ==
-                                      change.patchset)
-        change.ref = "refs/pull/%s/head" % change.number
-        change.branch = change.pr.get('base').get('ref')
-        change.base_sha = change.pr.get('base').get('sha')
-        change.commit_id = change.pr.get('head').get('sha')
-        change.owner = change.pr.get('user').get('login')
-        # Don't overwrite the files list. The change object is bound to a
-        # specific revision and thus the changed files won't change. This is
-        # important if we got the files later because of the 300 files limit.
-        if not change.files:
-            change.files = change.pr.get('files')
-            # Github's pull requests files API only returns at max
-            # the first 300 changed files of a PR in alphabetical order.
-            # https://developer.github.com/v3/pulls/#list-pull-requests-files
-            if change.files is None:
-                log.warning("Got no files of PR.")
-            elif len(change.files) < change.pr.get('changed_files', 0):
-                log.warning("Got only %s files but PR has %s files.",
-                            len(change.files),
-                            change.pr.get('changed_files', 0))
-                # In this case explicitly set change.files to None to signalize
-                # that we need to ask the mergers later in pipeline processing.
-                # We cannot query the files here using the mergers because this
-                # can slow down the github event queue considerably.
-                change.files = None
-        change.title = change.pr.get('title')
-        change.open = change.pr.get('state') == 'open'
-
-        # Never change the is_merged attribute back to unmerged. This is
-        # crucial so this cannot race with mergePull wich sets this attribute
-        # after a successful merge.
-        if not change.is_merged:
-            change.is_merged = change.pr.get('merged')
-        # Similarly, never overwrite merge_commit_sha which is set by
-        # mergePull.
-        if change.is_merged and not change.merge_commit_sha:
-            change.merge_commit_sha = change.pr.get('merge_commit_sha')
-
-        change.reviews = self.getPullReviews(
-            pr_obj, change.project, change.number, event)
-        change.labels = change.pr.get('labels')
-        # ensure message is at least an empty string
-        message = change.pr.get("body") or ""
-        if change.title:
-            if message:
-                message = "{}\n\n{}".format(change.title, message)
-            else:
-                message = change.title
-        change.message = message
-        change.body_text = change.pr.get("body_text")
-
-        # Note(tobiash): The updated_at timestamp is a moving target that is
-        # not bound to the pull request 'version' we can solve that by just not
-        # updating the timestamp if the pull request is updated in the cache.
-        # This way the old pull request object retains its old timestamp and
-        # the update check works.
-        if not change.updated_at:
-            change.updated_at = int(time.mktime(self._ghTimestampToDate(
-                change.pr.get('updated_at'))))
-
-        # Note: Github returns different urls for the pr:
-        #  - url: this is the url meant for api use
-        #  - html_url: this is the url meant for use in browser (this is what
-        #              change.url means)
-        change.url = change.pr.get('html_url')
-        change.uris = [
-            'https://%s/%s/pull/%s' % (
-                self.server, change.project.name, change.number),
-        ]
-
-        self._updateCanMergeInfo(change, event)
-
-        return change
-
-    def _updateCanMergeInfo(self, change, event):
+    def getCanMergeData(self, change_key, branch, event):
         # NOTE: The 'mergeable' field may get a false (null) while GitHub is
         # calculating if it can merge. The Github API will just return
         # that as false. This could lead to false negatives. So don't get this
         # field here and only evaluate branch protection settings. Any merge
         # conflicts which would block merging finally will be detected by
         # the zuul-mergers anyway.
-        github = self.getGithubClient(change.project.name, zuul_event_id=event)
+        github = self.getGithubClient(change_key.project_name,
+                                      zuul_event_id=event)
 
         # Append accept headers so we get the draft status and checks api
         self._append_accept_header(github, PREVIEW_DRAFT_ACCEPT)
@@ -1694,21 +1632,9 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         # For performance reasons fetch all needed data upfront using a
         # single graphql call.
         canmerge_data = self.graphql_client.fetch_canmerge(
-            github, change, zuul_event_id=event)
+            github, change_key, branch, zuul_event_id=event)
 
-        change.contexts = self._get_contexts(canmerge_data)
-        change.draft = canmerge_data.get('isDraft', False)
-        change.mergeable = (canmerge_data.get('mergeable', 'MERGEABLE').lower()
-                            in ('mergeable', 'unknown'))
-        change.review_decision = canmerge_data['reviewDecision']
-        change.unresolved_conversations = canmerge_data.get(
-            'unresolvedConversations', False)
-        change.unsigned_commits = canmerge_data.get(
-            'unsignedCommits', False)
-        change.required_contexts = set(
-            canmerge_data['requiredStatusCheckContexts']
-        )
-        change.branch_protected = canmerge_data['protected']
+        return canmerge_data
 
     def getGitUrl(self, project: Project):
         if self.git_ssh_key:
@@ -2008,7 +1934,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         log = get_annotated_logger(self.log, event)
 
         if allow_refresh:
-            self._updateCanMergeInfo(change, event)
+            change.updateCanMergeData(self.getCanMergeData(change, event))
 
         # If the PR is a draft it cannot be merged.
         if change.draft:
@@ -2112,7 +2038,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
                     'email': user.get('email'),
                     'name': user.get('name')
                 },
-                'grantedOn': int(time.mktime(self._ghTimestampToDate(
+                'grantedOn': int(time.mktime(gh_timestamp_to_date(
                                              rev.get('submitted_at')))),
             }
 
@@ -2598,18 +2524,6 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
                 files.add(f)
         return list(files)
 
-    def _ghTimestampToDate(self, timestamp):
-        return time.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
-
-    def _get_contexts(self, canmerge_data):
-        contexts = set(
-            _status_as_tuple(s) for s in canmerge_data["status"].values()
-        )
-        contexts.update(set(
-            _check_as_tuple(c) for c in canmerge_data["checks"].values()
-        ))
-        return contexts
-
     def getWebController(self, zuul_web):
         return GithubWebController(zuul_web, self)
 
@@ -2690,37 +2604,3 @@ class GithubWebController(BaseWebController):
         }
         self.event_queue.put(data)
         return data
-
-
-def _status_as_tuple(status):
-    """Translate a status into a tuple of user, context, state"""
-
-    creator = status.get('creator')
-    if not creator:
-        user = "Unknown"
-    else:
-        user = creator.get('login')
-    context = status.get('context')
-    state = status.get('state')
-    # Normalize state to lowercase as the Graphql and REST API are not
-    # consistent in this regard.
-    state = state.lower() if state else state
-    return (user, context, state)
-
-
-def _check_as_tuple(check):
-    """Translate a check into a tuple of app, name, conclusion"""
-
-    # A check_run does not contain any "creator" information like a status, but
-    # only the app for/by which it was created.
-    app = check.get("app")
-    if app:
-        slug = app.get("slug")
-    else:
-        slug = "Unknown"
-    name = check.get("name")
-    conclusion = check.get("conclusion")
-    # Normalize conclusion to lowercase as the Graphql and REST API are not
-    # consistent in this regard.
-    conclusion = conclusion.lower() if conclusion else conclusion
-    return (slug, name, conclusion)
