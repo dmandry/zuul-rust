@@ -54,6 +54,7 @@ from zuul.lib.changenetwork import (
     ChangeNetworkFuture,
     ChangeNetworkConflict,
     ChangeNetworkManager,
+    QueryHistory,
 )
 from zuul.lib.logutil import get_annotated_logger
 from zuul import model
@@ -64,6 +65,7 @@ from zuul.driver.github.githubmodel import (
     GithubTriggerEvent,
     PullRequest,
     check_as_tuple,
+    get_branch_from_pr,
     gh_timestamp_to_date,
     status_as_tuple,
 )
@@ -108,6 +110,10 @@ EventTuple = collections.namedtuple(
         "timestamp", "span_context", "body", "event_type", "delivery"
     ]
 )
+
+
+class GithubEventProcessingException(Exception):
+    pass
 
 
 def _sign_request(body, secret):
@@ -825,7 +831,7 @@ class GithubEventProcessor(object):
         event.change_url = self.connection.getPullUrl(event.project_name,
                                                       event.change_number)
         event.updated_at = pr_body.get('updated_at')
-        event.branch = base.get('ref')
+        event.branch = get_branch_from_pr(pr_body)
         event.ref = "refs/pull/" + str(pr_body.get('number')) + "/head"
         event.patch_number = head.get('sha')
 
@@ -1282,6 +1288,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
     def __init__(self, driver, connection_name, connection_config):
         super(GithubConnection, self).__init__(driver, connection_name,
                                                connection_config)
+
         self.change_network_manager = ChangeNetworkManager()
         self.projects = {}
         self.git_ssh_key = self.connection_config.get('sshkey')
@@ -1320,6 +1327,10 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         self.watched_event_filters_by_tenant = {}
         self.watched_event_filters_lock = threading.Lock()
         self.query_actor_permission = False
+        self.max_dependencies = self.connection_config.get(
+            'max_dependencies', None)
+        if self.max_dependencies is not None:
+            self.max_dependencies = int(self.max_dependencies)
 
     def setWatchedEventFilters(self, tenant_name, filters):
         # TODO: This does not remove filters when tenants are deleted
@@ -1434,14 +1445,24 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         elif change_key.change_type == 'Ref':
             return self._getRef(change_key, refresh=refresh, event=event)
 
-    def _getChange(self, change_key, refresh=False,
-                   network_future=None, event=None,
+    def _checkMaxDependencies(self, change, history):
+        if change and history:
+            history.add(history.Query.SEEN, change)
+            if (self.max_dependencies is not None and
+                len(history.queries[history.Query.SEEN]) >
+                self.max_dependencies):
+                raise GithubEventProcessingException(
+                    f"Change {change} has too many dependencies")
+
+    def _getChange(self, change_key, refresh=False, history=None,
+                   network_future=None, stack=None, event=None,
                    update_if_older_than=None):
         # Note(tobiash): We force the pull request number to int centrally here
         # because it can originate from different sources (github event, manual
         # enqueue event) where some might just parse the string and forward it.
         number = int(change_key.stable_id)
         change = self._change_cache.get(change_key)
+        self._checkMaxDependencies(change, history)
         if change and not refresh:
             return change
         project = self.source.getProject(change_key.project_name)
@@ -1450,6 +1471,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             change.project = project
             change.number = number
             change.patchset = change_key.revision
+            self._checkMaxDependencies(change, history)
         network_start = network_future is None
         while True:
             if network_future is None:
@@ -1457,8 +1479,8 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             network_future.add(change_key)
             try:
                 self.change_network_manager.permissionToProceed(network_future)
-                return self._updateChange(change_key, change, event,
-                                          network_future)
+                return self._updateChange(change_key, change, event, history,
+                                          network_future, stack)
             except ChangeNetworkConflict as e:
                 if network_start:
                     # This is the top of the stack.  We wait for the
@@ -1480,8 +1502,18 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
                 if network_start:
                     self.change_network_manager.setComplete(network_future)
 
-    def _updateChange(self, change_key, change, event, network_future):
+    def _updateChange(self, change_key, change, event, history,
+                      network_future, stack):
         log = get_annotated_logger(self.log, event)
+
+        # See note in gerritconnection.py
+        if history and change.number and change.patchset:
+            history_change = history.getByKey(history.Query.CHANGE,
+                                              change_key)
+            if history_change:
+                log.debug("Change %s is in history", change)
+                return history_change
+
         if (network_future.min_ltime and
             change.zuul_query_ltime and
             change.zuul_query_ltime > network_future.min_ltime):
@@ -1493,14 +1525,101 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         log.info("Updating %s" % (change,))
         data = self.queryChange(change_key, change, event,
                                 network_future.min_ltime)
+        # Do a local update without updating the cache so that we can
+        # reference this change when we recurse for dependencies.
+        change.update(self.server, log, data, {})
+
+        # Get the dependencies for this change, and recursively update
+        # dependent changes (recursively calling this method).
+        if data.pr['state'] == 'open':
+            extra = self._updateChangeDependencies(
+                log, change_key, change, data, event, history,
+                network_future, stack)
+        else:
+            extra = {}
 
         def _update_change(c):
-            c.update(self.server, log, data)
+            c.update(self.server, log, data, extra)
 
         change = self._change_cache.updateChangeWithRetry(
             change_key, change, _update_change)
         log.debug('Finished updating change %s', change)
         return change
+
+    def _updateChangeDependencies(self, log, key, change, data, event,
+                                  history, network_future, stack):
+        if 'stack' not in data.pr:
+            return {}
+
+        if history is None:
+            history = QueryHistory()
+        history.add(history.Query.CHANGE, change)
+
+        needs_changes = set()
+        git_needs_changes = []
+
+        if stack is None:
+            stack = self.getStack(change.project.name,
+                                  data.pr['stack']['number'])
+            if stack is None:
+                raise Exception("Unable to retrieve stack info")
+        current_stack_idx = data.pr['stack']['position'] - 1
+        if current_stack_idx:
+            prev_stack_pr = stack['pull_requests'][current_stack_idx - 1]
+            # This is a git commit dependency. So we only ignore
+            # it if it is already merged.
+            if prev_stack_pr['merged_at'] is None:
+                dep_num = prev_stack_pr['number']
+                dep_ps = prev_stack_pr['head']['sha']
+                log.debug("Updating %s: Getting git-dependent change %s,%s",
+                          change, dep_num, dep_ps)
+                dep_key = ChangeKey(self.connection_name, change.project.name,
+                                    'PullRequest',
+                                    str(dep_num), str(dep_ps))
+                dep = self._getChange(dep_key, history=history,
+                                      network_future=network_future,
+                                      stack=stack,
+                                      event=event)
+                if dep not in needs_changes:
+                    git_needs_changes.append(dep_key.reference)
+                    needs_changes.add(dep_key.reference)
+
+        needed_by_changes = set()
+        git_needed_by_changes = []
+        if current_stack_idx + 1 <= len(stack['pull_requests']) - 1:
+            dep_num = dep_ps = None
+            try:
+                next_stack_pr = stack['pull_requests'][current_stack_idx + 1]
+                if next_stack_pr['state'] == 'open':
+                    dep_num = next_stack_pr['number']
+                    dep_ps = next_stack_pr['head']['sha']
+                    log.debug("Updating %s: Getting git-needed change %s,%s",
+                              change, dep_num, dep_ps)
+                    dep_key = ChangeKey(self.connection_name,
+                                        change.project.name,
+                                        'PullRequest',
+                                        str(dep_num), str(dep_ps))
+                    dep = self._getChange(dep_key, history=history,
+                                          network_future=network_future,
+                                          stack=stack,
+                                          event=event)
+                    if dep not in needed_by_changes:
+                        git_needed_by_changes.append(dep_key.reference)
+                        needed_by_changes.add(dep_key.reference)
+            except ChangeNetworkConflict:
+                raise
+            # We ignore GerritEventProcessingExceptions (e.g. when exceeding
+            # max_dependencies) here because they are not important on the
+            # "needed_by" side of the dependency chain. Those are already
+            # checked for on the "needs" side.
+            except Exception:
+                log.exception("Failed to get git-needed change %s,%s",
+                              dep_num, dep_ps)
+
+        return dict(
+            git_needs_changes=git_needs_changes,
+            git_needed_by_changes=git_needed_by_changes,
+        )
 
     def queryChange(self, change_key, change, event, min_ltime):
         number = change_key.stable_id
@@ -1513,7 +1632,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
             zuul_query_ltime = self.sched.zk_client.getCurrentLtime()
             pull = self.getPull(change.project.name, change.number,
                                 event=event)
-            branch = pull[0].get('base').get('ref')
+            branch = get_branch_from_pr(pull[0])
             reviews = self.getPullReviews(
                 pull[1], change.project, change.number, event)
             canmerge_data = self.getCanMergeData(
@@ -2177,6 +2296,19 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         # get permissions from the data
         return perms.json().get('permission', 'none')
 
+    def getStack(self, project, stack_number):
+        github = self.getGithubClient(project)
+        url = github.session.build_url('repos', project,
+                                       'stacks', str(stack_number))
+        stack = github.session.get(url)
+
+        self.log.debug("Got stack info for %s", project)
+
+        if stack.status_code == 404:
+            return None
+
+        return stack.json()
+
     def commentPull(self, project, pr_number, message, zuul_event_id=None):
         log = get_annotated_logger(self.log, zuul_event_id)
         github = self.getGithubClient(project, zuul_event_id=zuul_event_id)
@@ -2186,8 +2318,8 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         resp.raise_for_status()
         log.debug("Commented on PR %s#%s", project, pr_number)
 
-    def mergePull(self, project, pr_number, commit_message='', sha=None,
-                  method='merge', zuul_event_id=None):
+    def mergePullSync(self, project, pr_number, commit_message='', sha=None,
+                      method='merge', zuul_event_id=None):
         log = get_annotated_logger(self.log, zuul_event_id)
         github = self.getGithubClient(project, zuul_event_id=zuul_event_id)
         url = github.session.build_url("repos", project, "pulls",
@@ -2231,6 +2363,82 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
 
         if not result:
             raise MergeFailure('Pull request was not merged')
+        log.debug("Merged PR %s#%s", project, pr_number)
+        # This is the new merge_commit_sha
+        return data["sha"]
+
+    def _waitForAsyncMerge(self, github, project, pr_number, request_id):
+        start = time.monotonic()
+        timeout = start + 300
+        url = github.session.build_url("repos", project, "pulls",
+                                       str(pr_number), "merge-async",
+                                       request_id)
+        while time.monotonic() < timeout:
+            resp = github.session.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+            if data['status'] == 'pending':
+                time.sleep(5)
+                continue
+            if data['status'] == 'merged':
+                return data['details']['sha']
+            if not data:
+                raise MergeFailure('Pull request was not merged')
+            msg = data.get('details', {}).get('message')
+            if msg:
+                raise MergeFailure(msg)
+            raise MergeFailure('Pull request was not merged')
+
+    def mergePullAsync(self, project, pr_number, commit_message='', sha=None,
+                       method='merge', zuul_event_id=None):
+        log = get_annotated_logger(self.log, zuul_event_id)
+        github = self.getGithubClient(project, zuul_event_id=zuul_event_id)
+        url = github.session.build_url("repos", project, "pulls",
+                                       str(pr_number), "merge-async")
+
+        payload = {
+            "merge_method": method,
+            "merge_action": "direct_merge",
+        }
+        if sha:
+            payload["sha"] = sha
+        if commit_message:
+            payload["commit_message"] = commit_message
+
+        try:
+            resp = github.session.put(url, json=payload)
+            resp.raise_for_status()
+            if resp.status_code == 200:
+                data = resp.json()
+                sha = data['details']['sha']
+                log.debug("PR %s#%s already merged", project, pr_number)
+                return sha
+            if resp.status_code == 202:
+                data = resp.json()
+                request_id = data['details']['uuid']
+                return self._waitForAsyncMerge(
+                    github, project, pr_number, request_id)
+            raise MergeFailure('Pull request was not merged')
+        except Exception as e:
+            api_message = None
+            if hasattr(e, 'response'):
+                try:
+                    api_message = e.response.json().get('message')
+                except ValueError:
+                    # There was no json body so use the generic message below.
+                    pass
+
+            msg = None
+            if api_message == "Resource not accessible by integration":
+                msg = (f'Pull request merge failed: {api_message}, '
+                       'You may need to manually rebase your PR and '
+                       'retry.')
+            elif api_message:
+                msg = f'Pull request merge failed: {api_message}'
+            else:
+                msg = 'Pull request merge failed: %s' % e
+            raise MergeFailure(msg)
+
         log.debug("Merged PR %s#%s", project, pr_number)
         # This is the new merge_commit_sha
         return data["sha"]
