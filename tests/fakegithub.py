@@ -84,6 +84,7 @@ class FakeGithubPullRequest:
         self.is_merged = False
         self.merge_message = None
         self.state = 'open'
+        self.stack = None
         self.url = 'https://%s/%s/pull/%s' % (self.github_server,
                                               project, number)
         self.base_sha = base_sha
@@ -731,6 +732,8 @@ class FakeRepository(object):
         self._api = FAKE_BASE_URL
         self._branches = [FakeBranch(self, data)]
         self._commits = {}
+        self._stacks = {}
+        self._merge_requests = {}
 
         # Simple dictionary to store permission values per feature (e.g.
         # checks, Repository contents, Pull requests, Commit statuses, ...).
@@ -867,10 +870,20 @@ class FakeRepository(object):
             return self.get_url_collaborators(request)
         if entity == 'commits':
             return self.get_url_commits(request, params=params)
+        if entity == 'stacks':
+            return self.get_url_stacks(request)
+        if entity == 'pulls':
+            return self.get_url_pulls(request)
         if entity == '':
             return self.get_url_repo()
         else:
             return None
+
+    def get_url_pulls(self, path):
+        parts = path.split('/')
+        if len(parts) == 3 and parts[1] == 'merge-async':
+            request_uuid = parts[2]
+            return FakeResponse(self._merge_requests[request_uuid], 200)
 
     def get_url_branches(self, path, params=None):
         if path is None:
@@ -965,6 +978,23 @@ class FakeRepository(object):
 
     def get_url_repo(self):
         return FakeResponse(self._repodata)
+
+    def get_url_stacks(self, number):
+        stack = self._stacks.get(int(number))
+        if not stack:
+            return FakeResponse({}, 404)
+        stack = stack.copy()
+        prs = []
+        for pr in stack['pull_requests']:
+            d = {
+                'number': str(pr.number),
+                'head': {'sha': pr.head_sha},
+                'merged_at': 'timestamp' if pr.is_merged else None,
+                'state': pr.state,
+            }
+            prs.append(d)
+        stack['pull_requests'] = prs
+        return FakeResponse(stack)
 
     def pull_requests(self, state=None, sort=None, direction=None):
         # sort and direction are unused currently, but present to match
@@ -1072,6 +1102,8 @@ class FakePull(object):
             'changed_files': len(pr.files),
             'labels': [{'name': l} for l in pr.labels]
         }
+        if pr.stack:
+            data['stack'] = pr.stack
         return data
 
 
@@ -1230,6 +1262,43 @@ class FakeGithubSession(object):
                 return FakeResponse(data, 405, 'Method not allowed')
             pr.setMerged(json.get("commit_message", ""))
             return FakeResponse({"merged": True, "sha": "fakemergesha"}, 200)
+
+        # Handle async pull request merge
+        match = re.match(r'.+/repos/(.+)/pulls/(\d+)/merge-async$', url)
+        if match:
+            project, pr_number = match.groups()
+            project = urllib.parse.unquote(project)
+            pr = self.client._data.pull_requests[int(pr_number)]
+            conn = self.client._data.fake_github_connection
+
+            # record that this got reported
+            self.client._data.reports.append(
+                (pr.project, pr.number, 'merge', json["merge_method"]))
+            if conn.merge_failure:
+                raise Exception('Unknown merge failure')
+            if conn.merge_not_allowed_count > 0:
+                conn.merge_not_allowed_count -= 1
+                # GitHub returns 405 Method not allowed with more details in
+                # the body of the response.
+                data = {
+                    'message': 'Merge not allowed because of fake reason',
+                }
+                return FakeResponse(data, 405, 'Method not allowed')
+            pr.setMerged(json.get("commit_message", ""))
+            merge_uuid = str(uuid.uuid4())
+            repo = self.client._data.repos.get(tuple(project.split('/')))
+            repo._merge_requests[merge_uuid] = {
+                "status": "merged",
+                "details": {
+                    "message": "Pull request was merged.",
+                    "sha": "fakemergesha",
+                }
+            }
+            return FakeResponse({
+                "details": {
+                    "uuid": merge_uuid,
+                }
+            }, 202)
 
         return FakeResponse(None, 404)
 
@@ -1606,6 +1675,27 @@ class FakeGithubConnection(githubconnection.GithubConnection):
 
     def setZuulWebPort(self, port):
         self.zuul_web_port = port
+
+    def createStack(self, *prs):
+        project = prs[0].project
+        repo = self.getGithubClient(project).repo_from_project(project)
+        stacks = repo._stacks
+        stack = {
+            'id': 'unused',
+            'number': len(stacks) + 1,
+            'base': {'ref': prs[0].branch},
+            'pull_requests': prs[:],
+        }
+        stacks[stack['number']] = stack
+        for i, pr in enumerate(prs):
+            pr.stack = {
+                'base': {'ref': prs[0].branch},
+                'id': stack['id'],
+                'number': stack['number'],
+                'position': i + 1,
+                'size': len(prs),
+            }
+        return stack
 
     def openFakePullRequest(self, project, branch, subject, files=[],
                             body=None, body_text=None, draft=False,
