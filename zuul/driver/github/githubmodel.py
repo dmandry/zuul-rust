@@ -153,7 +153,7 @@ class PullRequest(Change):
         self.contexts = set(tuple(c) for c in data.get("contexts", []))
         self.branch_protected = data.get("branch_protected", False)
 
-    def update(self, server, log, data):
+    def update(self, server, log, data, extra):
         if not (self.zuul_query_ltime and
                 self.zuul_query_ltime > data.zuul_query_ltime):
             # If our query is older than the existing change data, it
@@ -161,6 +161,8 @@ class PullRequest(Change):
             # update to avoid having is_merged flap.
             self.zuul_query_ltime = data.zuul_query_ltime
             self._update(server, log, data)
+            for k, v in extra.items():
+                setattr(self, k, v)
 
     def _update(self, server, log, data):
         self.pr = data.pr
