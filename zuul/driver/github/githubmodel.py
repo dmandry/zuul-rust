@@ -94,6 +94,7 @@ class PullRequest(Change):
         self.branch_protected = False
         self.merge_commit_sha = None
         self.zuul_query_ltime = None
+        self.stack_number = None
 
     @property
     def status(self):
@@ -133,6 +134,7 @@ class PullRequest(Change):
             "required_contexts": list(self.required_contexts),
             "contexts": list(self.contexts),
             "branch_protected": self.branch_protected,
+            "stack_number": self.stack_number,
         })
         return d
 
@@ -152,8 +154,9 @@ class PullRequest(Change):
         self.required_contexts = set(data.get("required_contexts", []))
         self.contexts = set(tuple(c) for c in data.get("contexts", []))
         self.branch_protected = data.get("branch_protected", False)
+        self.stack_number = data.get("stack_number")
 
-    def update(self, server, log, data):
+    def update(self, server, log, data, extra):
         if not (self.zuul_query_ltime and
                 self.zuul_query_ltime > data.zuul_query_ltime):
             # If our query is older than the existing change data, it
@@ -161,6 +164,8 @@ class PullRequest(Change):
             # update to avoid having is_merged flap.
             self.zuul_query_ltime = data.zuul_query_ltime
             self._update(server, log, data)
+            for k, v in extra.items():
+                setattr(self, k, v)
 
     def _update(self, server, log, data):
         self.pr = data.pr
@@ -232,6 +237,7 @@ class PullRequest(Change):
             'https://%s/%s/pull/%s' % (
                 server, self.project.name, self.number),
         ]
+        self.stack_number = self.pr.get('stack', {}).get('number')
 
         # reviews from getPullReviews
         self.reviews = data.reviews

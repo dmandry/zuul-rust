@@ -225,9 +225,14 @@ class GithubReporter(BaseReporter):
         max_retries = 5
         for i in range(1, max_retries + 1):
             try:
-                merge_sha = self.connection.mergePull(
-                    project, pr_number, message, sha=sha,
-                    method=merge_mode, zuul_event_id=item.event)
+                if change.stack_number is None:
+                    merge_sha = self.connection.mergePullSync(
+                        project, pr_number, message, sha=sha,
+                        method=merge_mode, zuul_event_id=item.event)
+                else:
+                    merge_sha = self.connection.mergePullAsync(
+                        project, pr_number, message, sha=sha,
+                        method=merge_mode, zuul_event_id=item.event)
                 self.connection.updateChangeAttributes(
                     change,
                     merge_commit_sha=merge_sha,
