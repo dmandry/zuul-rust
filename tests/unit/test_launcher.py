@@ -935,6 +935,9 @@ class TestLauncher(LauncherBaseTestCase):
             f'zuul.provider.{pname}.label.debian-normal.nodes.state.in-use',
             kind='g')
         self.assertReportedStat(
+            f'zuul.provider.{pname}.label.debian-large.nodes.state.in-use',
+            kind='g')
+        self.assertReportedStat(
             'zuul.nodes.state.in-use',
             kind='g')
         for _ in iterate_timeout(60, "nodes to be deleted"):

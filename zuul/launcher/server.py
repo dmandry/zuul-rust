@@ -3480,8 +3480,9 @@ class Launcher:
                     f'zuul.provider.{safe_pname}.nodes.state.{state.value}',
                     value)
             # zuul.provider.<provider>.label.<label>.nodes.state.<state> gauge
-            for label, label_nodes in provider_label_nodes[
-                    provider.canonical_name].items():
+            for label in provider.labels:
+                label_nodes = provider_label_nodes[
+                    provider.canonical_name][label]
                 safe_label = _normalize_statsd_name(label)
                 for state, value in label_nodes.items():
                     self.statsd.gauge(
