@@ -44,6 +44,7 @@ import {
   IconProperty,
 } from '../../MiscComponents'
 import {
+  formatHostname,
   formatProviderName,
   getNodeStyle,
   isAuthorized,
@@ -173,7 +174,7 @@ function NodeTable(props) {
                </Tooltip>,
         props: {column: 'Age'}
       },
-      {title: node.lock_holder, props: {column: 'Locked'}},
+      {title: formatHostname(node.lock_holder), props: {column: 'Locked'}},
       {title: formatProviderName(node.provider), props: {column: 'Provider'}},
       {title: node.comment, props: {column: 'Comment'}},
     ]
