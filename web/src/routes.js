@@ -32,6 +32,7 @@ import FlavorsPage from './pages/Flavors'
 import LabelsPage from './pages/Labels'
 import NodesetRequestsPage from './pages/NodesetRequests'
 import NodesPage from './pages/Nodes'
+import NodePage from './pages/Node'
 import OpenApiPage from './pages/OpenApi'
 import PipelineDetailsPage from './pages/PipelineDetails'
 import PipelineOverviewPage from './pages/PipelineOverview'
@@ -139,6 +140,10 @@ const routes = (info, user) => {
     {
       to: '/autohold/:requestId',
       component: AutoholdPage
+    },
+    {
+      to: '/node/:nodeId',
+      component: NodePage
     },
     {
       to: '/semaphore/:semaphoreName',
