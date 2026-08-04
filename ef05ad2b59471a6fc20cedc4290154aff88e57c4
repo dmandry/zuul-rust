@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0d7bf69d_f1be5eeb",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2342,
+      "author": {
+        "id": 39140
+      },
+      "writtenOn": "2026-08-04T19:44:53Z",
+      "side": 1,
+      "message": "Is this where we are merging the PR?  When I try this API on a stacked PR, even on the bottom of the chain, I get:\n\n```\nMerging stacked PRs via this endpoint is not supported.\nUse the asynchronous merge endpoint instead.\n```\n\nAre we getting around that somehow?",
+      "revId": "ef05ad2b59471a6fc20cedc4290154aff88e57c4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
