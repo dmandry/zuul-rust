@@ -1326,14 +1326,17 @@ class Launcher:
     def run(self):
         self.log.debug("Launcher running")
         while self._running:
+            self.log.debug("Run handler awake")
             loop_start = time.monotonic()
             try:
-                with self._run_lock:
-                    self._run()
+                with self.statsd_timer("zuul.launcher.run_handler"):
+                    with self._run_lock:
+                        self._run()
             except Exception:
                 self.log.exception("Error in main thread:")
             loop_duration = time.monotonic() - loop_start
             time.sleep(max(0, self.MAX_SLEEP - loop_duration))
+            self.log.debug("Run handler sleeping")
             self.wake_event.wait(timeout=self.MIN_INTERVAL)
             self.wake_event.clear()
 
