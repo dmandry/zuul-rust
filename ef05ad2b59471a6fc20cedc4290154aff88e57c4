@@ -16,6 +16,24 @@
       "message": "Is this where we are merging the PR?  When I try this API on a stacked PR, even on the bottom of the chain, I get:\n\n```\nMerging stacked PRs via this endpoint is not supported.\nUse the asynchronous merge endpoint instead.\n```\n\nAre we getting around that somehow?",
       "revId": "ef05ad2b59471a6fc20cedc4290154aff88e57c4",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b62d1774_a34eebcd",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2342,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-04T20:17:06Z",
+      "side": 1,
+      "message": "We will need to switch to the new API.  At least at first, we will probably only use the new API for stacked requests.  Since it\u0027s async, it could slow things down since we\u0027ll have to poll.  If it\u0027s fast, then we could eventually switch to using it all the time (once it\u0027s available in github enterprise).  If it\u0027s not, we\u0027ll probably want to hold onto the old one as long as possible.  Using it only for stacked PRs will let us collect data.",
+      "parentUuid": "0d7bf69d_f1be5eeb",
+      "revId": "ef05ad2b59471a6fc20cedc4290154aff88e57c4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
