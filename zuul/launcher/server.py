@@ -2067,12 +2067,14 @@ class Launcher:
         # A user has requested to move the node to a new state
         if node.next_state and not active_request:
             state = node.next_state
+            comment = node.next_comment
             log.debug("Marking node %s as %s", node, state)
             with self.createZKContext(node._lock, self.log) as ctx:
                 node.unassign(ctx)
                 node.clearNextState(ctx)
                 with node.activeContext(ctx):
                     node.setState(state)
+                    node.comment = comment
 
         # Mark outdated nodes w/o a request for cleanup when ...
         if not request and (

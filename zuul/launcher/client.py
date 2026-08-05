@@ -406,7 +406,8 @@ class LauncherClient:
         # Use default states
         return dict()
 
-    def setNextNodeState(self, node, next_state, cache=None):
+    def setNextNodeState(self, node, next_state, next_comment=None,
+                         cache=None):
         if cache:
             getNode = cache.getItem
         else:
@@ -422,6 +423,6 @@ class LauncherClient:
                 if n is None:
                     # Subnode no longer exists
                     continue
-                n.setNextState(ctx, next_state)
+                n.setNextState(ctx, next_state, next_comment)
 
         return nodes
