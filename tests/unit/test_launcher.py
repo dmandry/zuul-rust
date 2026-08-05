@@ -4386,6 +4386,33 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
         self.assertNotEqual(sub1.request_id, sub2.request_id)
         cache._event_queue.unpause()
 
+    @simple_layout('layouts/nodepool-subnodes.yaml', enable_nodepool=True)
+    def test_subnodes_multi_request(self):
+        # Test that subnodes can serve multiple requests in the same
+        # launcher run loop.
+        with self.launcher._run_lock:
+            self.requestNodes(['debian-normal'], timeout=0)
+            self.requestNodes(['debian-normal'], timeout=0)
+
+            for _ in iterate_timeout(60, "requests to appear"):
+                requests = self.launcher.api.requests_cache.getItems()
+                if len(requests) == 2:
+                    break
+
+        for _ in iterate_timeout(60, "nodes to be created"):
+            nodes = self.launcher.api.nodes_cache.getItems()
+            if len(nodes) < 3:
+                continue
+            # Get a list with the main node first and the subnodes last
+            nodes.sort(key=lambda x: len(x.subnodes))
+            nodes.reverse()
+            sub1 = nodes[1]
+            sub2 = nodes[2]
+            if sub1.request_id and sub2.request_id:
+                break
+        self.assertNotEqual(sub1.request_id, sub2.request_id)
+        self.assertEqual(3, len(nodes))
+
     @simple_layout('layouts/nodepool-reuse.yaml', enable_nodepool=True)
     def test_reuse(self):
         ctx = self.createZKContext(None)
