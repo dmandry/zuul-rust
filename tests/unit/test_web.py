@@ -2179,7 +2179,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
         resp = self.put_url(
             f"api/tenant/tenant-one/nodes/{nodes[0]['uuid']}",
             headers={'Authorization': 'Bearer %s' % token},
-            json={'state': 'hold'},
+            json={'state': 'hold', 'comment': 'test hold'},
         )
         self.assertEqual(201, resp.status_code)
         self.waitUntilSettled()
@@ -2215,6 +2215,7 @@ class TestWebProviders(LauncherBaseTestCase, WebMixin):
             node.refresh(ctx)
             if node.state == node.State.HOLD:
                 break
+        self.assertEqual('test hold', node.comment)
 
         resp = self.put_url(
             f"api/tenant/tenant-one/nodes/{nodes[0]['uuid']}",
