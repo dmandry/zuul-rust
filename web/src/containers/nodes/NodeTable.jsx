@@ -27,7 +27,13 @@ import {
 import moment from 'moment'
 import moment_tz from 'moment-timezone'
 import {
+  Button,
+  Form,
+  FormGroup,
+  Modal,
+  ModalVariant,
   Spinner,
+  TextInput,
   Tooltip,
 } from '@patternfly/react-core'
 import {
@@ -68,6 +74,10 @@ function NodeTable(props) {
   const user = useSelector((state) => state.user)
   const timezone = useSelector((state) => state.timezone)
   const dispatch = useDispatch()
+
+  const [pendingHoldNode, setPendingHoldNode] = useState(null)
+  const [pendingHoldNodeComment, setPendingHoldNodeComment] = useState(null)
+  const [showHoldModal, setShowHoldModal] = useState(false)
 
   const columns = [
     {
@@ -152,6 +162,60 @@ function NodeTable(props) {
       })
   }
 
+  function renderHoldModal() {
+    const title = 'Hold node'
+    return (
+      <Modal
+        variant={ModalVariant.small}
+        isOpen={showHoldModal}
+        title={title}
+        onClose={() => { setShowHoldModal(false) }}
+        actions={[
+          <Button key="confirm" variant="primary"
+                  onClick={() => {
+                    setShowHoldModal(false)
+                    setNodeState(tenant.apiPrefix,
+                                 pendingHoldNode.uuid,
+                                 "hold",
+                                 pendingHoldNodeComment)
+                      .then(() => {
+                        dispatch(addNotification(
+                          {
+                            text: 'Node state updated.',
+                            type: 'success',
+                            status: '',
+                            url: '',
+                          }))
+                        dispatch(fetchNodesIfNeeded(tenant, true))
+                      })
+                      .catch(error => {
+                        dispatch(addApiError(error))
+                      })
+                  }}>
+            Confirm
+          </Button>,
+          <Button key="cancel" variant="link"
+                  onClick={() => {setShowHoldModal(false) }}>
+            Cancel
+          </Button>,
+        ]}>
+        <Form isHorizontal>
+          <FormGroup
+            label="Comment"
+            fieldId="node-form-comment"
+            helperText="The comment for the node">
+            <TextInput
+              value={pendingHoldNodeComment}
+              type="text"
+              id="node-form-comment"
+              name="comment"
+              onChange={(value) => { setPendingHoldNodeComment(value) }} />
+          </FormGroup>
+        </Form>
+      </Modal>
+    )
+  }
+
   function createNodeRow(rows, node, lastMainNode) {
     const state_time = typeof(node.state_time) === 'string' ?
           moment_tz.utc(node.state_time) :
@@ -182,8 +246,12 @@ function NodeTable(props) {
       r.push({title:
               <ActionsColumn items={[
                 {
-                  title: 'Set to HOLD',
-                  onClick: () => handleStateChange(node.uuid, 'hold')
+                  title: 'Set to HOLD...',
+                  onClick: () => {
+                    setPendingHoldNode(node)
+                    setPendingHoldNodeComment(node.comment)
+                    setShowHoldModal(true)
+                  },
                 },
                 {
                   title: 'Set to OUTDATED',
@@ -263,7 +331,8 @@ function NodeTable(props) {
       >
         <TableHeader />
         <TableBody />
-        </Table>
+      </Table>
+      {renderHoldModal()}
     </>
   )
 }

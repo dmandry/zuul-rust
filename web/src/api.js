@@ -339,11 +339,11 @@ function fetchNodes(apiPrefix) {
   return makeRequest(apiPrefix + 'nodes')
 }
 
-function setNodeState(apiPrefix, requestId, state) {
+function setNodeState(apiPrefix, requestId, state, comment) {
   return makeRequest(
     apiPrefix + '/nodes/' + requestId,
     'put',
-    { state }
+    { state, comment }
   )
 }
 function fetchSemaphores(apiPrefix) {
