@@ -1361,7 +1361,6 @@ class Launcher:
         self._processMinReady()
 
     def _processRequests(self):
-        unassigned_nodes = self._getUnassignedNodes()
         for request in self.api.getMatchingRequests():
             log = get_annotated_logger(self.log, request, request=request.uuid)
             try:
@@ -1386,16 +1385,16 @@ class Launcher:
                 if not self._cachesReadyForRequest(request):
                     self.log.debug("Caches are not up-to-date for %s", request)
                     continue
-                self._processNodesetRequest(request, unassigned_nodes, log)
+                self._processNodesetRequest(request, log)
             except Exception:
                 log.exception("Failed to process request %s", request)
 
-    def _processNodesetRequest(self, request, unassigned_nodes, log):
+    def _processNodesetRequest(self, request, log):
         try:
             if request.state == model.NodesetRequest.State.REQUESTED:
-                self._acceptRequest(request, log, unassigned_nodes)
+                self._acceptRequest(request, log)
             elif request.state == model.NodesetRequest.State.ACCEPTED:
-                self._checkRequest(request, log, unassigned_nodes)
+                self._checkRequest(request, log)
         except NodesetRequestError as err:
             state = model.NodesetRequest.State.FAILED
             log.error("Marking request %s as %s: %s",
@@ -1426,40 +1425,9 @@ class Launcher:
             for n in request.nodes
         )
 
-    def _filterUnassignedNodes(self, unassigned_nodes, request):
-        request_unassigned_nodes = LabelNodeMapping()
-        if request.image_upload_uuid:
-            # This is a request for an image validation job.
-            # Don't use any unassigned nodes for that.
-            return request_unassigned_nodes
-        providers = {p.canonical_name: p
-                     for p in self.tenant_providers.get(request.tenant_name)}
-        if not providers:
-            return request_unassigned_nodes
-        label_names = set(request.labels)
-        for label_name in label_names:
-            unassigned_for_label = unassigned_nodes.getNodesForLabel(
-                label_name)
-            if not unassigned_for_label:
-                continue
-            # TODO: sort by age? use old nodes first? random to reduce
-            # chance of thundering herd?
-            for node in unassigned_for_label:
-                if node.request_id:
-                    continue
-                if node.state not in node.ASSIGNABLE_STATES:
-                    continue
-                if self.api.hasNodeExpired(node):
-                    continue
-                # Check to see if this node is valid in this tenant
-                if node.provider in providers:
-                    request_unassigned_nodes.addNode(node)
-        return request_unassigned_nodes
-
-    def _assignUnassignedNode(self, ctx, unassigned_nodes,
-                              request_unassigned_nodes, request,
+    def _assignUnassignedNode(self, ctx, unassigned_nodes, request,
                               label, provider, log):
-        unassigned_for_label = request_unassigned_nodes.getNodesForLabel(
+        unassigned_for_label = unassigned_nodes.getNodesForLabel(
             label.name)
         # TODO: sort by age? use old nodes first? random to reduce
         # chance of thundering herd?
@@ -1478,7 +1446,6 @@ class Launcher:
                 # Double check if it's still available
                 if (node.request_id or
                     node.state not in node.ASSIGNABLE_STATES):
-                    request_unassigned_nodes.removeNode(node)
                     unassigned_nodes.removeNode(node)
                     continue
                 nearest_lock = (
@@ -1495,7 +1462,6 @@ class Launcher:
                         )
                     except NodeExistsError:
                         continue
-                request_unassigned_nodes.removeNode(node)
                 unassigned_nodes.removeNode(node)
                 log.debug("Assigned unassigned node %s", node.uuid)
                 return node
@@ -1508,13 +1474,12 @@ class Launcher:
                     node.releaseLock(ctx)
         return None
 
-    def _acceptRequest(self, request, log, unassigned_nodes):
+    def _acceptRequest(self, request, log):
         messages = []
-        request_unassigned_nodes = self._filterUnassignedNodes(
-            unassigned_nodes, request)
+        unassigned_nodes = self._getUnassignedNodes(request)
         # Create provider nodes for the requested labels
         label_providers = self._selectProviders(
-            request, request_unassigned_nodes, messages)
+            request, unassigned_nodes, messages)
         with (self.createZKContext(request._lock, log) as ctx,
               request.activeContext(ctx)):
             for i, (label, provider) in enumerate(label_providers):
@@ -1523,8 +1488,7 @@ class Launcher:
                 if i < len(request.provider_node_data):
                     continue
                 node = self._assignUnassignedNode(
-                    ctx, unassigned_nodes, request_unassigned_nodes,
-                    request, label, provider, log)
+                    ctx, unassigned_nodes, request, label, provider, log)
                 if node is None:
                     # We need to request a new node
                     if provider.driver.name == 'static':
@@ -1566,7 +1530,7 @@ class Launcher:
         random.shuffle(providers)
         return providers
 
-    def _selectProviders(self, request, request_unassigned_nodes, messages):
+    def _selectProviders(self, request, unassigned_nodes, messages):
         providers = self.tenant_providers.get(request.tenant_name)
         if not providers:
             raise NodesetRequestError(
@@ -1581,11 +1545,11 @@ class Launcher:
 
         # Then if there are unassigned nodes, sort so that we can use the
         # most unassigned nodes.
-        if request_unassigned_nodes:
+        if unassigned_nodes:
             # provider -> total unassigned nodes
             usable_provider_unassigned_nodes = collections.Counter()
             for label_name in set(request.labels):
-                for node in request_unassigned_nodes.getNodesForLabel(
+                for node in unassigned_nodes.getNodesForLabel(
                         label_name):
                     usable_provider_unassigned_nodes[node.provider] += 1
                     messages.append(
@@ -1879,17 +1843,16 @@ class Launcher:
         subnode = self.api.nodes_cache.insert(subnode)
         return subnode
 
-    def _checkRequest(self, request, log, unassigned_nodes):
+    def _checkRequest(self, request, log):
         messages = []
         requested_nodes = [self.api.getProviderNode(node_id) for
                            node_id in request.nodes]
-        request_unassigned_nodes = self._filterUnassignedNodes(
-            unassigned_nodes, request)
         if any(n.state in n.FAILED_STATES for n in requested_nodes):
+            unassigned_nodes = self._getUnassignedNodes(request)
             # If any nodes failed, see if we need to change providers
             # for any or all of them.
             label_providers = self._selectProviders(
-                request, request_unassigned_nodes, messages)
+                request, unassigned_nodes, messages)
             for i, node in enumerate(requested_nodes):
                 label, provider = label_providers[i]
                 if (node.state in node.FAILED_STATES or
@@ -1908,7 +1871,7 @@ class Launcher:
                             add_failed_provider = None
 
                         new_node = self._assignUnassignedNode(
-                            ctx, unassigned_nodes, request_unassigned_nodes,
+                            ctx, unassigned_nodes,
                             request, label, provider, log)
                         if new_node is None:
                             if provider.driver.name == 'static':
@@ -2656,11 +2619,22 @@ class Launcher:
                 unassigned_nodes[alias].append(node.label_config_hash)
         return unassigned_nodes
 
-    def _getUnassignedNodes(self):
+    def _getUnassignedNodes(self, request):
         # Get unassigned ready nodes and also building nodes.  We can
         # have unassigned building nodes if a request is canceled, or
         # in the case of subnodes.
         unassigned_nodes = LabelNodeMapping()
+        if request.image_upload_uuid:
+            # This is a request for an image validation job.
+            # Don't use any unassigned nodes for that.
+            return unassigned_nodes
+
+        providers = {p.canonical_name: p
+                     for p in self.tenant_providers.get(request.tenant_name)}
+        if not providers:
+            return unassigned_nodes
+
+        label_names = set(request.labels)
         nodes = []
         for node in self.api.getProviderNodes():
             if node.request_id is not None:
@@ -2668,6 +2642,13 @@ class Launcher:
             if node.subnodes:
                 continue
             if node.state not in node.ASSIGNABLE_STATES:
+                continue
+            # Check the provider to see if this node is valid in this tenant
+            if node.provider not in providers:
+                continue
+            if label_names.isdisjoint(node.all_labels):
+                continue
+            if self.api.hasNodeExpired(node):
                 continue
             nodes.append(node)
 
