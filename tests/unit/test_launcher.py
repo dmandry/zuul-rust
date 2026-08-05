@@ -2690,7 +2690,7 @@ class TestLauncher(LauncherBaseTestCase):
 
             # Double check that the internal ordering
             for _ in iterate_timeout(60, "nodes to be unassigned"):
-                unassigned = self.launcher._getUnassignedNodes().\
+                unassigned = self.launcher._getUnassignedNodes(request2).\
                     getNodesForLabel('debian-normal')
                 if len(unassigned) == 2:
                     break
