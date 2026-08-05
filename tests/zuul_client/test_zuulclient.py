@@ -879,7 +879,7 @@ class TestZuulClientNodesets(LauncherBaseTestCase, BaseTestWeb):
             ['zuul-client',
              '--zuul-url', self.base_url, '--auth-token', token,
              'node-set-state', '--tenant', 'tenant-one',
-             nodes[0]['uuid'], 'hold',
+             nodes[0]['uuid'], 'hold', 'test hold'
              ],
             stdout=subprocess.PIPE)
         output, err = p.communicate()
@@ -890,6 +890,7 @@ class TestZuulClientNodesets(LauncherBaseTestCase, BaseTestWeb):
             node = self.launcher.api.nodes_cache.getItem(nodes[0]['uuid'])
             if node.next_state == node.State.HOLD:
                 break
+        self.assertEqual('test hold', node.next_comment)
 
         token = self._getToken()
         p = subprocess.Popen(
