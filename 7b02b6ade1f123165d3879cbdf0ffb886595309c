@@ -1,0 +1,123 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b8b5cf6d_8a3bfe6a",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "recheck",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "650891f1_9d296631",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1346,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "The purpose of this launcher_score patched method is to force the requests to be handled by launcher0 where we\u0027ve also patched _acceptRequest in order to control the order things are handled in right?\n\nAt first I was wondering why this was necessary at all since launcher0 is already patched, but we\u0027re trying to avoid also managing launcher1 state I think.",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "979df948_7712b62b",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1380,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "At the point we make request2 and request3 we are at quota so they are both processed normally but we hit quota and the requests are fulfilled.",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "81ea886a_4ee3e48f",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1400,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "Then we replace the _acceptRequest() method in launcher0 with our steppable version which doesn\u0027t run until we wake the launcher with wake_event.set().",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a6ef3108_cd55bac5",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1406,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "The three lines above process request2 (which continues to noop due to being at quota). Then the line above waits for us to reach processing of request3.",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a9dc853d_463276e8",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1415,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "This resets quota usage back to 0 allowing the next request to be processed.",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2e0d6559_c7cc3ee1",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1420,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-05T23:42:47Z",
+      "side": 1,
+      "message": "go_event.set() allows request3 processing to continue. In the old setup request3 would be fulfilled before request2 because it would be handled immediately. But now it should see that there is some other request ahead of it waiting on quota and noop allowing the next loop iteration to handle request2 in the expected order.",
+      "revId": "7b02b6ade1f123165d3879cbdf0ffb886595309c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
