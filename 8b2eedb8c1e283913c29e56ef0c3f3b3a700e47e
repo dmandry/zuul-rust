@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "38b3993d_bb6935c5",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 1040,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-06T08:06:56Z",
+      "side": 1,
+      "message": "This seems to be unused. The job already has a `all_playbooks` property.",
+      "revId": "8b2eedb8c1e283913c29e56ef0c3f3b3a700e47e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
