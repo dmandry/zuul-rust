@@ -1110,6 +1110,12 @@ following statsd events:
 
    Holds metrics related to the Zuul launcher component.
 
+   .. stat:: run_handler
+      :type: timer
+
+      A timer metric reporting the time taken for one launcher run
+      handler iteration.
+
    .. stat:: server.<hostname>
 
       Holds metrics from a specific zuul-launcher server.

@@ -962,6 +962,7 @@ class TestLauncher(LauncherBaseTestCase):
         self.assertReportedStat(
             f'zuul.provider.{pname}.image.debian.launch.ready',
             value='1', kind='c')
+        self.assertReportedStat('zuul.launcher.run_handler', kind='ms')
 
     @simple_layout('layouts/nodepool.yaml', enable_nodepool=True)
     def test_zuul_node_data(self):
