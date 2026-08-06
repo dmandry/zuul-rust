@@ -16,6 +16,24 @@
       "message": "What is the reason for calling `_stopJob()` at the end? Does this influence the output in any way?",
       "revId": "f7720cff2bb784db113c67d23ea98db2aa833f5a",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4f87b1d4_8146e2bb",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 604,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-06T13:29:02Z",
+      "side": 1,
+      "message": "This change adds 3 options: ignore, redact, and fail.  If the user sets fail, this is the mechanism to stop the job immediately and fail.  In other words, as soon as we see a secret, the job has failed, and, given that we\u0027ve exposed a secret, we want to contain the fallout as much as possible, so we treat it like we\u0027ve aborted the job.",
+      "parentUuid": "6ad1b838_d22ebd5f",
+      "revId": "f7720cff2bb784db113c67d23ea98db2aa833f5a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
