@@ -22,6 +22,24 @@
       },
       "revId": "eb2eff07259a68abf3ffa7cbe0e1977051e08439",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "191e6573_55bdfc9d",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 1913,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-06T13:24:18Z",
+      "side": 1,
+      "message": "Done.  There are other places in web where we have statuses listed, but I don\u0027t think we need to explicitly list this one there and can just use default colors.",
+      "parentUuid": "cb9a5d19_19c66957",
+      "revId": "eb2eff07259a68abf3ffa7cbe0e1977051e08439",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
