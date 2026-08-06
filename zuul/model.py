@@ -2965,6 +2965,7 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
     ASSIGNABLE_STATES = {
         State.READY: 0,
         State.BUILDING: 1,
+        State.REQUESTED: 2,
     }
 
     ROOT = "/zuul/nodes"

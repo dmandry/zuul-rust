@@ -1554,9 +1554,12 @@ class Launcher:
                             # label immediately.
                             return
                     self._emitMessages(log, messages)
-                    node = self._requestNode(
+                    node, extra_subnodes = self._requestNode(
                         label, request, provider, log, ctx)
                     log.debug("Requested node %s", node.uuid)
+                    for subnode in extra_subnodes:
+                        request_unassigned_nodes.addNode(subnode)
+                        unassigned_nodes.addNode(subnode)
                 request.addProviderNode(node)
             if request.provider_node_data:
                 self._emitMessages(log, messages)
@@ -1767,6 +1770,7 @@ class Launcher:
 
     def _requestNode(self, label, request, provider, log, ctx,
                      static_node=None):
+        extra_subnodes = []
         image = provider.images[label.image]
         label_quota = provider.getQuotaForLabel(label)
         endpoint_name = provider.getEndpoint().name
@@ -1859,10 +1863,12 @@ class Launcher:
                 if request is not None:
                     # Assign the sub node
                     subnode.assign(ctx, **assign_args)
+            else:
+                extra_subnodes.append(subnode)
         if not subnodes and request is not None:
             # Assign the main (only) node
             node.assign(ctx, **assign_args)
-        return retnode
+        return retnode, extra_subnodes
 
     def _createSubNode(self, context, node, args, slot, subnode_uuid):
         args['uuid'] = subnode_uuid
@@ -1917,8 +1923,11 @@ class Launcher:
                             if provider.driver.name == 'static':
                                 new_node = node
                             else:
-                                new_node = self._requestNode(
+                                new_node, extra_subnodes = self._requestNode(
                                     label, request, provider, log, ctx)
+                                for subnode in extra_subnodes:
+                                    request_unassigned_nodes.addNode(subnode)
+                                    unassigned_nodes.addNode(subnode)
                         if new_node is node:
                             continue
                         requested_nodes[i] = new_node
@@ -2573,7 +2582,11 @@ class Launcher:
 
         for label, provider in self._getMissingMinReadySlots():
             with self.createZKContext(None, self.log) as ctx:
-                node = self._requestNode(label, None, provider, self.log, ctx)
+                node, extra_subnodes = self._requestNode(
+                    label, None, provider, self.log, ctx)
+                # Note: if this label has slots and extra_subnodes is
+                # returned, we may end up creating more nodes than
+                # planned.  This is not wrong, but not optimal.
                 self.log.debug("Created min-ready node %s via provider %s",
                                node, provider)
 
