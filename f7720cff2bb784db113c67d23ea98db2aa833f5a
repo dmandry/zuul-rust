@@ -34,6 +34,24 @@
       "parentUuid": "6ad1b838_d22ebd5f",
       "revId": "f7720cff2bb784db113c67d23ea98db2aa833f5a",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f248a982_4d64440e",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 604,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-06T13:31:34Z",
+      "side": 1,
+      "message": "My question was more re. the position where we call `_stopJob()` based on the flag. Could we just call it directly instead of setting `stop\u003dTrue`?",
+      "parentUuid": "4f87b1d4_8146e2bb",
+      "revId": "f7720cff2bb784db113c67d23ea98db2aa833f5a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
