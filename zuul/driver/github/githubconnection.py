@@ -2270,24 +2270,18 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
 
     def getRepoPermission(self, project, login):
         github = self.getGithubClient(project)
-        owner, proj = project.split('/')
         # This gets around a missing API call
         # need preview header
         headers = {'Accept': 'application/vnd.github.korra-preview'}
 
-        # Create a repo object
-        repository = github.repository(owner, proj)
-
-        if not repository:
-            return 'none'
-
         # Build up a URL
-        url = repository._build_url('collaborators', login, 'permission',
-                                    base_url=repository._api)
-        # Get the data
-        perms = repository._get(url, headers=headers)
+        url = github.session.build_url('repos', project,
+                                       'collaborators', login, 'permission')
 
-        self.log.debug("Got repo permissions for %s/%s", owner, proj)
+        # Get the data
+        perms = github.session.get(url, headers=headers)
+
+        self.log.debug("Got repo permissions for %s", project)
 
         # no known user, maybe deleted since review?
         if perms.status_code == 404:
