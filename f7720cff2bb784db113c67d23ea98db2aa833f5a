@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6ad1b838_d22ebd5f",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 604,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-06T08:26:32Z",
+      "side": 1,
+      "message": "What is the reason for calling `_stopJob()` at the end? Does this influence the output in any way?",
+      "revId": "f7720cff2bb784db113c67d23ea98db2aa833f5a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
