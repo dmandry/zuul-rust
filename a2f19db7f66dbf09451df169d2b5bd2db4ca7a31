@@ -16,6 +16,23 @@
       "message": "Instead of a flag, I\u0027d rather concentrate the logic here as it is also done in `writePlaybookToJson()`\n\nhttps://opendev.org/zuul/zuul/src/branch/master/zuul/executor/server.py#L4049-L4057",
       "revId": "a2f19db7f66dbf09451df169d2b5bd2db4ca7a31",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9b1f6d58_21ae2498",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 636,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-06T07:38:20Z",
+      "side": 1,
+      "message": "With the flag removed this could be moved into `_addPlaybookToJson()`",
+      "revId": "a2f19db7f66dbf09451df169d2b5bd2db4ca7a31",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
