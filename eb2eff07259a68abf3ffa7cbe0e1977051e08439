@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "cb9a5d19_19c66957",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 7
+      },
+      "lineNbr": 1913,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-06T07:46:33Z",
+      "side": 1,
+      "message": "I think this should also be added to the options in `web/src/pages/Builds.jsx` https://opendev.org/zuul/zuul/src/branch/master/web/src/pages/Builds.jsx#L85",
+      "range": {
+        "startLine": 1913,
+        "startChar": 22,
+        "endLine": 1913,
+        "endChar": 37
+      },
+      "revId": "eb2eff07259a68abf3ffa7cbe0e1977051e08439",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
