@@ -2786,6 +2786,11 @@ class TestLauncherTenantLimits(LauncherBaseTestCase):
             if request3.state == request2.State.FULFILLED:
                 break
 
+        self.launcher._runStats()
+        label_cname = "review_example_com%2Fcommon-config_debian-normal"
+        self.assertReportedStat(
+            f'zuul.label.{label_cname}.max_nodes', value='2', kind='g')
+
     def test_label_max_nodes_two_tenants(self):
         self.commitConfigUpdate(
             'common-config',
@@ -2804,6 +2809,11 @@ class TestLauncherTenantLimits(LauncherBaseTestCase):
         # Request one more in a different tenant, it should be fulfilled
         request3 = self.requestNodes(['debian-normal'], tenant="tenant-two")
         self.assertEqual(request3.State.FULFILLED, request3.state)
+
+        self.launcher._runStats()
+        label_cname = "review_example_com%2Fcommon-config_debian-normal"
+        self.assertReportedStat(
+            f'zuul.label.{label_cname}.max_nodes', value='2', kind='g')
 
 
 class TestLauncherLocality(LauncherBaseTestCase):

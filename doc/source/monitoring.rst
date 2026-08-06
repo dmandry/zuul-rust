@@ -1106,6 +1106,15 @@ following statsd events:
 
          The number of requests in this state.
 
+.. stat:: zuul.label
+
+   Holds global metrics related to a label.
+
+   .. stat:: <label>.max_nodes
+      :type: gauge
+
+      The configured max-nodes setting for this label (canonical name).
+
 .. stat:: zuul.launcher
 
    Holds metrics related to the Zuul launcher component.

@@ -3455,6 +3455,8 @@ class Launcher:
         for tenant_name, tenant_providers in self.tenant_providers.items():
             for tenant_provider in tenant_providers:
                 providers[tenant_provider.canonical_name] = tenant_provider
+
+        max_nodes_by_label = {}
         for provider in providers.values():
             safe_pname = _normalize_statsd_name(provider.canonical_name)
             quota = self.getEndpointLimits(provider).copy()
@@ -3483,15 +3485,24 @@ class Launcher:
                     f'zuul.provider.{safe_pname}.nodes.state.{state.value}',
                     value)
             # zuul.provider.<provider>.label.<label>.nodes.state.<state> gauge
-            for label in provider.labels:
+            for label_name, label in provider.labels.items():
                 label_nodes = provider_label_nodes[
-                    provider.canonical_name][label]
-                safe_label = _normalize_statsd_name(label)
+                    provider.canonical_name][label_name]
+                safe_label = _normalize_statsd_name(label_name)
                 for state, value in label_nodes.items():
                     self.statsd.gauge(
                         f'zuul.provider.{safe_pname}.label.{safe_label}.'
                         f'nodes.state.{state.value}',
                         value)
+                if label.max_nodes is not None:
+                    safe_label_cname = _normalize_statsd_name(
+                        label.canonical_name)
+                    max_nodes_by_label[safe_label_cname] = label.max_nodes
+
+        # zuul.label.<label>.max_nodes
+        for safe_label, value in max_nodes_by_label.items():
+            self.statsd.gauge(
+                f'zuul.label.{safe_label}.max_nodes', value)
         # zuul.nodes.state.<state> gauge
         for state, value in nodes.items():
             self.statsd.gauge(
