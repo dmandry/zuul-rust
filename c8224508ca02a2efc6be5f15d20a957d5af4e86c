@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "e7dc9b95_37c4bfed",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 17,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-07T13:41:09Z",
+      "side": 1,
+      "message": "This will add an extra k8s api call to every pod creation, but it should be fast.  If we decide it\u0027s not fast enough, we could wrap the SA creation in a check that performs this only on initial failure, but that\u0027s more complex, so I think it\u0027s worth seeing if this is a problem first.",
+      "revId": "c8224508ca02a2efc6be5f15d20a957d5af4e86c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ebd262dd_a30e972f",
+        "filename": "zuul/driver/kubernetes/kubernetesendpoint.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 319,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-07T13:41:09Z",
+      "side": 1,
+      "message": "Note to reviewers: AIUI, these are \"created\" like normal resources, but they don\u0027t appear to persist as real objects.  Instead all the requested data is just returned in the response to the \"create\" call.  https://kubernetes.io/docs/reference/access-authn-authz/authorization/#checking-api-access",
+      "revId": "c8224508ca02a2efc6be5f15d20a957d5af4e86c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
