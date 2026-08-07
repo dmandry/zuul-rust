@@ -34,6 +34,24 @@
       "parentUuid": "3177870b_a8108419",
       "revId": "0504f606be56e1dbb349dd083a6142c0fe33bae2",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "71aa5194_491408b5",
+        "filename": "web/src/pages/Node.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 173,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-07T13:32:44Z",
+      "side": 1,
+      "message": "Ok, let\u0027s try it like this and see what users think.",
+      "parentUuid": "b95ee448_94145985",
+      "revId": "0504f606be56e1dbb349dd083a6142c0fe33bae2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
