@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f5474fef_820366a0",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-08-07T07:04:11Z",
+      "side": 1,
+      "message": "Looks good to me. One thing I noticed is that the node list/table is not updated when switching tenants via the tenant selector in the top menu. It doesn\u0027t seem to be related to your change (it\u0027s the same on zuul.opendev.org), but maybe we can use the opportunity to fix this?",
+      "revId": "70d6ca9b3e3e68b02bdbf18ac9fac3fdf60a9d1b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
