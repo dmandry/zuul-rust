@@ -17,6 +17,8 @@ import base64
 import logging
 
 import kubernetes
+from kubernetes.client.models.v1_self_subject_access_review \
+    import V1SelfSubjectAccessReview
 
 from zuul.driver.kubernetes.kubernetesmodel import (
     KubernetesInstance,
@@ -52,7 +54,8 @@ def _getClient(config_file, context, log):
     core_client = kubernetes.client.CoreV1Api(api_client)
     rbac_client = kubernetes.client.RbacAuthorizationV1Api(api_client)
     dynamic_client = kubernetes.dynamic.DynamicClient(api_client)
-    return (core_client, rbac_client, dynamic_client)
+    auth_client = kubernetes.client.AuthorizationV1Api(api_client)
+    return (core_client, rbac_client, dynamic_client, auth_client)
 
 
 class KubernetesDeleteStateMachine(statemachine.StateMachine):
@@ -133,6 +136,16 @@ class KubernetesCreateStateMachine(statemachine.StateMachine):
                 self.endpoint._createProject(self.hostname, self.node.tags)
             else:
                 self.endpoint._createNamespace(self.hostname, self.node.tags)
+            self.state = self.NAMESPACE_CREATING
+
+        if self.state == self.NAMESPACE_CREATING:
+            subject_access_review = self.endpoint._getSubjectAccessReview(
+                self.namespace)
+            if subject_access_review is None:
+                return
+            if not subject_access_review.status.allowed:
+                return
+
             self.endpoint._createImagePullSecrets(self.namespace, self.label)
             self.endpoint._createServiceAccount(self.namespace,
                                                 self.user)
@@ -183,8 +196,8 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
 
     def startEndpoint(self):
         self.log.debug("Starting kubernetes endpoint")
-        self.core_client, self.rbac_client, self.dynamic_client =\
-            self._getClient()
+        self.core_client, self.rbac_client, self.dynamic_client, \
+            self.auth_client = self._getClient()
         self._running = True
 
     def stopEndpoint(self):
@@ -289,6 +302,21 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
         projects = self.dynamic_client.resources.get(
             api_version='project.openshift.io/v1', kind='ProjectRequest')
         projects.create(body=proj_body)
+
+    def _getSubjectAccessReview(self, namespace):
+        body = V1SelfSubjectAccessReview(
+            spec={
+                'resourceAttributes': {
+                    'namespace': namespace,
+                    'resource': 'serviceaccounts',
+                    'verb': 'create',
+                }
+            }
+        )
+        try:
+            return self.auth_client.create_self_subject_access_review(body)
+        except Exception:
+            return None
 
     def _createImagePullSecrets(self, namespace, label):
         # Copy any image pull secrets required
