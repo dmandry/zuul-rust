@@ -240,8 +240,17 @@ class KubernetesProviderEndpoint(BaseProviderEndpoint):
                                      namespace.metadata.name,
                                      namespace.metadata.labels or {},
                                      quota)
-            for pod in self.core_client.list_namespaced_pod(
-                    namespace.metadata.name).items:
+            try:
+                pods = self.core_client.list_namespaced_pod(
+                    namespace.metadata.name)
+            except kubernetes.client.exceptions.ApiException as e:
+                if e.reason == "Forbidden":
+                    # this means we don't have access to the pods in the
+                    # namespace -> ignore and go on
+                    continue
+                raise
+
+            for pod in pods.items:
                 quota = QuotaInformation(pods=1)
                 yield KubernetesInstance('pod',
                                          pod.metadata.name,
