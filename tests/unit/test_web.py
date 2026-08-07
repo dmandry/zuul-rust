@@ -4190,6 +4190,44 @@ class TestTenantScopedWebApi(BaseTestWeb):
             dict(name='project-test2', result='SUCCESS', changes='2,1'),
         ], ordered=False)
 
+    def test_state_post_timer(self):
+        self.executor_server.hold_jobs_in_build = False
+
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'testuser',
+                 'zuul': {
+                     'admin': ['tenant-one', ],
+                 },
+                 'exp': int(time.time()) + 3600,
+                 'iat': int(time.time())}
+        token = jwt.encode(authz, key='ThisIsABadSecretOnlyUsedForTesting',
+                           algorithm='HS256')
+        args = {
+            'trigger_queue_discarding': True,
+            'reason': 'test discarding',
+        }
+        req = self.post_url(
+            'api/tenant/tenant-one/state',
+            headers={'Authorization': 'Bearer %s' % token},
+            json=args)
+        self.assertEqual(200, req.status_code, req.text)
+
+        self.commitConfigUpdate('common-config', 'layouts/timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        # The pipeline triggers every second, so we should have seen
+        # several by now.
+        time.sleep(5)
+        self.waitUntilSettled()
+
+        self.commitConfigUpdate('common-config',
+                                'layouts/no-timer.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+        self.assertHistory([])
+
     @simple_layout('layouts/parameterized-builds.yaml')
     def test_web_parameterized_build(self):
         token = self._getToken(['tenant-one'])
