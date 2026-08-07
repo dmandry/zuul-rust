@@ -16,6 +16,24 @@
       "message": "I think we should limit the length of the comment. Since provider nodes are not sharded a user might maliciously or accidentally bring the data size close to the 1MB znode limit and cause errors in the launcher when the state/comment is updated.",
       "revId": "9786f2c1044856e2c2847745af9289b56c48408b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9b1673e7_e1ab222c",
+        "filename": "zuul/web/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2918,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-07T13:27:34Z",
+      "side": 1,
+      "message": "Done.  Also the autohold reason since it feeds this.",
+      "parentUuid": "9ca9f152_8c7dadbc",
+      "revId": "9786f2c1044856e2c2847745af9289b56c48408b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
