@@ -16,6 +16,24 @@
       "message": "Do we also want to filter out the current node? It feels a little weird to have the currently viewed node be display there.",
       "revId": "0504f606be56e1dbb349dd083a6142c0fe33bae2",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b95ee448_94145985",
+        "filename": "web/src/pages/Node.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 173,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-07T13:22:19Z",
+      "side": 1,
+      "message": "I went back and forth on this a lot.  Here\u0027s the problem that keeping the current node solves:\n\nWe want to be able to change the state of all the nodes for a slot host on this page (because that seems much more convenient than needing to go to each node page individually, or go back to the big node list page).  The easiest way to manage all of those input/action options is to just use the existing 3-dot menu on the node list.  So, by including the section of the node list here that includes all the nodes for a slot host, the user can easily modify any one slot, or all the slots, and it\u0027s intuitive: the mechanism is the same as on the big list.\n\nBut, imagine that we have only one node (say a regular single vm).  We want to manage the state of that node as well.  If we don\u0027t list it in the related nodes, then we need a new mechanism for changing the state.  That\u0027s not too hard -- we can make a button to pop up a modal, or even put the 3-dot menu to the right of the big state display at the top of the page.  But, it\u0027s an extra affordance that people have to learn about, compared to the 3-dot menu on the right of the listing that is used elsewhere.\n\nAlso, imagine that we\u0027re looking at a subnode -- we get a slightly better overview of the whole node if we include the current subnode in the list rather than omitting it.\n\nAnd on the other side of the coin, it is a little weird in a single-node view to list the self-same node with some redundant info.  But, again, consistency might be nice here.\n\nThose are all minor reasons, but in my mind, they tipped the balance toward including all the nodes all the time.  My opinion is weakly held -- I\u0027m happy to change it either now, or after trying it out for a bit.",
+      "parentUuid": "3177870b_a8108419",
+      "revId": "0504f606be56e1dbb349dd083a6142c0fe33bae2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
