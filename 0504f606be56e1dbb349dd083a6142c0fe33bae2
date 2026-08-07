@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3177870b_a8108419",
+        "filename": "web/src/pages/Node.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 173,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-07T08:12:07Z",
+      "side": 1,
+      "message": "Do we also want to filter out the current node? It feels a little weird to have the currently viewed node be display there.",
+      "revId": "0504f606be56e1dbb349dd083a6142c0fe33bae2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
