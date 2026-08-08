@@ -119,6 +119,21 @@ class FakeRbacClient:
         return
 
 
+class FakeAuthClient:
+    def __init__(self):
+        class FakeSubjectAccessReview:
+            def __init__(self, allowed):
+                class FakeSubjectAccessReviewStatus:
+                    def __init__(self, allowed):
+                        self.allowed = allowed
+                self.status = FakeSubjectAccessReviewStatus(allowed)
+
+        self.subject_access_review = FakeSubjectAccessReview(True)
+
+    def create_self_subject_access_review(self, body):
+        return self.subject_access_review
+
+
 class FakeDynamicClient:
     def __init__(self, core_client, openshift):
         class FakeResources:

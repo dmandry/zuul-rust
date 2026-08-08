@@ -26,6 +26,7 @@ from zuul.driver.kubernetes.kubernetesendpoint import (
 )
 
 from tests.fake_kubernetes import (
+    FakeAuthClient,
     FakeCoreClient,
     FakeRbacClient,
     FakeDynamicClient,
@@ -105,6 +106,7 @@ class BaseKubernetesDriverTest(ZuulTestCase):
         self.fake_rbac_client = FakeRbacClient()
         self.fake_dynamic_client = FakeDynamicClient(self.fake_core_client,
                                                      self.is_openshift)
+        self.fake_auth_client = FakeAuthClient()
 
         def coreClientFactory(api_client):
             return self.fake_core_client
@@ -115,10 +117,14 @@ class BaseKubernetesDriverTest(ZuulTestCase):
         def dynamicClientFactory(api_client):
             return self.fake_dynamic_client
 
+        def authClientFactory(api_client):
+            return self.fake_auth_client
+
         self.patch(kubernetes.client, 'CoreV1Api', coreClientFactory)
         self.patch(kubernetes.client, 'RbacAuthorizationV1Api',
                    rbacClientFactory)
         self.patch(kubernetes.dynamic, 'DynamicClient', dynamicClientFactory)
+        self.patch(kubernetes.client, 'AuthorizationV1Api', authClientFactory)
 
         super().setUp()
 
