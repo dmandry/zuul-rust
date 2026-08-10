@@ -191,6 +191,9 @@ class UploadPlanner:
                     self.jobs[source_upload.uuid] = source_job
                     pending_hash_uploads.remove(source_upload)
                     pending_uploads.remove(source_upload)
+                else:
+                    # Apparently we can't create an upload job
+                    continue
 
             for (upload, job) in jobs:
                 if upload not in pending_hash_uploads:
