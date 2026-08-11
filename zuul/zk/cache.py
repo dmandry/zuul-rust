@@ -368,6 +368,7 @@ class ZuulTreeCache(abc.ABC):
             return
 
         obj = None
+        msg = None
         if data:
             data = self.manageShard(key, data, shard_index)
             if data is None:
@@ -389,10 +390,14 @@ class ZuulTreeCache(abc.ABC):
                 if (stat.mzxid > old_mzxid and
                     getattr(obj, 'lock', None) is None):
                     self.updateFromRaw(obj, key, data, stat)
+                    msg = "JEB update existing object"
+                else:
+                    msg = "JEB skip update existing object"
             else:
                 obj = self.objectFromRaw(key, data, stat)
                 if obj is not None:
                     self._cached_objects[key] = obj
+                    msg = "JEB add new object"
         else:
             try:
                 obj = self._cached_objects[key]
@@ -400,6 +405,8 @@ class ZuulTreeCache(abc.ABC):
             except KeyError:
                 # If it's already gone, don't care
                 pass
+        if msg:
+            self.log.debug(msg)
         self.postCacheHook(event, data, stat, key, obj)
 
     def ensureReady(self):
@@ -529,4 +536,7 @@ class ZuulTreeCache(abc.ABC):
         cached_obj = self._cached_objects.setdefault(key, obj)
         if obj is cached_obj:
             self._cached_paths.add(path)
+            self.log.debug("JEB direct insert")
+        else:
+            self.log.debug("JEB skip direct insert")
         return cached_obj
