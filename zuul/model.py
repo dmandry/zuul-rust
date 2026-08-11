@@ -9869,8 +9869,6 @@ class ProjectConfig(ConfigObject):
             return None
         elif len(matchers) > 1:
             return change_matcher.MatchAny(matchers)
-        else:
-            return matchers[0]
 
     def setExplicitBranchMatchers(self, matchers):
         self.explicit_branch_matcher = self._makeBranchMatcher(matchers)
