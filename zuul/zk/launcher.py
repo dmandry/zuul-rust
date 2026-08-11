@@ -478,7 +478,10 @@ class LauncherApi:
         all_launchers = {
             c.hostname: c for c in self.component_registry.all("launcher")}
 
+        self.log.debug("JEB start getMatchingProviderNodes")
         for node in sorted(self.nodes_cache.getItems()):
+            self.log.debug("JEB gmpn node %s %s %s",
+                           node, node.hasLock(), node.is_locked)
             if node.hasLock():
                 # We are holding a lock, so short-circuit here.
                 yield node
@@ -505,6 +508,9 @@ class LauncherApi:
                                     for n in candidate_names})
 
             launcher_scores = sorted(node._lscores.items())
+
+            self.log.debug("JEB gmpn node %s launcher scores %s launchers %s",
+                           node, launcher_scores, candidate_launchers)
 
             for score, launcher_name in launcher_scores:
                 launcher = candidate_launchers.get(launcher_name)
