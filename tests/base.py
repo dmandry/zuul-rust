@@ -2683,6 +2683,9 @@ class ZuulTestCase(BaseTestCase):
             _hostname=hostname)
         launcher._start_cleanup = False
         launcher._stats_interval = 1
+        # Normally 60 seconds, but set to a lower value for tests with
+        # slow node creation.
+        launcher.MIN_INTERVAL = 5
         launcher.start()
         return launcher
 
