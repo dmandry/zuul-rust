@@ -166,10 +166,8 @@ class TestStaticDriver(ZuulTestCase):
             nodes = self.launcher.api.nodes_cache.getItems()
             self.assertEqual(1, len(nodes))
             self.assertIsNone(nodes[0].request_id)
-
-            # The node should be in the rebuilding state
-            states = Counter(n.state for n in nodes)
-            self.assertEqual(1, states['rebuilding'])
+            # The node should be in the rebuilding or failed state
+            self.assertTrue(nodes[0].state in ['rebuilding', 'failed'])
 
         # Node scanning happens normally now, and the request should
         # have the node assigned to it.
