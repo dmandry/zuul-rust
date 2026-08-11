@@ -1,0 +1,67 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "412b33bf_b6cccd9c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 8
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-08-11T14:35:37Z",
+      "side": 1,
+      "message": "Nice!",
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6fcec7dd_8672ebd2",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 605,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-08-11T14:35:37Z",
+      "side": 1,
+      "message": "Absolute bikeshed on my part, but I would have thought `collections_paths` is the obvious name for this.",
+      "range": {
+        "startLine": 605,
+        "startChar": 13,
+        "endLine": 605,
+        "endChar": 29
+      },
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5a8c6be9_47b00af7",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 3395,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-08-11T14:35:37Z",
+      "side": 1,
+      "message": "This is the code that made me think it should be called `collections_paths`. But it\u0027s only a slight OCD twinge.",
+      "range": {
+        "startLine": 3395,
+        "startChar": 36,
+        "endLine": 3395,
+        "endChar": 52
+      },
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
