@@ -42,7 +42,6 @@ import testtools
 import yaml
 from kazoo.exceptions import NoNodeError
 from moto import mock_aws
-import moto.ec2.responses.instances
 import boto3
 
 from tests.base import (
@@ -57,6 +56,7 @@ from tests.base import (
     simple_layout,
 )
 from tests.fake_nodescan import NodescanFixture
+from tests.fake_aws import PatchMotoFixture
 
 
 class ImageMocksFixture(fixtures.Fixture):
@@ -192,25 +192,9 @@ class LauncherBaseTestCase(ZuulTestCase):
 
     def setUp(self):
         self.initTestConfig()
-
-        # Patch moto describe_instances as it isn't terribly threadsafe
-        orig_describe_instances = \
-            moto.ec2.responses.instances.InstanceResponse.describe_instances
-
-        def describe_instances(self):
-            for x in range(10):
-                try:
-                    return orig_describe_instances(self)
-                except RuntimeError:
-                    # describe_instances can fail if the reservations dict
-                    # changes while it renders its template. Ignore the
-                    # error and retry.
-                    pass
-        self.patch(moto.ec2.responses.instances.InstanceResponse,
-                   'describe_instances',
-                   describe_instances)
-
         self.mock_aws.start()
+        self.useFixture(PatchMotoFixture())
+
         # Must start responses after mock_aws
         responses_fixture = self.useFixture(ResponsesFixture())
         self.useFixture(ImageMocksFixture(responses_fixture))
