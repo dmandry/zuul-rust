@@ -552,6 +552,7 @@ class NodescanRequest:
     def fail(self, exception):
         """Declare this request a failure and store the related exception"""
         self.exception = exception
+        self.log.debug('JEB fail')
         self.cleanup()
         self.complete = True
         self.state = self.COMPLETE
@@ -845,6 +846,7 @@ class NodescanWorker:
         """Remove the request and cleanup"""
         if request is None:
             return
+        request.log.debug('JEB remove')
         request.cleanup()
         try:
             self._active_requests.remove(request)
@@ -916,6 +918,7 @@ class NodescanWorker:
                 except Exception as e:
                     request.fail(e)
                 if request.complete:
+                    request.log.debug("JEB worker remove on complete")
                     self.removeRequest(request)
             if process_unready:
                 last_unready_check = time.monotonic()
@@ -2366,6 +2369,7 @@ class Launcher:
             pass
 
     def _checkNodescanRequest(self, node, log):
+        log.debug("JEB check nodescan")
         if node.nodescan_request is None:
             node.nodescan_request = NodescanRequest(node, log)
             self.nodescan_worker.addRequest(node.nodescan_request)
@@ -2374,9 +2378,12 @@ class Launcher:
                 node.interface_ip,
                 self.nodescan_worker.length())
         if not node.nodescan_request.complete:
+            log.debug("JEB check nodescan request %s %s", node.nodescan_request, node.nodescan_request.complete)
             return False
         try:
+            log.debug("JEB check nodescan request get result")
             keys = node.nodescan_request.result()
+            log.debug("JEB check nodescan request got result")
         except Exception as e:
             if isinstance(e, exceptions.ConnectionTimeoutException):
                 log.warning("Error scanning keys: %s", str(e))
@@ -2503,6 +2510,7 @@ class Launcher:
     def _cleanupNode(self, node, log):
         with self.createZKContext(node._lock, self.log) as ctx:
             with node.activeContext(ctx):
+                self.log.debug("JEB launcher remove on cleanup")
                 self.nodescan_worker.removeRequest(node.nodescan_request)
                 node.nodescan_request = None
 
