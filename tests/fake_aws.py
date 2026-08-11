@@ -18,6 +18,7 @@ import uuid
 
 import botocore
 import boto3
+import fixtures
 
 from zuul.driver.aws.awsendpoint import AwsProviderEndpoint
 
@@ -86,6 +87,30 @@ def make_import_image_stage_2(task_id, image_id, snap_id, task):
         'Status': 'completed',
         'Tags': task['Tags'],
     }
+
+
+class RetryPaginateFixture(fixtures.Fixture):
+
+    def _setUp(self):
+        super()._setUp()
+
+        # Patch boto pagination since moto describe_instances is not
+        # thread-safe
+        orig_paginate = botocore.paginate.Paginator.paginate
+
+        def retry_paginate(*args, **kw):
+            for x in range(10):
+                try:
+                    return orig_paginate(*args, **kw)
+                except RuntimeError:
+                    # describe_instances can fail if the underlying
+                    # dicts change while it renders its
+                    # template. Ignore the error and retry.
+                    pass
+
+        self.useFixture(fixtures.MonkeyPatch(
+            'botocore.paginate.Paginator.paginate',
+            retry_paginate))
 
 
 class ImportSnapshotTaskPaginator:
