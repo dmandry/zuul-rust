@@ -20,6 +20,23 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "21feb482_cb8df291",
+        "filename": "tests/fixtures/config/implicit-roles/git/org_collection-project/playbooks/implicit-collection-ok.yaml",
+        "patchSetId": 8
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-12T13:56:30Z",
+      "side": 1,
+      "message": "Could we have this playbook actually do something from the collection to make sure Ansible really uses it (we check the config file, but AFAICT we don\u0027t check that Ansible actually does anything with it)?",
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "6fcec7dd_8672ebd2",
         "filename": "zuul/executor/server.py",
         "patchSetId": 8
@@ -37,6 +54,23 @@
         "endLine": 605,
         "endChar": 29
       },
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "576f51b4_c0260d7e",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 2543,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-12T13:56:30Z",
+      "side": 1,
+      "message": "We use the cone setting with sparse paths, so we don\u0027t need to list galaxy.yml here.  It\u0027s harmless, but I\u0027d rather we don\u0027t so that we don\u0027t get confused later and think it\u0027s necessary and start adding other files.",
       "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
