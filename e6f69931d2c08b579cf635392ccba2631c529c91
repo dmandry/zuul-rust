@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "5b4df621_d1857420",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-13T17:50:29Z",
+      "side": 1,
+      "message": "recheck zookeeper connection loss caused a test failure.",
+      "revId": "e6f69931d2c08b579cf635392ccba2631c529c91",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a0ceb549_a6ec4386",
+        "filename": "zuul/zk/cache.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 399,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-13T17:50:29Z",
+      "side": 1,
+      "message": "If we\u0027re updating obj here and passing that into postCacheHook below do we also need to update date, stat and key which we initially derive obj from on line 393 above? Otherwise there will be a mismatch between the obj and what is passed to postCacheHook.\n\nI suppose key is likely the same but data and state may differ?",
+      "revId": "e6f69931d2c08b579cf635392ccba2631c529c91",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
