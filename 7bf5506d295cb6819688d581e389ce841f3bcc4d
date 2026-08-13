@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2c6b9aa3_6216f571",
+        "filename": "tests/unit/test_zk.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2062,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-13T21:32:31Z",
+      "side": 1,
+      "message": "Should we wait for watches here to avoid the delete (which I think is expected to noop here) sideeffecting the watches in a way that causes them to repopulate?",
+      "revId": "7bf5506d295cb6819688d581e389ce841f3bcc4d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
