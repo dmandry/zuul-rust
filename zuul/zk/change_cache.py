@@ -333,6 +333,8 @@ class AbstractChangeCache(ZooKeeperSimpleBase, Iterable, abc.ABC):
         if change and change.cache_stat.uuid == data_uuid:
             # Change in our local cache is up-to-date
             return change
+        if change and change.cache_stat.mzxid >= zstat.mzxid:
+            return change
 
         compressed_size = 0
         uncompressed_size = 0
