@@ -33,6 +33,24 @@
       "message": "If we\u0027re updating obj here and passing that into postCacheHook below do we also need to update date, stat and key which we initially derive obj from on line 393 above? Otherwise there will be a mismatch between the obj and what is passed to postCacheHook.\n\nI suppose key is likely the same but data and state may differ?",
       "revId": "e6f69931d2c08b579cf635392ccba2631c529c91",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "19b4465c_790a53ff",
+        "filename": "zuul/zk/cache.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 399,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-13T17:59:13Z",
+      "side": 1,
+      "message": "I think the most straigtforward way to think about this is: this doesn\u0027t affect postCacheHook -- if you look a few lines above, 391, there is a case where we may choose not to update the object based on the data we get.  But we still pass all the same args to postCacheHook.\n\nThe case you describe is pretty similar to the line 391 case.\n\n(Another answer: nothing actually uses data or stat).",
+      "parentUuid": "a0ceb549_a6ec4386",
+      "revId": "e6f69931d2c08b579cf635392ccba2631c529c91",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
