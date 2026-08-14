@@ -1,0 +1,6 @@
+- provider:
+    name: aws-us-east-1-main
+    section: aws-us-east-1
+    labels:
+      - name: debian-normal
+
