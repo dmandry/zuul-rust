@@ -1,0 +1,23 @@
+- section:
+    name: aws-base
+    abstract: true
+    connection: aws
+    launch-timeout: 600
+    launch-attempts: 2
+    object-storage:
+      bucket-name: zuul
+    label-defaults:
+      host-key-checking: false
+      boot-timeout: 120
+      key-name: zuul
+    flavors:
+      - name: normal
+        instance-type: t3.medium
+    images:
+      - name: debian
+        image-id: ami-1e749f67
+
+- section:
+    name: aws-us-east-1
+    parent: aws-base
+    region: us-east-1

@@ -1,0 +1,5 @@
+- label:
+    name: debian-normal
+    image: debian
+    flavor: normal
+    min-ready: 0

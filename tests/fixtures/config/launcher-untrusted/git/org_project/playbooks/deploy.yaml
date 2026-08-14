@@ -1,0 +1,5 @@
+- name: Test
+  hosts: localhost
+  tasks:
+    - debug:
+        var: zuul_deploy

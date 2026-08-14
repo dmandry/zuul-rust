@@ -5078,3 +5078,63 @@ class TestSubnodesAndReuse(LauncherBaseTestCase):
                 main.refresh(ctx)
             except NoNodeError:
                 break
+
+
+class TestUntrustedConfig(LauncherBaseTestCase):
+    # Test launcher configuration in untrusted config
+    tenant_config_file = 'config/launcher-untrusted/main.yaml'
+
+    def test_branch(self):
+        # Test that we can create a branch without error
+        self.create_branch('org/project', 'work/foo')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        errors = tenant.layout.loading_errors
+        self.assertEqual(len(errors), 0)
+
+        A = self.fake_gerrit.addFakeChange('org/project', 'work/foo', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS'),
+        ], ordered=False)
+
+        in_repo_conf = textwrap.dedent(
+            """
+            - provider:
+                name: aws-us-east-1-main
+                section: aws-us-east-1
+                labels:
+                  - name: debian-normal
+                    tags: foo
+            """)
+
+        files = {'zuul.d/providers.yaml': in_repo_conf}
+        B = self.fake_gerrit.addFakeChange('org/project', 'work/foo', 'B',
+                                           files=files)
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS'),
+        ], ordered=False)
+
+        self.assertEqual(B.data['status'], 'NEW')
+        self.assertEqual(B.reported, 1)
+        self.assertIn('does not match existing', B.messages[0])
+
+        C = self.fake_gerrit.addFakeChange('org/project', 'master', 'C',
+                                           files=files)
+        self.fake_gerrit.addEvent(C.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='test-job', result='SUCCESS'),
+        ], ordered=False)
+
+        self.assertEqual(C.data['status'], 'NEW')
+        self.assertEqual(C.reported, 1)
+        self.assertIn('does not match existing', B.messages[0])
