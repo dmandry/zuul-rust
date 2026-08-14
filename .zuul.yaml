@@ -8,6 +8,9 @@
     # changes that are not intended to be merged (or otherwise have no
     # impact on our upgrade and continuous deployment processes).
     allow-circular-dependencies: true
+    # Emulate the submitWholeTopic functionality for Zuul projects, so
+    # that we can build circulare dependencies using Gerrit topics.
+    dependencies-by-topic: true
 
 - nodeset:
     name: zuul-functional-temp-master
