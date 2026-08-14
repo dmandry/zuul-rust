@@ -2473,6 +2473,7 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         item = cache._getOldOrNewCache().cache.getItem('project1')
         data = item.serialize(ctx)
         item.deserialize(data, ctx)
+        cache._new_cache.cache.waitForSync()
 
     def test_branch_cache_all_then_protected(self):
         conn = DummyConnection()
@@ -2542,6 +2543,7 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         item = cache._getOldOrNewCache().cache.getItem('project1')
         data = item.serialize(ctx)
         item.deserialize(data, ctx)
+        cache._new_cache.cache.waitForSync()
 
     def test_branch_cache_change_protected(self):
         conn = DummyConnection()
@@ -2620,6 +2622,7 @@ class TestBranchCache(ZooKeeperBaseTestCase):
                     cache.getProjectBranches('project1', all_flags).values()]),
             [bi.name for bi in data1['project1']['all']]
         )
+        cache._new_cache.cache.waitForSync()
 
     def test_branch_cache_lookup_error(self):
         # Test that a missing branch cache entry results in a LookupError
@@ -2632,6 +2635,7 @@ class TestBranchCache(ZooKeeperBaseTestCase):
         self.assertIsNone(
             cache.getProjectBranches('project1', True, default=None)
         )
+        cache._new_cache.cache.waitForSync()
 
 
 class TestConfigurationErrorList(ZooKeeperBaseTestCase):
