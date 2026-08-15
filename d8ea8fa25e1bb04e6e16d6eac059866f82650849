@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "764f7d6a_e60b518e",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 10496,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-15T18:30:59Z",
+      "side": 1,
+      "message": "This is the default case where we don\u0027t have a more specific matcher so we use the default queue right? Should we only match this case if all other cases don\u0027t match or is short circuiting here ok?\n\nI think the case where we don\u0027t have any branch assigned queues is handled by the default_queue_config. But this covers cases where we are using branch assigned queues and a branch shows up without a specific matcher needing a default queue?",
+      "range": {
+        "startLine": 10496,
+        "startChar": 30,
+        "endLine": 10496,
+        "endChar": 37
+      },
+      "revId": "d8ea8fa25e1bb04e6e16d6eac059866f82650849",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
