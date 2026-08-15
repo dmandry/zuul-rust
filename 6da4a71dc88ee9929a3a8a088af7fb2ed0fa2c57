@@ -16,6 +16,24 @@
       "message": "Congratulations on posting the 1 millionth openstack gerrit review!",
       "revId": "6da4a71dc88ee9929a3a8a088af7fb2ed0fa2c57",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "192f1d4d_fead1c27",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 36080
+      },
+      "writtenOn": "2026-08-15T16:02:18Z",
+      "side": 1,
+      "message": "That\u0027s it! One million 🥳\nI think you should put all your efforts into making it green 😄",
+      "parentUuid": "de32d20b_ae4c223e",
+      "revId": "6da4a71dc88ee9929a3a8a088af7fb2ed0fa2c57",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
