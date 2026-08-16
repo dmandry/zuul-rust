@@ -22,6 +22,24 @@
       },
       "revId": "d8ea8fa25e1bb04e6e16d6eac059866f82650849",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7264bbbe_292d37b2",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 10496,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-16T14:42:03Z",
+      "side": 1,
+      "message": "There are 3 cases where we can have None:\n1) project stanza is in a config project and has no \"branches\" attr\n2) pragma.implied-branch-matchers is False\n3) the project has no branches\n\nLet\u0027s ignore number 3 since it\u0027s not interesting for branch-assigned queues.\n\nTo get to this point at all, the user also must have added a \"queue\" attr to the project stanza.\n\nIn both remaining cases, the user has somehow explicitly said \"I want to assign this particular queue to this project, and I want this project stanza to match all branches\".  Most zuul configuration is affected by ordering, especially project stanzas; typically the first stanza to set a value wins.\n\nTherefore the way Zuul behaves, both in this change to the config metadata, and in the previous change to the queue managers, is that as soon as a user says \"I want all branches of this project to be assigned to this branch-assigned queue\", then all branches after that point are assigned to that queue, no matter what.  Assignments prior to that still stand.\n\n(Consider the case where a user assigned branch1 to queue1 then immediately assigns branch1 to queue2 -- in that case we would simply respect only the first assignment and ignore the second.  This case is no different.)\n\nI think this matches the existing queue construction behavior and existing practices and docs.",
+      "parentUuid": "764f7d6a_e60b518e",
+      "revId": "d8ea8fa25e1bb04e6e16d6eac059866f82650849",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
