@@ -83,7 +83,7 @@ class AutoholdsPage extends React.Component {
 
   componentDidUpdate(prevProps) {
     if (this.props.tenant.name !== prevProps.tenant.name) {
-      this.updateData()
+      this.updateData(true)
     }
   }
 
