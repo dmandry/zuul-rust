@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a4198fe1_48c53dbd",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-17T18:51:24Z",
+      "side": 1,
+      "message": "I\u0027m willing to try this one as is, but I do wonder if we can debug why getImageUploadJob returns None in the tests?",
+      "revId": "6e7e3fcda95b36a1d7777ea40c959f7614f0e9eb",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
