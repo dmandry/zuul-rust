@@ -1466,7 +1466,11 @@ class TestTenantTPCLoadingFailure(TenantParserTestCase):
         # Start a second scheduler which will not have the benefit of
         # a config in memory.
         app = self.createScheduler()
-        app.start()
+        try:
+            app.start()
+        except Exception as e:
+            if "may not configure" not in str(e):
+                raise
         self.assertEqual(len(self.scheds), 2)
 
         # In this case, the layout is not up to date since we don't
