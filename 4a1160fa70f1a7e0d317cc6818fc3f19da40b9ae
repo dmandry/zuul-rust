@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ed47218c_ca114bb0",
+        "filename": "tests/unit/test_configloader.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1470,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-17T18:44:15Z",
+      "side": 1,
+      "message": "The issue here is that okay_tracebacks is only looking at tracebacks in the log. It doesn\u0027t act like an exception handler. That means if the code we are executing directly in the test raises in an expected way then we have to handle that directly. okay_tracebacks won\u0027t catch and suppress the exception for us.",
+      "revId": "4a1160fa70f1a7e0d317cc6818fc3f19da40b9ae",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
