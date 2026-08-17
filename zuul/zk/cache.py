@@ -392,7 +392,11 @@ class ZuulTreeCache(abc.ABC):
             else:
                 obj = self.objectFromRaw(key, data, stat)
                 if obj is not None:
-                    self._cached_objects[key] = obj
+                    # The direct insert method could be racing this.
+                    # If it is, we don't need to worry about the
+                    # object being stale because this only happens on
+                    # the initial insert.
+                    obj = self._cached_objects.setdefault(key, obj)
         else:
             try:
                 obj = self._cached_objects[key]
