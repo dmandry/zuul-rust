@@ -1997,6 +1997,17 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         self.cache = DummyChangeCache(self.zk_client, DummyConnection())
         self.addCleanup(self.cache.stop)
 
+    def _waitForWatches(self, *changes):
+        # This is used to wait for the watch list to stabilize at the
+        # end of the test.  If it's to be empty, first make sure it
+        # was previously populated.  This ensures we are not in the
+        # middle of a callback establishing or clearing a watch before
+        # we shutdown the ZK connection.
+        expected_keys = set(change.cache_stat.key._hash for change in changes)
+        for _ in iterate_timeout(10, "watch registration to match"):
+            if expected_keys == self.cache._watched_keys:
+                break
+
     def test_insert(self):
         change_foo = DummyChange("project", {"foo": "bar"})
         change_bar = DummyChange("project", {"bar": "foo"})
@@ -2010,6 +2021,7 @@ class TestChangeCache(ZooKeeperBaseTestCase):
 
         compressed_size, uncompressed_size = self.cache.estimateDataSize()
         self.assertTrue(compressed_size != uncompressed_size != 0)
+        self._waitForWatches(change_foo, change_bar)
 
     def test_update(self):
         change = DummyChange("project", {"foo": "bar"})
@@ -2018,6 +2030,7 @@ class TestChangeCache(ZooKeeperBaseTestCase):
 
         change.number = 123
         self.cache.set(key, change, change.cache_version)
+        self._waitForWatches(change)
 
         # The change instance must stay the same
         updated_change = self.cache.get(key)
@@ -2028,12 +2041,15 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         change = DummyChange("project", {"foo": "bar"})
         key = ChangeKey('conn', 'project', 'change', 'foo', '1')
         self.cache.set(key, change)
+        self._waitForWatches(change)
+
         self.cache.delete(key)
         self.assertIsNone(self.cache.get(key))
 
         # Deleting an non-existent key should not raise an exception
         invalid_key = ChangeKey('conn', 'project', 'change', 'invalid', '1')
         self.cache.delete(invalid_key)
+        self._waitForWatches()
 
     def test_concurrent_delete(self):
         change = DummyChange("project", {"foo": "bar"})
@@ -2043,6 +2059,7 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         # Simulate someone updating the cache after we decided to
         # delete the entry
         self.cache.set(key, change, old_version)
+        self._waitForWatches(change)
         self.assertNotEqual(old_version, change.cache_version)
         self.cache.delete(key, old_version)
         # The change should still be in the cache
@@ -2055,9 +2072,11 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         key2 = ChangeKey('conn', 'project', 'change', 'foo', '2')
         self.cache.set(key1, change1)
         self.cache.set(key2, change2)
+        self._waitForWatches(change1, change2)
         self.cache.prune([key1], max_age=0)
         self.assertIsNotNone(self.cache.get(key1))
         self.assertIsNone(self.cache.get(key2))
+        self._waitForWatches(change1)
 
     def test_concurrent_update(self):
         change = DummyChange("project", {"foo": "bar"})
@@ -2067,6 +2086,7 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         # Attempt to update with the old change stat
         with testtools.ExpectedException(ConcurrentUpdateError):
             self.cache.set(key, change, change.cache_version - 1)
+        self._waitForWatches(change)
 
     def test_change_update_retry(self):
         change = DummyChange("project", {"foobar": 0})
@@ -2091,12 +2111,14 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         updated_change = self.cache.updateChangeWithRetry(
             key, change, updater)
         self.assertEqual(updated_change.foobar, 2)
+        self._waitForWatches(change)
 
     def test_cache_sync(self):
         other_cache = DummyChangeCache(self.zk_client, DummyConnection())
         key = ChangeKey('conn', 'project', 'change', 'foo', '1')
         change = DummyChange("project", {"foo": "bar"})
         self.cache.set(key, change)
+        self._waitForWatches(change)
         self.assertIsNotNone(other_cache.get(key))
 
         change_other = other_cache.get(key)
@@ -2109,6 +2131,7 @@ class TestChangeCache(ZooKeeperBaseTestCase):
 
         other_cache.delete(key)
         self.assertIsNone(self.cache.get(key))
+        self._waitForWatches()
 
     def test_cache_sync_on_start(self):
         key = ChangeKey('conn', 'project', 'change', 'foo', '1')
@@ -2121,6 +2144,7 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         other_cache.cleanup()
         other_cache.cleanup()
         self.assertIsNotNone(other_cache.get(key))
+        self._waitForWatches(change)
 
     def test_cleanup(self):
         change = DummyChange("project", {"foo": "bar"})
@@ -2144,22 +2168,19 @@ class TestChangeCache(ZooKeeperBaseTestCase):
         self.assertEqual(len(self.cache._data_cleanup_candidates), 0)
         self.assertEqual(
             len(self.zk_client.client.get_children(self.cache.data_root)), 1)
+        self._waitForWatches(change)
 
     def test_watch_cleanup(self):
         change = DummyChange("project", {"foo": "bar"})
         key = ChangeKey('conn', 'project', 'change', 'foo', '1')
         self.cache.set(key, change)
 
-        for _ in iterate_timeout(10, "watch to be registered"):
-            if change.cache_stat.key._hash in self.cache._watched_keys:
-                break
+        self._waitForWatches(change)
 
         self.cache.delete(key)
         self.assertIsNone(self.cache.get(key))
 
-        for _ in iterate_timeout(10, "watch to be removed"):
-            if change.cache_stat.key._hash not in self.cache._watched_keys:
-                break
+        self._waitForWatches()
         # No need for extra waiting here
 
 
