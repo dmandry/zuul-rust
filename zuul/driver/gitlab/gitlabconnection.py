@@ -23,6 +23,7 @@ import uuid
 import re
 import requests
 import urllib3
+import hmac
 
 import dateutil.parser
 
@@ -906,7 +907,7 @@ class GitlabWebController(BaseWebController):
             raise cherrypy.HTTPError(401, 'x-gitlab-token header missing.')
 
         configured_token = self.connection.webhook_token
-        if not configured_token == event_token:
+        if not hmac.compare_digest(str(event_token), str(configured_token)):
             self.log.debug(
                 "Missmatch (Incoming token: %s, Configured token: %s)" % (
                     event_token, configured_token))
