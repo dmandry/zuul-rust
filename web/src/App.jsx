@@ -346,14 +346,32 @@ class AppComponent extends React.Component {
           case '/t/' + tenant.name + '/nodes':
             suffix = '/nodes'
             break
+          case '/t/' + tenant.name + '/nodeset-requests':
+            suffix = '/nodeset-requests'
+            break
           case '/t/' + tenant.name + '/autoholds':
             suffix = '/autoholds'
+            break
+          case '/t/' + tenant.name + '/semaphores':
+            suffix = '/semaphores'
             break
           case '/t/' + tenant.name + '/builds':
             suffix = '/builds'
             break
           case '/t/' + tenant.name + '/buildsets':
             suffix = '/buildsets'
+            break
+          case '/t/' + tenant.name + '/providers':
+            suffix = '/providers'
+            break
+          case '/t/' + tenant.name + '/images':
+            suffix = '/images'
+            break
+          case '/t/' + tenant.name + '/flavors':
+            suffix = '/flavors'
+            break
+          case '/t/' + tenant.name + '/config-errors':
+            suffix = '/config-errors'
             break
           case '/t/' + tenant.name + '/status':
           default:
