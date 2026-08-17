@@ -692,6 +692,10 @@ class TestEventWatchers(EventQueueBaseTestCase):
         management_queues["tenant"]["check"].initialize()
         management_queues["tenant"]["check"].put(model.ReconfigureEvent())
         self._wait_for_event(event)
+        # Avoid test shutdown race conditions.
+        for _ in iterate_timeout(5, "all watches to be established"):
+            if watcher.watched_pipelines:
+                break
 
 
 class TestConnectionEventQueue(EventQueueBaseTestCase):
