@@ -32,6 +32,7 @@ import os
 import pathlib
 import time
 import re
+import sys
 import select
 import ssl
 import threading
@@ -1150,6 +1151,40 @@ class WebMetrics:
             'web_streamers', 'The number of log streamers currently operating')
 
 
+class AuditLogTool(cherrypy.Tool):
+    log = logging.getLogger("zuul.web.audit")
+
+    def __init__(self):
+        # Use before_finalize so we have access to the exception handler
+        cherrypy.Tool.__init__(self, 'before_finalize',
+                               self.emitLog)
+
+    def emitLog(self, action):
+        body = getattr(cherrypy.request, 'json', None)
+        params = cherrypy.request.params.copy()
+        # Any request with a tenant also has a tenant_name in params
+        params.pop('tenant', None)
+        uid = None
+        if auth := params.pop('auth', None):
+            uid = auth.uid
+        # Get the default code/reason (200 OK will come from this)
+        code, reason, message = cherrypy.lib.httputil.valid_status(
+            cherrypy.response.status)
+        # If we are inside an exception handler, get the customized
+        # message; otherwise ignore the message from valid_status
+        # because it doesn't add any info.
+        if exc := sys.exception():
+            message = ': ' + getattr(exc, '_message', message)
+        else:
+            message = ''
+        self.log.info(
+            "Action: %s user: %s params: %s body: %s result: %s %s%s",
+            action, uid, params, body, code, reason, message)
+
+
+cherrypy.tools.audit_log = AuditLogTool()
+
+
 # Custom JSONEncoder that combines the ZuulJSONEncoder with cherrypy's
 # JSON functionality.
 class ZuulWebJSONEncoder(ZuulJSONEncoder):
@@ -1509,6 +1544,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
     @cherrypy.tools.handle_options(allowed_methods=['POST', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True, permission='dequeue')
+    @cherrypy.tools.audit_log(action='dequeue')
     def dequeue(self, tenant_name, tenant, auth, project_name):
         if cherrypy.request.method != 'POST':
             raise cherrypy.HTTPError(405)
@@ -1544,6 +1580,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
     @cherrypy.tools.handle_options(allowed_methods=['POST', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True, permission='enqueue')
+    @cherrypy.tools.audit_log(action='enqueue')
     def enqueue(self, tenant_name, tenant, auth, project_name):
         body = cherrypy.request.json
         if cherrypy.request.method != 'POST':
@@ -1610,6 +1647,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.json_out(content_type='application/json; charset=utf-8')
     @cherrypy.tools.handle_options(allowed_methods=['POST', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True, permission='promote')
+    @cherrypy.tools.audit_log(action='promote')
     def promote(self, tenant_name, tenant, auth):
         if cherrypy.request.method != 'POST':
             raise cherrypy.HTTPError(405)
@@ -1641,6 +1679,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['POST', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='set-tenant-state')
+    @cherrypy.tools.audit_log(action='set-tenant-state')
     def state_post(self, tenant_name, tenant, auth):
         body = cherrypy.request.json
         current_state = self.zuulweb.event_watcher.tenant_state[tenant.name]
@@ -1693,6 +1732,7 @@ class ZuulWebAPI(object):
     # Options handled by _get method
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='autohold')
+    @cherrypy.tools.audit_log(action='autohold')
     def autohold_project_post(self, tenant_name, tenant, auth, project_name):
         project = self._getProjectOrRaise(tenant, project_name)
         self.log.info(f'User {auth.uid} requesting autohold on '
@@ -1816,6 +1856,7 @@ class ZuulWebAPI(object):
     # Options handled by get method
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='autohold')
+    @cherrypy.tools.audit_log(action='delete-autohold')
     def autohold_delete(self, tenant_name, tenant, auth, request_id):
         request = self._getAutoholdRequest(tenant_name, request_id)
         self.log.info(f'User {auth.uid} requesting autohold-delete on '
@@ -2652,6 +2693,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['POST'])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='build-image')
+    @cherrypy.tools.audit_log(action='build-image')
     def image_build(self, tenant_name, tenant, auth, image_name):
         providers = self.zuulweb.tenant_providers.get(tenant.name)
         if not providers:
@@ -2681,6 +2723,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['DELETE'])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='delete-image-build-artifact')
+    @cherrypy.tools.audit_log(action='delete-image-build-artifact')
     def image_build_artifact_delete(self, tenant_name, tenant, auth,
                                     artifact_id):
         iba = self.zuulweb.image_build_registry.getItem(artifact_id)
@@ -2717,6 +2760,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['DELETE'])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='delete-image-upload')
+    @cherrypy.tools.audit_log(action='delete-image-upload')
     def image_upload_delete(self, tenant_name, tenant, auth, upload_id):
         upload = self.zuulweb.image_upload_registry.getItem(upload_id)
         if upload:
@@ -2745,6 +2789,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['POST'])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='validate-image-upload')
+    @cherrypy.tools.audit_log(action='validate-image-upload')
     def image_upload_validate(self, tenant_name, tenant, auth, upload_id):
         upload = self.zuulweb.image_upload_registry.getItem(upload_id)
         if upload:
@@ -2774,6 +2819,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['POST'])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='upload-image')
+    @cherrypy.tools.audit_log(action='upload-image')
     def image_upload_upload(self, tenant_name, tenant, auth, upload_id):
         upload = self.zuulweb.image_upload_registry.getItem(upload_id)
         if upload:
@@ -2883,6 +2929,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['PUT', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='modify-node')
+    @cherrypy.tools.audit_log(action='modify-node')
     def nodes_put(self, tenant_name, tenant, auth, node_id):
         node = self.zuulweb.nodes_cache.getItem(node_id)
 
@@ -2944,6 +2991,7 @@ class ZuulWebAPI(object):
     @cherrypy.tools.handle_options(allowed_methods=['DELETE', ])
     @cherrypy.tools.check_tenant_auth(require_admin=True,
                                       permission='modify-nodeset-request')
+    @cherrypy.tools.audit_log(action='delete-nodeset-request')
     def nodeset_requests_delete(self, tenant_name, tenant, auth, request_id):
         request = self.zuulweb.requests_cache.getItem(request_id)
         if not request or request.tenant_name != tenant.name:
