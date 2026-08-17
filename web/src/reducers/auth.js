@@ -43,7 +43,6 @@ export default (state = {
       return {
         ...state,
         isFetching: true,
-        info: null,
       }
     case AUTH_CONFIG_SUCCESS:
       // Make sure we only update the auth_params object if something actually
