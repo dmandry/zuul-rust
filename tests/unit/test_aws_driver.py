@@ -30,7 +30,11 @@ from zuul.driver.aws import AwsDriver
 from zuul.driver.aws.awsmodel import AwsProviderNode
 import zuul.driver.aws.awsendpoint
 
-from tests.fake_aws import FakeAws, FakeAwsProviderEndpoint
+from tests.fake_aws import (
+    FakeAws,
+    FakeAwsProviderEndpoint,
+    PatchMotoFixture,
+)
 from tests.base import (
     AnsibleZuulTestCase,
     ResponsesFixture,
@@ -119,6 +123,7 @@ class AwsBaseTest(BaseCloudDriverTest):
 
         self.fake_aws = FakeAws()
         self.mock_aws.start()
+        self.useFixture(PatchMotoFixture())
         # Must start responses after mock_aws
         responses_fixture = self.useFixture(ResponsesFixture())
         self.useFixture(ImageMocksFixture(responses_fixture))

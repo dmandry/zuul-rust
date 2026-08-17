@@ -18,6 +18,7 @@ import uuid
 
 import botocore
 import boto3
+import fixtures
 
 from zuul.driver.aws.awsendpoint import AwsProviderEndpoint
 
@@ -86,6 +87,22 @@ def make_import_image_stage_2(task_id, image_id, snap_id, task):
         'Status': 'completed',
         'Tags': task['Tags'],
     }
+
+
+class PatchMotoFixture(fixtures.Fixture):
+
+    def _setUp(self):
+        super()._setUp()
+
+        # Patch moto because this method is not thread-safe
+
+        @property
+        def get_block_device_mapping(self):
+            return list(self.block_device_mapping.items())
+
+        self.useFixture(fixtures.MonkeyPatch(
+            'moto.ec2.models.instances.Instance.get_block_device_mapping',
+            get_block_device_mapping))
 
 
 class ImportSnapshotTaskPaginator:
