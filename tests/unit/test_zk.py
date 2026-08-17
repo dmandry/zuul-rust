@@ -1112,7 +1112,11 @@ class TestExecutorApi(ZooKeeperBaseTestCase):
         second_executor_api.lock(second_a)
         second_a.state = BuildRequest.RUNNING
         second_executor_api.update(second_a)
+        for _ in iterate_timeout(30, "request to update"):
+            if a.state == BuildRequest.RUNNING:
+                break
         executor_api.waitForSync()
+        second_executor_api.waitForSync()
 
         self.log.debug("Disconnect simulated scheduler")
         self.zk_client.client.stop()
