@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b50c5cac_f7944a87",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 37754
+      },
+      "writtenOn": "2026-08-17T18:19:43Z",
+      "side": 1,
+      "message": "See blocker: https://github.com/getmoto/moto/pull/10185",
+      "revId": "68be1c01c276aed1576dc6a8a20693fd2e87433b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
