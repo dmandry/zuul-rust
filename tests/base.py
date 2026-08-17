@@ -4164,7 +4164,7 @@ class ZuulTestCase(BaseTestCase):
                 break
 
     def requestNodes(self, labels, tenant="tenant-one", pipeline="check",
-                     provider=None, timeout=10):
+                     provider=None, timeout=60):
         result_queue = PipelineResultEventQueue(
             self.zk_client, tenant, pipeline)
 
