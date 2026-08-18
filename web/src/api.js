@@ -192,7 +192,7 @@ function fetchChangeStatus(apiPrefix, changeId) {
   return makeRequest(apiPrefix + 'status/change/' + changeId)
 }
 
-function setTenantState(apiPrefix, discardTriggerEvents, pauseTriggerQueue, pauseResultQueue, reason) {
+function setTenantState(apiPrefix, discardTriggerEvents, pauseTriggerQueue, pauseResultQueue, reason, info) {
   return makeRequest(
     apiPrefix + 'state',
     'post',
@@ -201,6 +201,7 @@ function setTenantState(apiPrefix, discardTriggerEvents, pauseTriggerQueue, paus
       trigger_queue_paused: pauseTriggerQueue,
       result_queue_paused: pauseResultQueue,
       reason: reason,
+      info: info,
     }
   )
 }
