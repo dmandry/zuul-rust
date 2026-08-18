@@ -37,6 +37,7 @@ import {
   FlexItem,
 } from '@patternfly/react-core'
 import {
+  InfoCircleIcon,
   StreamIcon,
   ExclamationTriangleIcon,
 } from '@patternfly/react-icons'
@@ -127,11 +128,25 @@ PipelineGallery.propTypes = {
 }
 
 
-function renderBanner(status)
+function renderInfoBanner(status)
 {
-  if (!status || !status.state) {
+  if (!status || !status.state.info) {
     return <></>
   }
+  return (
+    <Banner screenReaderText="Info banner" variant="info">
+      <Flex spaceItems={{ default: 'spaceItemsSm' }}>
+        <FlexItem>
+          <InfoCircleIcon />
+        </FlexItem>
+        <FlexItem>{status.state.info}</FlexItem>
+      </Flex>
+    </Banner>
+  )
+}
+
+function renderPauseBanner(status)
+{
   // This method is able to describe states that the client libraries
   // do not support creating (for example, buth discarding and pausing
   // the trigger event queue).
@@ -164,6 +179,19 @@ function renderBanner(status)
         <FlexItem>{msg}</FlexItem>
       </Flex>
     </Banner>
+  )
+}
+
+function renderBanner(status)
+{
+  if (!status || !status.state) {
+    return <></>
+  }
+  return (
+    <>
+      {renderInfoBanner(status)}
+      {renderPauseBanner(status)}
+    </>
   )
 }
 

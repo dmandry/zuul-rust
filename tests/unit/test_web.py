@@ -4190,6 +4190,129 @@ class TestTenantScopedWebApi(BaseTestWeb):
             dict(name='project-test2', result='SUCCESS', changes='2,1'),
         ], ordered=False)
 
+    def test_state_post_info(self):
+        # Test setting an info banner and separately pausing events
+        self.executor_server.hold_jobs_in_build = False
+
+        authz = {'iss': 'zuul_operator',
+                 'aud': 'zuul.example.com',
+                 'sub': 'testuser',
+                 'zuul': {
+                     'admin': ['tenant-one', ],
+                 },
+                 'exp': int(time.time()) + 3600,
+                 'iat': int(time.time())}
+        token = jwt.encode(authz, key='ThisIsABadSecretOnlyUsedForTesting',
+                           algorithm='HS256')
+        info_msg = 'This is a test message'
+        args = {
+            'info': info_msg,
+        }
+        req = self.post_url(
+            'api/tenant/tenant-one/state',
+            headers={'Authorization': 'Bearer %s' % token},
+            json=args)
+        self.assertEqual(200, req.status_code, req.text)
+        time.sleep(1)
+
+        resp = self.get_url("api/tenant/tenant-one/status",
+                            headers={'Authorization': 'Bearer %s' % token})
+        data = resp.json()
+        self.assertEqual(info_msg, data['state']['info'])
+        self.assertEqual(None, data['state']['reason'])
+
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-merge', result='SUCCESS', changes='1,1'),
+            dict(name='project-test1', result='SUCCESS', changes='1,1'),
+            dict(name='project-test2', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+
+        pause_msg = 'test trigger paused'
+        args = {
+            'trigger_queue_paused': True,
+            'reason': pause_msg,
+            'info': info_msg,
+        }
+        req = self.post_url(
+            'api/tenant/tenant-one/state',
+            headers={'Authorization': 'Bearer %s' % token},
+            json=args)
+        self.assertEqual(200, req.status_code, req.text)
+        time.sleep(1)
+
+        resp = self.get_url("api/tenant/tenant-one/status",
+                            headers={'Authorization': 'Bearer %s' % token})
+        data = resp.json()
+        self.assertEqual(info_msg, data['state']['info'])
+        self.assertEqual(pause_msg, data['state']['reason'])
+
+        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        time.sleep(5)
+
+        self.assertHistory([
+            dict(name='project-merge', result='SUCCESS', changes='1,1'),
+            dict(name='project-test1', result='SUCCESS', changes='1,1'),
+            dict(name='project-test2', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+        self.assertEqual(0, len(self.builds))
+
+        pause_msg = 'test result paused'
+        args = {
+            'trigger_queue_paused': True,
+            'result_queue_paused': True,
+            'reason': pause_msg,
+        }
+        req = self.post_url(
+            'api/tenant/tenant-one/state',
+            headers={'Authorization': 'Bearer %s' % token},
+            json=args)
+        self.assertEqual(200, req.status_code, req.text)
+
+        time.sleep(5)
+        resp = self.get_url("api/tenant/tenant-one/status",
+                            headers={'Authorization': 'Bearer %s' % token})
+        data = resp.json()
+        self.assertEqual(None, data['state']['info'])
+        self.assertEqual(pause_msg, data['state']['reason'])
+
+        self.assertHistory([
+            dict(name='project-merge', result='SUCCESS', changes='1,1'),
+            dict(name='project-test1', result='SUCCESS', changes='1,1'),
+            dict(name='project-test2', result='SUCCESS', changes='1,1'),
+        ], ordered=False)
+        self.assertEqual(0, len(self.builds))
+
+        args = {
+            'trigger_queue_paused': False,
+            'result_queue_paused': False,
+            'reason': None,
+        }
+        req = self.post_url(
+            'api/tenant/tenant-one/state',
+            headers={'Authorization': 'Bearer %s' % token},
+            json=args)
+        self.assertEqual(200, req.status_code, req.text)
+
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-merge', result='SUCCESS', changes='1,1'),
+            dict(name='project-test1', result='SUCCESS', changes='1,1'),
+            dict(name='project-test2', result='SUCCESS', changes='1,1'),
+            dict(name='project-merge', result='SUCCESS', changes='2,1'),
+            dict(name='project-test1', result='SUCCESS', changes='2,1'),
+            dict(name='project-test2', result='SUCCESS', changes='2,1'),
+        ], ordered=False)
+        time.sleep(5)
+        resp = self.get_url("api/tenant/tenant-one/status",
+                            headers={'Authorization': 'Bearer %s' % token})
+        data = resp.json()
+        self.assertEqual(None, data['state']['info'])
+        self.assertEqual(None, data['state']['reason'])
+
     def test_state_post_timer(self):
         self.executor_server.hold_jobs_in_build = False
 

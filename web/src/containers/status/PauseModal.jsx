@@ -31,6 +31,7 @@ import { setTenantState } from '../../api'
 function PauseModal({isOpen, setOpen}) {
   const tenant = useSelector((state) => state.tenant)
   const [reason, setReason] = useState('')
+  const [info, setInfo] = useState('')
   const [queueState, setQueueState] = useState('normal')
   const [discardTrigger, setDiscardTrigger] = useState(false)
   const [pauseTrigger, setPauseTrigger] = useState(false)
@@ -52,7 +53,8 @@ function PauseModal({isOpen, setOpen}) {
                     discardTrigger,
                     pauseTrigger,
                     pauseResult,
-                    reason)
+                    reason,
+                    info)
                     .catch(error => {
                       dispatch(addApiError(error))
                     })
@@ -116,7 +118,7 @@ function PauseModal({isOpen, setOpen}) {
       <FormGroup
         label="Reason"
         fieldId="pause-form-reason"
-        helperText="This explanation will appear on the status page.">
+        helperText="This explanation will appear on the status page while event processing is inactive.">
         <TextInput
           value={reason}
           isRequired
@@ -124,6 +126,18 @@ function PauseModal({isOpen, setOpen}) {
           id="pause-form-reason"
           name="pauseReason"
           onChange={(value) => { setReason(value) }}
+        />
+      </FormGroup>
+      <FormGroup
+        label="Info"
+        fieldId="pause-form-info"
+        helperText="This text will appear in a separate info banner on the status page, regardless of event processing status.">
+        <TextInput
+          value={info}
+          type="text"
+          id="pause-form-info"
+          name="pauseInfo"
+          onChange={(value) => { setInfo(value) }}
         />
       </FormGroup>
     </Modal>
