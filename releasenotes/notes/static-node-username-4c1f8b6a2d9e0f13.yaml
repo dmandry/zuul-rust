@@ -1,0 +1,13 @@
+---
+fixes:
+  - |
+    Fixed a bug in the static driver of the Zuul launcher where the
+    ``username`` configured on an individual node was ignored.  The
+    launcher always used the username from the node's image, so nodes
+    that relied on the documented per-node ``username`` attribute were
+    connected to with the wrong user.  The per-node ``username`` is now
+    honored (falling back to the image username when unset), consistent
+    with the handling of ``connection-port``.
+
+    See
+    https://zuul-ci.org/docs/zuul/latest/drivers/static.html#attr-provider[static].nodes.username
