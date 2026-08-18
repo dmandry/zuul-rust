@@ -298,6 +298,17 @@ class Repo(object):
                 # just drop all the reflog when gc kicks in.
                 config_writer.set_value('gc', 'reflogExpire', 'now')
 
+                # Without this setting, git will perform the initial
+                # http request without authentication and only add the
+                # auth header on receiving a 401.  The auto setting
+                # will cause us to send an HTTP Basic auth header iff
+                # a username and password is supplied.  If we are
+                # configured to use an anonymous URL, we won't set the
+                # header.
+                if (self.remote_url.startswith('https://') and
+                    repo.git.version_info[:2] >= (2, 46)):
+                    config_writer.set_value('http', 'proactiveAuth', 'auto')
+
                 config_writer.write()
             if rewrite_url:
                 self._git_set_remote_url(repo, self.remote_url)
