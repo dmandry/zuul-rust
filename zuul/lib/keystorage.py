@@ -561,8 +561,13 @@ class KeyStorage(ZooKeeperBase):
                 oidc_signing_keys = OIDCSigningKeys.loadKeys(
                     context, algorithm)
                 if not oidc_signing_keys:
-                    OIDCSigningKeys.createAndStoreKeys(
-                        context, algorithm, self.password_bytes)
+                    try:
+                        self.log.info("Creating OIDC signing keys")
+                        OIDCSigningKeys.createAndStoreKeys(
+                            context, algorithm, self.password_bytes)
+                    except kazoo.exceptions.NodeExistsError:
+                        # We may have raced another actor
+                        self.log.debug("OIDC signing keys exist on creation")
                     oidc_signing_keys = OIDCSigningKeys.loadKeys(
                         context, algorithm)
 
