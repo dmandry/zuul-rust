@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "eed082d6_5480b086",
+        "filename": "web/src/containers/auth/Auth.jsx",
+        "patchSetId": 1
+      },
+      "lineNbr": 103,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-19T23:26:42Z",
+      "side": 1,
+      "message": "Do we need to check for redirect_target being `\u0027\u0027` and convert that to `\u0027/\u0027` here? We do that in App.jsx. I ask because it occurs to me that maybe we hit some of the problems observed by users because these values are `\u0027\u0027` which is falsey in javascript and maybe that creates the problem of not having a valid redirect target?",
+      "revId": "33dbf5f278d704a7d957a01f200060f7d7a62557",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
