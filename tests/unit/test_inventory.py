@@ -116,6 +116,9 @@ class TestInventoryGithub(TestInventoryBase):
         self.assertEqual(z_vars['message'], 'QQ==')
         self.assertEqual(z_vars['change_url'],
                          'https://github.com/org/project3/pull/1')
+        self.assertTrue(z_vars['workspace_checkout'])
+        self.assertEqual(z_vars['deduplicate'], 'auto')
+        self.assertEqual(z_vars['image_build_name'], None)
 
         self.executor_server.release()
         self.waitUntilSettled()
