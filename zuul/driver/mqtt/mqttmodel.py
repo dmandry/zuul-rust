@@ -15,6 +15,7 @@
 
 from zuul.model import TriggerEvent
 from zuul.model import EventFilter
+import jsonpath_rw
 
 
 class MQTTTriggerEvent(TriggerEvent):
@@ -23,71 +24,50 @@ class MQTTTriggerEvent(TriggerEvent):
     def toDict(self):
         ret = super().toDict()
         ret['topic'] = self.topic
-        if hasattr(self, "action"):
-            ret['action'] = self.action
+        ret['payload'] = self.payload
         return ret
 
     def updateFromDict(self, d):
         super().updateFromDict(d)
         self.topic = d['topic']
-        if action := d.get('action'):
-            self.action = action
+        self.payload = d['payload']
 
     def __repr__(self):
-        ret = '<MQTTTriggerEvent %s %s' % (self.type,
-                                           self.topic)
+        ret = '<MQTTTriggerEvent %s' % (self.topic,)
 
-        if hasattr(self, "action"):
-            ret += " action:%s" % self.action
-        if hasattr(self, "tenant"):
-            ret += " tenant:%s" % self.tenant
+        # TODO: change, hostname, etc
         if hasattr(self, "project"):
             ret += " project:%s" % self.project
-        if hasattr(self, "pipeline"):
-            ret += " pipeline:%s" % self.pipeline
+        if hasattr(self, "payload"):
+            ret += " payload:%s" % self.payload
         ret += '>'
 
         return ret
 
 
 class MQTTEventFilter(EventFilter):
-    def __init__(self, connection_name, trigger, types=None, topic=None,
-                 refs=None, action=None, tenant=None, project=None,
-                 pipeline=None):
+    def __init__(self, connection_name, trigger, topic=None,
+                 payload=None):
 
         super().__init__(connection_name, trigger)
 
-        self.types = types if types is not None else []
         self.topic = topic if topic is not None else []
         self._topic = [x.pattern for x in self.topic]
-        self.refs = refs if refs is not None else []
-        self._refs = [x.pattern for x in self.refs]
-        self.action = action if action is not None else []
-        self.tenant = tenant if tenant is not None else []
-        self._tenant = [x.pattern for x in self.tenant]
-        self.project = project if project is not None else []
-        self._project = [x.pattern for x in self.project]
-        self.pipeline = pipeline if pipeline is not None else []
-        self._pipeline = [x.pattern for x in self.pipeline]
+        self.payload = []
+        if payload:
+            for k, v in payload.items():
+                expr = jsonpath_rw.parse(k)
+                self.payload.append((expr, v))
+        self._payload = payload
 
     def __repr__(self):
         ret = '<MQTTEventFilter'
         ret += ' connection: %s' % self.connection_name
 
-        if self.types:
-            ret += ' types: %s' % ', '.join(self.types)
         if self._topic:
             ret += ' topic: %s' % ', '.join(self._topic)
-        if self._refs:
-            ret += ' refs: %s' % ', '.join(self._refs)
-        if self.action:
-            ret += ' action: %s' % ', '.join(self.action)
-        if self._tenant:
-            ret += ' tenant: %s' % ', '.join(self._tenant)
-        if self._project:
-            ret += ' project: %s' % ', '.join(self._project)
-        if self._pipeline:
-            ret += ' pipeline: %s' % ', '.join(self._pipeline)
+        if self.payload:
+            ret += f' payload: {self._payload}'
         ret += '>'
 
         return ret
@@ -97,38 +77,20 @@ class MQTTEventFilter(EventFilter):
         if not super().matches(event, change):
             return False
 
-        # event types are ORed
-        matches_type = False
-        for etype in self.types:
-            if etype == event.type:
-                matches_type = True
-        if self.types and not matches_type:
-            return False
-
         # Topics are ORed
         matches_topic = False
         for etopic in self.topic:
             if etopic.match(event.topic):
                 matches_topic = True
         if self.topic and not matches_topic:
-            return False
+            return False # with reason
 
-        # refs are ORed
-        matches_ref = False
-        if event.ref is not None:
-            for ref in self.refs:
-                if ref.match(event.ref):
-                    matches_ref = True
-        if self.refs and not matches_ref:
-            return False
-
-        # actions are ORed
-        matches_action = False
-        if event.action is not None:
-            for action in self.action:
-                if action == event.action:
-                    matches_action = True
-        if self.action and not matches_action:
-            return False
+        # payloads are ANDed
+        for expr, value in self.payload:
+            found = expr.find(event.payload)
+            if found:
+                found = found[0].value
+            if value != found:
+                return False # with reason
 
         return True

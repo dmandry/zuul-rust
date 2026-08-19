@@ -148,24 +148,27 @@ class MQTTConnection(BaseConnection):
     def addEvent(self, topic, payload):
         event = MQTTTriggerEvent()
         event.connection_name = self.connection_name
-        event.type = 'ref-updated'
+        #event.type = 'ref-updated'
         event.timestamp = time.time()
         event.topic = topic
-        event.tenant = payload['tenant']
+        #event.tenant = payload['tenant']
         # TODO handle errors and also decide if there needs to be any
         # authorization for grabbing tenant info here if suggested by mqtt.
-        tenant = self.sched.abide.tenants[event.tenant]
-        (trusted, project) = tenant.getProject(payload['project'])
-        event.project_hostname = project.canonical_hostname
-        event.project_name = project.name
-        for attr in ('ref', 'branch', 'action',
-                     'change', 'patchset',
-                     'pipeline'):
+        #tenant = self.sched.abide.tenants[event.tenant]
+        #(trusted, project) = tenant.getProject(payload['project'])
+        canonical_name = payload['project_canonical_name'].split('/', 1)
+        event.project_hostname = canonical_name[0]
+        event.project_name = canonical_name[1]
+        event.payload = payload
+        for attr in ('ref', 'branch',
+                     'change', 'patchset'):
             if payload.get(attr):
-                setattr(event, attr, payload[attr])
+                out_attr = {'change': 'change_number'}.get(attr, attr)
+                setattr(event, out_attr, payload[attr])
 
         # Force changes cache update before passing
         # the event to the scheduler
+        # Can do this by looking up the source from the hostname
         # change_key = self.source.getChangeKey(event)
         # self.getChange(change_key)
         self.logEvent(event)

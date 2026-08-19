@@ -3,9 +3,9 @@
     manager: independent
     trigger:
       mqtt:
-        - event: ref-updated
-          topic: 'tenant-one/zuul/testevent'
-          action: 'enqueue'
+        - topic: 'tenant-one/zuul/testevent'
+          payload:
+            "$.action": 'enqueue'
     success:
       gerrit:
         Verified: 1

@@ -34,39 +34,15 @@ class MQTTTrigger(BaseTrigger):
             with pcontext.confAttr(trigger, 'topic') as attr:
                 topic = [make_regex(x, pcontext)
                          for x in to_list(attr)]
-            refs = None
-            with pcontext.confAttr(trigger, 'ref') as attr:
-                refs = [make_regex(x, pcontext)
-                        for x in to_list(attr)]
-            tenant = None
-            if trigger.get('tenant'):
-                with pcontext.confAttr(trigger, 'tenant') as attr:
-                    tenant = [make_regex(x, pcontext)
-                              for x in to_list(attr)]
-            project = None
-            if trigger.get('project'):
-                with pcontext.confAttr(trigger, 'project') as attr:
-                    project = [make_regex(x, pcontext)
-                               for x in to_list(attr)]
-            pipeline = None
-            if trigger.get('pipeline'):
-                with pcontext.confAttr(trigger, 'pipeline') as attr:
-                    pipeline = [make_regex(x, pcontext)
-                                for x in to_list(attr)]
-            action = None
-            if trigger.get('action'):
-                action = to_list(trigger['action'])
+            payload = None
+            with pcontext.confAttr(trigger, 'payload') as attr:
+                payload = attr
 
             f = MQTTEventFilter(
                 connection_name=connection_name,
                 trigger=self,
-                types=to_list(trigger['event']),
                 topic=topic,
-                refs=refs,
-                action=action,
-                tenant=tenant,
-                project=project,
-                pipeline=pipeline,
+                payload=payload,
             )
             efilters.append(f)
 
@@ -74,27 +50,10 @@ class MQTTTrigger(BaseTrigger):
 
 
 def getSchema():
-    actions = [
-        'enqueue',
-        'start',
-        'success',
-        'failure',
-        'merge-conflict',
-        'config-error',
-        'no-jobs',
-        'disabled',
-        'dequeue',
-    ]
     mqtt_trigger = {
-        v.Required('event'):
-            scalar_or_list(v.Any('ref-updated')),
         v.Required('topic'):
             scalar_or_list(v.Any(ZUUL_REGEX, str)),
-        'ref': scalar_or_list(v.Any(ZUUL_REGEX, str)),
-        'action': scalar_or_list(v.Any(*actions)),
-        'tenant': scalar_or_list(v.Any(ZUUL_REGEX, str)),
-        'project': scalar_or_list(v.Any(ZUUL_REGEX, str)),
-        'pipeline': scalar_or_list(v.Any(ZUUL_REGEX, str))
+        'payload': dict,
     }
 
     return mqtt_trigger

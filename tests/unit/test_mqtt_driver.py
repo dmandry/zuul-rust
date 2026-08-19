@@ -36,10 +36,10 @@ class TestMQTTTrigger(ZuulTestCase):
                                  message='test commit for testing')
         event = {
             'tenant': 'tenant-one',
-            'project': 'org/project',
+            'project_canonical_name': 'review.example.com/org/project',
             'branch': 'master',
             'ref': 'master',
-            'newrev': rev,
+            #'newrev': rev,
             'action': 'enqueue'
         }
         self.executor_server.hold_jobs_in_build = True
