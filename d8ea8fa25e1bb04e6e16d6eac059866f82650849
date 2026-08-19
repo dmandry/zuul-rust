@@ -40,6 +40,30 @@
       "parentUuid": "764f7d6a_e60b518e",
       "revId": "d8ea8fa25e1bb04e6e16d6eac059866f82650849",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "041d7030_c45e4264",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 10496,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-19T23:19:37Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "7264bbbe_292d37b2",
+      "range": {
+        "startLine": 10496,
+        "startChar": 30,
+        "endLine": 10496,
+        "endChar": 37
+      },
+      "revId": "d8ea8fa25e1bb04e6e16d6eac059866f82650849",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
