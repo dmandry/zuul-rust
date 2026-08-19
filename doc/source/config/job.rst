@@ -124,6 +124,11 @@ Here is an example of two job definitions:
            - name: test-node
              label: fedora
 
+The following job configuration attributes are also supplied as variables:
+- :attr:`job.workspace-checkout`
+- :attr:`job.deduplicate`
+- :attr:`job.image-build-name`
+
 .. attr:: job
 
    The following attributes are available on a job; all are optional
