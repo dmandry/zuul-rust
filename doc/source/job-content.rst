@@ -1369,6 +1369,22 @@ The following variables related to the job are available:
 
          The name of the pod when the label defines a kubectl connection.
 
+     .. var:: workspace_checkout
+
+        Whether the job performed a full checkout of projects in the workspace.
+        This value is taken from :attr:`job.workspace-checkout`.
+
+     .. var:: deduplicate
+
+        Whether the job was deduplicated or not. This value is taken from
+        :attr:`job.deduplicate`.
+
+     .. var:: image_build_name
+
+        The name of the image build by this job (in case this is an image
+        build job (see :ref:`image-creation`)). The value is taken from
+        :attr:`job.image-build-name`.
+
      Project or namespace resources might be used in a template as:
 
      .. code-block:: yaml

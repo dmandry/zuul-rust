@@ -1394,13 +1394,15 @@ class TestWeb(BaseTestWeb):
                 'timeout': None,
                 'post_timeout': None,
                 'jobtags': [],
-                'branch': 'master',
                 'projects': {},
                 'items': [],
                 'change_url': None,
                 'child_jobs': [],
                 'event_id': None,
                 'include_vars': [],
+                'workspace_checkout': True,
+                'deduplicate': 'auto',
+                'image_build_name': None,
             },
             'workspace_scheme': 'golang',
             'workspace_checkout': True,
@@ -1499,7 +1501,10 @@ class TestWeb(BaseTestWeb):
                 'pre_timeout': None,
                 'timeout': None,
                 'post_timeout': None,
-                'voting': True}}
+                'voting': True,
+                'workspace_checkout': True,
+                'deduplicate': True,
+                'image_build_name': None}}
 
         self.assertEqual(job_params, resp.json())
 

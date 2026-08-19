@@ -124,6 +124,7 @@ Here is an example of two job definitions:
            - name: test-node
              label: fedora
 
+
 .. attr:: job
 
    The following attributes are available on a job; all are optional
