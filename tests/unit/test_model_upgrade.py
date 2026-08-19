@@ -159,7 +159,9 @@ class TestModelUpgrade(ZuulTestCase):
         self.log.debug("Trigger upgrade on scheduler-1 and check")
         event = model.TriggerEvent()
         event.zuul_event_ltime = self.zk_client.getCurrentLtime()
+
         first.sched.reconfigureTenant(tenant1, project1, event)
+        self.waitUntilSettled()
         state_two = first.sched.local_layout_state.get("tenant-one")
         for _ in iterate_timeout(
                 10, "all schedulers to have the same layout state"):
@@ -258,6 +260,7 @@ class TestModelUpgrade(ZuulTestCase):
         event = model.TriggerEvent()
         event.zuul_event_ltime = self.zk_client.getCurrentLtime()
         second.sched.reconfigureTenant(tenant1, project1, event)
+        self.waitUntilSettled()
         state_two = second.sched.local_layout_state.get("tenant-one")
         for _ in iterate_timeout(
                 10, "all schedulers to have the same layout state"):
