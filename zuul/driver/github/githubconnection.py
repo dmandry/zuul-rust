@@ -945,8 +945,6 @@ class GithubClientManager:
         # tenant config before its GitHub App installation is created.
         self._unknown_projects = cachetools.TTLCache(maxsize=1024, ttl=1800)
 
-        # The version of github enterprise stays None for github.com
-        self._github_version = None
 
     def initialize(self):
         self.log.info('Authing to GitHub')
@@ -1000,16 +998,8 @@ class GithubClientManager:
                                  "GitHub Enterprise")
             github = self.github_enterprise_class(
                 url, session=session, verify=self.verify_ssl)
-            if not self._github_version:
-                version = github.meta().get('installed_version')
-                self._github_version = tuple(
-                    [int(v) for v in version.split('.', 2)])
         else:
             github = self.github_class(session=session)
-
-        # Attach a version number to the github client so we can support per
-        # version features.
-        github.version = self._github_version
 
         # anything going through requests to http/s goes through cache
         github.session.mount('http://', self.cache_adapter)
