@@ -952,6 +952,7 @@ class GithubClientManager:
         self.log.info('Authing to GitHub')
         self._authenticateGithubAPI()
         self._prime_installation_map()
+        self._getGithubVersion()
         self._initialized = True
 
     @property
@@ -989,6 +990,15 @@ class GithubClientManager:
         if app_key:
             self.app_key = app_key
 
+    def _getGithubVersion(self):
+        if self.server == 'github.com':
+            return
+        if not self._github_version:
+            github = self._createGithubClient()
+            version = github.meta()['installed_version']
+            self._github_version = tuple(
+                [int(v) for v in version.split('.', 2)])
+
     def _createGithubClient(self, zuul_event_id=None):
         session = github3.session.GitHubSession(default_read_timeout=300)
 
@@ -1000,10 +1010,6 @@ class GithubClientManager:
                                  "GitHub Enterprise")
             github = self.github_enterprise_class(
                 url, session=session, verify=self.verify_ssl)
-            if not self._github_version:
-                version = github.meta().get('installed_version')
-                self._github_version = tuple(
-                    [int(v) for v in version.split('.', 2)])
         else:
             github = self.github_class(session=session)
 
