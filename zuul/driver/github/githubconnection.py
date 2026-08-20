@@ -19,6 +19,7 @@ import datetime
 import logging
 import hmac
 import hashlib
+import random
 import threading
 import time
 import json
@@ -994,7 +995,19 @@ class GithubClientManager:
         if self.server == 'github.com':
             return
         if not self._github_version:
-            github = self._createGithubClient()
+            project_name = None
+            # We need to perform this query exactly once.  So that we
+            # don't use the very minimial unauthenticated limit, pick
+            # an installation token at random.
+            if self.installation_map:
+                project_name = random.choice(
+                    list(self.installation_map.keys()))
+                github = self.getGithubClient(project_name)
+            else:
+                # If we don't have installation tokens, we must make
+                # an unauthenticated request because app
+                # authentication is not supported.
+                github = self._createGithubClient()
             version = github.meta()['installed_version']
             self._github_version = tuple(
                 [int(v) for v in version.split('.', 2)])
