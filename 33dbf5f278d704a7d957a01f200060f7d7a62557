@@ -16,6 +16,23 @@
       "message": "Do we need to check for redirect_target being `\u0027\u0027` and convert that to `\u0027/\u0027` here? We do that in App.jsx. I ask because it occurs to me that maybe we hit some of the problems observed by users because these values are `\u0027\u0027` which is falsey in javascript and maybe that creates the problem of not having a valid redirect target?",
       "revId": "33dbf5f278d704a7d957a01f200060f7d7a62557",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "29b9ac7d_16e0f97a",
+        "filename": "web/src/containers/auth/Auth.jsx",
+        "patchSetId": 1
+      },
+      "lineNbr": 103,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-20T14:10:09Z",
+      "side": 1,
+      "message": "Nope, here\u0027s why:\n\nWe need to check in the other place because if someone types the zuul url into their browser with no trailing path, then we hit the code in App.jsx and we add the redirect target as /.  But here, the user is hitting the login button on the screen after it\u0027s already rendered, and there is no valid / url in the app (even whitelabeled, we redirect to /status), so there\u0027s no screen where a user could hit the login button and call this method.\n\n(Also, I\u0027m not sure it\u0027s strictly necessary; if I force the url to be \u0027\u0027 both here and in App.jsx, everything still works.)",
+      "revId": "33dbf5f278d704a7d957a01f200060f7d7a62557",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
