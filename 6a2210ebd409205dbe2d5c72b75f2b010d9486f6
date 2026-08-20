@@ -84,6 +84,23 @@
       "message": "recheck test_min_ready_aliases",
       "revId": "6a2210ebd409205dbe2d5c72b75f2b010d9486f6",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "96fa656f_65fa3d54",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 24245
+      },
+      "writtenOn": "2026-08-20T12:33:58Z",
+      "side": 1,
+      "message": "If production code wait\u0027s for all schedulers to be in sync, then yes the test can do the same.",
+      "revId": "6a2210ebd409205dbe2d5c72b75f2b010d9486f6",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
