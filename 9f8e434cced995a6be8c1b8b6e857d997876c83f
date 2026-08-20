@@ -3,6 +3,23 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "037b5015_8345bf0d",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 20,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-20T16:28:08Z",
+      "side": 1,
+      "message": "We still use this to change the default merge mode, and we will almost certainly continue to use it in the future for other changes that github makes.  That seems especially likely since github has now started versioning their api.",
+      "revId": "9f8e434cced995a6be8c1b8b6e857d997876c83f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "43c927ea_50b41b22",
         "filename": "zuul/driver/github/githubconnection.py",
         "patchSetId": 1

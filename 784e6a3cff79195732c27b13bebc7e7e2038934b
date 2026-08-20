@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0e6e481e_3ae16e2c",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 1003,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-20T16:28:08Z",
+      "side": 0,
+      "message": "The version is cached on the client manager, and the client manager is 1:1 with the connection.  So we only query this once per connection.  That seems like exactly what we want.",
+      "revId": "784e6a3cff79195732c27b13bebc7e7e2038934b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
