@@ -327,6 +327,10 @@ the following options.
 
          Pull request closed.
 
+      .. value:: edited
+
+         Pull request edited.
+
       .. value:: reopened
 
          Pull request reopened.
