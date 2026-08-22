@@ -1,0 +1,123 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "59467719_5b7eadac",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 351,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "I have proposed new config terms here for payload (proposed: payload_required) and data (proposed: data_mapping) to better capture the purpose of these fields.\n\nFor payload we are saying this payload must be present in the event otherwise we ignore the event. For data we\u0027re saying use these mappings to build our event data within Zuul. I think both of these new names are more descriptive and make it easier to understand what is happening. I\u0027m open to other terms too but payload and data seem to generic.\n\nNote I haven\u0027t updated the code yet. Once we decide on the names I\u0027ll update the schema and the related fields within the driver.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "57055798_058bb921",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 81,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "I realized that existing users of the mqtt reporter features may not want the driver to automatically subscribe to a default topic and start processing events after they upgrade zuul.\n\nTo address that I made the trigger portion of the mqtt driver opt in behind the configuration of an explicit subscription topic.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "08f21bb9_872e1e8c",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 152,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "This fixes a bug where we only got a single transformer and thus only evaluated mqtt events against one transformer. This was exposed by testing.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d9bd6727_3a391c0a",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 178,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "I added this debug flag and handling because I found when updating test cases that it isn\u0027t typically clear why an MQTT event was silently dropped by transformer handling. I found this useful and figured Zuul operators may too so left it in. There may be better ways to do this too, but I was worried in a real deployment logging this info on every mqtt event that doesn\u0027t transform will be too verbose. Particularly since not transforming some events under specific rules is expected.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "adb219eb_9d9a31f6",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 204,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "Can we just drop the branch handling entirely?",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "260795f0_fad5a820",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 209,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "Zuul logging complains when there isn\u0027t an event id. If we get one in the payload we preserve it. Otherwise generate a new one.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "39537386_b77e90cc",
+        "filename": "zuul/driver/mqtt/mqtttrigger.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 62,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "Made data a required field as the current transformer implementation requires explicit mappings from payload to required fields. We don\u0027t read out of the payload and combine any mappings we only use the mapping.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

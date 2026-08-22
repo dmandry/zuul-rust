@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "a465fc46_d81633fb",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 156,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "18d72d7d_47b5e73a",
+      "revId": "972ccae04878e58155fbcac335beac44ecb85e3d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "46beae15_7bffe15a",
@@ -35,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "66449036_aa1bbcee",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 164,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "46beae15_7bffe15a",
+      "revId": "972ccae04878e58155fbcac335beac44ecb85e3d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e74df998_c3ad3d40",
@@ -48,6 +84,24 @@
       "writtenOn": "2026-08-22T18:54:16Z",
       "side": 1,
       "message": "Apply attr_map here.",
+      "revId": "972ccae04878e58155fbcac335beac44ecb85e3d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3aa0a052_b9c06b1f",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 189,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:17:16Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "e74df998_c3ad3d40",
       "revId": "972ccae04878e58155fbcac335beac44ecb85e3d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
