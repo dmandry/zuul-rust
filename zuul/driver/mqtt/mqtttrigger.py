@@ -37,12 +37,16 @@ class MQTTTrigger(BaseTrigger):
             payload = None
             with pcontext.confAttr(trigger, 'payload') as attr:
                 payload = attr
+            data = None
+            with pcontext.confAttr(trigger, 'data') as attr:
+                data = attr
 
             f = MQTTEventFilter(
                 connection_name=connection_name,
                 trigger=self,
                 topic=topic,
                 payload=payload,
+                data=data,
             )
             efilters.append(f)
 
@@ -54,6 +58,7 @@ def getSchema():
         v.Required('topic'):
             scalar_or_list(v.Any(ZUUL_REGEX, str)),
         'payload': dict,
+        'data': dict,
     }
 
     return mqtt_trigger

@@ -13,6 +13,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import json
+
 import jsonpath_rw
 
 from zuul.model import TriggerEvent
@@ -55,7 +57,7 @@ class MQTTTriggerEvent(TriggerEvent):
 
 class MQTTEventFilter(EventFilter):
     def __init__(self, connection_name, trigger, topic=None,
-                 payload=None):
+                 payload=None, data=None):
 
         super().__init__(connection_name, trigger)
 
@@ -67,6 +69,7 @@ class MQTTEventFilter(EventFilter):
                 expr = jsonpath_rw.parse(k)
                 self.payload.append((expr, v))
         self._payload = payload
+        self.data = data
 
     def __repr__(self):
         ret = '<MQTTEventFilter'
@@ -105,3 +108,83 @@ class MQTTEventFilter(EventFilter):
                     'payload value "%s"' % (expr, value, found))
 
         return True
+
+    def getTransformer(self):
+        return MQTTEventTransformer(self.connection_name, self._topic,
+                                    self.topic, self.data)
+
+
+class MQTTEventTransformer:
+    attr_map = {
+        'change': 'change_number',
+        'patchset': 'patch_number',
+        'branch': 'branch',
+        'oldrev': 'oldrev',
+        'newrev': 'newrev',
+        'ref': 'ref',
+        'url': 'change_url',
+        'project': 'project_name',
+        'project-hostname': 'project_hostname',
+    }
+
+    def __init__(self, connection_name, raw_topic, topic, data):
+        self.connection_name = connection_name
+        self.topic = topic
+        self._topic = raw_topic
+        self.data = []
+        if data:
+            for k, v in data.items():
+                expr = jsonpath_rw.parse(v)
+                self.data.append((expr, k))
+        self._hash = hash(json.dumps({'topic': raw_topic, 'data': data},
+                                     sort_keys=True).encode('utf8'))
+
+    def __hash__(self):
+        return self._hash
+
+    def __eq__(self, other):
+        return (isinstance(other, MQTTEventTransformer) and
+                self._hash == other._hash)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def getEvent(self, timestamp, topic, payload):
+        matches_topic = False
+        for etopic in self.topic:
+            if etopic.match(topic):
+                matches_topic = True
+        if self.topic and not matches_topic:
+            return None
+
+        data = {}
+        for expr, key in self.data:
+            found = expr.find(payload)
+            if not found:
+                print("JEB no data", key)
+                return None
+            data[key] = found[0].value
+
+        event = MQTTTriggerEvent()
+        event.connection_name = self.connection_name
+        event.timestamp = timestamp
+        event.topic = topic
+        event.payload = payload
+
+        if pcn := data.pop('project-canonical-name', None):
+            canonical_name = pcn.split('/', 1)
+            data['project_hostname'] = canonical_name[0]
+            data['project_name'] = canonical_name[1]
+
+        if not ('project_hostname' in data and
+                'project_name' in data):
+            return None
+
+        if not ('ref' in data or
+                'branch' in data or
+                'change' in data):
+            return None
+
+        for k, v in data.items():
+            setattr(event, k, v)
+        return event

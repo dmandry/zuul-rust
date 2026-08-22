@@ -6,6 +6,9 @@
         - topic: 'tenant-one/zuul/testevent'
           payload:
             "$.action": 'enqueue'
+          data:
+            project-canonical-name: '$.project_canonical_name'
+            ref: '$.ref'
     success:
       gerrit:
         Verified: 1
