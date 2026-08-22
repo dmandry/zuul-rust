@@ -20,6 +20,40 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "386844b5_753a6a18",
+        "filename": "tests/fixtures/config/mqtt-trigger/git/common-config/zuul.yaml",
+        "patchSetId": 2
+      },
+      "lineNbr": 31,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:22:26Z",
+      "side": 1,
+      "message": "Should add a test case that handles the project and project-hostname mapping as well.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8acf4c10_9e5247af",
+        "filename": "tests/unit/test_mqtt_driver.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 140,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-22T19:22:26Z",
+      "side": 1,
+      "message": "Should also add a test case that doesn\u0027t enqueue events due to data mapping failures.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "57055798_058bb921",
         "filename": "zuul/driver/mqtt/mqttconnection.py",
         "patchSetId": 2
