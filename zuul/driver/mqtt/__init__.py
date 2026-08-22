@@ -41,3 +41,17 @@ class MQTTDriver(Driver, ConnectionInterface, ReporterInterface):
 
     def getReporterSchema(self):
         return mqttreporter.getSchema()
+
+    def reconfigure(self, tenant):
+        connection_transformer_map = {}
+        for manager in tenant.layout.pipeline_managers.values():
+            pipeline = manager.pipeline
+            for event_filter in pipeline.event_filters:
+                trigger = event_filter.trigger
+                if isinstance(trigger, mqtttrigger.MQTTTrigger):
+                    con = trigger.connection
+                    transformers = connection_transformer_map.setdefault(
+                        con, [])
+                    transformers.append(event_filter.getTransformer())
+        for (con, transformers) in connection_transformer_map.items():
+            con.setTransformers(tenant.name, transformers)

@@ -21,7 +21,6 @@ import time
 import paho.mqtt.client as mqtt
 
 from zuul.connection import BaseConnection
-from zuul.driver.mqtt.mqttmodel import MQTTTriggerEvent
 from zuul.exceptions import ConfigurationError
 from zuul.lib.logutil import get_annotated_logger
 from zuul.zk.event_queues import EventReceiverElection
@@ -47,6 +46,8 @@ class MQTTListener(threading.Thread):
         self.client.on_disconnect = self._on_disconnect
         self.client.on_subscribe = self._on_subscribe
         self.client.on_message = self._on_message
+        self.sub_topic = self.connection.connection_config.get(
+            'subscribe_topic')
 
     def _on_connect(self, client, userdata, flags, rc):
         self.log.debug("MQTT client connection established")
@@ -75,17 +76,15 @@ class MQTTListener(threading.Thread):
         self.log.debug("Won mqtt listener election")
         self._stop_event.clear()
         while not self._stop_event.is_set():
-            # TODO(clarkb) make this topic subscription configurable
-            # This matches the events that Zuul itself will publish to
-            # the mqtt broker.
-            self.log.debug("Subscribing to mqtt topic")
-            self.client.subscribe('+/zuul/#', 2)
+            if self.sub_topic:
+                self.log.debug("Subscribing to mqtt topic")
+                self.client.subscribe(self.sub_topic, 2)
             self._stop_event.wait()
-            if self.connected:
+            if self.connected and self.sub_topic:
                 # Handle the case where we lost the election and set the
                 # stop event. In that case we remain connected for
                 # publishing but unsubscribe from events.
-                self.client.unsubscribe('+/zuul/#')
+                self.client.unsubscribe(self.sub_topic)
 
     def run(self):
         while not self._stopped:
@@ -140,34 +139,43 @@ class MQTTConnection(BaseConnection):
                 certfile=certfile,
                 keyfile=keyfile,
                 ciphers=ciphers)
+        self._transformers_by_tenant = {}
+
+    @property
+    def transformers(self):
+        seen = set()
+        for trns in list(self._transformers_by_tenant.values()):
+            for trn in trns:
+                if trn in seen:
+                    continue
+                yield trn
+                seen.add(trn)
+
+    def setTransformers(self, tenant_name, transformers):
+        self._transformers_by_tenant[tenant_name] = transformers
 
     def addEvent(self, topic, payload):
-        event = MQTTTriggerEvent()
-        event.connection_name = self.connection_name
-        event.timestamp = time.time()
-        event.topic = topic
-        canonical_name = payload['project_canonical_name'].split('/', 1)
-        event.project_hostname = canonical_name[0]
-        event.project_name = canonical_name[1]
-        event.payload = payload
-        # TODO(clarkb) ensure that either ref, branch, or change,patchset are
-        # included
-        for attr in ('ref', 'branch',
-                     'change', 'patchset'):
-            if payload.get(attr):
-                out_attr = {'change': 'change_number'}.get(attr, attr)
-                setattr(event, out_attr, payload[attr])
+        timestamp = time.time()
 
-        # Force changes cache update before passing the event to the scheduler.
-        # We have to lookup the source by hostname as each mqtt event may
-        # include information for projects in different sources.
-        conns = self.sched.connections
-        source = conns.getSourceByCanonicalHostname(event.project_hostname)
-        change_key = source.getChangeKey(event)
-        source.getChange(change_key)
-        self.logEvent(event)
-        # Pass the event to the scheduler
-        self.sched.addTriggerEvent(self.driver_name, event)
+        for transformer in self.transformers:
+            event = transformer.getEvent(timestamp, topic, payload)
+            if event:
+                # Force changes cache update before passing the event
+                # to the scheduler.  We have to lookup the source by
+                # hostname as each mqtt event may include information
+                # for projects in different sources.
+                conns = self.sched.connections
+                source = conns.getSourceByCanonicalHostname(
+                    event.project_hostname)
+                change_key = source.getChangeKey(event)
+                source.getChange(change_key)
+                self.logEvent(event)
+                # Pass the event to the scheduler
+                self.sched.addTriggerEvent(self.driver_name, event)
+            elif transformer.debug:
+                self.log.debug("MQTT event topic: %s payload: %s is not "
+                               "transformed by %s",
+                               topic, payload, transformer)
 
     def onLoad(self, zk_client, component_registry):
         # If the connection was not loaded by a scheduler, but by e.g.

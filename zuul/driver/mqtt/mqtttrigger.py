@@ -29,20 +29,25 @@ class MQTTTrigger(BaseTrigger):
         efilters = []
         pcontext = parse_context
         for trigger in to_list(trigger_conf):
-            # TODO(clarkb) roughed in based on the git driver.
-            # need to figure out what filters make sense for MQTT
             with pcontext.confAttr(trigger, 'topic') as attr:
                 topic = [make_regex(x, pcontext)
                          for x in to_list(attr)]
             payload = None
             with pcontext.confAttr(trigger, 'payload') as attr:
                 payload = attr
+            data = None
+            with pcontext.confAttr(trigger, 'data') as attr:
+                data = attr
+            with pcontext.confAttr(trigger, 'debug', default=False) as attr:
+                debug = attr
 
             f = MQTTEventFilter(
                 connection_name=connection_name,
                 trigger=self,
                 topic=topic,
                 payload=payload,
+                data=data,
+                debug=debug,
             )
             efilters.append(f)
 
@@ -54,6 +59,8 @@ def getSchema():
         v.Required('topic'):
             scalar_or_list(v.Any(ZUUL_REGEX, str)),
         'payload': dict,
+        v.Required('data'): dict,
+        'debug': bool,
     }
 
     return mqtt_trigger

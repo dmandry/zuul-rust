@@ -18,7 +18,7 @@ from tests.base import ZuulTestCase
 
 
 class TestMQTTTrigger(ZuulTestCase):
-    config_file = 'zuul-mqtt-driver.conf'
+    config_file = 'zuul-mqtt-trigger.conf'
     tenant_config_file = 'config/mqtt-trigger/main.yaml'
 
     def setUp(self):
@@ -28,13 +28,13 @@ class TestMQTTTrigger(ZuulTestCase):
         self.useFixture(mqtt_fixture)
         super().setUp()
 
-    def test_mqtt_triggers_build(self):
-        """Test MQTT Triggers Build"""
+    def test_mqtt_triggers_build_on_branch_ref(self):
+        """Test MQTT Triggers Build on Branch Ref"""
         topic = 'tenant-one/zuul/testevent'
         event = {
             'tenant': 'tenant-one',
             'project_canonical_name': 'review.example.com/org/project',
-            'ref': 'master',
+            'ref': 'refs/heads/master',
             'action': 'enqueue'
         }
         self.executor_server.hold_jobs_in_build = True
@@ -56,8 +56,86 @@ class TestMQTTTrigger(ZuulTestCase):
                  ref='refs/heads/master'),
         ])
 
-    # TODO(clarkb) Add a test case that triggers against a change not a ref.
-    # TODO(clarkb) Add a test case that triggers against a branch not a ref.
+    def test_mqtt_triggers_build_on_branch_mapped_to_ref(self):
+        """Test MQTT Triggers Build on Branch Mapped to a Ref"""
+        topic = 'tenant-one/zuul/testevent'
+        event = {
+            'tenant': 'tenant-one',
+            'project_canonical_name': 'review.example.com/org/project',
+            'branch': 'master',
+            'action': 'enqueue'
+        }
+        self.executor_server.hold_jobs_in_build = True
+        # Trigger a job through MQTT
+        self.broker.publish(topic, json.dumps(event), 2)
+        self.waitUntilSettled()
+        self.assertTrue(len(self.builds) > 0)
+        # Ensure that the correct project enqueued into the correct pipeline
+        self.assertEqual(self.builds[0].project, 'org/project')
+        self.assertEqual(self.builds[0].pipeline, 'check')
+
+        # Let the job complete and check the result
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertTrue(len(self.history) > 0)
+        self.assertHistory([
+            dict(name='project-test1', result='SUCCESS',
+                 ref='refs/heads/master'),
+        ])
+
+    def test_mqtt_triggers_build_on_change(self):
+        """Test MQTT Triggers Build on Change"""
+        self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        topic = 'tenant-one/zuul/testevent'
+        event = {
+            'tenant': 'tenant-one',
+            'project_canonical_name': 'review.example.com/org/project',
+            'change': 1,
+            'action': 'enqueue'
+        }
+        self.executor_server.hold_jobs_in_build = True
+        # Trigger a job through MQTT
+        self.broker.publish(topic, json.dumps(event), 2)
+        self.waitUntilSettled()
+        self.assertTrue(len(self.builds) == 1)
+        # Ensure that the correct project enqueued into the correct pipeline
+        self.assertEqual(self.builds[0].project, 'org/project')
+        self.assertEqual(self.builds[0].pipeline, 'check')
+
+        # Let the job complete and check the result
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertTrue(len(self.history) == 1)
+        self.assertHistory([
+            dict(name='project-test1', result='SUCCESS',
+                 changes='1,1', ref='refs/changes/01/1/1'),
+        ])
+
+        # Now enqueue the same change with an explicit patchset.
+        # Zuul won't enqueue the same change twice so we have to process the
+        # change above before proceeding here.
+        self.executor_server.hold_jobs_in_build = True
+        event['patchset'] = 1
+        self.broker.publish(topic, json.dumps(event), 2)
+        self.waitUntilSettled()
+        self.assertTrue(len(self.builds) == 1)
+        # Ensure that the correct project enqueued into the correct pipeline
+        self.assertEqual(self.builds[0].project, 'org/project')
+        self.assertEqual(self.builds[0].pipeline, 'check')
+
+        # Let the job complete and check the result
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        self.assertTrue(len(self.history) == 2)
+        self.assertHistory([
+            dict(name='project-test1', result='SUCCESS',
+                 changes='1,1', ref='refs/changes/01/1/1'),
+            dict(name='project-test1', result='SUCCESS',
+                 changes='1,1', ref='refs/changes/01/1/1'),
+        ])
 
     def test_mqtt_triggers_ignore_non_matching_events(self):
         """Test non matching MQTT events don't trigger builds"""

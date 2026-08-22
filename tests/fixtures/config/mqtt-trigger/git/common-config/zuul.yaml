@@ -6,6 +6,29 @@
         - topic: 'tenant-one/zuul/testevent'
           payload:
             "$.action": 'enqueue'
+          data:
+            project-canonical-name: '$.project_canonical_name'
+            ref: '$.ref'
+        - topic: 'tenant-one/zuul/testevent'
+          payload:
+            "$.action": 'enqueue'
+          data:
+            project-canonical-name: '$.project_canonical_name'
+            ref: '$.branch'
+          debug: true
+        - topic: 'tenant-one/zuul/testevent'
+          payload:
+            "$.action": 'enqueue'
+          data:
+            project-canonical-name: '$.project_canonical_name'
+            change: '$.change'
+        - topic: 'tenant-one/zuul/testevent'
+          payload:
+            "$.action": 'enqueue'
+          data:
+            project-canonical-name: '$.project_canonical_name'
+            change: '$.change'
+            patchset: '$.patchset'
     success:
       gerrit:
         Verified: 1
