@@ -58,6 +58,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "9833b928_ac685756",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 605,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-08-23T10:10:27Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "6fcec7dd_8672ebd2",
+      "range": {
+        "startLine": 605,
+        "startChar": 13,
+        "endLine": 605,
+        "endChar": 29
+      },
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "576f51b4_c0260d7e",
@@ -75,6 +99,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d602295c_795c4694",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 2543,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-08-23T10:10:27Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "576f51b4_c0260d7e",
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "5a8c6be9_47b00af7",
@@ -88,6 +130,30 @@
       "writtenOn": "2026-08-11T14:35:37Z",
       "side": 1,
       "message": "This is the code that made me think it should be called `collections_paths`. But it\u0027s only a slight OCD twinge.",
+      "range": {
+        "startLine": 3395,
+        "startChar": 36,
+        "endLine": 3395,
+        "endChar": 52
+      },
+      "revId": "47e91e1ee2e16d7972d234a1faab615e302862a0",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "40ad5a9f_9893e590",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 3395,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-08-23T10:10:27Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "5a8c6be9_47b00af7",
       "range": {
         "startLine": 3395,
         "startChar": 36,
