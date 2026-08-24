@@ -6733,6 +6733,18 @@ class BuildSet(zkobject.ZKObject):
             _repo_state=RepoState(),
         )
 
+    @property
+    def merge_uuid(self):
+        return str(uuid.uuid5(uuid.UUID(self.uuid), 'merge').hex)
+
+    @property
+    def files_uuid(self):
+        return str(uuid.uuid5(uuid.UUID(self.uuid), 'fileschanges').hex)
+
+    @property
+    def repo_state_uuid(self):
+        return str(uuid.uuid5(uuid.UUID(self.uuid), 'refstate').hex)
+
     def setFiles(self, items):
         if self._files_path is not None:
             raise Exception("Repo files can not be updated")
