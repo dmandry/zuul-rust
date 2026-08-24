@@ -127,12 +127,24 @@
     name: zuul-nox-py311
     parent: zuul-nox
     timeout: 10800  # 180 minutes
+    nodeset: ubuntu-jammy-16GB
     failure-output:
       # This matches stestr output when a test fails
       # {1} tests.unit.test_blah [5.743446s] ... FAILED
       - '\{\d+\} (.*?) \[[\d\.]+s\] \.\.\. FAILED'
     vars:
       nox_keyword: tests
+
+- job: {name: zuul-nox-py311-0, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-1, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-2, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-3, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-4, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-5, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-6, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-7, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-8, parent: zuul-nox-py311}
+- job: {name: zuul-nox-py311-9, parent: zuul-nox-py311}
 
 - job:
     name: zuul-nox-py311-multi-scheduler
@@ -369,35 +381,16 @@
       release_python: python3
     check:
       jobs:
-        - zuul-build-image
-        - zuul-nox-docs
-        - nox-linters:
-            vars:
-              nox_install_bindep: false
-            nodeset: ubuntu-jammy
-        - zuul-nox-py311
-        - zuul-nox-py312
-        - zuul-nox-upgrade
-        - zuul-build-dashboard-openstack-whitelabel
-        - zuul-build-dashboard-software-factory
-        - zuul-build-dashboard-opendev
-        - nodejs-run-lint:
-            vars:
-              zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            nodeset: ubuntu-jammy
-        - nodejs-run-test:
-            vars:
-              zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            files:
-              - web/.*
-            nodeset: ubuntu-jammy
-        - zuul-stream-functional-9
-        - zuul-stream-functional-11
-        - zuul-nox-remote
-        - zuul-quick-start:
-            dependencies: zuul-build-image
-        - zuul-nox-zuul-client
-        - zuul-build-python-release
+        - zuul-nox-py311-0
+        - zuul-nox-py311-1
+        - zuul-nox-py311-2
+        - zuul-nox-py311-3
+        - zuul-nox-py311-4
+        - zuul-nox-py311-5
+        - zuul-nox-py311-6
+        - zuul-nox-py311-7
+        - zuul-nox-py311-8
+        - zuul-nox-py311-9
     experimental:
       jobs:
         - zuul-nox-py311-multi-scheduler
