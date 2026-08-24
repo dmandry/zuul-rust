@@ -658,7 +658,7 @@ Here is an example of two job definitions:
 
          The path to the playbook relative to the root of the repo.
 
-      .. attr:: semaphore
+      .. attr:: semaphores
 
          The name of a :ref:`semaphore` (or list of them) or
          :ref:`global_semaphore` which should be acquired and released
@@ -694,7 +694,7 @@ Here is an example of two job definitions:
 
          The path to the playbook relative to the root of the repo.
 
-      .. attr:: semaphore
+      .. attr:: semaphores
 
          The name of a :ref:`semaphore` (or list of them) or
          :ref:`global_semaphore` which should be acquired and released
@@ -748,7 +748,7 @@ Here is an example of two job definitions:
 
          The path to the playbook relative to the root of the repo.
 
-      .. attr:: semaphore
+      .. attr:: semaphores
 
          The name of a :ref:`semaphore` (or list of them) or
          :ref:`global_semaphore` which should be acquired and released
@@ -781,7 +781,7 @@ Here is an example of two job definitions:
 
          The path to the playbook relative to the root of the repo.
 
-      .. attr:: semaphore
+      .. attr:: semaphores
 
          The name of a :ref:`semaphore` (or list of them) or
          :ref:`global_semaphore` which should be acquired and released
