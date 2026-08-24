@@ -57,15 +57,9 @@ class MergeClient(object):
             self.sched.zk_client
         )
 
-    def submitJob(
-        self,
-        job_type,
-        data,
-        build_set,
-        precedence=PRECEDENCE_NORMAL,
-        needs_result=False,
-        event=None,
-    ):
+    def submitJob(self, job_type, data, build_set,
+                  precedence=PRECEDENCE_NORMAL, needs_result=False,
+                  event=None, uuid=None):
         # We need the tenant, pipeline and queue names to put the merge result
         # in the correct queue. The only source for those values in this
         # context is the buildset. If no buildset is provided, we can't provide
@@ -86,7 +80,8 @@ class MergeClient(object):
         with trace.use_span(parent_span):
             job_span = self.tracer.start_span(_JOB_TYPE_TO_SPAN_NAME[job_type])
 
-        uuid = str(uuid4().hex)
+        if uuid is None:
+            uuid = str(uuid4().hex)
 
         log = get_annotated_logger(self.log, event)
         log.debug("Submitting job %s with data %s", uuid, data)
@@ -113,14 +108,16 @@ class MergeClient(object):
                     dirs=dirs,
                     repo_state=repo_state,
                     branches=branches)
-        self.submitJob(
-            MergeRequest.MERGE, data, build_set, precedence, event=event)
+        return self.submitJob(
+            MergeRequest.MERGE, data, build_set, precedence, event=event,
+            uuid=build_set.merge_uuid)
 
     def getRepoState(self, items, build_set, precedence=PRECEDENCE_NORMAL,
                      branches=None, event=None):
         data = dict(items=items, branches=branches)
-        self.submitJob(
-            MergeRequest.REF_STATE, data, build_set, precedence, event=event)
+        return self.submitJob(
+            MergeRequest.REF_STATE, data, build_set, precedence, event=event,
+            uuid=build_set.repo_state_uuid)
 
     def getFiles(self, connection_name, project_name, branch, files, dirs=[],
                  precedence=PRECEDENCE_HIGH, event=None):
@@ -129,7 +126,7 @@ class MergeClient(object):
                     branch=branch,
                     files=files,
                     dirs=dirs)
-        job = self.submitJob(
+        return self.submitJob(
             MergeRequest.CAT,
             data,
             None,
@@ -137,7 +134,6 @@ class MergeClient(object):
             needs_result=True,
             event=event,
         )
-        return job
 
     def getFilesChanges(self, changes, precedence=PRECEDENCE_HIGH,
                         build_set=None, needs_result=False,
@@ -155,15 +151,15 @@ class MergeClient(object):
                 tosha=tosha,
             ))
         data = dict(changes=changes_data)
-        job = self.submitJob(
+        return self.submitJob(
             MergeRequest.FILES_CHANGES,
             data,
             build_set,
             precedence,
             needs_result=needs_result,
             event=event,
+            uuid=build_set.files_uuid,
         )
-        return job
 
     def getFilesChangesRaw(self, connection_name, project_name, branch, tosha,
                            precedence=PRECEDENCE_HIGH,
@@ -176,7 +172,7 @@ class MergeClient(object):
             tosha=tosha,
         )]
         data = dict(changes=changes_data)
-        job = self.submitJob(
+        return self.submitJob(
             MergeRequest.FILES_CHANGES,
             data,
             build_set,
@@ -184,7 +180,6 @@ class MergeClient(object):
             needs_result=needs_result,
             event=event,
         )
-        return job
 
     def cleanupLostMergeRequests(self):
         for merge_request in self.merger_api.lostRequests():
@@ -258,17 +253,20 @@ class MergeClient(object):
             # the exception.
             return
 
+    def cancelRequest(self, request_uuid):
+        request = self.merger_api.getRequest(request_uuid)
+        if request:
+            if self.merger_api.lock(request, blocking=False):
+                try:
+                    self.merger_api.remove(request)
+                finally:
+                    self.merger_api.unlock(request)
+
     def cancel(self, job):
         try:
             # Try to remove the request first
             request_uuid = job.request_path.split('/')[-1]
-            request = self.merger_api.getRequest(request_uuid)
-            if request:
-                if self.merger_api.lock(request, blocking=False):
-                    try:
-                        self.merger_api.remove(request)
-                    finally:
-                        self.merger_api.unlock(request)
+            self.cancelRequest(request_uuid)
         finally:
             # Regardless of that, remove the waiter node
             job.cancel()

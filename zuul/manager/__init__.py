@@ -1347,6 +1347,18 @@ class PipelineManager(metaclass=ABCMeta):
         log.debug("Cancel jobs for %s", item)
         canceled = False
         old_build_set = item.current_build_set
+
+        if old_build_set.merge_state == old_build_set.PENDING:
+            log.debug("Cancel merge job %s", old_build_set.merge_uuid)
+            self.sched.merger.cancelRequest(old_build_set.merge_uuid)
+        if old_build_set.files_state == old_build_set.PENDING:
+            log.debug("Cancel files changes job %s", old_build_set.files_uuid)
+            self.sched.merger.cancelRequest(old_build_set.files_uuid)
+        if old_build_set.repo_state_state == old_build_set.PENDING:
+            log.debug("Cancel repo state job %s",
+                      old_build_set.repo_state_uuid)
+            self.sched.merger.cancelRequest(old_build_set.repo_state_uuid)
+
         jobs_to_cancel = item.getJobs()
 
         for job in jobs_to_cancel:

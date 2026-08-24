@@ -1,0 +1,37 @@
+- pipeline:
+    name: merge
+    description: Pipeline for merging the pull request
+    manager: dependent
+    merge-conflict-message: Merge failed
+    trigger:
+      github:
+        - event: pull_request
+          action: comment
+          comment: merge me
+    success:
+      github:
+        merge: true
+        comment: false
+
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+
+- job:
+    name: testjob
+    required-projects:
+      - org/project1
+      - org/project2
+
+- project:
+    name: org/project1
+    merge:
+      jobs:
+        - testjob
+
+- project:
+    name: org/project2
+    merge:
+      jobs:
+        - testjob

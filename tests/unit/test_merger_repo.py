@@ -22,6 +22,7 @@ from zuul.lib import yamlutil as yaml
 
 import git
 import testtools
+import github3.exceptions
 
 from zuul.merger.merger import MergerTree, Repo, SparsePaths
 import zuul.model
@@ -1304,6 +1305,61 @@ class TestMerger(ZuulTestCase):
         ls = os.listdir(project_root)
         self.assertIn('zuul.yaml', ls)
         self.assertNotIn('playbooks', ls)
+
+
+class TestMergerCancel(ZuulTestCase):
+    config_file = 'zuul-github-driver.conf'
+
+    @simple_layout('layouts/github-merge-jobs.yaml', driver='github')
+    def test_cancel_repo_state(self):
+        # Test that we can cancel repostate jobs
+        self.hold_merge_jobs_in_queue = True
+
+        A = self.fake_github.openFakePullRequest('org/project1', 'master', 'A')
+        self.fake_github.emitEvent(A.getCommentAddedEvent('merge me'))
+
+        self.waitUntilSettled()
+        jobs = list(self.merger_api.queued())
+        self.assertEqual(1, len(jobs))
+        self.assertEqual('merge', jobs[0].job_type)
+
+        self.merger_api.release()
+        self.waitUntilSettled()
+        jobs = list(self.merger_api.queued())
+        self.assertEqual(1, len(jobs))
+        self.assertEqual('refstate', jobs[0].job_type)
+
+        self.fake_github.emitEvent(A.getPullRequestClosedEvent())
+        self.waitUntilSettled()
+        for _ in iterate_timeout(60, "job to be canceled"):
+            jobs = list(self.merger_api.queued())
+            if not len(jobs):
+                break
+
+    @simple_layout('layouts/github-merge-jobs.yaml', driver='github')
+    @mock.patch("tests.fakegithub.FakePull.files")
+    def test_cancel_merge_files(self, files_mock):
+        # Test that we can cancel merge and fileschanges jobs
+        files_mock.side_effect = github3.exceptions.ServerError(
+            mock.MagicMock())
+
+        self.hold_merge_jobs_in_queue = True
+
+        A = self.fake_github.openFakePullRequest('org/project1', 'master', 'A')
+        self.fake_github.emitEvent(A.getCommentAddedEvent('merge me'))
+
+        self.waitUntilSettled()
+        jobs = list(self.merger_api.queued())
+        self.assertEqual(2, len(jobs))
+        self.assertEqual('merge', jobs[0].job_type)
+        self.assertEqual('fileschanges', jobs[1].job_type)
+
+        self.fake_github.emitEvent(A.getPullRequestClosedEvent())
+        self.waitUntilSettled()
+        for _ in iterate_timeout(60, "job to be canceled"):
+            jobs = list(self.merger_api.queued())
+            if not len(jobs):
+                break
 
 
 class TestMergerTree(BaseTestCase):
