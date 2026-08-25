@@ -126,6 +126,7 @@
 - job:
     name: zuul-nox-py311
     parent: zuul-nox
+    nodeset: ubuntu-jammy-16GB
     timeout: 10800  # 180 minutes
     failure-output:
       # This matches stestr output when a test fails
