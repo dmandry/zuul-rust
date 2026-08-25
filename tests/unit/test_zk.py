@@ -1672,6 +1672,9 @@ class TestMergerApi(ZooKeeperBaseTestCase):
                 client_b.state = client_b.RUNNING
                 client.update(client_b)
                 client.remove(client_c)
+                # Wait for the cache to see the ZK update
+                server.cache.waitForSync()
+
         # Make sure we only got the first request
         self.assertEqual(count, 1)
 
