@@ -88,6 +88,10 @@ DOWNLOAD_BLOCK_SIZE = 1024 * 64
 # The byte range size for an individual GET operation.  Should be a
 # multiple of the above.  Current value is approx 100MiB.
 DOWNLOAD_CHUNK_SIZE = DOWNLOAD_BLOCK_SIZE * 1525
+# Set a 30 second connection timeout, and 900 second transfer timeout
+# for each chunk.  The transfer timeout works out to a bit less than
+# 1Mbps.
+DOWNLOAD_CHUNK_TIMEOUT = (30, 900)
 
 
 def _normalize_statsd_name(name):
@@ -3199,20 +3203,22 @@ class Launcher:
         headers = {'Range': f'bytes={start}-{end}'}
         with open(path, 'r+b') as f:
             f.seek(start)
-            with requests.get(url, stream=True, headers=headers) as resp:
+            with requests.get(url, stream=True, timeout=DOWNLOAD_CHUNK_TIMEOUT,
+                              headers=headers) as resp:
                 resp.raise_for_status()
                 for chunk in resp.iter_content(chunk_size=DOWNLOAD_BLOCK_SIZE):
                     f.write(chunk)
 
     def downloadArtifact(self, url, path):
         futures = []
-        with requests.head(url) as resp:
+        with requests.head(url, timeout=DOWNLOAD_CHUNK_TIMEOUT) as resp:
             if resp.status_code == 403:
                 self.log.debug(
                     "Received 403 for %s, retrying with range header", url)
                 # This may be a pre-signed url that can't handle a
                 # HEAD request, retry with GET:
                 with requests.get(url, stream=True,
+                                  timeout=DOWNLOAD_CHUNK_TIMEOUT,
                                   headers={"Range": "bytes=0-0"}) as resp:
                     resp.raise_for_status()
                     size = int(resp.headers['content-range'].split('/')[-1])
