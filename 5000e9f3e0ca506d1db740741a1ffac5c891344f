@@ -16,6 +16,23 @@
       "message": "recheck too many errors",
       "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "00d30f01_3e46a27b",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 10
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 25733
+      },
+      "writtenOn": "2026-08-25T13:25:17Z",
+      "side": 1,
+      "message": "I\u0027m assuming that an existing zuul system that has projects with galaxy.yml in the roles might behave differently? I think it\u0027s OK, it\u0027s probably an upgrade note.",
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
