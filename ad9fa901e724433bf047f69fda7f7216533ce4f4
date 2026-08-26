@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4027fcc8_03d1bb1f",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-08-26T08:09:20Z",
+      "side": 1,
+      "message": "If I understand this correctly, we are removing the \"global\" fetching to avoid  remounting all components and instead rely on the componentDidUpdate of useEffect functions to refresh the data when we switch tenants?\n\nI don\u0027t fully understand if this change is necessary to fix the \"tenant switch issue\" or just an improvement in general, but nevertheless I think it\u0027s fine.",
+      "revId": "ad9fa901e724433bf047f69fda7f7216533ce4f4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
