@@ -16,6 +16,23 @@
       "message": "Ack. I\u0027ve added a section between the job description and the list of attributes with a link to the documentation.",
       "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "3284337d_0a609818",
+        "filename": "doc/source/config/job.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-26T14:16:14Z",
+      "side": 1,
+      "message": "Sorry, I should have been more clear, I meant we should add the docs here:\nhttps://opendev.org/zuul/zuul/src/commit/e76e5dab8d32db8596beac58b8a8fdb24d6903d8/doc/source/job-content.rst?display\u003dsource#L1138 instead\n\nBut now that I look at that, I don\u0027t think my idea of just listing them is appropriate for this change; since we have so many there already, I think we need to double-document it for now.  Maybe we can refactor that in a later change to just turn (some of?) them into a list.",
+      "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
