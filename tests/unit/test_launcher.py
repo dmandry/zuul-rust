@@ -2837,6 +2837,9 @@ class TestLauncher(LauncherBaseTestCase):
                       if (u.state == u.State.FAILED and not u.is_locked)]
             if len(failed) == 2:
                 break
+        for _ in iterate_timeout(60, "job to complete"):
+            if not self.executor_server.job_workers:
+                break
 
 
 class TestLauncherTenantLimits(LauncherBaseTestCase):
