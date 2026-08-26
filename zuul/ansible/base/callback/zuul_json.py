@@ -40,8 +40,6 @@ except ImportError:
         # It's here in 2.5
         from ansible.vars.clean import strip_internal_keys
 
-from zuul.ansible import logconfig
-
 
 def current_time():
     return '%sZ' % datetime.datetime.utcnow().isoformat()
@@ -57,12 +55,7 @@ class CallbackModule(CallbackBase):
         super(CallbackModule, self).__init__(display)
         self.results = []
         self.playbook = {}
-        logging_config = logconfig.load_job_config(
-            os.environ['ZUUL_JOB_LOG_CONFIG'])
-
-        self.output_path = os.path.splitext(
-            logging_config.job_output_file)[0] + '.json'
-
+        self.output_path = os.environ['ZUUL_JSON_OUTPUT_FILE']
         self._playbook_name = None
 
     def _new_playbook(self, play):
