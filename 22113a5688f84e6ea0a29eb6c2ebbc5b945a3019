@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4a647b76_b7bd085e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-08-26T12:09:04Z",
+      "side": 1,
+      "message": "Ack. I\u0027ve added a section between the job description and the list of attributes with a link to the documentation.",
+      "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
