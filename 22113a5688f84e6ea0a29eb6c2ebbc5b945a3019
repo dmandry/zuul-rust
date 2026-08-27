@@ -51,6 +51,24 @@
       "parentUuid": "3284337d_0a609818",
       "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "72068d83_91118205",
+        "filename": "doc/source/config/job.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-27T17:44:12Z",
+      "side": 1,
+      "message": "I think it\u0027s okay for it to be there twice.  One audience is for the executor, the other is for users.  I don\u0027t feel strongly about it.  For maximum efficiency in job freezing, we could remove the executor one and populate it on the executor from the zuul var.  Might need a release note for that.",
+      "parentUuid": "3284337d_0a609818",
+      "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
