@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d9515b61_4a812abe",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 351,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-27T00:29:38Z",
+      "side": 1,
+      "message": "I noted this on the child change that ended up getting squashed into this change so I\u0027ll note it here too.\n\nI ended up renaming payload and data keys to payload_required and data_mapping (as I type that out I realize they should be payload-required and data-mapping) because I think these are more descriptive terms. However, before I go and modify the code in the change I wanted to make sure these terms make sense to others or maybe others can be suggested.\n\nThe main issue I had is that payload and data are very generic particularly when they sit next to each other. Adding just a bit more information should make this trigger configuration easier to understand.",
+      "revId": "728918c5ca119b4ac8299c39435d5adba8d330b2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
