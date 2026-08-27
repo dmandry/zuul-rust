@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "914f42f6_6e8cb621",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-27T00:26:22Z",
+      "side": 1,
+      "message": "This has been squashed into the parent change for anyone wondering what happened.",
+      "revId": "b5f1df004534716ee60c08caa6846faaaa5c914d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "59467719_5b7eadac",
