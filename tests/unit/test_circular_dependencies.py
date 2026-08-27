@@ -4876,6 +4876,52 @@ class TestGithubAppCircularDependencies(ZuulGithubAppTestCase):
         for build in self.history[-3:]:
             self.assertEqual(build.result, 'SUCCESS')
 
+    @simple_layout('layouts/dependency_removal_gate.yaml', driver='github')
+    def test_body_edit_without_dependency_url_change_does_not_reset_gate(self):
+        # Consider gate pipeline, that sets pull_request.edited action.
+        # Test, that editing a PR's body in a circular dependency does
+        # not cause a gate reset when the Depends-On URL remain
+        # unchanged.
+        self.executor_server.hold_jobs_in_build = True
+
+        A = self.fake_github.openFakePullRequest('gh/project1', 'master', 'A')
+        B = self.fake_github.openFakePullRequest('gh/project2', 'master', 'B')
+
+        A.body = f'{A.subject}\n\nDepends-On: {B.url}\n'
+        B.body = f'{B.subject}\n\nDepends-On: {A.url}\n'
+
+        # Trigger gate
+        B.addLabel('approved')
+        self.fake_github.emitEvent(A.addLabel('approved'))
+        self.waitUntilSettled()
+
+        items = list(self.getAllItems('tenant-one', 'gate'))
+        self.assertEqual(len(items), 1)
+
+        item = items[0]
+        item_uuid = item.uuid
+        buildset_uuid = item.current_build_set.uuid
+
+        edited_body = B.body + "\n\nSome additional text to edit the body."
+        self.fake_github.emitEvent(B.editBody(edited_body))
+        self.waitUntilSettled()
+
+        items = list(self.getAllItems('tenant-one', 'gate'))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].uuid, item_uuid)
+        self.assertEqual(items[0].current_build_set.uuid, buildset_uuid)
+
+        # All done.
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='project1-job', result='SUCCESS'),
+            dict(name='project2-job', result='SUCCESS'),
+            dict(name='common-job', result='SUCCESS'),
+        ], ordered=False)
+
     def assertQueueCycles(self, pipeline_name, queue_index, bundles):
         queues = self.getAllQueues('tenant-one', pipeline_name)
         queue = queues[queue_index]

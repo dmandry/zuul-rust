@@ -136,6 +136,56 @@ class TestGithubDriver(ZuulTestCase):
         self.waitUntilSettled()
         self.assertEqual(1, len(self.history))
 
+    @simple_layout('layouts/edited-github.yaml', driver='github')
+    def test_pull_request_edited_title_event(self):
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
+
+        self.fake_github.emitEvent(A.editTitle('A updated'))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS'),
+        ])
+
+    @simple_layout('layouts/edited-github.yaml', driver='github')
+    def test_pull_request_edited_body_event_no_depends_on(self):
+        A = self.fake_github.openFakePullRequest(
+            'org/project', 'master', 'A', body='Original PR body')
+
+        self.fake_github.emitEvent(A.editBody('Updated PR body'))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS'),
+        ])
+
+    @simple_layout('layouts/edited-github.yaml', driver='github')
+    def test_pull_request_edited_base_branch_event(self):
+        new_base_branch = 'feature'
+        project = 'org/project'
+        self.create_branch(project, new_base_branch)
+
+        github = self.fake_github.getGithubClient()
+        repo = github.repo_from_project(project)
+        repo._create_branch(new_base_branch)
+        repo._set_branch_protection(new_base_branch, protected=True)
+
+        A = self.fake_github.openFakePullRequest(project, 'master', 'A')
+
+        self.fake_github.emitEvent(A.editBase(new_base_branch))
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='project-test', result='SUCCESS'),
+        ])
+
+        # getJobFromHistory raises an exception if the job is not found
+        self.getJobFromHistory(
+            'project-test',
+            result='SUCCESS',
+            branch=new_base_branch,
+        )
+
     @simple_layout('layouts/files-github.yaml', driver='github')
     def test_pull_changed_files_length_mismatch(self):
         files = {'{:03d}.txt'.format(n): 'test' for n in range(300)}

@@ -117,8 +117,11 @@ class FakeGithubPullRequest:
     def getPullRequestClosedEvent(self):
         return self._getPullRequestEvent('closed')
 
-    def getPullRequestEditedEvent(self, old_body=None):
-        return self._getPullRequestEvent('edited', old_body)
+    def getPullRequestEditedEvent(self, old_body=None, old_title=None,
+                                  old_branch=None):
+        return self._getPullRequestEvent(
+            'edited', old_body=old_body, old_title=old_title,
+            old_branch=old_branch)
 
     def addComment(self, message):
         self.comments.append(message)
@@ -287,6 +290,18 @@ class FakeGithubPullRequest:
         self._updateTimeStamp()
         return self.getPullRequestEditedEvent(old_body=old_body)
 
+    def editTitle(self, title):
+        old_title = self.subject
+        self.subject = title
+        self._updateTimeStamp()
+        return self.getPullRequestEditedEvent(old_title=old_title)
+
+    def editBase(self, branch):
+        old_branch = self.branch
+        self.branch = branch
+        self._updateTimeStamp()
+        return self.getPullRequestEditedEvent(old_branch=old_branch)
+
     def _getRepo(self):
         repo_path = os.path.join(self.upstream_root, self.project)
         return git.Repo(repo_path)
@@ -403,7 +418,8 @@ class FakeGithubPullRequest:
     def getPRReference(self):
         return '%s/head' % self.number
 
-    def _getPullRequestEvent(self, action, old_body=None):
+    def _getPullRequestEvent(self, action, old_body=None, old_title=None,
+                             old_branch=None):
         name = 'pull_request'
         data = {
             'action': action,
@@ -440,6 +456,10 @@ class FakeGithubPullRequest:
         }
         if old_body:
             data['changes']['body'] = {'from': old_body}
+        if old_title:
+            data['changes']['title'] = {'from': old_title}
+        if old_branch:
+            data['changes']['base'] = {'ref': {'from': old_branch}}
         return (name, data)
 
     def getCommitStatusEvent(self, context, state='success', user='zuul'):
