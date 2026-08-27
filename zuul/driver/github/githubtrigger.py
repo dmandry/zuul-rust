@@ -162,7 +162,7 @@ def getNewSchema():
     pull_request_default_schema = pull_request_base_schema.extend({
         'action': scalar_or_list(vs.Any(
             'opened', 'changed', 'closed', 'reopened',
-            'converted_to_draft', 'ready_for_review')),
+            'converted_to_draft', 'ready_for_review', 'edited')),
     })
 
     pull_request_comment_schema = pull_request_base_schema.extend({
