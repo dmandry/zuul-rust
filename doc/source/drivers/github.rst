@@ -343,6 +343,10 @@ the following options.
 
          Label removed from pull request.
 
+      .. value:: edited
+
+         Pull request title or body edited, or base branch of pull request changed.
+
       .. value:: converted_to_draft
 
          The pull request was converted to a draft.
