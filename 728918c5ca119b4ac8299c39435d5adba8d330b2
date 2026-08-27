@@ -16,6 +16,24 @@
       "message": "I noted this on the child change that ended up getting squashed into this change so I\u0027ll note it here too.\n\nI ended up renaming payload and data keys to payload_required and data_mapping (as I type that out I realize they should be payload-required and data-mapping) because I think these are more descriptive terms. However, before I go and modify the code in the change I wanted to make sure these terms make sense to others or maybe others can be suggested.\n\nThe main issue I had is that payload and data are very generic particularly when they sit next to each other. Adding just a bit more information should make this trigger configuration easier to understand.",
       "revId": "728918c5ca119b4ac8299c39435d5adba8d330b2",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a255614f_767ff018",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 8
+      },
+      "lineNbr": 351,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-27T13:55:35Z",
+      "side": 1,
+      "message": "I agree -- but I suggest:\n* required-payload\n* data-mapping\n\nLet\u0027s switch the order in \"required-payload\" to make it similar to other attributes like \"required-projects\" (so it\u0027s clear that the object of the phrase is payload -- the other way around sounds to melike it should be a boolean value (the object of the phrase is whether it\u0027s required)).\n\nAnd of course using hyphens because this is zuul config language.",
+      "parentUuid": "d9515b61_4a812abe",
+      "revId": "728918c5ca119b4ac8299c39435d5adba8d330b2",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
