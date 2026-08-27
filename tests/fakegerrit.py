@@ -724,6 +724,11 @@ class FakeGerritChange(object):
         self.data['open'] = False
         self.open = False
 
+    def unsetAbandoned(self):
+        self.data['status'] = 'NEW'
+        self.data['open'] = True
+        self.open = True
+
 
 class FakeGerritPoller(gerritconnection.GerritChecksPoller):
     """A Fake Gerrit poller for use in tests.
