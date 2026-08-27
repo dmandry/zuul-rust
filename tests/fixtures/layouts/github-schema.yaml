@@ -12,6 +12,7 @@
           action:
             - opened
             - closed
+            - edited
         # Valid
         - event: pull_request
           action: labeled
