@@ -3505,8 +3505,11 @@ class AnsibleJob(object):
             # as sudo) it does not hang.
             config.write('pipelining = True\n')
             config.write('control_path_dir = %s\n' % self.jobdir.control_path)
+            # We write known_hosts ourselves; letting ssh rewrite it
+            # leaves a known_hosts.old backup in the build home dir.
             ssh_args = "-o ControlMaster=auto -o ControlPersist=60s " \
                 "-o ServerAliveInterval=60 " \
+                "-o UpdateHostKeys=no " \
                 "-o UserKnownHostsFile=%s" % self.jobdir.known_hosts
             config.write('ssh_args = %s\n' % ssh_args)
 

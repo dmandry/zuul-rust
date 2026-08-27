@@ -1,0 +1,7 @@
+---
+upgrade:
+  - |
+    The executor now passes ``UpdateHostKeys=no`` to ssh.  The build's
+    ``known_hosts`` file is written by the executor from the host keys
+    recorded when the node was booted, and is no longer rewritten by
+    ssh at connection time.
