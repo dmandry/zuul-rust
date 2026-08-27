@@ -116,8 +116,9 @@ class FakeGithubPullRequest:
     def getPullRequestClosedEvent(self):
         return self._getPullRequestEvent('closed')
 
-    def getPullRequestEditedEvent(self, old_body=None):
-        return self._getPullRequestEvent('edited', old_body)
+    def getPullRequestEditedEvent(self, old_body=None, old_title=None):
+        return self._getPullRequestEvent(
+            'edited', old_body=old_body, old_title=old_title)
 
     def addComment(self, message):
         self.comments.append(message)
@@ -286,6 +287,12 @@ class FakeGithubPullRequest:
         self._updateTimeStamp()
         return self.getPullRequestEditedEvent(old_body=old_body)
 
+    def editTitle(self, title):
+        old_title = self.subject
+        self.subject = title
+        self._updateTimeStamp()
+        return self.getPullRequestEditedEvent(old_title=old_title)
+
     def _getRepo(self):
         repo_path = os.path.join(self.upstream_root, self.project)
         return git.Repo(repo_path)
@@ -402,7 +409,7 @@ class FakeGithubPullRequest:
     def getPRReference(self):
         return '%s/head' % self.number
 
-    def _getPullRequestEvent(self, action, old_body=None):
+    def _getPullRequestEvent(self, action, old_body=None, old_title=None):
         name = 'pull_request'
         data = {
             'action': action,
@@ -439,6 +446,8 @@ class FakeGithubPullRequest:
         }
         if old_body:
             data['changes']['body'] = {'from': old_body}
+        if old_title:
+            data['changes']['title'] = {'from': old_title}
         return (name, data)
 
     def getCommitStatusEvent(self, context, state='success', user='zuul'):
