@@ -16,6 +16,23 @@
       "message": "@cboylan@sapwetik.org I saw the patch from you while I was debugging the known_hosts.old warnings - would be happy to know your views on this.",
       "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2b6194c3_84bf82f3",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 6968
+      },
+      "writtenOn": "2026-08-27T14:37:46Z",
+      "side": 1,
+      "message": "For reference, example warnings from a recent Swift patch: https://review.opendev.org/c/openstack/swift/+/1002636#message-b717e4abcff3de4cdcaa75aa4b739e62ab9be883",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
