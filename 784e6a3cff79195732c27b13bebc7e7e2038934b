@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6c3c1b71_2dc733a7",
+        "filename": "tests/unit/test_web.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 1397,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-08-27T10:09:20Z",
+      "side": 0,
+      "message": "I noticed that this key is listed twice (this line + https://review.opendev.org/c/zuul/zuul/+/1001473/3/tests/unit/test_web.py#b1288), so I removed this line.",
+      "revId": "784e6a3cff79195732c27b13bebc7e7e2038934b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

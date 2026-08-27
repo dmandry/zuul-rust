@@ -33,6 +33,24 @@
       "message": "Sorry, I should have been more clear, I meant we should add the docs here:\nhttps://opendev.org/zuul/zuul/src/commit/e76e5dab8d32db8596beac58b8a8fdb24d6903d8/doc/source/job-content.rst?display\u003dsource#L1138 instead\n\nBut now that I look at that, I don\u0027t think my idea of just listing them is appropriate for this change; since we have so many there already, I think we need to double-document it for now.  Maybe we can refactor that in a later change to just turn (some of?) them into a list.",
       "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "76336ae8_0d8d3925",
+        "filename": "doc/source/config/job.rst",
+        "patchSetId": 2
+      },
+      "lineNbr": 130,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-08-27T10:09:20Z",
+      "side": 1,
+      "message": "Ack. I added them to the `job-content.rst` with a short description and a link to the respective config attribute (like it was also done for the `max_attempts`: https://opendev.org/zuul/zuul/src/commit/e76e5dab8d32db8596beac58b8a8fdb24d6903d8/doc/source/job-content.rst?display\u003dsource#L1153).\n\nI also fixed the testcases. The job freezing already exposed the `workspace_checkout` flag explicitly (https://opendev.org/zuul/zuul/src/commit/64c02eb28b281e680957e3176fb9e8c6a6605706/zuul/web/__init__.py#L3395), so it\u0027s now exposed twice. Should we keep it like that or align the job freezing part?",
+      "parentUuid": "3284337d_0a609818",
+      "revId": "22113a5688f84e6ea0a29eb6c2ebbc5b945a3019",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
