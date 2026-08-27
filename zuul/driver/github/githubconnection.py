@@ -529,8 +529,13 @@ class GithubEventProcessor(object):
             event.action = 'unlabeled'
             event.label = self.body['label']['name']
         elif action == 'edited':
+            changes = self.body.get('changes', {})
+            # Drop PR base branch edit action and only cover changes to
+            # the PR title or body
+            if 'base' in changes:
+                return None
             event.action = 'edited'
-            if 'body' in self.body.get('changes', {}):
+            if 'body' in changes:
                 event.body_edited = True
         elif action == 'converted_to_draft':
             event.action = action
