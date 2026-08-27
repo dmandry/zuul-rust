@@ -1,6 +1,40 @@
 {
   "comments": [
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "7db02ffe_f2f20f08",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 12,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-27T14:44:13Z",
+      "side": 1,
+      "message": "What happens when there are no host keys because host-key-checking is disabled?",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9abc800b_d4ef7d05",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 24,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-27T14:44:13Z",
+      "side": 1,
+      "message": "For future reference, this should have a Generated-By or Assisted-By label; please see the policies at\n* https://opendev.org/zuul/zuul#ai-generated-content\n* https://openinfra.org/legal/ai-policy",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "99286cd9_09b99247",
@@ -31,6 +65,23 @@
       "writtenOn": "2026-08-27T14:37:46Z",
       "side": 1,
       "message": "For reference, example warnings from a recent Swift patch: https://review.opendev.org/c/openstack/swift/+/1002636#message-b717e4abcff3de4cdcaa75aa4b739e62ab9be883",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "61f0107c_45559d30",
+        "filename": "releasenotes/notes/no-update-host-keys-a99dd5ebbe950841.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-27T14:44:13Z",
+      "side": 1,
+      "message": "I would suggest putting this under either \"fixes\" or \"features\"; we usually only put things that people need to do to manage an upgrade here.",
       "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
