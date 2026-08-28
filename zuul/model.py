@@ -3534,26 +3534,6 @@ class Secret(ConfigObject):
         r.secret_data = self._decrypt(private_key, self.secret_data)
         return r
 
-    def _decryptForCollection(self, private_key, secret_data):
-        # recursive function to decrypt data
-        if hasattr(secret_data, 'decrypt'):
-            yield secret_data.decrypt(private_key)
-
-        if isinstance(secret_data, (dict, types.MappingProxyType)):
-            for k, v in secret_data.items():
-                yield from self._decryptForCollection(private_key, v)
-
-        if isinstance(secret_data, (list, tuple)):
-            for v in secret_data:
-                yield from self._decryptForCollection(private_key, v)
-
-    def collectEncryptedValues(self, private_key):
-        """Return a list of the decrypted contents of encrypted values
-        in this secret"""
-
-        return [x for x in self._decryptForCollection(
-            private_key, self.secret_data)]
-
     def serialize(self, layout):
         # The output of this method is used by the executor
         # Set the ttl for this tenant
@@ -4045,7 +4025,6 @@ class FrozenJob(zkobject.ZKObject):
                   'image_build_name',
                   'include_vars',
                   'type',
-                  'secret_exposure',
                   )
 
     job_data_attributes = ('artifact_data',
@@ -4235,9 +4214,6 @@ class FrozenJob(zkobject.ZKObject):
         # MODEL_API <= 36
         data.setdefault('include_projects', None)
         data.setdefault('exclude_projects', None)
-
-        # MODEL_API <= 38
-        data.setdefault('secret_exposure', 'ignore')
 
         for job_data_key in self.job_data_attributes:
             job_data = data.pop(job_data_key, None)
@@ -4546,7 +4522,6 @@ class Job(ConfigObject):
         d['failure_output'] = self.failure_output
         d['image_build_name'] = self.image_build_name
         d['type'] = self.type
-        d['secret_exposure'] = self.secret_exposure
         d['include_vars'] = list(map(lambda x: x.toDict(), self.include_vars))
         if self.isBase():
             d['parent'] = None
@@ -4637,7 +4612,6 @@ class Job(ConfigObject):
             image_build_name=None,
             type='regular',
             preserve_home_paths=(),
-            secret_exposure='ignore',
         )
 
         override_control = defaultdict(lambda: True)
@@ -5480,8 +5454,7 @@ class Job(ConfigObject):
                                  'required_projects', 'include_projects',
                                  'exclude_projects', 'allowed_projects',
                                  'semaphores', 'failure_output',
-                                 'include_vars', 'preserve_home_paths',
-                                 'secret_exposure']):
+                                 'include_vars', 'preserve_home_paths']):
                     setattr(self, k, other._get(k))
 
         # Don't set final above so that we don't trip an error halfway
@@ -5531,16 +5504,6 @@ class Job(ConfigObject):
 
         # Freeze the nodeset
         self.nodeset = self.getNodeset(layout)
-
-        # Once set, the secret-exposure setting may not be changed
-        if secret_exposure := other._get('secret_exposure'):
-            if (self._get('secret_exposure') and
-                secret_exposure != self._get('secret_exposure')):
-                raise JobConfigurationError(
-                    "Unable to reset secret-exposure attribute of job"
-                    " %s by job %s" % (
-                        repr(self), repr(other)))
-            self.secret_exposure = secret_exposure
 
         # Pass secrets to parents
         secrets_for_parents = [s for s in other.secrets if s.pass_to_parent]

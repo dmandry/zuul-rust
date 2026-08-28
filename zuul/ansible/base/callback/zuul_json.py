@@ -26,8 +26,6 @@ import copy
 import datetime
 import json
 import os
-import logging
-import logging.config
 
 from ansible.plugins.loader import PluginLoader
 from ansible.plugins.callback import CallbackBase
@@ -59,16 +57,13 @@ class CallbackModule(CallbackBase):
         super(CallbackModule, self).__init__(display)
         self.results = []
         self.playbook = {}
-        self._playbook_name = None
         logging_config = logconfig.load_job_config(
             os.environ['ZUUL_JOB_LOG_CONFIG'])
 
-        if self._display.verbosity > 2:
-            logging_config.setDebug()
+        self.output_path = os.path.splitext(
+            logging_config.job_output_file)[0] + '.json'
 
-        logging_config.apply()
-
-        self._logger = logging.getLogger('zuul.executor.ansible.json')
+        self._playbook_name = None
 
     def _new_playbook(self, play):
         extra_vars = play._variable_manager._extra_vars
@@ -173,9 +168,25 @@ class CallbackModule(CallbackBase):
         self.playbook['plays'] = self.results
         self.playbook['stats'] = summary
 
-        self._logger.info(
-            json.dumps(self.playbook,
-                       indent=4, sort_keys=True, separators=(',', ': ')))
+        first_time = not os.path.exists(self.output_path)
+
+        if first_time:
+            with open(self.output_path, 'w') as outfile:
+                outfile.write('[\n\n]\n')
+
+        with open(self.output_path, 'r+') as outfile:
+            self._append_playbook(outfile, first_time)
+
+    def _append_playbook(self, outfile, first_time):
+        file_len = outfile.seek(0, os.SEEK_END)
+        # Remove three bytes to eat the trailing newline written by the
+        # json.dump. This puts the ',' on the end of lines.
+        outfile.seek(file_len - 3)
+        if not first_time:
+            outfile.write(',\n')
+        json.dump(self.playbook, outfile,
+                  indent=4, sort_keys=True, separators=(',', ': '))
+        outfile.write('\n]\n')
 
     v2_runner_on_unreachable = v2_runner_on_ok
 
