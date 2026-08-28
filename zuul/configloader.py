@@ -831,7 +831,6 @@ class JobParser(object):
                       'image-build-name': str,
                       'type': vs.Any('regular', 'initializer', 'reporter'),
                       'preserve-home-paths': to_list(str),
-                      'secret-exposure': vs.Any('ignore', 'redact', 'fail'),
                       'attribute-control': {
                           vs.Any(
                               'requires',
@@ -891,7 +890,6 @@ class JobParser(object):
         'deduplicate',
         'image-build-name',
         'type',
-        'secret-exposure',
     ]
 
     attr_control_job_attr_map = {

@@ -15,7 +15,6 @@
 
 import base64
 import copy
-import getpass
 import io
 import json
 import jwt
@@ -39,7 +38,6 @@ import git
 import paramiko
 
 import zuul.configloader
-from zuul.driver import bubblewrap
 from zuul.lib import yamlutil as yaml
 from zuul.model import MergeRequest, SEVERITY_WARNING
 from zuul.zk.blob_store import BlobStore
@@ -3303,30 +3301,6 @@ class TestInRepoConfig(ZuulTestCase):
         build = self.getJobFromHistory('project-test1')
         self.assertEqual(30, build.job.timeout)
         self.assertEqual(30, build.job.pre_timeout)
-
-    def test_secret_exposure(self):
-        in_repo_conf = textwrap.dedent(
-            """
-            - job:
-                name: parent
-                secret-exposure: fail
-            - job:
-                name: project-test1
-                parent: parent
-                secret-exposure: redact
-                run: playbooks/project-test1.yaml
-            - project:
-                check:
-                  jobs: ['project-test1']
-            """)
-        file_dict = {'.zuul.yaml': in_repo_conf}
-        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
-                                           files=file_dict)
-        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
-        self.waitUntilSettled()
-        self.assertEqual(A.reported, 1)
-        self.assertHistory([])
-        self.assertIn('Unable to reset secret-exposure', A.messages[0])
 
 
 class TestInRepoConfigSOS(ZuulTestCase):
@@ -9189,8 +9163,6 @@ class TestSecretLeaks(AnsibleZuulTestCase):
         matches = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for filename in filenames:
-                if filename == 'log.socket':
-                    continue
                 filepath = os.path.join(dirpath, filename)
                 with open(filepath, 'rb') as f:
                     if content in f.read():
@@ -9275,8 +9247,6 @@ class TestParseErrors(AnsibleZuulTestCase):
         matches = []
         for (dirpath, dirnames, filenames) in os.walk(path):
             for filename in filenames:
-                if filename == 'log.socket':
-                    continue
                 filepath = os.path.join(dirpath, filename)
                 with open(filepath, 'rb') as f:
                     if content in f.read():
@@ -9584,17 +9554,6 @@ class TestJobOutput(AnsibleZuulTestCase):
         p = os.path.join(build.jobdir.root, path)
         with open(p) as f:
             return f.read()
-
-    def _getSecrets(self, job, pbtype):
-        secrets = []
-        build = self.getJobFromHistory(job)
-        for pb in getattr(build.jobdir, pbtype):
-            if pb.secrets_content:
-                secrets.append(
-                    yamlutil.ansible_unsafe_load(pb.secrets_content))
-            else:
-                secrets.append({})
-        return secrets
 
     def test_job_output_split_streams(self):
         # Verify that command standard output appears in the job output,
@@ -9952,113 +9911,6 @@ class TestJobOutput(AnsibleZuulTestCase):
         expected_str = 'ERROR! A playbook must be a list of plays'
         result = j[1]['plays'][0]['play']['name']
         self.assertIn(expected_str, result)
-
-    def test_job_output_redact_secrets(self):
-        # If we can test cgroups, exercise the cgroup code path in
-        # this test
-        if os.environ.get("ZUUL_TEST_CGROUPS", None):
-            user = getpass.getuser()
-            memory_limit = '2G'
-            cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
-            self.executor_server.execution_wrapper.setCgroupManager(
-                cgroup_manager)
-        self.executor_server.keep_jobdir = True
-        self.executor_server._new_result_behavior = True
-        A = self.fake_gerrit.addFakeChange('org/project7', 'master', 'A')
-        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
-        self.waitUntilSettled()
-
-        es = 'expose-secrets'
-        self.assertHistory([
-            dict(name=f'{es}-txt-ignore', result='SUCCESS', changes='1,1'),
-            dict(name=f'{es}-json-ignore', result='SUCCESS', changes='1,1'),
-            dict(name=f'{es}-txt-redact', result='SUCCESS', changes='1,1'),
-            dict(name=f'{es}-json-redact', result='SUCCESS', changes='1,1'),
-            dict(name=f'{es}-txt-fail',
-                 result='SECRET_EXPOSURE', changes='1,1'),
-            dict(name=f'{es}-json-fail',
-                 result='SECRET_EXPOSURE', changes='1,1'),
-        ], ordered=False)
-
-        # Check Ignore
-        job1 = self.getJobFromHistory(f'{es}-txt-ignore')
-        job2 = self.getJobFromHistory(f'{es}-json-ignore')
-        json_output = self._get_file(job2, 'work/logs/job-output.json')
-        self.log.info(json_output)
-        data = json.loads(json_output)
-        self.assertEqual(3, len(data))
-        self.assertEqual('Username: test-username',
-                         data[1]['plays'][0]['tasks'][0]
-                         ['hosts']['test_node']['ansible_facts']['output'])
-        # This is a secret exposed
-        self.assertEqual('Password: test-password',
-                         data[2]['plays'][0]['tasks'][0]
-                         ['hosts']['test_node']['ansible_facts']['output'])
-
-        job_output = self._get_file(job1, 'work/logs/job-output.txt')
-        self.log.info(job_output)
-        self.assertIn("Job console starting", job_output)
-        self.assertIn("Username: test-username", job_output)
-        self.assertIn("Okay to expose this: test-password", job_output)
-        # This is a secret exposed
-        self.assertIn("Password: test-password", job_output)
-
-        # Check Redact
-        job1 = self.getJobFromHistory(f'{es}-txt-redact')
-        job2 = self.getJobFromHistory(f'{es}-json-redact')
-        json_output = self._get_file(job2, 'work/logs/job-output.json')
-        self.log.info(json_output)
-        data = json.loads(json_output)
-        self.assertEqual(3, len(data))
-        self.assertEqual('Username: test-username',
-                         data[1]['plays'][0]['tasks'][0]
-                         ['hosts']['test_node']['ansible_facts']['output'])
-        # This is a redaction
-        self.assertEqual('[Zuul] Secret detected in output',
-                         data[2]['plays'][0]['play']['name'])
-
-        job_output = self._get_file(job1, 'work/logs/job-output.txt')
-        self.log.info(job_output)
-        self.assertIn("Job console starting", job_output)
-        self.assertIn("Username: test-username", job_output)
-        self.assertIn("Okay to expose this: test-password", job_output)
-        # This is a redaction
-        self.assertNotIn("Password:", job_output)
-        self.assertNotIn("zuul-return-redaction-1", job_output)
-        self.assertNotIn("zuul-return-redaction-2", job_output)
-        self.assertNotIn("zuul-return-redaction-3", job_output)
-        self.assertIn("[Zuul] Secret detected in output", job_output)
-
-        # We check the OIDC secret here
-        secrets = self._getSecrets(
-            f'{es}-txt-redact', 'playbooks'
-        )[0]
-        self.assertEqual(len(secrets), 2)
-        token = secrets['oidc_secret'].value
-        self.assertNotIn("OIDC:", job_output)
-        self.assertNotIn(token, job_output)
-
-        # Check Fail
-        job1 = self.getJobFromHistory(f'{es}-txt-fail')
-        job2 = self.getJobFromHistory(f'{es}-json-fail')
-        job_output = self._get_file(job2, 'work/logs/job-output.txt')
-        self.log.info(job_output)
-        json_output = self._get_file(job2, 'work/logs/job-output.json')
-        self.log.info(json_output)
-        data = json.loads(json_output)
-        self.assertEqual(3, len(data))
-        self.assertEqual('Username: test-username',
-                         data[1]['plays'][0]['tasks'][0]
-                         ['hosts']['test_node']['ansible_facts']['output'])
-        self.assertEqual('[Zuul] Secret detected in output',
-                         data[2]['plays'][0]['play']['name'])
-
-        job_output = self._get_file(job1, 'work/logs/job-output.txt')
-        self.log.info(job_output)
-        self.assertIn("Job console starting", job_output)
-        self.assertIn("Username: test-username", job_output)
-        self.assertIn("Okay to expose this: test-password", job_output)
-        self.assertNotIn("Password:", job_output)
 
 
 class TestNoLog(AnsibleZuulTestCase):
@@ -11765,6 +11617,20 @@ class TestConnectionVars(AnsibleZuulTestCase):
         # job_output = self._get_file(job, 'work/logs/job-output.txt')
         # self.log.debug(job_output)
         # self.assertNotIn("/bin/du", job_output)
+
+
+class TestSymlinkEscape(AnsibleZuulTestCase):
+    tenant_config_file = 'config/symlink-escape/main.yaml'
+
+    @okay_tracebacks('ValueError: Symlink detected')
+    def test_symlink_escape(self):
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.assertHistory([])
+        self.assertEqual(A.reported, 1)
+        self.assertIn("ERROR", A.messages[0])
+        self.assertIn("Symlink detected", A.messages[0])
 
 
 class IncludeBranchesTestCase(ZuulTestCase):
