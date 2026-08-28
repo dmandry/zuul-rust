@@ -20,6 +20,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "f0fe7d27_8f675da5",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 12,
+      "author": {
+        "id": 6968
+      },
+      "writtenOn": "2026-08-28T10:50:46Z",
+      "side": 1,
+      "message": "Thx @jim@acmegating.com for looking into this!\n\nTo answer your question - actually nothing is written then. That raised some questions on my side, and I run a couple checks in 1002671: DNM: Diagnose known_hosts.old creation | https://review.opendev.org/c/openstack/swift/+/1002671\n\nTurns out this patch won\u0027t fix it: it\u0027s the playbook synchronize task using rsync ssh that creates the known_hosts.old. Because `use_ssh_args` defaults to false in the Ansible synchronize module, this patch won\u0027t fix it.\n\nThere are a few options to go forward:\n1. Add `use_ssh_args: true` to all synchronize tasks in zuul-jobs. Doesn\u0027t lgtm.\n2. Let zuul write a `~/.ssh/config` with `UpdateHostKeys no` - should fix this.\n3. Add the `known_hosts.old` to `self.preserve_home_paths` - would disable the warning, but keep the file. Doesn\u0027t lgtm either.\n4. Do nothing, simply wait until zuul eventually deletes these files (assuming that this no longer raises a warning).\n\nWDYT?",
+      "parentUuid": "7db02ffe_f2f20f08",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "9abc800b_d4ef7d05",
         "filename": "/COMMIT_MSG",
         "patchSetId": 1
@@ -31,6 +49,24 @@
       "writtenOn": "2026-08-27T14:44:13Z",
       "side": 1,
       "message": "For future reference, this should have a Generated-By or Assisted-By label; please see the policies at\n* https://opendev.org/zuul/zuul#ai-generated-content\n* https://openinfra.org/legal/ai-policy",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ba509a7c_b7c0a645",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 24,
+      "author": {
+        "id": 6968
+      },
+      "writtenOn": "2026-08-28T10:50:46Z",
+      "side": 1,
+      "message": "Thanks, noted and will change if this patch gets another patchset.",
+      "parentUuid": "9abc800b_d4ef7d05",
       "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
@@ -82,6 +118,24 @@
       "writtenOn": "2026-08-27T14:44:13Z",
       "side": 1,
       "message": "I would suggest putting this under either \"fixes\" or \"features\"; we usually only put things that people need to do to manage an upgrade here.",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "aa3e222d_8c4a886c",
+        "filename": "releasenotes/notes/no-update-host-keys-a99dd5ebbe950841.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 6968
+      },
+      "writtenOn": "2026-08-28T10:50:46Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "61f0107c_45559d30",
       "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
