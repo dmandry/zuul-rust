@@ -38,6 +38,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "c9027565_65f93e41",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 12,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-29T15:28:23Z",
+      "side": 1,
+      "message": "Thank you for looking into this as well!\n\nMy concern with adding \"UpdateHostKeys no\" (to either location) is mostly with the case where host-key-checking is disabled and we\u0027re not providing keys.  If the current behavior is to add keys to that file, effectively a \"trust on first use\" situation, I don\u0027t want to break that.  Zuul adds the \"-o StrictHostKeyChecking\u003dfalse\" option to the ansible_ssh_common_args host variable in order to facilitate this.\n\nI have experimented in a workstation environment, and it appears that even with UpdateHostKeys\u003dno, openssh will still add a new key to known_hosts (without writing a .old file).  I guess the idea is that it only writes a .old file if it\u0027s changing or removing an entry, not adding a new one.\n\nThat seems to suggest that UpdateHostKeys\u003dno should be safe, and I agree it\u0027s a good option.  I haven\u0027t tested this in a full Zuul+Ansible environment though; so if I\u0027m missing something, please let me know.\n\nI do also think that adding known_hosts.old to the allow list may be acceptable.  The goal of the warning, and eventual deletion, is to avoid a situation where an untrusted playbook tricks a later trusted playbook into doing something unintended by its author.  I don\u0027t see a way for known_hosts.old to do that, nor do I necessarily think that host_keys changing is automatically bad (it could be!  but if some attack relies on changing the host keys file, it seems very, very, likely that attack could also just clean up the .old file in order to avoid detection here, so while, sure, this could expose or prevent such attack if the attacker is inept, it\u0027s not a real defence since it\u0027s so easily bypassed).\n\nAccording to the Ansible docs, the use_ssh_args argument also controls the use of the ansible_ssh_common_args, so I agree, if we want to set UpdateHostKeys\u003dno, we need to do it in the .ssh/config file (which we do not currently write at all).\n\nRegarding doing nothing: that is also tempting; I am not sure if we will keep the warnings in that case.  Regardless, this seems like it is affecting a number of different use cases, and if we decide it\u0027s noise, we should probably reduce the noise.  Based on the security analysis I wrote above, I think adding known_hosts.old to the allow list is effectively the same as \"do nothing\" the way that you described it (eventually delete with no warning).\n\nI think either UpdateHostKeys\u003dno or adding to the allow list is okay.  I don\u0027t see any issues with adding the .ssh/config file, but it does have the potential to have ripple effects we don\u0027t foresee now.  Adding the .old file to the allow list seems easiest and minimally intrusive.  You said you didn\u0027t like that idea -- if you want to elaborate on why, I would welcome that (I may be missing something, or you may be extra cautious).\n\nI think I\u0027d also like to get some more opinions too before we make a decision.",
+      "parentUuid": "f0fe7d27_8f675da5",
+      "revId": "6c091b2fd0f154214a25643979655ceab8af0e13",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "9abc800b_d4ef7d05",
         "filename": "/COMMIT_MSG",
         "patchSetId": 1
