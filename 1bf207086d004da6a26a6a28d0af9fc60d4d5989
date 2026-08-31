@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ced4de7e_e2ef675c",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 13861
+      },
+      "writtenOn": "2026-08-31T12:23:58Z",
+      "side": 1,
+      "message": "seeing issues where jobs randomly fails, reported https://storyboard.openstack.org/#!/story/2011873 to track those cases",
+      "revId": "1bf207086d004da6a26a6a28d0af9fc60d4d5989",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
