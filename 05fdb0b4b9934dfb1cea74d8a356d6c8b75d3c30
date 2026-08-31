@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5dada9ec_2e31d396",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 5
+      },
+      "lineNbr": 1361,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-08-31T04:57:28Z",
+      "side": 1,
+      "message": "I think this might be misleading. This variable only reflects the config of the `job.deduplicate` flag, but doesn\u0027t say anything if the job was deduplicated or not.",
+      "range": {
+        "startLine": 1361,
+        "startChar": 22,
+        "endLine": 1361,
+        "endChar": 38
+      },
+      "revId": "05fdb0b4b9934dfb1cea74d8a356d6c8b75d3c30",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
