@@ -33,6 +33,24 @@
       "message": "This will raise if message is not a list of strings. For example a list of ints.",
       "revId": "f9e0878ec405b862efd519dab5c15d79d171d5b9",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9b9763aa_d5e56b02",
+        "filename": "zuul/executor/logreceiver.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 139,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-31T21:43:46Z",
+      "side": 1,
+      "message": "That\u0027s probably still an improvement since that doesn\u0027t make sense, and before we would have just silently ignored that.",
+      "parentUuid": "b4d7a763_51e7555a",
+      "revId": "f9e0878ec405b862efd519dab5c15d79d171d5b9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
