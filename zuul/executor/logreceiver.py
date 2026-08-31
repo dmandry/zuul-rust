@@ -40,7 +40,10 @@ class LogReceiver:
     TYPE_SYNC = 4
 
     def __init__(self, zuul_event_id, build, jobdir, stop_conn, behavior):
-        self.jobdir = jobdir
+        # Avoid storing the jobdir itself to minimize subprocess resources
+        self.jobdir_log_socket = jobdir.log_socket
+        self.jobdir_job_output_file = jobdir.job_output_file
+        self.jobdir_json_output_file = jobdir.json_output_file
         self.build = build
         self.log = get_annotated_logger(
             logging.getLogger("zuul.ExecutorServer"),
@@ -56,7 +59,7 @@ class LogReceiver:
         self.behavior = behavior
 
     def start(self, cgroup_manager):
-        self.log.debug("Starting log receiver at %s", self.jobdir.log_socket)
+        self.log.debug("Starting log receiver at %s", self.jobdir_log_socket)
         self.proc.start()
         if cgroup_manager:
             cgroup_manager.moveToBuildGroup(self.proc.pid)
@@ -173,14 +176,14 @@ class LogReceiver:
         self.thread = threading.Thread(target=self.manage,
                                        name=f"manage-{self.name}")
         try:
-            with _safe_open(self.jobdir.job_output_file, "a") as job_output:
-                with (_safe_open(self.jobdir.json_output_file, "w") as
+            with _safe_open(self.jobdir_job_output_file, "a") as job_output:
+                with (_safe_open(self.jobdir_json_output_file, "w") as
                       json_output):
                     self.job_output_file = job_output
                     self.json_output_file = json_output
                     self.thread.start()
                     with socketserver.ThreadingUnixStreamServer(
-                            self.jobdir.log_socket,
+                            self.jobdir_log_socket,
                             MyHandler) as server:
                         self.server = server
                         self.child_conn.send(None)
