@@ -31,8 +31,8 @@ class LogReceiver:
     # combinations we're using, we just map the constants here.
     # TODO: in the future we can shift the result output to this
     # system via a different facility code.
-    OUTPUT_PRIORITY = '<135>'
-    JSON_PRIORITY = '<134>'
+    OUTPUT_PRIORITY = b'<135>'
+    JSON_PRIORITY = b'<134>'
     TYPE_STOP = 0
     TYPE_MESSAGE = 1
     TYPE_JSON = 2
@@ -80,11 +80,12 @@ class LogReceiver:
         stop = False
         if self.behavior != 'ignore':
             if self._containsSecrets(message):
-                message = "[Zuul] Secret detected in output"
+                message = b"[Zuul] Secret detected in output"
                 if self.behavior == 'fail':
                     stop = True
         output = self.job_output_file
-        output.write(message + '\n')
+        output.write(message)
+        output.write(b'\n')
         output.flush()
         if stop:
             self._stopJob()
@@ -109,14 +110,14 @@ class LogReceiver:
         file_len = output.seek(0, os.SEEK_END)
         if file_len == 0:
             # This is a new file without any content
-            output.write('[\n')
+            output.write(b'[\n')
         else:
             # Existing file: Remove three bytes to eat the trailing
             # '\n]\n' and add the ',' on the end of the last line.
             output.seek(file_len - 3)
-            output.write(',\n')
+            output.write(b',\n')
         output.write(message)
-        output.write('\n]\n')
+        output.write(b'\n]\n')
         output.flush()
         if stop:
             self._stopJob()
@@ -132,29 +133,26 @@ class LogReceiver:
         }]
         data = json.dumps(playbook_info,
                           indent=4, sort_keys=True, separators=(',', ': '))
-        return data
+        return data.encode('utf8')
 
     def _setSecrets(self, message):
-        self.secrets = json.loads(message)
+        self.secrets = [x.encode('utf8') for x in json.loads(message)]
 
     def addLineToJobOutput(self, message):
-        self.parent_conn.send((self.TYPE_MESSAGE, message))
+        self.parent_conn.send((self.TYPE_MESSAGE, message.encode('utf8')))
 
     def addPlaybookToJson(self, data):
-        self.parent_conn.send((self.TYPE_JSON, data))
+        self.parent_conn.send((self.TYPE_JSON, data.encode('utf8')))
 
     def sendSecrets(self, secrets):
         secrets = json.dumps(secrets)
         self.parent_conn.send((self.TYPE_SECRETS, secrets))
 
-    def _handlePacket(self, data):
-        data = data.decode('utf8')
+    def _handlePacket(self, priority, message):
         try:
-            if data[:5] == self.OUTPUT_PRIORITY:
-                message = data[5:]
+            if priority == self.OUTPUT_PRIORITY:
                 self._addLineToJobOutput(message)
-            elif data[:5] == self.JSON_PRIORITY:
-                message = data[5:]
+            elif priority == self.JSON_PRIORITY:
                 self._addPlaybookToJson(message)
         except Exception:
             self.log.exception("Error in log receiver:")
@@ -165,19 +163,26 @@ class LogReceiver:
 
         class MyHandler(socketserver.StreamRequestHandler):
             def handle(this):
-                buf = bytearray()
-                while b := this.rfile.read(1):
-                    if b == b'\x00':
-                        self._handlePacket(buf)
-                        buf = bytearray()
+                while True:
+                    priority = bytearray()
+                    message = bytearray()
+                    priority = this.rfile.read(5)
+                    if len(priority) != 5:
+                        return
+                    while b := this.rfile.read(1):
+                        if b == b'\x00':
+                            self._handlePacket(priority, message)
+                            break
+                        else:
+                            message.extend(b)
                     else:
-                        buf.extend(b)
+                        return
 
         self.thread = threading.Thread(target=self.manage,
                                        name=f"manage-{self.name}")
         try:
-            with _safe_open(self.jobdir_job_output_file, "a") as job_output:
-                with (_safe_open(self.jobdir_json_output_file, "w") as
+            with _safe_open(self.jobdir_job_output_file, "ab") as job_output:
+                with (_safe_open(self.jobdir_json_output_file, "wb") as
                       json_output):
                     self.job_output_file = job_output
                     self.json_output_file = json_output
