@@ -22,6 +22,30 @@
       },
       "revId": "05fdb0b4b9934dfb1cea74d8a356d6c8b75d3c30",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "52153632_0d3ecf58",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 5
+      },
+      "lineNbr": 1361,
+      "author": {
+        "id": 27952
+      },
+      "writtenOn": "2026-08-31T09:27:59Z",
+      "side": 1,
+      "message": "Ack. I rephrased the section to make it more clear.",
+      "parentUuid": "5dada9ec_2e31d396",
+      "range": {
+        "startLine": 1361,
+        "startChar": 22,
+        "endLine": 1361,
+        "endChar": 38
+      },
+      "revId": "05fdb0b4b9934dfb1cea74d8a356d6c8b75d3c30",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
