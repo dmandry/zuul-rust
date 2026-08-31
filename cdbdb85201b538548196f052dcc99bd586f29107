@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9f4f31ca_8227419e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-08-31T20:55:11Z",
+      "side": 1,
+      "message": "Not approving this one as I\u0027m not sure if we\u0027re ready to proceed with this approach yet or not.\n\nFWIW I didn\u0027t review this change line by line. Instead I took the revert diff and compared it to this revert revert\u0027s diff in vimdiff which mostly handled the interdiff well and I could see that it was a clean revert revert. I also trust corvus to do the right thing here.",
+      "revId": "cdbdb85201b538548196f052dcc99bd586f29107",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
