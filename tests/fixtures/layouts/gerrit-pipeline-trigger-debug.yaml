@@ -1,10 +1,15 @@
 - pipeline:
     name: check
     manager: independent
+    require:
+      gerrit:
+        current-patchset: true
     trigger:
       gerrit:
         - event: patchset-created
           debug: true
+        - event: comment-added
+          comment: recheck
     success:
       gerrit:
         Verified: 1
@@ -19,6 +24,7 @@
     require:
       gerrit:
         open: true
+        current-patchset: true
     trigger:
       gerrit:
         - event: comment-added

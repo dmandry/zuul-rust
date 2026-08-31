@@ -533,6 +533,21 @@ class TestGerritWeb(ZuulTestCase):
                       B.messages[0])
 
         # Test that we get debug info for a pipeline debug trigger
+        # when a change depends on a change missing a pipeline requirement
+        B.unsetAbandoned()
+        B.addPatchset()
+        self.fake_gerrit.addEvent(B.getChangeCommentEvent(1, 'recheck'))
+        self.waitUntilSettled()
+        A.addPatchset()
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(2))
+        self.waitUntilSettled()
+        self.assertEqual(B.data['status'], 'NEW')
+        self.assertEqual(A.data['status'], 'NEW')
+        self.assertEqual(A.reported, 3)
+        self.assertIn('does not match pipeline requirement',
+                      A.messages[2])
+
+        # Test that we get debug info for a pipeline debug trigger
         # when a change is missing a merge requirement
         C = self.fake_gerrit.addFakeChange('org/project', 'master', 'C')
         self.fake_gerrit.addEvent(C.addApproval('Approved', 1))

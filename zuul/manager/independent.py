@@ -77,6 +77,7 @@ class IndependentPipelineManager(PipelineManager):
                                    change_queue=change_queue,
                                    history=history,
                                    dependency_graph=dependency_graph,
+                                   debug=debug,
                                    warnings=warnings)
                 if not r:
                     return False
