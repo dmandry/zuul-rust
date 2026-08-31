@@ -847,7 +847,8 @@ class RecordingAnsibleJob(zuul.executor.server.AnsibleJob):
 
         self.result, unreachable, error_detail = super(
             RecordingAnsibleJob, self).runPlaybooks(args)
-        self.recordResult(self.result)
+        if not self.executor_server._new_result_behavior:
+            self.recordResult(self.result)
         return self.result, unreachable, error_detail
 
     def runAnsible(self, cmd, timeout, playbook, ansible_version,
@@ -901,7 +902,8 @@ class RecordingAnsibleJob(zuul.executor.server.AnsibleJob):
         super().resume()
 
     def _send_aborted(self):
-        self.recordResult('ABORTED')
+        if not self.executor_server._new_result_behavior:
+            self.recordResult('ABORTED')
         super()._send_aborted()
 
 
@@ -1115,6 +1117,7 @@ class RecordingExecutorServer(zuul.executor.server.ExecutorServer):
 
     _job_class = RecordingAnsibleJob
     _merger_api_class = TestingMergerApi
+    _new_result_behavior = False
 
     def __init__(self, *args, **kw):
         self._run_ansible = kw.pop('_run_ansible', False)
@@ -1235,6 +1238,15 @@ class RecordingExecutorServer(zuul.executor.server.ExecutorServer):
             build.aborted = True
             build.release()
         super(RecordingExecutorServer, self).stop()
+
+    def completeBuild(self, build_request, result_data):
+        # TODO: change all existing tests to use this behavior since
+        # it more accurately reflects what the scheduler sees.
+        if self._new_result_behavior:
+            job_worker = self.job_workers.get(build_request.uuid)
+            job_worker.recordResult(result_data['result'])
+        super(RecordingExecutorServer, self).completeBuild(
+            build_request, result_data)
 
 
 class TestScheduler(zuul.scheduler.Scheduler):

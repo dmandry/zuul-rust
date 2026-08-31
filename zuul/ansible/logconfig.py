@@ -43,9 +43,11 @@ _DEFAULT_JOB_LOGGING_CONFIG = {
         },
         'jobfile': {
             # used by executor to emit log file
-            'class': 'logging.FileHandler',
-            'level': 'INFO',
+            'class': 'logging.handlers.SysLogHandler',
+            'level': 'DEBUG',
             'formatter': 'plain',
+            'facility': 'local0',
+            'socktype': 1,  # SOCK_STREAM
         },
     },
     'loggers': {
@@ -53,9 +55,13 @@ _DEFAULT_JOB_LOGGING_CONFIG = {
             'handlers': ['result'],
             'level': 'INFO',
         },
-        'zuul.executor.ansible': {
+        'zuul.executor.ansible.json': {
             'handlers': ['jobfile'],
             'level': 'INFO',
+        },
+        'zuul.executor.ansible.stream': {
+            'handlers': ['jobfile'],
+            'level': 'DEBUG',
         },
         'sqlalchemy.engine': {
             'handlers': ['console'],
@@ -186,24 +192,49 @@ class DictLoggingConfig(LoggingConfig, metaclass=abc.ABCMeta):
 
 class JobLoggingConfig(DictLoggingConfig):
 
-    def __init__(self, config=None, job_output_file=None):
+    def __init__(self, config=None, log_socket=None,
+                 test_log_output_text_file=None,
+                 test_log_output_json_file=None):
         if not config:
             config = copy.deepcopy(_DEFAULT_JOB_LOGGING_CONFIG)
         super(JobLoggingConfig, self).__init__(config=config)
-        if job_output_file:
-            self.job_output_file = job_output_file
+        if log_socket:
+            self.log_socket = log_socket
+        if test_log_output_text_file:
+            # This is used by the streaming output test
+            self._config['handlers']['jobfile'] = {
+                'class': 'logging.FileHandler',
+                'level': 'DEBUG',
+                'formatter': 'plain',
+                'filename': test_log_output_text_file,
+            }
+        if test_log_output_json_file:
+            # This is used by the streaming output test
+            self._config['handlers']['jsonfile'] = {
+                'class': 'logging.FileHandler',
+                'level': 'INFO',
+                'formatter': 'plain',
+                'filename': test_log_output_json_file,
+            }
+            self._config['loggers']['zuul.executor.ansible.json'] = {
+                'handlers': ['jsonfile'],
+                'level': 'INFO',
+            }
 
     def setDebug(self):
         # Set the level for zuul.executor.ansible to DEBUG
-        self._config['loggers']['zuul.executor.ansible']['level'] = 'DEBUG'
+        self._config['loggers']['zuul.executor.ansible.stream']['level'] =\
+            'DEBUG'
+        self._config['loggers']['zuul.executor.ansible.json']['level'] =\
+            'DEBUG'
 
     @property
-    def job_output_file(self) -> str:
-        return self._config['handlers']['jobfile']['filename']
+    def log_socket(self):
+        return self._config['handlers']['jobfile']['address']
 
-    @job_output_file.setter
-    def job_output_file(self, filename: str):
-        self._config['handlers']['jobfile']['filename'] = filename
+    @log_socket.setter
+    def log_socket(self, filename):
+        self._config['handlers']['jobfile']['address'] = filename
 
 
 class ServerLoggingConfig(DictLoggingConfig):
@@ -257,5 +288,7 @@ if __name__ == '__main__':
     # Use this to emit a working logging output for testing zuul_stream
     # locally.
     config = JobLoggingConfig(
-        job_output_file=os.path.abspath('job-output.txt'))
+        test_log_output_text_file=os.path.abspath('test-job-output.txt'),
+        test_log_output_json_file=os.path.abspath('test-job-output.json'),
+    )
     config.writeJson('logging.json')

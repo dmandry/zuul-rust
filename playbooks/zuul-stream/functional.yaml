@@ -31,8 +31,8 @@
 
     - name: Save output
       shell: |
-          mv job-output.txt job-output-success-19887.txt
-          mv job-output.json job-output-success-19887.json
+          mv test-job-output.txt job-output-success-19887.txt
+          mv test-job-output.json job-output-success-19887.json
 
     # Streamer puts out a line like
     #  [node1] Starting to log 916b2084-4bbb-80e5-248e-000000000016-1-node1 for task TASK: Print binary data
@@ -71,8 +71,8 @@
 
     - name: Save output
       shell: |
-          mv job-output.txt job-output-success-19885.txt
-          mv job-output.json job-output-success-19885.json
+          mv test-job-output.txt job-output-success-19885.txt
+          mv test-job-output.json job-output-success-19885.json
 
     - name: Validate text outputs
       include_tasks: validate.yaml
@@ -113,8 +113,8 @@
 
     - name: Save output
       shell: |
-          mv job-output.txt job-output-failure.txt
-          mv job-output.json job-output-failure.json
+          mv test-job-output.txt job-output-failure.txt
+          mv test-job-output.json job-output-failure.json
 
     - name: Validate output - failure shell task with exception
       shell: |
