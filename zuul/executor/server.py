@@ -4342,7 +4342,7 @@ class ExecutorServer(BaseMergeServer):
         self._command_running = True
 
         try:
-            multiprocessing.set_start_method('spawn')
+            multiprocessing.set_start_method('forkserver')
         except RuntimeError:
             # Note: During tests this can be called multiple times which
             # results in a runtime error. This is ok here as we've set this
