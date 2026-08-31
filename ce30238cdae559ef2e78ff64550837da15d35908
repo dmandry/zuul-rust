@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "c8ee25eb_b621d7a9",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-08-31T14:38:13Z",
+      "side": 1,
+      "message": "That\u0027s a good point -- it *is* okay for us to downgrade this schema change, however, Zuul will not allow us to restart the executors without restarting the schedulers too.  I don\u0027t think that\u0027s necessary, so I\u0027m going to revise this to drop the model_api change (ie, leave it at the newer value).",
+      "revId": "ce30238cdae559ef2e78ff64550837da15d35908",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
