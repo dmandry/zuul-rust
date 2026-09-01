@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b9e25f05_37a4b18d",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 13,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-01T16:31:06Z",
+      "side": 1,
+      "message": "This is problematic:\n\nselectProviders should give us the best provider for the label first.  So if the first one can\u0027t fulfill it, then it\u0027s very unlikely that a later one can.  If you\u0027re seeing selectProviders return a poor candidate provider when better ones are available, then we need to look into what\u0027s causing that.\n\nWe assume that the request either has all the nodes, or none.  Many places in the launcher can\u0027t handle a request with a node assigned for the second label in a request but no node for the first one.\n\nIf we make this change, we could end up skipping the first label in the request and creating a node for the second label.  That will cause errors.",
+      "revId": "29d55e306a04d98cc46382c8f713b77090f45710",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
