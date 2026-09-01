@@ -111,6 +111,22 @@ from zuul.zk.zkobject import ZKContext
 from zuul.zk.semaphore import SemaphoreHandler
 
 
+# Monkeypatch the multiprocessing module so that it does not import
+# all of zuul when starting the subprocess (which can use several
+# hundred mb of RSS memory).
+original_get_preparation_data = multiprocessing.spawn.get_preparation_data
+
+
+def get_preparation_data(name):
+    data = original_get_preparation_data(name)
+    data.pop('init_main_from_name', None)
+    data.pop('init_main_from_path', None)
+    return data
+
+
+multiprocessing.spawn.get_preparation_data = get_preparation_data
+
+
 BUFFER_LINES_FOR_SYNTAX = 200
 OUTPUT_MAX_LINE_BYTES = 51200  # 50 MiB
 OUTPUT_MAX_BYTES = 1024 * 1024 * 1024  # 1GiB
@@ -4343,6 +4359,7 @@ class ExecutorServer(BaseMergeServer):
 
         try:
             multiprocessing.set_start_method('forkserver')
+            multiprocessing.set_forkserver_preload([])
         except RuntimeError:
             # Note: During tests this can be called multiple times which
             # results in a runtime error. This is ok here as we've set this
