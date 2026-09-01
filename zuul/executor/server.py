@@ -4343,6 +4343,7 @@ class ExecutorServer(BaseMergeServer):
 
         try:
             multiprocessing.set_start_method('forkserver')
+            multiprocessing.set_forkserver_preload([])
         except RuntimeError:
             # Note: During tests this can be called multiple times which
             # results in a runtime error. This is ok here as we've set this
