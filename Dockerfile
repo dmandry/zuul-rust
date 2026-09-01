@@ -16,7 +16,7 @@
 
 # Set this to "-debug" to build a debug image (includes gdb, debug
 # symbols, and is quite a bit larger).
-ARG IMAGE_FLAVOR=
+ARG IMAGE_FLAVOR=-debug
 
 # Base images, defined as separate stages to allow for mirror selection or
 # downstream customization via named contexts when built with docker buildx.
