@@ -237,6 +237,9 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
             change_annotations = {c: ' (config error)'
                                   for c in changes_with_errors}
             if with_jobs:
+                item_url = item.formatItemUrl()
+                if item_url is not None:
+                    msg += '\n' + item_url
                 msg = '{}\n{}'.format(msg, self._formatItemReportJobs(
                     item, short))
             msg = "{}\n{}".format(
