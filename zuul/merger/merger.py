@@ -173,11 +173,12 @@ class Repo(object):
     def _ensure_cloned(self, zuul_event_id, build=None):
         log = get_annotated_logger(self.log, zuul_event_id, build=build)
         repo_is_cloned = os.path.exists(os.path.join(self.local_path, '.git'))
-        if self._initialized and repo_is_cloned:
+        if repo_is_cloned:
             try:
                 # validate that the repo isn't corrupt
                 git.Repo(self.local_path)
-                return
+                if self._initialized:
+                    return
             except Exception:
                 # the repo is corrupt, delete the local path
                 shutil.rmtree(self.local_path)
