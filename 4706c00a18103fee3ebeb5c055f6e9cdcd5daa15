@@ -1,0 +1,89 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "719dc4d3_8936cd4b",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 9
+      },
+      "lineNbr": 76,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-02T18:43:03Z",
+      "side": 1,
+      "message": "Now that we have done the work to gather the matches after pipeline updates, can we drop this from zuul.conf and instead collect the subscription topics after updates?  I think that would be a better ux.",
+      "revId": "4706c00a18103fee3ebeb5c055f6e9cdcd5daa15",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ea5fdfad_bab88504",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 9
+      },
+      "lineNbr": 349,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-02T18:43:03Z",
+      "side": 1,
+      "message": "If we do my suggestion of dropping the zuul.conf topic config, then this would probably have to be a regular mqtt topic matching syntax.",
+      "revId": "4706c00a18103fee3ebeb5c055f6e9cdcd5daa15",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "86108063_c2156e7e",
+        "filename": "zuul/driver/mqtt/__init__.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 57,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-02T18:43:03Z",
+      "side": 1,
+      "message": "This is where we could collect the topics and update the subscriptions.",
+      "revId": "4706c00a18103fee3ebeb5c055f6e9cdcd5daa15",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "820e189b_80fd4628",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 64,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-02T18:43:03Z",
+      "side": 1,
+      "message": "I think this error msg needs updating",
+      "revId": "4706c00a18103fee3ebeb5c055f6e9cdcd5daa15",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9b7bc020_61909acc",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 96,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-02T18:43:03Z",
+      "side": 1,
+      "message": "If we switch to pipeline-based subscription, we can use this here: https://eclipse.dev/paho/files/paho.mqtt.python/html/client.html#paho.mqtt.client.topic_matches_sub",
+      "revId": "4706c00a18103fee3ebeb5c055f6e9cdcd5daa15",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
