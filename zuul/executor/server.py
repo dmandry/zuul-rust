@@ -2690,9 +2690,10 @@ class AnsibleJob(object):
                         self.executor_server.keystore.getProjectSecretsKeys(
                             frozen_secret['connection_name'],
                             frozen_secret['project_name'])
-                    ret_secret_values.extend(secret.collectEncryptedValues(
-                        private_secrets_key
-                    ))
+                    ret_secret_values.extend([
+                        str(x) for x in secret.collectEncryptedValues(
+                            private_secrets_key
+                        )])
                     secret = secret.decrypt(private_secrets_key)
                     ret_secret_data[secret_name] = secret.secret_data
                 else:
@@ -4069,7 +4070,7 @@ class AnsibleJob(object):
         if redactions:
             self.secrets_values |= set(redactions)
         for value in _recursive_values(secret_data):
-            self.secrets_values.add(value)
+            self.secrets_values.add(str(value))
 
         return result, code
 
