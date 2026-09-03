@@ -10022,11 +10022,11 @@ class TestJobOutput(AnsibleZuulTestCase):
         self.assertIn("Job console starting", job_output)
         self.assertIn("Username: test-username", job_output)
         self.assertIn("Okay to expose this: test-password", job_output)
+        self.assertIn("port 5000", job_output)
         # This is a redaction
         self.assertNotIn("Password:", job_output)
         self.assertNotIn("zuul-return-redaction-1", job_output)
         self.assertNotIn("zuul-return-redaction-2", job_output)
-        self.assertNotIn("zuul-return-redaction-3", job_output)
         self.assertIn("[Zuul] Secret detected in output", job_output)
 
         # We check the OIDC secret here

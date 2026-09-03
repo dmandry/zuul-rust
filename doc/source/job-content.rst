@@ -1725,11 +1725,11 @@ in the work directory.  Care must still be taken to avoid displaying
 or storing sensitive data within the job.
 
 If a job is configured with :attr:`job.secret-exposure` to redact or
-fail if a secret is exposed, any data returned using ``secret_data``
-will be automatically included in the list of secrets that Zuul
-searches for, starting with the next playbook.
+fail if a secret is exposed, data returned using ``secret_data`` is
+not included in the list of secrets that Zuul searches for.  See
+:ref:`adding-redactions` for a method to add such data.
 
-For example:
+A secret data return example:
 
 .. code-block:: yaml
 
@@ -1930,6 +1930,8 @@ For example the following would skip retrying the build:
           zuul:
             retry: false
 
+.. _adding-redactions:
+
 Adding redactions
 ~~~~~~~~~~~~~~~~~
 
@@ -1942,10 +1944,11 @@ was obtained using *zuul_return*.  Zuul will search for it as it does
 other secrets beginning with the next playbook (but not the playbook
 that registers the data).
 
-Any secrets in secret_data are automatically added and do not need to
-be explicitly registered.
+Since data returned in `secret_data` are not automatically added, in
+order to detect exposure of returned secret data, those data must be
+explicitly added here.
 
-For example:
+An example additional redaction:
 
 .. code-block:: yaml
 
@@ -1954,7 +1957,20 @@ For example:
         data:
           zuul:
             redactions:
-              - my_secret_token
+              - "{{ secret_token_variable }}"
+
+Returning a password as secret data and also redacting it:
+
+.. code-block:: yaml
+
+  tasks:
+    - zuul_return:
+        secret_data:
+          password: "{{ password_variable }}"
+        data:
+          zuul:
+            redactions:
+              - "{{ password_variable }}"
 
 If *zuul_return* is invoked multiple times (e.g., via multiple
 playbooks), then the elements of **zuul.redactions** from each
