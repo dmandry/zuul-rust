@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "1479e24d_109542f9",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1728,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-03T16:29:22Z",
+      "side": 1,
+      "message": "Nit: This `will` is an extra unnecessary word in the sentence.",
+      "range": {
+        "startLine": 1728,
+        "startChar": 65,
+        "endLine": 1728,
+        "endChar": 69
+      },
+      "revId": "d18e67912a5846d14d9a2db586852b5f7c41863e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f66dc040_ed6425a2",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 1732,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-03T16:29:22Z",
+      "side": 1,
+      "message": "Nit: Should this be `A` rather than `An`?",
+      "range": {
+        "startLine": 1732,
+        "startChar": 0,
+        "endLine": 1732,
+        "endChar": 2
+      },
+      "revId": "d18e67912a5846d14d9a2db586852b5f7c41863e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
