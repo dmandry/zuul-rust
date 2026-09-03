@@ -4069,8 +4069,6 @@ class AnsibleJob(object):
         redactions = pop_redactions_from_result_data(data, logger=self.log)
         if redactions:
             self.secrets_values |= set(redactions)
-        for value in _recursive_values(secret_data):
-            self.secrets_values.add(str(value))
 
         return result, code
 
