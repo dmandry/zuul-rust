@@ -122,8 +122,6 @@ class AppComponent extends React.Component {
     const { info, auth, user } = this.props
     return !(info.isFetching ||
              !auth.info ||
-             auth.isFetching ||
-             user.isFetching ||
              (auth.info.read_protected && !user.data && !user.broadcastWaitFinish)
             )
   }
