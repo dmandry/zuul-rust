@@ -88,6 +88,12 @@ class GerritChange(Change):
         self.hashtags = data.get("hashtags", [])
         self.zuul_query_ltime = data.get("zuul_query_ltime")
 
+    def getRefUrl(self):
+        if self.url and self.patchset:
+            baseurl = self.url.rstrip('/')
+            return f'{baseurl}/{self.patchset}'
+        return self.url
+
     def updateFromSSH(self, data, connection):
         if self.patchset is None:
             self.patchset = str(data['currentPatchSet']['number'])

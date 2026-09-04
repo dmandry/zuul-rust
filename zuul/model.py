@@ -8712,6 +8712,9 @@ class Ref(object):
                           oldrev=self.oldrev,
                           newrev=self.newrev)
 
+    def getUrl(self):
+        return self.url
+
     def toDict(self):
         # Render to a dict to use in passing json to the executor
         d = dict()
