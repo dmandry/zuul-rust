@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a33da9e5_3d9d6dcd",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 10
+      },
+      "lineNbr": 333,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-04T14:41:16Z",
+      "side": 1,
+      "message": "Can we still call this topic?  I think that would be more intuitive.",
+      "revId": "aaaadefcc94b03246e0e904ca6610d54d2db678c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
