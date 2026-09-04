@@ -1107,3 +1107,12 @@ details.foldable[open] summary::before {
     user-select: text;
     cursor: text;
 }
+
+.zuul-node-table .pf-c-table__expandable-row-content {
+    padding-top: var(
+        --pf-c-table--m-compact--cell--PaddingTop
+    );
+    padding-bottom: var(
+        --pf-c-table--m-compact--cell--PaddingBottom
+    );
+}

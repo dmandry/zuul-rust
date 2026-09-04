@@ -680,6 +680,7 @@ class ProviderNodeConverter:
             'lock_holder': node.lock_holder,
             'request_id': node.request_id,
             'request_time': request_time,
+            'main_node_id': node.main_node_id,
         }
         return ret
 
@@ -716,6 +717,7 @@ class ProviderNodeConverter:
             'lock_holder': str,
             'request_id': str,
             'request_time': str,
+            'main_node_id': str,
         })
 
 
