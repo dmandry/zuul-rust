@@ -1,0 +1,8 @@
+---
+upgrade:
+  - |
+    The `ref_url` stored in the database for a change on Gerrit and Github now
+    stores a link to the specific patchset or sha rather than to the general
+    change or PR. While this will cause links in the dashboard to better match
+    the triggering source, anyone who is post-processing a change url from the
+    database or consuming the url in job content may want to take note.

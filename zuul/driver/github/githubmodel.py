@@ -105,6 +105,12 @@ class PullRequest(Change):
         self.contexts = set(tuple(c) for c in data.get("contexts", []))
         self.branch_protected = data.get("branch_protected", False)
 
+    def getRefUrl(self):
+        if self.url and self.patchset:
+            baseurl = self.url.rstrip('/')
+            return f'{baseurl}/commits/{self.patchset}'
+        return self.url
+
 
 class GithubTriggerEvent(TriggerEvent):
     def __init__(self):

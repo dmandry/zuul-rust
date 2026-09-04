@@ -168,8 +168,10 @@ class TestSQLConnectionMysql(ZuulTestCase):
                 self.assertEqual('Build succeeded.', buildsets[0].message)
                 self.assertEqual('tenant-one', buildsets[0].tenant)
                 self.assertEqual(
-                    'https://review.example.com/%d' %
-                    buildsets[0].refs[0].change,
+                    'https://review.example.com/%d/%d' % (
+                        buildsets[0].refs[0].change,
+                        buildsets[0].refs[0].patchset
+                    ),
                     buildsets[0].refs[0].ref_url)
                 self.assertNotEqual(None, buildsets[0].event_id)
                 self.assertNotEqual(None, buildsets[0].event_timestamp)
@@ -314,7 +316,10 @@ class TestSQLConnectionMysql(ZuulTestCase):
                 self.assertEqual('Build succeeded.', buildset0.message)
                 self.assertEqual('tenant-one', buildset0.tenant)
                 self.assertEqual(
-                    'https://review.example.com/%d' % buildset0.refs[0].change,
+                    'https://review.example.com/%d/%d' % (
+                        buildset0.refs[0].change,
+                        buildset0.refs[0].patchset,
+                    ),
                     buildset0.refs[0].ref_url)
 
                 # Check the retry results
