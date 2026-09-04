@@ -3568,13 +3568,18 @@ class AnsibleJob(object):
                 self.zuul_event_id, build=self.build_request.uuid)
 
             first = True
+            exceeded_max = False
             for line in iter(
                     partial(self.proc.stdout.readline, OUTPUT_MAX_LINE_BYTES),
                     b''):
                 if line and line[-1:] != b'\n':
-                    self.log.warning(
-                        "Ansible output exceeds max. line size of %s KiB",
-                        OUTPUT_MAX_LINE_BYTES / 1024)
+                    if not exceeded_max:
+                        self.log.info(
+                            "Ansible output exceeds max. line size of %s KiB",
+                            OUTPUT_MAX_LINE_BYTES / 1024)
+                        exceeded_max = True
+                else:
+                    exceeded_max = False
                 if first:
                     # When we receive our first log line, bwrap should
                     # have started Ansible and it should still be
@@ -3605,12 +3610,13 @@ class AnsibleJob(object):
                             self.build_request, {'pre_fail': True})
                         # No need to pre-fail again
                         allow_pre_fail = False
-                syntax_buffer.append(line)
 
                 if line.startswith(b'fatal'):
                     line = line[:8192].rstrip()
                 else:
                     line = line[:1024].rstrip()
+
+                syntax_buffer.append(line)
 
                 if result_line:
                     ansible_log.debug("Ansible result output: %s" % (line,))
