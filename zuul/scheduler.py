@@ -2771,15 +2771,17 @@ class Scheduler(threading.Thread):
                       e.change, project.source)
             return
 
+        # Let the pipeline update any dependencies that may need
+        # refreshing if this change has updated.  Do this before
+        # removing old versions so that we have the latest information
+        # for the whole dependency cycle when we enqueue.
+        if event.isPatchsetCreated() or event.isMessageChanged():
+            manager.refreshDeps(change, event)
+
         if event.isPatchsetCreated():
             manager.removeOldVersionsOfChange(change, event)
         elif event.isChangeAbandoned():
             manager.removeAbandonedChange(change, event)
-
-        # Let the pipeline update any dependencies that may need
-        # refreshing if this change has updated.
-        if event.isPatchsetCreated() or event.isMessageChanged():
-            manager.refreshDeps(change, event)
 
         if match_info := manager.eventMatches(event, change):
             manager.addChange(change, event, debug=match_info.debug)

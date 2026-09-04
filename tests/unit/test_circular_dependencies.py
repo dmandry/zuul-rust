@@ -5000,3 +5000,73 @@ class TestGithubAppCircularDependencies(ZuulGithubAppTestCase):
         # A single change in the end
         for build in self.history[-2:]:
             self.assertEqual(build.result, 'SUCCESS')
+
+    def test_dependency_new_commit(self):
+        # Test the process of updating a single PR with a new commit
+        # that is part of a dependency cycle.
+        self.executor_server.hold_jobs_in_build = True
+        A = self.fake_github.openFakePullRequest("gh/project", "master", "A")
+        B = self.fake_github.openFakePullRequest("gh/project", "master", "B")
+        C = self.fake_github.openFakePullRequest("gh/project", "master", "C")
+        D = self.fake_github.openFakePullRequest("gh/project", "master", "D")
+        old_sha = D.head_sha
+
+        A.body = f"{A.subject}\n\nDepends-On: {D.url}\n"
+        B.body = f"{A.subject}\n\nDepends-On: {D.url}\n"
+        C.body = f"{A.subject}\n\nDepends-On: {D.url}\n"
+        D.body = (f"{D.subject}\n\nDepends-On: {A.url}\n"
+                  f"Depends-On: {B.url}\nDepends-On: {C.url}\n")
+        self.fake_github.emitEvent(D.getPullRequestOpenedEvent())
+        self.waitUntilSettled("initial push")
+
+        # We have a single item with all 4 changes in a bundle
+        items = self.getAllItems('tenant-one', 'check')
+        self.assertEqual(1, len(items))
+        self.assertEqual(4, len(items[0].changes))
+        self.assertQueueCycles('check', 0, [[A, B, C, D]])
+        old_item = items[0]
+
+        # Update the PR that depends on all the others
+        D.addCommit()
+        new_sha = D.head_sha
+        self.fake_github.emitEvent(D.getPullRequestSynchronizeEvent())
+        self.waitUntilSettled("second push")
+
+        # Ensure that we have a single item with all 4 changes in a
+        # bundle (and not an extra change with the old version).
+        items = self.getAllItems('tenant-one', 'check')
+        self.assertEqual(1, len(items))
+        self.assertEqual(4, len(items[0].changes))
+        self.assertQueueCycles('check', 0, [[A, B, C, D]])
+        new_item = items[0]
+        self.assertNotEqual(old_item.uuid, new_item.uuid)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled("shutdown")
+
+        old_changes = (
+            f"{C.number},{C.head_sha} {B.number},{B.head_sha} "
+            f"{A.number},{A.head_sha} {D.number},{old_sha}")
+        new_changes = (
+            f"{C.number},{C.head_sha} {B.number},{B.head_sha} "
+            f"{A.number},{A.head_sha} {D.number},{new_sha}")
+        self.assertHistory([
+            dict(name="project-job", result="ABORTED", changes=old_changes,
+                 ref="refs/pull/1/head"),
+            dict(name="project-job", result="ABORTED", changes=old_changes,
+                 ref="refs/pull/2/head"),
+            dict(name="project-job", result="ABORTED", changes=old_changes,
+                 ref="refs/pull/3/head"),
+            dict(name="project-job", result="ABORTED", changes=old_changes,
+                 ref="refs/pull/4/head"),
+
+            dict(name="project-job", result="SUCCESS", changes=new_changes,
+                 ref="refs/pull/1/head"),
+            dict(name="project-job", result="SUCCESS", changes=new_changes,
+                 ref="refs/pull/2/head"),
+            dict(name="project-job", result="SUCCESS", changes=new_changes,
+                 ref="refs/pull/3/head"),
+            dict(name="project-job", result="SUCCESS", changes=new_changes,
+                 ref="refs/pull/4/head"),
+        ], ordered=False)
