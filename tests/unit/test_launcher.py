@@ -536,6 +536,16 @@ class TestLauncher(LauncherBaseTestCase):
             upload_ids, itertools.repeat(RuntimeError)
         ))
 
+        # Validate that the image_build_name is exposed to the inventory
+        build = self.getBuildByName('build-debian-local-image')
+        inv_path = os.path.join(build.jobdir.root, 'ansible', 'inventory.yaml')
+        with open(inv_path, 'r') as f:
+            inventory = yaml.safe_load(f)
+        self.assertEqual(
+            inventory['all']['vars']['zuul']['image_build_name'],
+            'debian-local'
+        )
+
         self.executor_server.release('build-debian-local-image')
         self.waitUntilSettled()
         self.assertHistory([

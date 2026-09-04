@@ -1351,6 +1351,22 @@ The following variables related to the job are available:
       git tags, these are simply free-form text fields that can be
       used by the job for reporting or classification purposes.
 
+   .. var:: workspace_checkout
+
+      Whether the job performed a full checkout of projects in the workspace.
+      This value is taken from :attr:`job.workspace-checkout`.
+
+   .. var:: deduplicate
+
+      Whether Zuul considered deduplication for this job or not. The value
+      is taken from :attr:`job.deduplicate`.
+
+   .. var:: image_build_name
+
+      The name of the image build by this job (in case this is an image
+      build job (see :ref:`image-creation`)). The value is taken from
+      :attr:`job.image-build-name`.
+
    .. var:: resources
 
       A job using a container build resources has access to a

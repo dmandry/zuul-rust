@@ -252,6 +252,9 @@ def zuul_params_from_job(job):
         "timeout": job.timeout,
         "post_timeout": job.post_timeout,
         "jobtags": sorted(job.tags),
+        "workspace_checkout": job.workspace_checkout,
+        "image_build_name": job.image_build_name,
+        "deduplicate": job.deduplicate,
         "_inheritance_path": list(job.inheritance_path),
     }
     if job.artifact_data:
