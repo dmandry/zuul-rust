@@ -17,8 +17,7 @@ tzlocal<3.0  # https://github.com/agronholm/apscheduler/discussions/570
 PrettyTable
 babel>=1.0
 netaddr
-# Pinned due to increase in unit test timeouts related to connection issues
-kazoo==2.9.0
+kazoo
 sqlalchemy>=2.0.0
 alembic
 cryptography>=39.0.0
