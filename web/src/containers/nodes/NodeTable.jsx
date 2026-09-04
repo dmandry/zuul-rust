@@ -39,6 +39,7 @@ import {
   TagIcon,
   ZoneIcon,
 } from '@patternfly/react-icons'
+import { Link } from 'react-router-dom'
 import {
   IconProperty,
 } from '../../MiscComponents'
@@ -155,7 +156,10 @@ function NodeTable(props) {
           moment_tz.utc(node.state_time) :
           moment.unix(node.state_time)
     const r = [
-      {title: node.id, props: {column: 'ID'}},
+      {
+        title: (<Link to={`${tenant.linkPrefix}/node/${node.id}`}>{node.id}</Link>),
+        props: {column: 'ID'}
+      },
       {title: node.type.join(','), props: {column: 'Label' }},
       {title: renderNodeState(node), props: {column: 'State'}},
       {
