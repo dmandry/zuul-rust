@@ -16,6 +16,74 @@
       "message": "recheck",
       "revId": "961d4aca4120266e71cc0253b41a48b0cf7edb32",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4c3ae996_cb98b9c9",
+        "filename": "tests/unit/test_circular_dependencies.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 4833,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-04T14:06:29Z",
+      "side": 1,
+      "message": "This test doesn\u0027t exercise anything new in this change.  I guess it doesn\u0027t hurt to codify a behavior, but also, there\u0027s no reason to think the behavior this test aims to avoid would happen.",
+      "revId": "961d4aca4120266e71cc0253b41a48b0cf7edb32",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "9e3ebfd0_ff01d300",
+        "filename": "tests/unit/test_circular_dependencies.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 4874,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-04T14:06:29Z",
+      "side": 1,
+      "message": "In the future, it would be better to use assertHistory.",
+      "revId": "961d4aca4120266e71cc0253b41a48b0cf7edb32",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a499dd8d_360978fd",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 149,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-04T14:06:29Z",
+      "side": 1,
+      "message": "Better to use assertHistory here and below as well.",
+      "revId": "961d4aca4120266e71cc0253b41a48b0cf7edb32",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "0bae371e_1b38457b",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 534,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-04T14:06:29Z",
+      "side": 1,
+      "message": "I have two questions:\n\n1) Why do we want to drop the base branch edit action?\n2) If we do want to drop it, why does that mean we don\u0027t care about body or title any more?",
+      "revId": "961d4aca4120266e71cc0253b41a48b0cf7edb32",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
