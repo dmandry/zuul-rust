@@ -224,11 +224,13 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
         The full URL to information about the item in the web UI
 
    .. attr:: merge-conflict-message
-      :default: Merge failed.
+      :default: Merge failed. This change or one of its cross-repo
+                dependencies was unable to be automatically merged
+                with the current state of its repository. Please
+                rebase the change and upload a new patchset.
 
       The introductory text in the message reported when a change
       fails to merge with the current state of the repository.
-      Defaults to "Merge failed."
 
    .. attr:: no-jobs-message
 
