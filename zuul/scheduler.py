@@ -2160,9 +2160,22 @@ class Scheduler(threading.Thread):
         if change.project.name != project.name:
             raise Exception(
                 f'Change {change} does not belong to project "{project.name}"')
-        self.log.debug("Event %s for change %s was directly assigned "
-                       "to pipeline %s", event, change, self)
-        manager.addChange(change, event, ignore_requirements=True)
+        if event.orig_ref:
+            # This is a re-enqueue of a change from an earlier event.
+            # We don't want to re-enqueue changes if there is a new
+            # version already in the pipeline, so check for that here.
+            new_item, new_change =\
+                manager.findNewVersionOfChangeAlreadyInQueue(change)
+        else:
+            new_change = None
+        if new_change is not None:
+            self.log.debug("Ignoring event %s for change %s due to "
+                           "newer change %s in item %s",
+                           event, change, new_change, new_item)
+        else:
+            self.log.debug("Event %s for change %s was directly assigned "
+                           "to pipeline %s", event, change, self)
+            manager.addChange(change, event, ignore_requirements=True)
 
     def _doSupercedeEvent(self, event):
         tenant = self.abide.tenants[event.tenant_name]
