@@ -12,3 +12,6 @@
     - name: Echo ansible version
       debug:
         msg: Ansible version={{ ansible_version.major }}.{{ ansible_version.minor }}
+    - name: Echo datetime
+      debug:
+        msg: "Datetime={{ date_time.date }}"
