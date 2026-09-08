@@ -3120,13 +3120,24 @@ class ProviderNode(zkobject.PolymorphicZKObjectMixin,
             return self.lifecycle.next_state
         return None
 
-    def setNextState(self, context, next_state):
+    @property
+    def next_comment(self):
+        if self.lifecycle.getZKVersion() is not None:
+            return self.lifecycle.next_comment
+        return None
+
+    def setNextState(self, context, next_state, next_comment):
         if self.lifecycle.getZKVersion() is not None:
             self.lifecycle.updateAttributes(
                 context,
-                next_state=next_state)
+                next_state=next_state,
+                next_comment=next_comment,
+            )
         else:
-            self.lifecycle._set(next_state=next_state)
+            self.lifecycle._set(
+                next_state=next_state,
+                next_comment=next_comment,
+            )
             self.lifecycle.internalCreate(context)
 
     def clearNextState(self, context):
@@ -3452,6 +3463,7 @@ class ProviderNodeLifecycle(zkobject.ZKObject):
         super().__init__()
         self._set(
             next_state=None,
+            next_comment=None,
             # Not serialized
             node=None,
         )
@@ -3462,6 +3474,7 @@ class ProviderNodeLifecycle(zkobject.ZKObject):
     def serialize(self, context):
         data = dict(
             next_state=self.next_state,
+            next_comment=self.next_comment,
         )
         return json.dumps(data, sort_keys=True).encode("utf-8")
 
@@ -3469,6 +3482,7 @@ class ProviderNodeLifecycle(zkobject.ZKObject):
         # Internal method used to reset values on deletion.
         self._set(
             next_state=None,
+            next_comment=None,
             _zstat=None,
         )
 

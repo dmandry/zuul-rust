@@ -649,6 +649,8 @@ class ProviderNodeConverter:
             datetime.utcfromtimestamp(node.request_time)
             if node.request_time is not None else None
         )
+        comment = getattr(node, 'next_comment',
+                          getattr(node, 'comment', None))
         ret = {
             'id': node.uuid,
             'uuid': node.uuid,
@@ -660,7 +662,7 @@ class ProviderNodeConverter:
             'state': node.state,
             'state_time': state_time,
             'next_state': node.next_state,
-            'comment': getattr(node, 'comment', None),
+            'comment': comment,
             'max_ready_age': node.max_ready_age,
             'max_age': node.max_age,
             'interface_ip': node.interface_ip,
@@ -1741,6 +1743,10 @@ class ZuulWebAPI(object):
                   reason, count, node_hold_expiration):
         key = (tenant_name, project_name, job_name, ref_filter)
         self.log.debug("Autohold requested for %s", key)
+
+        if reason:
+            # Limit reason to 1024 to avoid znode size issues
+            reason = reason[:1024]
 
         request = HoldRequest()
         request.tenant = tenant_name
@@ -2910,19 +2916,33 @@ class ZuulWebAPI(object):
         }:
             raise cherrypy.HTTPError(400, 'Invalid request body')
 
+        if state == node.State.HOLD:
+            # We can set a comment when holding; if it's not provided,
+            # leave it alone.
+            comment = body.get('comment', node.next_comment or node.comment)
+            if not comment:
+                # If it's the empty string, clear it.
+                comment = None
+            else:
+                # Limit comment to 1024 to avoid znode size issues
+                comment = comment[:1024]
+        else:
+            # Comment resets with any other state change
+            comment = None
+
         # Make a request to the launcher to change the node state at
         # its earliest convenience.  No locking is necessary.
-        self.log.info('User %s setting node %s to %s',
-                      auth.uid, node_id, state)
+        self.log.info('User %s setting node %s to %s comment %s',
+                      auth.uid, node_id, state, comment)
         nodes = self.zuulweb.launcher.setNextNodeState(
-            node, state,
+            node, state, comment,
             cache=self.zuulweb.nodes_cache)
 
         # If this is a slot host, the actual nodes changed will be
         # returned.
         for n in nodes:
-            self.log.info('User %s set node %s to %s',
-                          auth.uid, n.uuid, state)
+            self.log.info('User %s set node %s to %s comment %s',
+                          auth.uid, n.uuid, state, comment)
         cherrypy.response.status = 201
 
     @cherrypy.expose
