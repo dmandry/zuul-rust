@@ -216,14 +216,14 @@ class InventoryAutoPythonMixin:
         self.waitUntilSettled()
 
 
-class TestInventoryAutoPythonAnsible9(TestInventoryBase,
-                                      InventoryAutoPythonMixin):
-    ansible_version = '9'
-
-
 class TestInventoryAutoPythonAnsible11(TestInventoryBase,
                                        InventoryAutoPythonMixin):
     ansible_version = '11'
+
+
+class TestInventoryAutoPythonAnsible13(TestInventoryBase,
+                                       InventoryAutoPythonMixin):
+    ansible_version = '13'
 
 
 class TestInventory(TestInventoryBase):
