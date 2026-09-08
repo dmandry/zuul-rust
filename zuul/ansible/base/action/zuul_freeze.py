@@ -13,8 +13,25 @@
 # You should have received a copy of the GNU General Public License
 # along with this software.  If not, see <http://www.gnu.org/licenses/>.
 
+from collections.abc import MutableMapping
+
 from ansible.plugins.action import ActionBase
-from ansible.template import recursive_check_defined
+from jinja2.runtime import Undefined
+
+
+# This method is from Ansible 2.18, GPLv3 Licensed.  It is not
+# included in later versions of Ansible, but for safety in variable
+# freezing, we still want to perform this check.
+def recursive_check_defined(item):
+    if isinstance(item, MutableMapping):
+        for key in item:
+            recursive_check_defined(item[key])
+    elif isinstance(item, list):
+        for i in item:
+            recursive_check_defined(i)
+    else:
+        if isinstance(item, Undefined):
+            raise Exception("{0} is undefined".format(item))
 
 
 class ActionModule(ActionBase):
