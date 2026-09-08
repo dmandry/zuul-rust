@@ -46,16 +46,16 @@
       - setup.cfg
 
 - job:
-    name: zuul-stream-functional-9
-    parent: zuul-stream-functional
-    vars:
-      zuul_ansible_version: 9
-
-- job:
     name: zuul-stream-functional-11
     parent: zuul-stream-functional
     vars:
       zuul_ansible_version: 11
+
+- job:
+    name: zuul-stream-functional-13
+    parent: zuul-stream-functional
+    vars:
+      zuul_ansible_version: 13
 
 - job:
     name: zuul-nox
@@ -83,7 +83,7 @@
 - job:
     name: zuul-nox-remote
     parent: nox
-    nodeset: ubuntu-jammy
+    nodeset: ubuntu-resolute-16GB
     timeout: 2700  # 45 minutes
     pre-run: playbooks/zuul-nox/pre.yaml
     post-run: playbooks/zuul-nox/post-system-logs.yaml
@@ -375,8 +375,8 @@
             files:
               - web/.*
             nodeset: ubuntu-jammy
-        - zuul-stream-functional-9
         - zuul-stream-functional-11
+        - zuul-stream-functional-13
         - zuul-nox-remote
         - zuul-quick-start:
             dependencies: zuul-build-image
@@ -403,8 +403,8 @@
             files:
               - web/.*
             nodeset: ubuntu-jammy
-        - zuul-stream-functional-9
         - zuul-stream-functional-11
+        - zuul-stream-functional-13
         - zuul-nox-remote
         - zuul-quick-start:
             dependencies: zuul-upload-image
