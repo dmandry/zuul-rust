@@ -720,44 +720,6 @@ class JobDir(object):
                                                  'nodes.unreachable')
         os.makedirs(self.control_path)
 
-        localhost_facts = os.path.join(self.fact_cache, 'localhost')
-        jobtime = datetime.datetime.utcnow()
-        date_time_facts = {}
-        date_time_facts['year'] = jobtime.strftime('%Y')
-        date_time_facts['month'] = jobtime.strftime('%m')
-        date_time_facts['weekday'] = jobtime.strftime('%A')
-        date_time_facts['weekday_number'] = jobtime.strftime('%w')
-        date_time_facts['weeknumber'] = jobtime.strftime('%W')
-        date_time_facts['day'] = jobtime.strftime('%d')
-        date_time_facts['hour'] = jobtime.strftime('%H')
-        date_time_facts['minute'] = jobtime.strftime('%M')
-        date_time_facts['second'] = jobtime.strftime('%S')
-        date_time_facts['epoch'] = jobtime.strftime('%s')
-        date_time_facts['date'] = jobtime.strftime('%Y-%m-%d')
-        date_time_facts['time'] = jobtime.strftime('%H:%M:%S')
-        date_time_facts['iso8601_micro'] = \
-            jobtime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        date_time_facts['iso8601'] = \
-            jobtime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        date_time_facts['iso8601_basic'] = jobtime.strftime("%Y%m%dT%H%M%S%f")
-        date_time_facts['iso8601_basic_short'] = \
-            jobtime.strftime("%Y%m%dT%H%M%S")
-
-        # Set the TZ data manually as jobtime is naive.
-        date_time_facts['tz'] = 'UTC'
-        date_time_facts['tz_offset'] = '+0000'
-
-        executor_facts = {}
-        executor_facts['date_time'] = date_time_facts
-        executor_facts['module_setup'] = True
-
-        # NOTE(pabelanger): We do not want to leak zuul-executor facts to other
-        # playbooks now that smart fact gathering is enabled by default.  We
-        # can have ansible skip populating the cache with information by
-        # writing a file with the minimum facts we want.
-        with open(localhost_facts, 'w') as f:
-            json.dump(executor_facts, f)
-
         self.result_data_file = os.path.join(self.work_root, 'results.json')
         with _safe_open(self.result_data_file, 'w'):
             pass
@@ -883,6 +845,80 @@ class JobDir(object):
 
     def __exit__(self, etype, value, tb):
         self.cleanup()
+
+
+class BaseFactManager(collections.UserDict):
+    def __init__(self, fact_cache_path, hostname):
+        self.fact_cache_path = fact_cache_path
+        self.hostname = hostname
+        self.data = {}
+
+    def load(self, hostname):
+        raise NotImplementedError
+
+    def save(self, hostname):
+        raise NotImplementedError
+
+
+class Schema0FactManager(BaseFactManager):
+    def getPath(self):
+        return os.path.join(self.fact_cache_path, self.hostname)
+
+    def load(self):
+        path = self.getPath()
+        if os.path.exists(path):
+            with open(path) as f:
+                self.data = json.load(f)
+
+    def save(self):
+        path = self.getPath()
+        with open(path, 'w') as f:
+            json.dump(self.data, f)
+
+
+class Schema1FactManager(BaseFactManager):
+    # In theory, this should preserve tagged values, but in practice,
+    # there are none at the points where we read and write the fact
+    # cache, other than our own frozen variables.
+    def getPath(self):
+        return os.path.join(self.fact_cache_path, 's1_' + self.hostname)
+
+    def load(self):
+        path = self.getPath()
+        if os.path.exists(path):
+            with open(path) as f:
+                data = json.load(f)
+            if '__payload__' in data:
+                self.data = json.loads(data['__payload__'])
+
+    def save(self):
+        path = self.getPath()
+        payload = json.dumps(self.data)
+        data = {'__payload__': payload}
+        with open(path, 'w') as f:
+            json.dump(data, f)
+
+    def _getRecursiveValues(self, data):
+        if isinstance(data, dict) and '__ansible_type' in data:
+            data = data['value']
+        if isinstance(data, dict):
+            ret = {}
+            for k, v in data.items():
+                if isinstance(v, dict) and 'value' in v:
+                    v = self._getRecursiveValues(v['value'])
+                ret[k] = v
+            return ret
+        if isinstance(data, list):
+            ret = []
+            for v in data.items():
+                if isinstance(v, dict) and 'value' in v:
+                    v = self._getRecursiveValues(v['value'])
+                ret.append(v)
+            return ret
+        return data
+
+    def __getitem__(self, key):
+        return self._getRecursiveValues(self.data[key])
 
 
 class UpdateTask(object):
@@ -1310,6 +1346,7 @@ class AnsibleJob(object):
             self.jobdir = JobDir(self.executor_server.jobdir_root,
                                  self.executor_server.keep_jobdir,
                                  str(self.build_request.uuid))
+            self.setExecutorFacts()
             # report that job has been taken
             self.executor_server.startBuild(self.build_request, start_time)
 
@@ -1375,6 +1412,42 @@ class AnsibleJob(object):
                 self.log.exception("Error finalizing job thread:")
             self.log.info("Job execution took: %.3f seconds",
                           self.end_time - self.time_starting_build)
+
+    def setExecutorFacts(self):
+        # NOTE(pabelanger): We do not want to leak zuul-executor facts to other
+        # playbooks now that smart fact gathering is enabled by default.  We
+        # can have ansible skip populating the cache with information by
+        # writing a file with the minimum facts we want.
+        jobtime = datetime.datetime.utcnow()
+        date_time_facts = {}
+        date_time_facts['year'] = jobtime.strftime('%Y')
+        date_time_facts['month'] = jobtime.strftime('%m')
+        date_time_facts['weekday'] = jobtime.strftime('%A')
+        date_time_facts['weekday_number'] = jobtime.strftime('%w')
+        date_time_facts['weeknumber'] = jobtime.strftime('%W')
+        date_time_facts['day'] = jobtime.strftime('%d')
+        date_time_facts['hour'] = jobtime.strftime('%H')
+        date_time_facts['minute'] = jobtime.strftime('%M')
+        date_time_facts['second'] = jobtime.strftime('%S')
+        date_time_facts['epoch'] = jobtime.strftime('%s')
+        date_time_facts['date'] = jobtime.strftime('%Y-%m-%d')
+        date_time_facts['time'] = jobtime.strftime('%H:%M:%S')
+        date_time_facts['iso8601_micro'] = \
+            jobtime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        date_time_facts['iso8601'] = \
+            jobtime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        date_time_facts['iso8601_basic'] = jobtime.strftime("%Y%m%dT%H%M%S%f")
+        date_time_facts['iso8601_basic_short'] = \
+            jobtime.strftime("%Y%m%dT%H%M%S")
+
+        # Set the TZ data manually as jobtime is naive.
+        date_time_facts['tz'] = 'UTC'
+        date_time_facts['tz_offset'] = '+0000'
+
+        executor_facts = self.getFactManager('localhost')
+        executor_facts['date_time'] = date_time_facts
+        executor_facts['module_setup'] = True
+        executor_facts.save()
 
     def setNodeInfo(self):
         try:
@@ -3223,6 +3296,12 @@ class AnsibleJob(object):
             host_list, self.nodeset, normal_vars,
             self.job.group_variables, self.job.extra_variables)
 
+    def getFactManager(self, hostname):
+        if self.ansible_version == '11':
+            return Schema0FactManager(self.jobdir.fact_cache, hostname)
+        else:
+            return Schema1FactManager(self.jobdir.fact_cache, hostname)
+
     def loadFrozenHostvars(self):
         # Read in the frozen hostvars, and remove the frozen variable
         # from the fact cache.
@@ -3234,12 +3313,10 @@ class AnsibleJob(object):
         host_list = self.host_list + [localhost]
         for host in host_list:
             self.log.debug("Loading frozen vars for %s", host['name'])
-            path = os.path.join(self.jobdir.fact_cache, host['name'])
-            facts = {}
-            if os.path.exists(path):
-                with open(path) as f:
-                    facts = json.loads(f.read())
-            self.frozen_hostvars[host['name']] = facts.pop('_zuul_frozen', {})
+            facts = self.getFactManager(host['name'])
+            facts.load()
+            frozen_vars = facts.pop('_zuul_frozen', {})
+            self.frozen_hostvars[host['name']] = frozen_vars
             # Always include the nodepool vars, even if we didn't run
             # the playbook for this host.
             if 'host_vars' in host:
@@ -3247,8 +3324,7 @@ class AnsibleJob(object):
                     host['host_vars']['nodepool']
                 self.frozen_hostvars[host['name']]['zuul_node'] =\
                     host['host_vars']['zuul_node']
-            with open(path, 'w') as f:
-                f.write(json.dumps(facts))
+            facts.save()
 
             # While we're here, update both hostvars dicts with
             # an !unsafe copy of the original input as well.
