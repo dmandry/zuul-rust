@@ -307,7 +307,10 @@ class BaseMergeServer(metaclass=ABCMeta):
             try:
                 self._update(connection, project)
             except Exception:
-                errors.append(f"Unable to update {connection}/{project}")
+                errors.append(
+                    f"Unable to update {connection}/{project}.  "
+                    "This may be due to an infrastructure issue."
+                )
                 return result
 
         ret = self.merger.mergeChanges(

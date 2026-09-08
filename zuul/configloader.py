@@ -1668,7 +1668,7 @@ class PipelineParser(object):
             "of its cross-repo dependencies was unable to be "
             "automatically merged with the current state of its "
             "repository. Please rebase the change and upload a new "
-            "patchset.")
+            "revision.")
 
         pipeline.success_message = conf.get('success-message',
                                             "Build succeeded.")
