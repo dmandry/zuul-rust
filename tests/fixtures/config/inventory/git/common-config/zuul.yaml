@@ -115,19 +115,19 @@
     run: playbooks/network.yaml
 
 - job:
-    name: ansible-version9-inventory
-    nodeset:
-      nodes:
-        - name: ubuntu-xenial
-          label: ubuntu-xenial
-    ansible-version: '9'
-    run: playbooks/ansible-version.yaml
-
-- job:
     name: ansible-version11-inventory
     nodeset:
       nodes:
         - name: ubuntu-xenial
           label: ubuntu-xenial
     ansible-version: '11'
+    run: playbooks/ansible-version.yaml
+
+- job:
+    name: ansible-version13-inventory
+    nodeset:
+      nodes:
+        - name: ubuntu-xenial
+          label: ubuntu-xenial
+    ansible-version: '13'
     run: playbooks/ansible-version.yaml
