@@ -214,7 +214,7 @@ class TestZuulTriggerProjectChangeMerged(ZuulTestCase):
             "Merge Failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
-            "upload a new patchset.",
+            "upload a new revision.",
             B.messages[0])
         self.assertIn(
             'Error merging gerrit/org/project for 2,2',
@@ -250,7 +250,7 @@ class TestZuulTriggerProjectChangeMerged(ZuulTestCase):
             "Merge Failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
-            "upload a new patchset.",
+            "upload a new revision.",
             E.messages[0])
         self.assertIn(
             'Error merging gerrit/org/project for 5,2',

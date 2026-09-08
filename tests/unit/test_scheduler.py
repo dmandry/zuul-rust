@@ -5604,7 +5604,7 @@ For CI problems and help debugging, contact ci@example.org"""
             "Merge Failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
-            "upload a new patchset.",
+            "upload a new revision.",
             tenant.layout.pipeline_managers['check'].
             pipeline.merge_conflict_message)
         self.assertEqual(
@@ -5652,7 +5652,7 @@ For CI problems and help debugging, contact ci@example.org"""
             "Merge Failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
-            "upload a new patchset.",
+            "upload a new revision.",
             tenant.layout.pipeline_managers['check'].
             pipeline.merge_conflict_message)
         self.assertEqual(
