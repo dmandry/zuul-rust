@@ -79,16 +79,16 @@ class FunctionalVarsMixIn:
         self._run_job('user-dir', 'SUCCESS')
 
 
-class TestVars9(AnsibleZuulTestCase, FunctionalVarsMixIn):
-    ansible_version = '9'
+class TestVars11(AnsibleZuulTestCase, FunctionalVarsMixIn):
+    ansible_version = '11'
 
     def setUp(self):
         super().setUp()
         self._setUp()
 
 
-class TestVars11(AnsibleZuulTestCase, FunctionalVarsMixIn):
-    ansible_version = '11'
+class TestVars13(AnsibleZuulTestCase, FunctionalVarsMixIn):
+    ansible_version = '13'
 
     def setUp(self):
         super().setUp()
