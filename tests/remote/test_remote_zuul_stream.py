@@ -848,18 +848,18 @@ class FunctionalZuulStreamMixIn:
                 r'fake \| skipping: Conditional result was False', text)
 
 
-class TestZuulStream9(AnsibleZuulTestCase, FunctionalZuulStreamMixIn):
-    ansible_version = '9'
-    ansible_core_version = '2.16'
+class TestZuulStream11(AnsibleZuulTestCase, FunctionalZuulStreamMixIn):
+    ansible_version = '11'
+    ansible_core_version = '2.18'
 
     def setUp(self):
         super().setUp()
         self._setUp()
 
 
-class TestZuulStream11(AnsibleZuulTestCase, FunctionalZuulStreamMixIn):
-    ansible_version = '11'
-    ansible_core_version = '2.18'
+class TestZuulStream13(AnsibleZuulTestCase, FunctionalZuulStreamMixIn):
+    ansible_version = '13'
+    ansible_core_version = '2.20'
 
     def setUp(self):
         super().setUp()
