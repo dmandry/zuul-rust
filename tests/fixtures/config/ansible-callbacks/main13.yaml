@@ -1,9 +1,7 @@
 - tenant:
     name: tenant-one
-    default-ansible-version: '9'
+    default-ansible-version: '13'
     source:
       gerrit:
         config-projects:
           - common-config
-        untrusted-projects:
-          - org/project
