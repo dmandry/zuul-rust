@@ -197,6 +197,14 @@ function formatProviderName(providerName) {
   }
 }
 
+function formatHostname(hostName) {
+  if (hostName !== null) {
+    return hostName.split('.')[0]
+  } else {
+    return hostName
+  }
+}
+
 // from https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent
 function useTimeMinute() {
   const [time, setTime] = useState(() => new Date())
@@ -226,6 +234,7 @@ export {
   buildExternalLink,
   buildExternalTableLink,
   describeRef,
+  formatHostname,
   formatProviderName,
   formatTime,
   getNodeStyle,
