@@ -1339,7 +1339,10 @@ class ExecutorFactsMixin:
         build = self.getJobFromHistory('datetime-fact', result='SUCCESS')
         with open(build.jobdir.job_output_file) as f:
             output = f.read()
+            self.log.debug(output)
             self.assertIn(f'Ansible version={self.ansible_major_minor}',
+                          output)
+            self.assertIn(f'Datetime={date_time['date']}',
                           output)
 
 
