@@ -11638,8 +11638,8 @@ class TestReturnWarnings(AnsibleZuulTestCase):
         self.assertIn('This is the second warning', A.messages[0])
 
 
-class TestUnsafeVars(AnsibleZuulTestCase):
-    tenant_config_file = 'config/unsafe-vars/main.yaml'
+class UnsafeVarsMixin:
+    tenant_config_file = 'config/unsafe-vars/main-X.yaml'
 
     def _get_file(self, build, path):
         p = os.path.join(build.jobdir.root, path)
@@ -11718,6 +11718,14 @@ class TestUnsafeVars(AnsibleZuulTestCase):
 
         # This is marked unsafe
         self.assertIn("TESTJOB SECRET: {{ subtext }}", job_output)
+
+
+class TestUnsafeVars11(AnsibleZuulTestCase, UnsafeVarsMixin):
+    tenant_config_file = 'config/unsafe-vars/main-11.yaml'
+
+
+class TestUnsafeVars13(AnsibleZuulTestCase, UnsafeVarsMixin):
+    tenant_config_file = 'config/unsafe-vars/main-13.yaml'
 
 
 class TestConnectionVars(AnsibleZuulTestCase):
