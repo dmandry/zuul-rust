@@ -133,7 +133,7 @@ function NodeInfoItem(tenant, darkMode, timezone, node, item) {
             <strong>{item.title}</strong> {value}
           </>
         }
-      />) : <></>)
+      />) : '')
 }
 
 function NodeInfo(tenant, darkMode, timezone, node) {
