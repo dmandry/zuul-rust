@@ -19,12 +19,19 @@ import os
 from zuul.ansible import paths
 
 from ansible.module_utils.parsing.convert_bool import boolean
+try:
+    from ansible._internal._datatag._tags import TrustedAsTemplate
+except ImportError:
+    # TODO: this is only needed for Ansible < 12
+    TrustedAsTemplate = None
 
 
 def zuul_console_disabled(module):
-    return boolean(
-        module._templar.template(
-            "{{zuul_console_disabled|default(false)}}"))
+    tmpl = "{{zuul_console_disabled|default(false)}}"
+    if TrustedAsTemplate is not None:
+        tmpl = TrustedAsTemplate().tag(tmpl)
+
+    return boolean(module._templar.template(tmpl))
 
 
 def stream_setup_run(module, task_vars):
