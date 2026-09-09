@@ -94,12 +94,25 @@ class PipelineManager(metaclass=ABCMeta):
         self.state = None
         self.change_list = None
         self.pipeline_run_id = None
+        self._live_blobs = None
 
         if sched:
             self.sql = sched.sql
 
     def __str__(self):
         return "<%s %s>" % (self.__class__.__name__, self.pipeline.name)
+
+    @property
+    def live_blobs(self):
+        if self._live_blobs is None:
+            live_blobs = set()
+            for item in self.state.getAllItems(include_old=True):
+                live_blobs.update(item.getBlobKeys())
+            self._live_blobs = live_blobs
+        return self._live_blobs
+
+    def resetLiveBlobs(self):
+        self._love_blobs = None
 
     @contextlib.contextmanager
     def currentContext(self, ctx):
@@ -1887,6 +1900,7 @@ class PipelineManager(metaclass=ABCMeta):
             start = time.time()
             item.freezeJobGraph(self.getLayout(item),
                                 self.current_context,
+                                self.live_blobs,
                                 skip_file_matcher=False,
                                 redact_secrets_and_keys=False)
             self.reportPipelineTiming('job_freeze_time', start)

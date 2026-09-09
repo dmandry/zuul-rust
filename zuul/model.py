@@ -4787,7 +4787,7 @@ class Job(ConfigObject):
             use_ref=include_vars.use_ref,
         )
 
-    def _deduplicateSecrets(self, context, frozen_playbooks):
+    def _deduplicateSecrets(self, context, frozen_playbooks, live_blobs):
         # At the end of this method, the values in the playbooks'
         # secrets dictionary will be mutated to either be an integer
         # (which is an index into the job's secret list) or a dict
@@ -4809,7 +4809,9 @@ class Job(ConfigObject):
                 if (len(secret_serialized) > self.SECRET_BLOB_SIZE):
                     # If the secret is large, store it in the blob store
                     # and store the key in the playbook secrets dict.
-                    blob_key = blobstore.put(secret_serialized)
+                    blob_key = blobstore.put(secret_serialized, live_blobs)
+                    if live_blobs is not None:
+                        live_blobs.add(blob_key)
                     playbook['secrets'][secret_key] = {'blob': blob_key}
                 else:
                     if secret_value not in secrets_list:
@@ -4842,7 +4844,7 @@ class Job(ConfigObject):
         return ns.flattenAlternatives(layout)
 
     def freezeJob(self, context, tenant, layout, item, change,
-                  redact_secrets_and_keys):
+                  live_blobs, redact_secrets_and_keys):
         buildset = item.current_build_set
         kw = {}
 
@@ -4890,7 +4892,8 @@ class Job(ConfigObject):
             # If we're redacting, don't de-duplicate so that
             # it's clear that the value ("REDACTED") is
             # redacted.
-            kw['secrets'] = self._deduplicateSecrets(context, frozen_playbooks)
+            kw['secrets'] = self._deduplicateSecrets(context, frozen_playbooks,
+                                                     live_blobs)
         kw['affected_projects'] = self._getAffectedProjects(tenant)
         # Fill in the zuul project for any include-vars that don't specify it
         kw['include_vars'] = [self._freezeIncludeVars(
@@ -7528,14 +7531,15 @@ class QueueItem(zkobject.ZKObject):
                 return change
         return None
 
-    def freezeJobGraph(self, layout, context,
+    def freezeJobGraph(self, layout, context, live_blobs,
                        skip_file_matcher,
                        redact_secrets_and_keys):
         """Find or create actual matching jobs for this item's changes and
         store the resulting job tree."""
 
         try:
-            results = layout.createJobGraph(context, self, skip_file_matcher,
+            results = layout.createJobGraph(context, self, live_blobs,
+                                            skip_file_matcher,
                                             redact_secrets_and_keys)
             job_graph = results['job_graph']
 
@@ -8522,7 +8526,7 @@ class QueueItem(zkobject.ZKObject):
                 try:
                     log.debug("Creating job graph for config change detection")
                     results = layout_ahead.createJobGraph(
-                        None, self,
+                        None, self, None,
                         skip_file_matcher=True,
                         redact_secrets_and_keys=False,
                         old=True)
@@ -11094,8 +11098,9 @@ class Layout(object):
         return parameters
 
     def extendJobGraph(self, context, item, change, ppc, job_graph,
-                       skip_file_matcher, redact_secrets_and_keys,
-                       debug_messages, pending_errors):
+                       live_blobs, skip_file_matcher,
+                       redact_secrets_and_keys, debug_messages,
+                       pending_errors):
         log = item.annotateLogger(self.log)
         semaphore_handler = item.manager.tenant.semaphore_handler
         job_list = ppc.job_list
@@ -11238,7 +11243,7 @@ class Layout(object):
                     # initial decision here.
                     matches_change = False
             frozen_job = final_job.freezeJob(
-                context, self.tenant, self, item, change,
+                context, self.tenant, self, item, change, live_blobs,
                 redact_secrets_and_keys)
             frozen_job._set(matches_change=matches_change)
             job_graph.addJob(frozen_job)
@@ -11264,7 +11269,7 @@ class Layout(object):
                     "Job %s does not specify a run playbook" % (
                         final_job.name,))
 
-    def createJobGraph(self, context, item,
+    def createJobGraph(self, context, item, live_blobs,
                        skip_file_matcher,
                        redact_secrets_and_keys,
                        old=False):
@@ -11292,8 +11297,9 @@ class Layout(object):
                 enable_debug = True
                 debug_messages.extend(ppc.debug_messages)
             self.extendJobGraph(
-                context, item, change, ppc, job_graph, skip_file_matcher,
-                redact_secrets_and_keys, debug_messages, pending_errors)
+                context, item, change, ppc, job_graph, live_blobs,
+                skip_file_matcher, redact_secrets_and_keys, debug_messages,
+                pending_errors)
             if ppc.fail_fast is not None:
                 # Any explicit setting of fail_fast takes effect,
                 # last one wins.

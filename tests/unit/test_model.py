@@ -245,7 +245,7 @@ class TestJob(BaseTestCase):
             self.tenant, change))
 
         with self.zk_context as ctx:
-            item.freezeJobGraph(self.layout, ctx,
+            item.freezeJobGraph(self.layout, ctx, None,
                                 skip_file_matcher=False,
                                 redact_secrets_and_keys=False)
         self.assertEqual(len(item.getJobs()), 1)
@@ -263,7 +263,7 @@ class TestJob(BaseTestCase):
             self.tenant, change))
 
         with self.zk_context as ctx:
-            item.freezeJobGraph(self.layout, ctx,
+            item.freezeJobGraph(self.layout, ctx, None,
                                 skip_file_matcher=False,
                                 redact_secrets_and_keys=False)
         self.assertEqual(len(item.getJobs()), 1)
@@ -315,7 +315,7 @@ class TestJob(BaseTestCase):
 
         self.manager.getFallbackLayout = mock.Mock(return_value=None)
         with self.zk_context as ctx:
-            item.freezeJobGraph(self.layout, ctx,
+            item.freezeJobGraph(self.layout, ctx, None,
                                 skip_file_matcher=False,
                                 redact_secrets_and_keys=False)
         self.assertEqual([], item.getJobs())
@@ -391,7 +391,7 @@ class TestJob(BaseTestCase):
                 model.JobConfigurationError,
                 "Pre-review pipeline gate does not allow post-review job"):
             with self.zk_context as ctx:
-                item.freezeJobGraph(self.layout, ctx,
+                item.freezeJobGraph(self.layout, ctx, None,
                                     skip_file_matcher=False,
                                     redact_secrets_and_keys=False)
 
@@ -476,7 +476,7 @@ class TestJob(BaseTestCase):
         self.assertTrue(python27.changeMatchesBranch(self.tenant, change))
 
         with self.zk_context as ctx:
-            item.freezeJobGraph(self.layout, ctx,
+            item.freezeJobGraph(self.layout, ctx, None,
                                 skip_file_matcher=False,
                                 redact_secrets_and_keys=False)
         self.assertEqual(len(item.getJobs()), 1)
@@ -1300,7 +1300,7 @@ class TestJob(BaseTestCase):
                 model.JobConfigurationError,
                 "The image build job"):
             with self.zk_context as ctx:
-                item.freezeJobGraph(self.layout, ctx,
+                item.freezeJobGraph(self.layout, ctx, None,
                                     skip_file_matcher=False,
                                     redact_secrets_and_keys=False)
 
