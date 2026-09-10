@@ -1,0 +1,113 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "32fb9e86_a5dff5cd",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 653,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-10T13:18:50Z",
+      "side": 0,
+      "message": "The layout uuid only needs to be reset when we reset the buildset. Since this happens when we cancel all buils, we don\u0027t need to do this here prematurely.",
+      "range": {
+        "startLine": 652,
+        "startChar": 20,
+        "endLine": 653,
+        "endChar": 68
+      },
+      "revId": "4b8993e597f4081a987410b888f801d5ba92808a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "25f0a712_1733f236",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 658,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-10T13:18:50Z",
+      "side": 0,
+      "message": "Once frozen a job graph is never updated.",
+      "range": {
+        "startLine": 657,
+        "startChar": 16,
+        "endLine": 658,
+        "endChar": 46
+      },
+      "revId": "4b8993e597f4081a987410b888f801d5ba92808a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "05fc6886_1562ac16",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 663,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-10T13:18:50Z",
+      "side": 0,
+      "message": "We never update a frozen job graph, so there can\u0027t be new jobs.",
+      "range": {
+        "startLine": 662,
+        "startChar": 16,
+        "endLine": 663,
+        "endChar": 36
+      },
+      "revId": "4b8993e597f4081a987410b888f801d5ba92808a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f1c5b6b2_9b6925c6",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 667,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-10T13:18:50Z",
+      "side": 0,
+      "message": "The item state should not change.",
+      "revId": "4b8993e597f4081a987410b888f801d5ba92808a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "6a38b2e9_2d93b3ef",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 679,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-10T13:18:50Z",
+      "side": 0,
+      "message": "We should not remove builds during re-enqueue, so there is no need to resume jobs.",
+      "range": {
+        "startLine": 677,
+        "startChar": 16,
+        "endLine": 679,
+        "endChar": 66
+      },
+      "revId": "4b8993e597f4081a987410b888f801d5ba92808a",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
