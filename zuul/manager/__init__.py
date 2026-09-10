@@ -637,47 +637,12 @@ class PipelineManager(metaclass=ABCMeta):
                 # failing.
                 if item_ahead_valid:
                     change_queue.moveItem(item, old_item_ahead)
-
-                # Get an updated copy of the layout, but if we have a
-                # job graph already, then keep it (our repo state and
-                # jobs are frozen and will now only update if the item
-                # ahead changes).  This resumes the buildset merge
-                # state machine.  If we have an up-to-date layout, it
-                # will go ahead and refresh the job graph if there
-                # isn't one; or it will send a new merge job if
-                # necessary, or it will do nothing if we're waiting on
-                # a merge job.
-                has_job_graph = bool(item.current_build_set.job_graph)
-                if item.live:
-                    # Only reset the layout for live items as we don't need to
-                    # re-create the layout in independent pipelines.
-                    item.updateAttributes(self.current_context,
-                                          layout_uuid=None)
-
-                # If the item is no longer active, but has a job graph we
-                # will make sure to update it.
-                if item.active or has_job_graph:
-                    self.prepareItem(item)
-
-                # Re-set build results in case any new jobs have been
-                # added to the tree.
-                for build in item.current_build_set.getBuilds():
-                    if build.result:
-                        item.setResult(build)
-                # Similarly, reset the item state.
-                if item.current_build_set.unable_to_merge:
-                    item.setUnableToMerge()
-                if item.current_build_set.has_blocking_errors:
-                    item.setConfigErrors(item.getConfigErrors())
-                if item.dequeued_needing_change:
-                    item.setDequeuedNeedingChange(item.dequeued_needing_change)
-                if item.dequeued_missing_requirements:
-                    item.setDequeuedMissingRequirements()
-
-                # It can happen that all in-flight builds have been removed
-                # which would lead to paused parent jobs not being resumed.
-                # To prevent that resume parent jobs if necessary.
-                self._resumeBuilds(item.current_build_set)
+                else:
+                    # FIXME: reset all builds or will this be corrected by
+                    # the pipeline manager?
+                    # It looks like we could end up with multiple queue heads
+                    # in that case.
+                    log.debug(f"SWE> item {old_item_ahead} is no longer valid")
 
                 self.reportStats(item)
                 return True
