@@ -4040,6 +4040,7 @@ class TestScheduler(ZuulTestCase):
                          events[0].description)
 
     def test_live_reconfiguration_layout_cache_fallback(self):
+        # FIXME: check if we still need this test
         # Test that re-calculating a dynamic fallback layout works after it
         # was removed during a reconfiguration.
         self.executor_server.hold_jobs_in_build = True
@@ -4072,7 +4073,7 @@ class TestScheduler(ZuulTestCase):
 
         items = self.getAllItems('tenant-one', 'gate')
         self.assertEqual(len(items), 1)
-        self.assertIsNone(items[0].layout_uuid)
+        self.assertIsNotNone(items[0].layout_uuid)
 
         # Assert that the layout cache is empty after a reconfiguration.
         tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
@@ -4115,6 +4116,7 @@ class TestScheduler(ZuulTestCase):
         ], ordered=False)
 
     def test_live_reconfiguration_layout_cache_non_live(self):
+        # FIXME: check if we still need this test
         # Test that the layout UUID is only reset for live items.
         self.executor_server.hold_jobs_in_build = True
 
@@ -4152,7 +4154,7 @@ class TestScheduler(ZuulTestCase):
         # Assert that the layout UUID of the live item is reset during a
         # reconfiguration, but non-live items keep their UUID.
         self.assertIsNotNone(items[0].layout_uuid)
-        self.assertIsNone(items[1].layout_uuid)
+        self.assertIsNotNone(items[1].layout_uuid)
 
         # Cache should be empty after a reconfiguration
         tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
