@@ -19,7 +19,7 @@ import sys
 # would remove our ability to easily have a discussion with our friends
 # upstream
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: command
 short_description: Execute commands on targets
@@ -129,9 +129,9 @@ seealso:
 author:
     - Ansible Core Team
     - Michael DeHaan
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Return motd to registered var
   ansible.builtin.command: cat /etc/motd
   register: mymotd
@@ -185,9 +185,9 @@ EXAMPLES = r'''
 - name: Safely use templated variable to run command. Always use the quote filter to avoid injection issues
   ansible.builtin.command: cat {{ myfile|quote }}
   register: myoutput
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description: changed
   returned: always
@@ -240,7 +240,7 @@ stderr_lines:
   returned: always
   type: list
   sample: [u'ls cannot access foo: No such file or directory', u'ls …']
-'''
+"""
 
 import datetime
 import glob
@@ -655,6 +655,7 @@ def main():
         argument_spec=dict(
             _raw_params=dict(),
             _uses_shell=dict(type='bool', default=False),
+            cmd=dict(),
             argv=dict(type='list', elements='str'),
             chdir=dict(type='path'),
             executable=dict(),
@@ -670,12 +671,14 @@ def main():
             zuul_output_max_bytes=dict(type='int'),
             zuul_no_log=dict(type='bool'),
         ),
+        required_one_of=[['_raw_params', 'cmd', 'argv']],
+        mutually_exclusive=[['_raw_params', 'cmd', 'argv']],
         supports_check_mode=True,
     )
     shell = module.params['_uses_shell']
     chdir = module.params['chdir']
     executable = module.params['executable']
-    args = module.params['_raw_params']
+    args = module.params['_raw_params'] or module.params['cmd']
     argv = module.params['argv']
     creates = module.params['creates']
     removes = module.params['removes']
@@ -697,16 +700,6 @@ def main():
     if not zuul_log_id:
         module.fail_json(rc=256, msg="zuul_log_id missing: %s" % module.params)
 
-    if (not args or args.strip() == '') and not argv:
-        r['rc'] = 256
-        r['msg'] = "no command given"
-        module.fail_json(**r)
-
-    if args and argv:
-        r['rc'] = 256
-        r['msg'] = "only command or argv can be given, not both"
-        module.fail_json(**r)
-
     if not shell and args:
         args = shlex.split(args)
 
@@ -722,9 +715,9 @@ def main():
 
         try:
             os.chdir(chdir)
-        except (IOError, OSError) as e:
-            r['msg'] = 'Unable to change directory before execution: %s' % to_text(e)
-            module.fail_json(**r)
+        except OSError as ex:
+            r['msg'] = 'Unable to change directory before execution.'
+            module.fail_json(**r, exception=ex)
 
     # check_mode partial support, since it only really works in checking creates/removes
     if module.check_mode:
