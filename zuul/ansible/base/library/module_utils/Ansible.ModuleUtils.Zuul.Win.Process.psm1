@@ -3,7 +3,7 @@
 # Simplified BSD License (see licenses/simplified_bsd.txt or https://opensource.org/licenses/BSD-2-Clause)
 
 #AnsibleRequires -CSharpUtil Ansible.Zuul.Win.Common
-#AnsibleRequires -CSharpUtil Ansible.Zuul.Win.Command.Process
+#AnsibleRequires -CSharpUtil Ansible.Zuul.Win.Process
 
 Function Resolve-ExecutablePath {
     <#
@@ -67,7 +67,7 @@ Function ConvertFrom-EscapedArgument {
             # it expects it to be a filepath). We add a dummy value to ensure it splits the args in the same way as
             # each other and just discard that first arg in the output.
             $command = "a $command"
-            [Ansible.Zuul.Win.Command.Process.ProcessUtil]::CommandLineToArgv($command) | Select-Object -Skip 1
+            [Ansible.Zuul.Win.Process.ProcessUtil]::CommandLineToArgv($command) | Select-Object -Skip 1
         }
     }
 }
@@ -157,7 +157,7 @@ Function Start-AnsibleWindowsProcess {
     }
     #>
     [CmdletBinding(DefaultParameterSetName = 'ArgumentList')]
-    [OutputType('Ansible.Zuul.Win.Command.Process.Info')]
+    [OutputType('Ansible.Zuul.Win.Process.Info')]
     param (
         [Parameter(Mandatory = $true, ParameterSetName = 'ArgumentList')]
         [Parameter(ParameterSetName = 'CommandLine')]
@@ -214,7 +214,7 @@ Function Start-AnsibleWindowsProcess {
     }
     else {
         # If -FilePath is not set then -CommandLine must have been used. Select the path based on the first entry.
-        $applicationName = [Ansible.Zuul.Win.Command.Process.ProcessUtil]::CommandLineToArgv($CommandLine)[0]
+        $applicationName = [Ansible.Zuul.Win.Process.ProcessUtil]::CommandLineToArgv($CommandLine)[0]
     }
     $applicationName = Resolve-ExecutablePath -FilePath $applicationName -WorkingDirectory $WorkingDirectory
 
@@ -241,10 +241,10 @@ Function Start-AnsibleWindowsProcess {
         }
     }
 
-    $res = [Ansible.Zuul.Win.Command.Process.ProcessUtil]::CreateProcess($applicationName, $CommandLine, $WorkingDirectory, $Environment, $stdin, $OutputEncodingOverride, $WaitChildren, $ZuulLogId, $ZuulLogPath, $ZuulOutputMaxBytes, $ZuulNoLog)
+    $res = [Ansible.Zuul.Win.Process.ProcessUtil]::CreateProcess($applicationName, $CommandLine, $WorkingDirectory, $Environment, $stdin, $OutputEncodingOverride, $WaitChildren, $ZuulLogId, $ZuulLogPath, $ZuulOutputMaxBytes, $ZuulNoLog)
 
     [PSCustomObject]@{
-        PSTypeName = 'Ansible.Zuul.Win.Command.Process.Info'
+        PSTypeName = 'Ansible.Zuul.Win.Process.Info'
         Command = $CommandLine
         Stdout = $res.StandardOut
         Stderr = $res.StandardError
