@@ -637,6 +637,12 @@ class PipelineManager(metaclass=ABCMeta):
                 # failing.
                 if item_ahead_valid:
                     change_queue.moveItem(item, old_item_ahead)
+                else:
+                    # FIXME: reset all builds or will this be corrected by
+                    # the pipeline manager?
+                    # It looks like we could end up with multiple queue heads
+                    # in that case.
+                    log.debug(f"SWE> item {old_item_ahead} is no longer valid")
 
                 self.reportStats(item)
                 return True

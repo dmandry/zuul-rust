@@ -7217,6 +7217,76 @@ class TestChangeQueues(ZuulTestCase):
             dict(name='project-test', result='SUCCESS', changes='3,1 4,1'),
         ], ordered=False)
 
+    def test_project_moved_to_new_queue_on_reconfigure(self):
+        self.executor_server.hold_jobs_in_build = True
+
+        A = self.fake_gerrit.addFakeChange('org/project2', 'master', 'A')
+        B = self.fake_gerrit.addFakeChange('org/project4', 'master', 'B')
+        A.addApproval('Code-Review', 2)
+        B.addApproval('Code-Review', 2)
+
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.waitUntilSettled()
+        self.fake_gerrit.addEvent(B.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        gate_manager = tenant.layout.pipeline_managers['gate']
+        _, project2 = tenant.getProject('org/project2')
+        _, project4 = tenant.getProject('org/project4')
+
+        q1 = gate_manager.state.getQueue(project2.canonical_name, 'master')
+        q2 = gate_manager.state.getQueue(project4.canonical_name, 'master')
+        # Both projects share the same queue.
+        self.assertIs(q1, q2)
+        self.assertEqual(len(q1.queue), 2)
+
+        item_a = q1.queue[0]
+        item_b = q1.queue[1]
+        self.assertEqual(item_a.changes[0].number, A.data['number'])
+        self.assertEqual(item_b.changes[0].number, B.data['number'])
+        # B is behind A in the shared queue.
+        self.assertEqual(item_b.item_ahead, item_a)
+
+        old_buildset_uuid = item_b.current_build_set.uuid
+
+        # Remove org/project2 from tenant
+        self.newTenantConfig('config/change-queues/main-no-project2.yaml')
+        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
+        self.waitUntilSettled()
+
+        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
+        gate_manager = tenant.layout.pipeline_managers['gate']
+
+        # org/project2 is no longer part of the tenant at all.
+        _, project2 = tenant.getProject('org/project2')
+        self.assertIsNone(project2)
+        _, project4 = tenant.getProject('org/project4')
+
+        # B is now the head of the queue
+        q = gate_manager.state.getQueue(project4.canonical_name, 'master')
+        self.assertEqual(len(q.queue), 1)
+        item_b = q.queue[0]
+        self.assertIsNone(item_b.item_ahead)
+
+        # The B should be reset and get a new buildset
+        self.assertNotEqual(item_b.current_build_set.uuid, old_buildset_uuid)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertEqual(A.data['status'], 'NEW')
+        self.assertEqual(A.reported, 1)
+        self.assertEqual(B.data['status'], 'MERGED')
+        self.assertEqual(B.reported, 2)
+
+        self.assertHistory([
+            dict(name='project-test', result='ABORTED', changes='1,1'),
+            dict(name='project-test', result='ABORTED', changes='1,1 2,1'),
+            dict(name='project-test', result='SUCCESS', changes='2,1'),
+        ], ordered=False)
+
 
 class TestJobUpdateBrokenConfig(ZuulTestCase):
     tenant_config_file = 'config/job-update-broken/main.yaml'
