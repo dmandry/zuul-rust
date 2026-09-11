@@ -3,14 +3,6 @@
 // the GPLv3 as noted in the root of the repo.
 // GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-// Zuul note: This file, originating in the ansible.windows
-// collection, is similar to a file in ansible-core, but this file is
-// only used by the win_command module while the win_shell module uses
-// the version in core.  Therefore, in Zuul, this file and namespace
-// have adopted the name "Ansible.Zuul.Win.Command.Process" to
-// delineate that this is the Zuul version of the Process module used
-// by win_command.
-
 using Microsoft.Win32.SafeHandles;
 using System;
 using System.Collections;
@@ -24,13 +16,13 @@ using System.Threading;
 
 using Ansible.Zuul.Win.Common;
 
-//TypeAccelerator -Name Ansible.Zuul.Win.Command.Process.ProcessInformation -TypeName ProcessInformation
-//TypeAccelerator -Name Ansible.Zuul.Win.Command.Process.ProcessUtil -TypeName ProcessUtil
-//TypeAccelerator -Name Ansible.Zuul.Win.Command.Process.Result -TypeName Result
-//TypeAccelerator -Name Ansible.Zuul.Win.Command.Process.SecurityAttributes -TypeName SecurityAttributes
-//TypeAccelerator -Name Ansible.Zuul.Win.Command.Process.StartupInfo -TypeName StartupInfo
+//TypeAccelerator -Name Ansible.Zuul.Win.Process.ProcessInformation -TypeName ProcessInformation
+//TypeAccelerator -Name Ansible.Zuul.Win.Process.ProcessUtil -TypeName ProcessUtil
+//TypeAccelerator -Name Ansible.Zuul.Win.Process.Result -TypeName Result
+//TypeAccelerator -Name Ansible.Zuul.Win.Process.SecurityAttributes -TypeName SecurityAttributes
+//TypeAccelerator -Name Ansible.Zuul.Win.Process.StartupInfo -TypeName StartupInfo
 
-namespace Ansible.Zuul.Win.Command.Process
+namespace Ansible.Zuul.Win.Process
 {
     internal class NativeHelpers
     {
@@ -582,8 +574,8 @@ namespace Ansible.Zuul.Win.Command.Process
             SecurityAttributes processAttributes, SecurityAttributes threadAttributes, bool inheritHandles,
             ProcessCreationFlags creationFlags, IDictionary environment, string currentDirectory, StartupInfo startupInfo)
         {
-            // We always have the extended version present.
-            creationFlags |= ProcessCreationFlags.ExtendedStartupInfoPresent;
+            // We always have the extended version present and use a unicode environmant.
+            creationFlags |= ProcessCreationFlags.ExtendedStartupInfoPresent | ProcessCreationFlags.CreateUnicodeEnvironment;
 
             // $null from PowerShell ends up as an empty string, we need to convert back as an empty string doesn't
             // make sense for these parameters
