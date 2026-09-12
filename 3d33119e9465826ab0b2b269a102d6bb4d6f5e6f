@@ -169,6 +169,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "2d046369_56f770d2",
+        "filename": "tools/replay-workspace.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 54,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T17:18:41Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "8db086ce_8111702d",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "8cf217d2_d6a05c8e",
@@ -204,6 +222,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "62b3c4c4_e3bff734",
+        "filename": "zuul/merger/merger.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 844,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T17:18:41Z",
+      "side": 1,
+      "message": "I don\u0027t feel strongly about it. I just noticed the overlap and thought consistency may be important here. I think we can leave it as is.",
+      "parentUuid": "9b085ffd_0c098871",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "130ecce6_31452b5c",
@@ -235,6 +271,24 @@
       "side": 1,
       "message": "I think that might be something to look into in the future, but at least for the moment, Zuul will let you configure any merge mode for any system.  I see that as a potential future improvement.",
       "parentUuid": "130ecce6_31452b5c",
+      "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "fec74ecb_3556a22b",
+        "filename": "zuul/model.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 91,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T17:18:41Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "a7cddb2c_da05e40f",
       "revId": "3d33119e9465826ab0b2b269a102d6bb4d6f5e6f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
