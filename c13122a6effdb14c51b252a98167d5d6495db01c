@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "59290ab3_cb3f95a3",
+        "filename": "zuul/driver/openstack/openstackendpoint.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 442,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T17:05:42Z",
+      "side": 1,
+      "message": "See below, but I\u0027m wondering if we need to handle the project is the same case similar to the image is already public and uploaded cases (eg we just reuse the existing image external id).",
+      "revId": "c13122a6effdb14c51b252a98167d5d6495db01c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9ec57219_f8ff088e",
+        "filename": "zuul/driver/openstack/openstackendpoint.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 649,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T17:05:42Z",
+      "side": 1,
+      "message": "In this case would returning None cause us to upload the image again rather than logically copy it? If the projects are the same then we can probably just noop rather than do a proper upload? Maybe this case is handled elsewhere.",
+      "revId": "c13122a6effdb14c51b252a98167d5d6495db01c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
