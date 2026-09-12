@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "84eeabaa_59310b4d",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T17:31:18Z",
+      "side": 1,
+      "message": "Should we add a release note for this? Previously Zuul would have enqueued changes that it thought were mergeable, ran builds for those changes, then when reporting back and trying to submit the changes find they aren\u0027t actually mergeable now. After this change Zuul should avoid enqueuing the changes in the first place. The end result is the same (no merge occurs), but there are some subtle behavior differences in how we get there that users may notice. Specifically whether or not we run jobs and log an error when attempting to merge a change.\n\nAll that to say some people may end up confused after this change lands and a release note may help?",
+      "revId": "6b31c01ce2195a368d841c0881fe0bb4b916ff88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
