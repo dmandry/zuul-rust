@@ -1,0 +1,90 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "bd7d6b1f_4d16502e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T16:35:19Z",
+      "side": 1,
+      "message": "recheck I left some minor questions inline but I think this is fine as is.",
+      "revId": "9cad2dff130d1243c26143d1a9bc8bc0a6cdac21",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "20faa8ec_f288ed91",
+        "filename": "web/src/containers/status/PauseModal.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T16:35:19Z",
+      "side": 1,
+      "message": "Is there a reason we\u0027re keeping the association with pausing here when this is a purely informational banner?",
+      "range": {
+        "startLine": 133,
+        "startChar": 17,
+        "endLine": 133,
+        "endChar": 22
+      },
+      "revId": "9cad2dff130d1243c26143d1a9bc8bc0a6cdac21",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "9173849d_a882b627",
+        "filename": "web/src/containers/status/PauseModal.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 138,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T16:35:19Z",
+      "side": 1,
+      "message": "See above.",
+      "range": {
+        "startLine": 138,
+        "startChar": 14,
+        "endLine": 138,
+        "endChar": 19
+      },
+      "revId": "9cad2dff130d1243c26143d1a9bc8bc0a6cdac21",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "34c1eb25_d65f174e",
+        "filename": "web/src/containers/status/PauseModal.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 139,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-12T16:35:19Z",
+      "side": 1,
+      "message": "See above.",
+      "range": {
+        "startLine": 139,
+        "startChar": 16,
+        "endLine": 139,
+        "endChar": 21
+      },
+      "revId": "9cad2dff130d1243c26143d1a9bc8bc0a6cdac21",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
