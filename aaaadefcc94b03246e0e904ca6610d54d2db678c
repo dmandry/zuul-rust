@@ -16,6 +16,24 @@
       "message": "Can we still call this topic?  I think that would be more intuitive.",
       "revId": "aaaadefcc94b03246e0e904ca6610d54d2db678c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4a15eb05_3d6e6a47",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 10
+      },
+      "lineNbr": 333,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-13T20:12:34Z",
+      "side": 1,
+      "message": "I made this update in the more user facing items (triggers, event filters, etc), but continue to track these as subscriptions in the connection as mqtt seems to refer to these as subscriptions. I did leave a comment about that where the conversion in terminology occurs. If you\u0027d prefer we just be internally consistent until we subscribe/unsubscribe in mqtt itself let me know and I can update it the rest of the way.",
+      "parentUuid": "a33da9e5_3d9d6dcd",
+      "revId": "aaaadefcc94b03246e0e904ca6610d54d2db678c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
