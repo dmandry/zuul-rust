@@ -62,7 +62,7 @@
     description: |
       Zuul unit tests with ZooKeeper running
     parent: nox
-    nodeset: ubuntu-jammy
+    nodeset: ubuntu-resolute-8GB
     pre-run: playbooks/zuul-nox/pre.yaml
     post-run: playbooks/zuul-nox/post-system-logs.yaml
     vars:
@@ -77,13 +77,13 @@
         ZUUL_TEST_ROOT: /tmp/zuul-test
         ZUUL_TEST_CGROUPS: 1
         YARN_REGISTRY: "https://{{ zuul_site_mirror_fqdn }}:4443/registry.npmjs"
-      nox_force_python: "3.11"
-      python_version: "3.11"
+      nox_force_python: "3.14"
+      python_version: "3.14"
 
 - job:
     name: zuul-nox-remote
     parent: nox
-    nodeset: ubuntu-jammy
+    nodeset: ubuntu-resolute-8GB
     timeout: 2700  # 45 minutes
     pre-run: playbooks/zuul-nox/pre.yaml
     post-run: playbooks/zuul-nox/post-system-logs.yaml
@@ -97,8 +97,8 @@
         ZUUL_REMOTE_IPV4: "{{ nodepool.private_ipv4 or nodepool.public_ipv4 }}"
         ZUUL_REMOTE_KEEP: "true"
         CI: "1"
-      nox_force_python: "3.11"
-      python_version: "3.11"
+      nox_force_python: "3.14"
+      python_version: "3.14"
 
 - job:
     name: zuul-nox-upgrade
@@ -153,7 +153,7 @@
       # the project var below
       node_version: 22
     run: playbooks/dashboard/run.yaml
-    nodeset: ubuntu-jammy
+    nodeset: ubuntu-resolute-8GB
 
 - job:
     name: zuul-build-dashboard-openstack-whitelabel
@@ -234,8 +234,8 @@
     allowed-projects: zuul/zuul
     timeout: 2700  # 45 minutes
     requires:
-      - python-builder-3.11-trixie-container-image
-      - python-base-3.11-trixie-container-image
+      - python-builder-3.14-trixie-container-image
+      - python-base-3.14-trixie-container-image
     ansible-split-streams: true
     post-run:
       - playbooks/image/test-image.yaml
@@ -313,8 +313,8 @@
     description: Build container images and upload.
     allowed-projects: zuul/zuul
     requires:
-      - python-builder-3.11-trixie-container-image
-      - python-base-3.11-trixie-container-image
+      - python-builder-3.14-trixie-container-image
+      - python-base-3.14-trixie-container-image
     provides: zuul-container-image
     secrets:
       name: container_registry_credentials
@@ -339,13 +339,13 @@
     name: zuul-build-python-release
     parent: build-python-release
     pre-run: playbooks/release/pre.yaml
-    nodeset: ubuntu-jammy
+    nodeset: ubuntu-resolute-8GB
 
 - job:
     name: zuul-release-python
     parent: opendev-release-python
     pre-run: playbooks/release/pre.yaml
-    nodeset: ubuntu-jammy
+    nodeset: ubuntu-resolute-8GB
 
 - project:
     queue: zuul
@@ -359,7 +359,7 @@
         - nox-linters:
             vars:
               nox_install_bindep: false
-            nodeset: ubuntu-jammy
+            nodeset: ubuntu-resolute-8GB
         - zuul-nox-py314
         - zuul-nox-upgrade
         - zuul-build-dashboard-openstack-whitelabel
@@ -368,13 +368,13 @@
         - nodejs-run-lint:
             vars:
               zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            nodeset: ubuntu-jammy
+            nodeset: ubuntu-resolute-8GB
         - nodejs-run-test:
             vars:
               zuul_work_dir: "{{ zuul.project.src_dir }}/web"
             files:
               - web/.*
-            nodeset: ubuntu-jammy
+            nodeset: ubuntu-resolute-8GB
         - zuul-stream-functional-9
         - zuul-stream-functional-11
         - zuul-nox-remote
@@ -389,20 +389,20 @@
         - nox-linters:
             vars:
               nox_install_bindep: false
-            nodeset: ubuntu-jammy
+            nodeset: ubuntu-resolute-8GB
         - zuul-nox-py314
         - zuul-nox-upgrade
         - zuul-build-dashboard
         - nodejs-run-lint:
             vars:
               zuul_work_dir: "{{ zuul.project.src_dir }}/web"
-            nodeset: ubuntu-jammy
+            nodeset: ubuntu-resolute-8GB
         - nodejs-run-test:
             vars:
               zuul_work_dir: "{{ zuul.project.src_dir }}/web"
             files:
               - web/.*
-            nodeset: ubuntu-jammy
+            nodeset: ubuntu-resolute-8GB
         - zuul-stream-functional-9
         - zuul-stream-functional-11
         - zuul-nox-remote
