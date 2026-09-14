@@ -9,32 +9,25 @@
 
   post_tasks:
 
-    - name: Install pip
+    - name: Create build and install venvs
       shell: |+
-        python3 -m pip install --break-system-packages --upgrade pip setuptools wheel
-      become: yes
+        python3 -m pip ~/build-venv
+        ~/build-venv/bin/pip install --upgrade pip 'setuptools<82' wheel
+        python3 -m pip ~/zuul-venv
+        ~/build-venv/bin/pip install --upgrade pip setuptools wheel
 
     - name: Build wheel
       shell:
         chdir: src/opendev.org/zuul/zuul
         cmd: |+
-          python3 setup.py bdist_wheel
+          ~/build-venv/bin/python3 setup.py bdist_wheel
 
-    - name: Install software
+    - name: Install zuul
       shell: |+
-        python3 -m pip install --break-system-packages  src/opendev.org/zuul/zuul/dist/*.whl
-      become: yes
+        ~/zuul-venv/bin/pip install src/opendev.org/zuul/zuul/dist/*.whl
 
     - name: Install managed ansible versions
-      command: /usr/local/bin/zuul-manage-ansible -v
-      become: yes
-      environment:
-        # This appears to be necessary because without it the virtualenvs
-        # that virtualenv creates are not actually virtualenvs. They are just
-        # aliases for the root python installation instead. Then we try to
-        # install multiple ansible versions to the root (via multiple fake
-        # venvs) and the installation fails due to conflicts.
-        SETUPTOOLS_USE_DISTUTILS: stdlib
+      command: "{{ ansible_user_dir }}/zuul-venv/bin/zuul-manage-ansible -v"
 
     - name: Copy inventory
       copy:
@@ -47,4 +40,4 @@
         dest: "{{ ansible_user_dir }}/ansible.cfg"
 
     - name: Generate logging config
-      command: python3 src/opendev.org/zuul/zuul/zuul/ansible/logconfig.py
+      command: "{{ ansible_user_dir }}/zuul-venv/bin/python3 src/opendev.org/zuul/zuul/zuul/ansible/logconfig.py"
