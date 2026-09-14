@@ -13,7 +13,6 @@
   tasks:
     - name: Run quiet command
       command: echo 'This command should not stream 1'
-      when: new_console | default(false)
 
 - name: Start zuul stream daemon
   hosts: node
