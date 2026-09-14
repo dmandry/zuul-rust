@@ -11,7 +11,7 @@
       command: >
         {{ ansible_user_dir }}/zuul-venv/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
         -vvv
-        -e "new_console=true"
+        -e '{"new_console": true}'
         src/opendev.org/zuul/zuul/playbooks/zuul-stream/fixtures/test-stream.yaml
       environment:
         # Setup by test-stream.yaml so we start a new zuul_console
@@ -54,7 +54,7 @@
     - name: Run ansible that should succeed against extant console
       command: >
         {{ ansible_user_dir }}/zuul-venv/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
-        -e "new_console=false"
+        -e '{"new_console": false}'
         src/opendev.org/zuul/zuul/playbooks/zuul-stream/fixtures/test-stream.yaml
       environment:
         ZUUL_JOB_LOG_CONFIG: "{{ ansible_user_dir}}/logging.json"
