@@ -24,6 +24,9 @@ from zuul.driver import auth
 
 from tests.base import BaseTestCase, FIXTURE_DIR
 
+import urllib
+
+
 with open(os.path.join(FIXTURE_DIR,
                        'auth/openid-configuration.json'), 'r') as well_known:
     FAKE_WELL_KNOWN_CONFIG = json.loads(well_known.read())
@@ -83,6 +86,15 @@ def mock_urlopen(url, *args, **kwargs):
         raise Exception("Unknown URL %s" % url)
 
 
+ORIG_OPENER = urllib.request.build_opener
+
+
+def mock_opener(*args, **kwargs):
+    opener = ORIG_OPENER(*args, **kwargs)
+    opener.open = mock_urlopen
+    return opener
+
+
 class TestOpenIDConnectAuthenticator(BaseTestCase):
     def test_decodeToken(self):
         """Test the decoding workflow"""
@@ -105,8 +117,8 @@ class TestOpenIDConnectAuthenticator(BaseTestCase):
             headers={'kid': 'OwO'})
         with mock.patch('requests.get', side_effect=mock_get):
             # patching call in PyJWKClient's fetch_data
-            with mock.patch('urllib.request.urlopen',
-                            side_effect=mock_urlopen):
+            with mock.patch('urllib.request.build_opener',
+                            side_effect=mock_opener):
                 decoded = OIDCAuth.decodeToken(token)
                 for claim in payload.keys():
                     self.assertEqual(payload[claim], decoded[claim])
