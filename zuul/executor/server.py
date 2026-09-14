@@ -162,6 +162,11 @@ def _recursive_values(d):
             yield v
 
 
+def ansible_extra_var(**args):
+    data = json.dumps(args)
+    return ['-e', data]
+
+
 class VerboseCommand(commandsocket.Command):
     name = 'verbose'
     help = 'Enable Ansible verbose mode'
@@ -4058,23 +4063,23 @@ class AnsibleJob(object):
             ansible_version), verbose, playbook.path]
 
         if success is not None:
-            cmd.extend(['-e', 'zuul_success=%s' % str(bool(success))])
+            cmd.extend(ansible_extra_var(zuul_success=bool(success)))
 
         if will_retry is not None:
-            cmd.extend(['-e', f'zuul_will_retry={bool(will_retry)}'])
+            cmd.extend(ansible_extra_var(zuul_will_retry=bool(will_retry)))
 
         if phase:
-            cmd.extend(['-e', 'zuul_execution_phase=%s' % phase])
+            cmd.extend(ansible_extra_var(zuul_execution_phase=phase))
 
         if index is not None:
-            cmd.extend(['-e', 'zuul_execution_phase_index=%s' % index])
+            cmd.extend(ansible_extra_var(zuul_execution_phase_index=index))
 
-        cmd.extend(['-e', 'zuul_execution_trusted=%s' % str(playbook.trusted)])
-        cmd.extend([
-            '-e',
-            'zuul_execution_canonical_name_and_path=%s'
-            % playbook.canonical_name_and_path])
-        cmd.extend(['-e', 'zuul_execution_branch=%s' % str(playbook.branch)])
+        cmd.extend(ansible_extra_var(
+            zuul_execution_trusted=playbook.trusted,
+            zuul_execution_canonical_name_and_path=playbook.
+            canonical_name_and_path,
+            zuul_execution_branch=playbook.branch,
+        ))
 
         if self.executor_variables_file is not None:
             cmd.extend(['-e@%s' % self.executor_variables_file])
