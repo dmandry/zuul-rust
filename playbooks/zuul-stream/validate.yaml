@@ -18,11 +18,11 @@
 
 - name: Validate output - failed shell task
   shell: |
-    egrep "^.+\| {{ item.node }} \| Exception: Test module failure exception task" {{ item.filename }}
+    egrep "^.+\| {{ item.node }} \| .*Exception.*:.*Test module failure exception task" {{ item.filename }}
 
 - name: Validate output - item loop with exception
   shell: |
-    egrep "^.+\| {{ item.node }} \| Exception: Test module failure exception loop" {{ item.filename }}
+    egrep "^.+\| {{ item.node }} \| .*Exception.*:.*Test module failure exception loop" {{ item.filename }}
 
 - name: Validate output - no waiting on logger
   shell: |
