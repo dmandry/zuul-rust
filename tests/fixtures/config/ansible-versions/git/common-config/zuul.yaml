@@ -25,7 +25,7 @@
     parent: ansible-version
     vars:
       test_ansible_version_major: 2
-      test_ansible_version_minor: 16
+      test_ansible_version_minor: 18
 
 # This job is used by a test case specifying a different ansible version in
 # fixtures/zuul-default-ansible-version.conf
@@ -37,7 +37,7 @@
     parent: ansible-version
     vars:
       test_ansible_version_major: 2
-      test_ansible_version_minor: 18
+      test_ansible_version_minor: 16
 
 - job:
     name: ansible-9
