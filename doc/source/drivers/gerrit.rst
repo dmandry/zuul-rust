@@ -178,6 +178,18 @@ be able to invoke the ``gerrit stream-events`` command over SSH.
 
       SSH connection keepalive timeout; ``0`` disables.
 
+   .. attr:: stream_timeout
+      :default: 60
+
+      Time, in seconds, used to detect a ``stream-events`` connection
+      that has died silently.  TCP keepalive probes start after half
+      this time of idleness, and ``TCP_USER_TIMEOUT`` aborts the
+      connection once data has gone unacknowledged for this long, so
+      detection takes up to about 1.5 times this value.  Without it,
+      detection relies on the system TCP defaults (around fifteen
+      minutes), during which events are lost and no other scheduler
+      can take over the stream.  ``0`` disables.
+
    .. attr:: git_over_ssh
       :default: false
 

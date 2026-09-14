@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    The Gerrit SSH connection now supports a
+    :attr:`<gerrit ssh connection>.stream_timeout` option (default 60
+    seconds) which sets TCP keepalive and ``TCP_USER_TIMEOUT`` options
+    on the ``stream-events`` connection so that a silently dead
+    connection is detected and re-established promptly instead of
+    after the system TCP timeout.
