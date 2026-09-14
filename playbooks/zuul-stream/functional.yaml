@@ -5,11 +5,11 @@
         # This value is used by Ansible to find the zuul.ansible code
         # that Zuul's ansible plugins consume. It must be updated when
         # the python version of the platform is changed.
-        python_path: "/usr/local/lib/python3.11/dist-packages"
+        python_path: "{{ ansible_user_dir }}/zuul-venv/lib/python3.14/site-packages"
 
     - name: Run ansible that should succeed against testing console
       command: >
-        /usr/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
+        {{ ansible_user_dir }}/zuul-venv/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
         -vvv
         -e "new_console=true"
         src/opendev.org/zuul/zuul/playbooks/zuul-stream/fixtures/test-stream.yaml
@@ -53,7 +53,7 @@
     # job pre playbooks as a backwards compatability sanity check.
     - name: Run ansible that should succeed against extant console
       command: >
-        /usr/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
+        {{ ansible_user_dir }}/zuul-venv/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
         -e "new_console=false"
         src/opendev.org/zuul/zuul/playbooks/zuul-stream/fixtures/test-stream.yaml
       environment:
@@ -99,7 +99,7 @@
 
     - name: Run ansible playbook that should fail
       command: >
-        /usr/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
+        {{ ansible_user_dir }}/zuul-venv/lib/zuul/ansible/{{ zuul_ansible_version }}/bin/ansible-playbook
         src/opendev.org/zuul/zuul/playbooks/zuul-stream/fixtures/test-stream-failure.yaml
       register: failed_results
       failed_when: "failed_results.rc != 2"
