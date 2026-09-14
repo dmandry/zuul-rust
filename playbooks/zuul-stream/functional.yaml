@@ -22,6 +22,7 @@
         ZUUL_ANSIBLE_SPLIT_STREAMS: False
         ZUUL_OUTPUT_MAX_BYTES: 1073741824
         PYTHONPATH: "{{ python_path }}"
+        PYTHONCOLORS: "0"
       register: _success_output
 
     - name: Save raw output to file
@@ -62,6 +63,7 @@
         ZUUL_ANSIBLE_SPLIT_STREAMS: False
         ZUUL_OUTPUT_MAX_BYTES: 1073741824
         PYTHONPATH: "{{ python_path }}"
+        PYTHONCOLORS: "0"
       register: _success_output
 
     - name: Save raw output to file
@@ -110,6 +112,7 @@
         ZUUL_ANSIBLE_SPLIT_STREAMS: False
         ZUUL_OUTPUT_MAX_BYTES: 1073741824
         PYTHONPATH: "{{ python_path }}"
+        PYTHONCOLORS: "0"
 
     - name: Save output
       shell: |
