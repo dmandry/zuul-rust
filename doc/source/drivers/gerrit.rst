@@ -178,6 +178,14 @@ be able to invoke the ``gerrit stream-events`` command over SSH.
 
       SSH connection keepalive timeout; ``0`` disables.
 
+   .. attr:: stream_timeout
+      :default: 60
+
+      Timeout, in seconds, after which an unresponsive
+      ``stream-events`` connection is closed and reconnected.  This
+      sets TCP keepalive and ``TCP_USER_TIMEOUT`` options on the
+      connection; ``0`` disables.
+
    .. attr:: git_over_ssh
       :default: false
 

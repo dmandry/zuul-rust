@@ -19,6 +19,7 @@ import logging
 import paramiko
 import pprint
 import select
+import socket
 import threading
 import time
 
@@ -43,6 +44,8 @@ class GerritSSHEventListener(threading.Thread):
             gerrit_connection.connection_name,
             "watcher")
         self.keepalive = int(connection_config.get('keepalive', 60))
+        self.stream_timeout = max(
+            int(connection_config.get('stream_timeout', 60)), 0)
         self._stopped = False
 
     def _read(self, fd):
@@ -70,6 +73,36 @@ class GerritSSHEventListener(threading.Thread):
                     else:
                         raise Exception("event on ssh connection")
 
+    def _setSocketTimeouts(self, transport):
+        # Paramiko does not wait for replies to SSH keepalives, so an
+        # unresponsive connection is otherwise only detected once the
+        # kernel's TCP retransmission limit is reached.  Enable TCP
+        # keepalives so there is always data in flight, and set
+        # TCP_USER_TIMEOUT so the kernel closes the connection when that
+        # data goes unacknowledged.
+        sock = getattr(transport, 'sock', None)
+        if sock is None or self.stream_timeout <= 0:
+            return
+        idle = max(self.stream_timeout // 2, 5)
+        options = [
+            (socket.SOL_SOCKET, 'SO_KEEPALIVE', 1),
+            (socket.IPPROTO_TCP, 'TCP_KEEPIDLE', idle),
+            (socket.IPPROTO_TCP, 'TCP_KEEPINTVL', max(idle // 2, 5)),
+            (socket.IPPROTO_TCP, 'TCP_KEEPCNT', 3),
+            (socket.IPPROTO_TCP, 'TCP_USER_TIMEOUT',
+             self.stream_timeout * 1000),
+        ]
+        for level, name, value in options:
+            opt = getattr(socket, name, None)
+            if opt is None:
+                continue
+            try:
+                sock.setsockopt(level, opt, value)
+            except (AttributeError, OSError) as e:
+                # The option may be unsupported, or sock may not be a
+                # socket (e.g. a paramiko ProxyCommand).
+                self.log.debug("Unable to set %s on ssh socket: %s", name, e)
+
     def _run(self):
         try:
             client = paramiko.SSHClient()
@@ -84,6 +117,7 @@ class GerritSSHEventListener(threading.Thread):
                            timeout=self.gerrit_connection.ssh_timeout)
             transport = client.get_transport()
             transport.set_keepalive(self.keepalive)
+            self._setSocketTimeouts(transport)
 
             # We don't set a timeout for this since it is never
             # expected to complete.  We rely on ssh and tcp keepalives

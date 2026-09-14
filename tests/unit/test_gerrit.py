@@ -14,6 +14,7 @@
 # under the License.
 
 import os
+import socket
 import threading
 import time
 import textwrap
@@ -39,6 +40,7 @@ from zuul.driver.gerrit.gerritconnection import (
     GerritConnection,
     PeekQueue,
 )
+from zuul.driver.gerrit.gerriteventssh import GerritSSHEventListener
 
 import git
 import paramiko
@@ -226,6 +228,31 @@ class TestGerrit(BaseTestCase):
                 mock.call('echo hi', timeout=30),
             ]
             self.assertEqual(expected, mock_client.exec_command.mock_calls)
+
+    def test_ssh_stream_timeout(self):
+        gerrit = mock.Mock()
+        gerrit.connection_name = 'review_gerrit'
+        config = {'user': 'gerrit', 'server': 'localhost'}
+
+        listener = GerritSSHEventListener(gerrit, config)
+        self.assertEqual(60, listener.stream_timeout)
+        with socket.socket() as sock:
+            listener._setSocketTimeouts(mock.Mock(sock=sock))
+            self.assertEqual(
+                1, sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE))
+            if hasattr(socket, 'TCP_USER_TIMEOUT'):
+                self.assertEqual(60000, sock.getsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT))
+
+        # A non-socket transport (e.g. ProxyCommand) is ignored
+        listener._setSocketTimeouts(mock.Mock(sock=object()))
+
+        config['stream_timeout'] = '0'
+        listener = GerritSSHEventListener(gerrit, config)
+        with socket.socket() as sock:
+            listener._setSocketTimeouts(mock.Mock(sock=sock))
+            self.assertEqual(
+                0, sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE))
 
 
 class TestGerritWeb(ZuulTestCase):

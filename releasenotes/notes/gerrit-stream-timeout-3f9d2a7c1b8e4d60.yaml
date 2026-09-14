@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    Unresponsive Gerrit SSH ``stream-events`` connections are now
+    detected and reconnected.  See
+    :attr:`<gerrit ssh connection>.stream_timeout`.
