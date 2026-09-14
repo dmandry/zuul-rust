@@ -3476,6 +3476,7 @@ class AnsibleJob(object):
         env_copy['KUBECACHEDIR'] = self.jobdir.kubecache
         env_copy['ZUUL_ANSIBLE_SPLIT_STREAMS'] = str(
             self.ansible_split_streams)
+        env_copy['PYTHONCOLORS'] = '0'
         pythonpath = env_copy.get('PYTHONPATH')
         if pythonpath:
             pythonpath = [pythonpath]
