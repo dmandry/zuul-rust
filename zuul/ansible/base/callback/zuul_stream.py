@@ -426,6 +426,10 @@ class CallbackModule(default.CallbackModule):
             self._log_message(
                 result, status='MODULE FAILURE',
                 msg=result_dict['exception'])
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_message(
+                result, status='MODULE FAILURE',
+                msg=result_dict['failed_when_suppressed_exception'])
         elif 'module_stderr' in result_dict:
             self._log_message(
                 result, status='MODULE FAILURE',
@@ -633,6 +637,8 @@ class CallbackModule(default.CallbackModule):
             pass
         elif is_module_failure(result_dict.get('msg', '')):
             self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_module_failure(result, result_dict)
         else:
             self._log_message(
                 result=result, status='ERROR', result_dict=result_dict)
@@ -733,6 +739,8 @@ class CallbackModule(default.CallbackModule):
             pass
         elif to_text(result_dict.get('msg', '')).startswith('MODULE FAILURE'):
             self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_module_failure(result, result_dict)
         elif result._task.action == 'debug':
             # this is a debug statement, handle it special
             for key in [k for k in result_dict
@@ -801,6 +809,8 @@ class CallbackModule(default.CallbackModule):
         loop_var = result_dict.get('ansible_loop_var', 'item')
 
         if to_text(result_dict.get('msg', '')).startswith('MODULE FAILURE'):
+            self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
             self._log_module_failure(result, result_dict)
         elif result._task.action not in ALL_ACTIONS:
             if 'msg' in result_dict:
