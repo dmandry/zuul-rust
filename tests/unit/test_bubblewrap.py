@@ -33,8 +33,7 @@ class TestBubblewrap(testtools.TestCase):
             fixtures.FakeLogger(level=logging.DEBUG))
         self.useFixture(fixtures.NestedTempfile())
 
-    def test_bubblewrap_wraps(self):
-        bwrap = bubblewrap.BubblewrapDriver()
+    def _test_bubblewrap_wraps(self, bwrap):
         bwrap.check()
         context = bwrap.getExecutionContext()
         work_dir = tempfile.mkdtemp()
@@ -59,6 +58,18 @@ class TestBubblewrap(testtools.TestCase):
         # Make sure the _r's are closed
         self.assertEqual([], po.fds)
 
+    def test_bubblewrap_wraps(self):
+        bwrap = bubblewrap.BubblewrapDriver()
+        self._test_bubblewrap_wraps(bwrap)
+
+    def test_bubblewrap_cgroups_disabled(self):
+        user = getpass.getuser()
+        memory_limit = None
+        cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
+        bwrap = bubblewrap.BubblewrapDriver()
+        bwrap.setCgroupManager(cgroup_manager)
+        self._test_bubblewrap_wraps(bwrap)
+
     @skipIf(not os.environ.get("ZUUL_TEST_CGROUPS", None),
             "cgroups test flag not enabled")
     def test_bubblewrap_cgroups(self):
@@ -67,29 +78,7 @@ class TestBubblewrap(testtools.TestCase):
         cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
         bwrap = bubblewrap.BubblewrapDriver()
         bwrap.setCgroupManager(cgroup_manager)
-        bwrap.check()
-        context = bwrap.getExecutionContext()
-        work_dir = tempfile.mkdtemp()
-        home_dir = tempfile.mkdtemp()
-        ssh_agent = SshAgent()
-        self.addCleanup(ssh_agent.stop)
-        ssh_agent.start()
-        po = context.getPopen(work_dir=work_dir,
-                              home_dir=home_dir,
-                              ssh_auth_sock=ssh_agent.env['SSH_AUTH_SOCK'])
-        self.assertTrue(po.fds[0] > 2)
-        self.assertTrue(po.fds[1] > 2)
-        self.assertTrue(work_dir in po.command)
-        # Now run /usr/bin/id to verify passwd/group entries made it in
-        true_proc = po(['/usr/bin/id'], stdout=subprocess.PIPE,
-                       stderr=subprocess.PIPE)
-        (output, errs) = true_proc.communicate()
-        # Make sure it printed things on stdout
-        self.assertTrue(len(output.strip()))
-        # And that it did not print things on stderr
-        self.assertEqual(0, len(errs.strip()))
-        # Make sure the _r's are closed
-        self.assertEqual([], po.fds)
+        self._test_bubblewrap_wraps(bwrap)
 
     @skipIf(sys.platform == 'darwin', 'Not supported on MacOS')
     def test_bubblewrap_leak(self):
