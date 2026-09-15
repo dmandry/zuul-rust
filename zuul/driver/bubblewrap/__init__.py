@@ -133,7 +133,6 @@ class CgroupManager:
     def moveToBuildGroup(self, pid):
         if not self.enabled:
             return
-        self.log.debug("Moving PID %s to cgroup %s", pid, self.build_group)
         with CgroupFile(f'{self.build_group}/cgroup.procs') as build:
             build.write(str(pid) + '\n')
 
@@ -154,6 +153,10 @@ class WrappedPopen(object):
             kwargs['pass_fds'] = pass_fds
             proc = psutil.Popen(args, *sub_args, **kwargs,
                                 preexec_fn=self._bwrap_pre_exec)
+            if self.cgroup_manager:
+                self.cgroup_manager.log.debug(
+                    "Moved PID %s to cgroup %s",
+                    proc.pid, self.cgroup_manager.build_group)
         finally:
             self.__del__()
         return proc
