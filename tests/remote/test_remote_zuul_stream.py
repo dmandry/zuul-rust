@@ -497,7 +497,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine(r'TASK \[Module failure\]', text)
 
             regex = r'controller \| .*New-style module did not ' \
-                r'handle its own exit.*"'
+                r'handle its own exit.*'
             self.assertLogLine(regex, text)
 
     # These twe tests are helpful to have for local debugging, but we
