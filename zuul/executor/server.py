@@ -3419,6 +3419,7 @@ class AnsibleJob(object):
             config.write('library = %s\n' % self.library_dir)
             config.write('module_utils = %s\n' % self.module_utils_dir)
             config.write('command_warnings = False\n')
+            config.write('display_traceback = error\n')
             # Disable the Zuul callback plugins for the freeze playbooks
             # as that output is verbose and would be confusing for users.
             if jobdir_playbook != self.jobdir.freeze_playbook:
