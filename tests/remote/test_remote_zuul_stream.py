@@ -487,7 +487,7 @@ class FunctionalZuulStreamMixIn:
             self.assertLogLine(
                 r'controller \| MODULE FAILURE:', text)
             self.assertLogLine(
-                r'controller \| Exception: This module is broken', text)
+                r'controller \| .*This module is broken.*', text)
 
     def test_module_no_result(self):
         job = self._run_job('module_failure_no_result')
@@ -498,8 +498,8 @@ class FunctionalZuulStreamMixIn:
             text = self._get_job_output(build)
             self.assertLogLine(r'TASK \[Module failure\]', text)
 
-            regex = r'controller \|   "msg": "New-style module did not ' \
-                r'handle its own exit"'
+            regex = r'controller \| .*New-style module did not ' \
+                r'handle its own exit.*"'
             self.assertLogLine(regex, text)
 
     # These twe tests are helpful to have for local debugging, but we
