@@ -51,7 +51,7 @@ def daemonize():
 
     pid = os.fork()
     if pid > 0:
-        sys.exit(0)
+        os._exit(0)
 
     sys.stdout.flush()
     sys.stderr.flush()
@@ -314,8 +314,12 @@ def main():
         if daemonize():
             module.exit_json()
 
-        s = Server(path, port)
-        s.run()
+        try:
+            s = Server(path, port)
+            s.run()
+        except Exception:
+            # There's no one to see this, so just exit.
+            os._exit(1)
     else:
         pid = None
         exceptions = []
