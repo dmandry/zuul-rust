@@ -426,6 +426,10 @@ class CallbackModule(default.CallbackModule):
             self._log_message(
                 result, status='MODULE FAILURE',
                 msg=result_dict['exception'])
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_message(
+                result, status='MODULE FAILURE',
+                msg=result_dict['failed_when_suppressed_exception'])
         elif 'module_stderr' in result_dict:
             self._log_message(
                 result, status='MODULE FAILURE',
@@ -616,7 +620,14 @@ class CallbackModule(default.CallbackModule):
     def _v2_runner_on_failed(self, result, ignore_errors=False):
         result_dict = dict(result._result)
 
-        self._handle_exception(result_dict)
+        # TODO: it's not clear that we need this.  It pops the
+        # exception from the result, and iff it does so, it displays
+        # the "original" exception from the task.  We seem to get the
+        # exception output in stderr regardless, and we also try to
+        # output it to the logs.  We can't do that if it pops the
+        # exception, so we pass it a copy.  Consider removing this
+        # after Ansible 11 is removed.
+        self._handle_exception(result_dict.copy())
 
         if result_dict.get('msg') == 'All items completed':
             result_dict['status'] = 'ERROR'
@@ -632,6 +643,10 @@ class CallbackModule(default.CallbackModule):
             # items have their own events
             pass
         elif is_module_failure(result_dict.get('msg', '')):
+            self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_module_failure(result, result_dict)
+        elif result_dict.get('exception'):
             self._log_module_failure(result, result_dict)
         else:
             self._log_message(
@@ -733,6 +748,8 @@ class CallbackModule(default.CallbackModule):
             pass
         elif to_text(result_dict.get('msg', '')).startswith('MODULE FAILURE'):
             self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_module_failure(result, result_dict)
         elif result._task.action == 'debug':
             # this is a debug statement, handle it special
             for key in [k for k in result_dict
@@ -802,6 +819,8 @@ class CallbackModule(default.CallbackModule):
 
         if to_text(result_dict.get('msg', '')).startswith('MODULE FAILURE'):
             self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
+            self._log_module_failure(result, result_dict)
         elif result._task.action not in ALL_ACTIONS:
             if 'msg' in result_dict:
                 self._log_message(
@@ -843,6 +862,8 @@ class CallbackModule(default.CallbackModule):
         loop_var = result_dict.get('ansible_loop_var', 'item')
 
         if to_text(result_dict.get('msg', '')).startswith('MODULE FAILURE'):
+            self._log_module_failure(result, result_dict)
+        elif result_dict.get('failed_when_suppressed_exception'):
             self._log_module_failure(result, result_dict)
         elif result._task.action not in ALL_ACTIONS:
             self._log_message(
