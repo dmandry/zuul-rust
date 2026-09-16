@@ -41,6 +41,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "a2028b5b_75d1415c",
+        "filename": "web/src/containers/status/PauseModal.jsx",
+        "patchSetId": 2
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-16T21:46:17Z",
+      "side": 1,
+      "message": "Because the implementation of this is tied to the tenant event pausing system, it\u0027s the same form in the web page.  The implementation is so close that I don\u0027t think it\u0027s worth all the boilerplate for an extra api endpoint and a new ui form.",
+      "parentUuid": "20faa8ec_f288ed91",
+      "revId": "9cad2dff130d1243c26143d1a9bc8bc0a6cdac21",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "9173849d_a882b627",
