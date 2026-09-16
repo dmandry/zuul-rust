@@ -1,0 +1,11 @@
+---
+features:
+  - |
+    Ansible version 13 is now available.  The default Ansible version
+    is still 11, but version 13 may be selected by using
+    :attr:`job.ansible-version`.
+upgrade:
+  - |
+    Support for Ansible version 9 has been removed.  Migrate any
+    existing jobs which rely on this version to Ansible version 11
+    before upgrading.
