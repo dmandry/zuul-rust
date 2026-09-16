@@ -1557,11 +1557,21 @@ class Merger(object):
         item = items[-1]
         # A list of branch names the last item appears in.
         item_in_branches = []
-        if item.get('newrev'):
+        newrev = item.get('newrev')
+        if item.get('ref', '').startswith('refs/tags/') and not newrev:
+            # The current item is a tag ref, but the event did not
+            # come with a new-rev.  In order to make the
+            # "item_in_branches" feature work as well as possible,
+            # dereference the tag to find out what the newrev should
+            # have been.
+            newrev = repo_state.get(item['connection'], {}).\
+                get(item['project'], {}).\
+                get(item['ref'])
+        if newrev:
             lock = repo_locks.getRepoLock(item['connection'], item['project'])
             with lock:
                 repo = self.getRepo(item['connection'], item['project'])
-                item_in_branches = repo.contains(item['newrev'])
+                item_in_branches = repo.contains(newrev)
         return (True, repo_state, item_in_branches)
 
     def getFiles(self, connection_name, project_name, branch, files, dirs=[]):

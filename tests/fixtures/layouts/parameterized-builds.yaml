@@ -21,6 +21,7 @@
 - job:
     name: deploy-app
     run: playbooks/deploy.yaml
+    branches: master
 
 - project:
     name: org/project
