@@ -16,6 +16,23 @@
       "message": "recheck",
       "revId": "5a40024e6825f270941566280375a077b6a5203d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c6ce364c_88d5ed8b",
+        "filename": "doc/source/config/pipeline.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 234,
+      "author": {
+        "id": 37112
+      },
+      "writtenOn": "2026-09-16T13:43:47Z",
+      "side": 1,
+      "message": "This doesn\u0027t match the default value. The line could be removed.",
+      "revId": "5a40024e6825f270941566280375a077b6a5203d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
