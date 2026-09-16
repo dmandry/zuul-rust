@@ -1789,11 +1789,13 @@ class Launcher:
         if static_node:
             node_uuid = static_node.node_id
             connection_port = static_node.connection_port
+            username = static_node.username
             state = model.ProviderNode.State.REGISTERING
             label_aliases = set(static_node.aliases)
         else:
             node_uuid = uuid.uuid4().hex
             connection_port = image.connection_port
+            username = image.username
             state = model.ProviderNode.State.REQUESTED
             label_aliases = set()
         label_aliases |= set(label.aliases)
@@ -1816,7 +1818,7 @@ class Launcher:
             # Set any node attributes we already know here
             connection_port=connection_port,
             connection_type=image.connection_type,
-            username=image.username,
+            username=username,
             python_path=image.python_path,
             shell_type=image.shell_type,
             quota=label_quota,

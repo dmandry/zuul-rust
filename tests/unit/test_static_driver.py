@@ -182,6 +182,37 @@ class TestStaticDriver(ZuulTestCase):
                     request.state == model.NodesetRequest.State.FULFILLED):
                     break
 
+    @simple_layout('layouts/static/config.yaml', enable_nodepool=True)
+    def test_static_config(self):
+        # Test direct node configuration of attributes
+        self._waitForRegistration()
+        ctx = self.createZKContext(None)
+        request = self.requestNodes(['debian-normal'])
+        self.assertEqual(request.State.FULFILLED, request.state)
+
+        client = LauncherClient(self.zk_client, None)
+        request = client.getRequest(request.uuid)
+
+        nodeset = model.NodeSet()
+        nodeset.addNode(model.Node("node", 'debian-normal'))
+
+        self.assertEqual(request.state, model.NodesetRequest.State.FULFILLED)
+        self.assertEqual(len(request.nodes), 1)
+
+        client.acceptNodeset(request, nodeset)
+        self.waitUntilSettled()
+
+        with testtools.ExpectedException(NoNodeError):
+            # Request should be gone
+            request.refresh(ctx)
+
+        for node in nodeset.getNodes():
+            pnode = node._provider_node
+            self.assertIsNotNone(pnode)
+            self.assertTrue(pnode.hasLock())
+            self.assertEqual(pnode.connection_port, 80)
+            self.assertEqual(pnode.username, 'nodeuser')
+
     @simple_layout('layouts/static/subnodes.yaml', enable_nodepool=True)
     def test_static_subnodes(self):
         self._waitForRegistration()
