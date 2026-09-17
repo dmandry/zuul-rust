@@ -63,6 +63,7 @@
 - queue:
     name: red-queue
     type: branch-assigned
+    allow-circular-dependencies: true
 
 - queue:
     name: gold-queue

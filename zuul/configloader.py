@@ -3359,6 +3359,8 @@ class TenantParser(object):
                 with parse_context.errorContext(stanza='project',
                                                 conf=project_config):
                     with parse_context.accumulator.catchErrors():
+                        layout.updateProjectQueueConfig(
+                            project_name, project_config)
                         for template_name in project_config.templates:
                             if template_name not in layout.project_templates:
                                 raise TemplateNotFoundError(template_name)
@@ -3373,6 +3375,8 @@ class TenantParser(object):
                                         for ppc in p_tmpl.pipelines.values():
                                             inner_validate_ppcs(
                                                 project_config, ppc)
+                                        layout.updateProjectQueueConfig(
+                                            project_name, p_tmpl)
                         for ppc in project_config.pipelines.values():
                             inner_validate_ppcs(project_config, ppc)
             # Set a merge mode if we don't have one for this project.
