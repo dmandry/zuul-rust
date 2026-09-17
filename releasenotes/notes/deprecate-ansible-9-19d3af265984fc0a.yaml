@@ -1,0 +1,6 @@
+---
+upgrade:
+  - |
+    Ansible version 9 is now deprecated in Zuul and it will be removed
+    from a future version.  Ansible 11 is now the default version in
+    Zuul.
