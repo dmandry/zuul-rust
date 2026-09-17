@@ -39,6 +39,10 @@ class TestAbstractChangeMatcher(BaseTestMatcher):
         matcher = cm.ProjectMatcher(ZuulRegex(self.project))
         self.assertEqual(repr(matcher), '<ProjectMatcher project>')
 
+    def test_hash(self):
+        matcher = cm.ProjectMatcher(ZuulRegex(self.project))
+        self.assertIsNotNone(hash(matcher))
+
 
 class TestProjectMatcher(BaseTestMatcher):
 
@@ -88,6 +92,10 @@ class TestAbstractMatcherCollection(BaseTestMatcher):
     def test_repr(self):
         matcher = cm.MatchAll([])
         self.assertEqual(repr(matcher), '<MatchAll []>')
+
+    def test_hash(self):
+        matcher = cm.MatchAll([])
+        self.assertIsNotNone(hash(matcher))
 
 
 class BaseTestFilesMatcher(BaseTestMatcher):
