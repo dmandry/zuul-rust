@@ -35,6 +35,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "e6ecbf30_9eba8c24",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 5113,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-17T20:59:16Z",
+      "side": 1,
+      "message": "Wouldn\u0027t hurt!",
+      "parentUuid": "d437dd2a_386fdea7",
+      "revId": "7b26f81f8eb78a203b9de3f2d487f7c97c00fe9f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "05011d7f_b25b6a26",
@@ -54,6 +72,24 @@
         "endLine": 5140,
         "endChar": 50
       },
+      "revId": "7b26f81f8eb78a203b9de3f2d487f7c97c00fe9f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f8a11e63_5d1ec319",
+        "filename": "tests/unit/test_launcher.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 5140,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-17T20:59:16Z",
+      "side": 1,
+      "message": "Oops.",
+      "parentUuid": "05011d7f_b25b6a26",
       "revId": "7b26f81f8eb78a203b9de3f2d487f7c97c00fe9f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
