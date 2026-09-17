@@ -78,3 +78,10 @@
         - project-merge
         - project-test1:
             dependencies: project-merge
+
+- project:
+    name: org/project-rebase-fp
+    merge-mode: rebase-first-parent
+    gate:
+      jobs:
+        - project-test1
