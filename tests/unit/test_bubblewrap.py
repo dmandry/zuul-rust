@@ -62,9 +62,17 @@ class TestBubblewrap(testtools.TestCase):
         bwrap = bubblewrap.BubblewrapDriver()
         self._test_bubblewrap_wraps(bwrap)
 
-    def test_bubblewrap_cgroups_disabled(self):
+    def _test_cgroup_disabled(self):
         user = getpass.getuser()
         memory_limit = None
+        cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
+        bwrap = bubblewrap.BubblewrapDriver()
+        bwrap.setCgroupManager(cgroup_manager)
+        self._test_bubblewrap_wraps(bwrap)
+
+    def _test_cgroup_enabled(self):
+        user = getpass.getuser()
+        memory_limit = '2G'
         cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
         bwrap = bubblewrap.BubblewrapDriver()
         bwrap.setCgroupManager(cgroup_manager)
@@ -73,12 +81,28 @@ class TestBubblewrap(testtools.TestCase):
     @skipIf(not os.environ.get("ZUUL_TEST_CGROUPS", None),
             "cgroups test flag not enabled")
     def test_bubblewrap_cgroups(self):
-        user = getpass.getuser()
-        memory_limit = '2G'
-        cgroup_manager = bubblewrap.CgroupManager(user, memory_limit)
-        bwrap = bubblewrap.BubblewrapDriver()
-        bwrap.setCgroupManager(cgroup_manager)
-        self._test_bubblewrap_wraps(bwrap)
+        # This really updates the cgroups, so it's best to have one
+        # unit test that does this.
+
+        # But other tests may be running concurrently, spawning
+        # processes, which can cause an error for our cgroup move.  If
+        # we hit such an error, retry up to 10 times.
+
+        # First test with no memory limit, so not enabled
+        for x in range(10):
+            try:
+                self._test_cgroup_disabled()
+                break
+            except OSError:
+                time.sleep(1)
+
+        # Second test with it enabled
+        for x in range(10):
+            try:
+                self._test_cgroup_enabled()
+                break
+            except OSError:
+                time.sleep(1)
 
     @skipIf(sys.platform == 'darwin', 'Not supported on MacOS')
     def test_bubblewrap_leak(self):
