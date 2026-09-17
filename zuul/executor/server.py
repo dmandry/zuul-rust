@@ -21,6 +21,7 @@ import json
 import jwt
 import logging
 import multiprocessing
+import multiprocessing.spawn
 import os
 import psutil
 import re
