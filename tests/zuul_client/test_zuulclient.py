@@ -501,6 +501,44 @@ class TestZuulClientAdmin(BaseTestWeb):
             dict(name='project-test2', result='SUCCESS', changes='2,1'),
         ], ordered=False)
 
+    def test_manage_events_info(self):
+        token = self._getToken()
+        p = subprocess.Popen(
+            ['zuul-client',
+             '--zuul-url', self.base_url, '--auth-token', token, '-v',
+             'manage-events', '--tenant', 'tenant-one', 'normal',
+             '--info', 'test info'],
+            stdout=subprocess.PIPE)
+        output = p.communicate()
+        self.assertEqual(p.returncode, 0, output)
+        time.sleep(1)
+
+        resp = self.get_url(
+            "api/tenant/tenant-one/status",
+            headers={'Authorization': 'Bearer %s' % token})
+        self.assertEqual(200, resp.status_code, resp.text)
+        data = resp.json()
+        self.assertEqual('test info', data['state']['info'])
+        self.assertEqual(None, data['state']['reason'])
+
+        p = subprocess.Popen(
+            ['zuul-client',
+             '--zuul-url', self.base_url, '--auth-token', token, '-v',
+             'manage-events', '--tenant', 'tenant-one', 'normal',
+             ],
+            stdout=subprocess.PIPE)
+        output = p.communicate()
+        self.assertEqual(p.returncode, 0, output)
+        time.sleep(1)
+
+        resp = self.get_url(
+            "api/tenant/tenant-one/status",
+            headers={'Authorization': 'Bearer %s' % token})
+        self.assertEqual(200, resp.status_code, resp.text)
+        data = resp.json()
+        self.assertEqual(None, data['state']['info'])
+        self.assertEqual(None, data['state']['reason'])
+
 
 class TestZuulClientQueryData(BaseTestWeb):
     """Test that zuul-client can fetch builds"""
