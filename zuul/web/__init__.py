@@ -3445,7 +3445,7 @@ class ZuulWebAPI(object):
         with LocalZKContext(self.log) as context:
             queue = ChangeQueue.new(context, manager=manager)
             item = QueueItem.new(context, queue=queue, changes=[change])
-            item.freezeJobGraph(tenant.layout, context,
+            item.freezeJobGraph(tenant.layout, context, None,
                                 skip_file_matcher=True,
                                 redact_secrets_and_keys=True)
 

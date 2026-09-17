@@ -84,9 +84,7 @@ class BlobStore:
     def _checkKey(self, key):
         # This returns whether the key is in the store.  If it is in
         # the store, it also touches the flag file so that the cleanup
-        # routine can know the last time an entry was used.  Because
-        # of the critical section between the get and delete calls in
-        # the delete method, this must be called with the key lock.
+        # routine can know the last time an entry was used.
         flag = self._getFlagPath(key)
 
         if self.context.sessionIsInvalid():
@@ -112,7 +110,7 @@ class BlobStore:
             context.cumulative_write_bytes += stream.bytes_written
         return stream.bytes_written
 
-    def put(self, data):
+    def put(self, data, live_blobs=None):
         if isinstance(self.context, LocalZKContext):
             return None
 
@@ -125,6 +123,13 @@ class BlobStore:
 
         path = self._getPath(key)
         flag = self._getFlagPath(key)
+
+        # We only need to touch the flag path if the blob is not
+        # already in use (and even then, we still only need to touch
+        # it once per pipeline run).  If the caller
+        # supplied_live_blobs and our key is in it, skip the rest.
+        if live_blobs is not None and key in live_blobs:
+            return key
 
         if self._checkKey(key):
             return key

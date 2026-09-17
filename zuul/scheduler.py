@@ -2481,6 +2481,11 @@ class Scheduler(threading.Thread):
         # Generate a new run id for use by nodeset requests before we
         # start performing any work.
         manager.pipeline_run_id = uuid.uuid4().hex
+        # Reset the list of live blobs in the pipeline; it will be
+        # recreated if we perform any job freezing operations that use
+        # it.
+        manager.resetLiveBlobs()
+
         if manager.state.old_queues:
             self._reenqueuePipeline(tenant, manager, ctx)
 

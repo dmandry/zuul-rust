@@ -2744,8 +2744,33 @@ class TestBlobStore(ZooKeeperBaseTestCase):
             bs.delete(key, old_blobs[key])
             self._assertEmptyBlobStore(bs, key)
 
-            # Put the blob back and test cleanup
+            # Put the blob back
             key = bs.put(b'something')
+            self.assertEqual({}, bs.getKeysLastUsedBefore(cur_ltime))
+            cur_ltime = self.zk_client.getCurrentLtime()
+            # Make sure that the flag file shows up
+            self.assertEqual({
+                key: 0,
+            }, bs.getKeysLastUsedBefore(cur_ltime))
+            # And that we increment the version if the key isn't in
+            # live_blobs
+            live_blobs = set()
+            key = bs.put(b'something', live_blobs)
+            cur_ltime = self.zk_client.getCurrentLtime()
+            self.assertEqual({
+                key: 1,
+            }, bs.getKeysLastUsedBefore(cur_ltime))
+
+            # And that we do not increment the version if the key is
+            # in live_blobs
+            live_blobs.add(key)
+            key = bs.put(b'something', live_blobs)
+            cur_ltime = self.zk_client.getCurrentLtime()
+            self.assertEqual({
+                key: 1,
+            }, bs.getKeysLastUsedBefore(cur_ltime))
+
+            # Manually test cleanup
             live_blobs = set()
             cur_ltime = self.zk_client.getCurrentLtime()
             bs.cleanup(cur_ltime, live_blobs)
