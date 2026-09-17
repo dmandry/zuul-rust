@@ -8560,6 +8560,8 @@ class TestSemaphore(ZuulTestCase):
         self.assertReportedStat(
             'zuul.tenant.tenant-one.semaphore.test-semaphore.holders',
             value='0', kind='g')
+        self.assertUnReportedStat(
+            'zuul.global_semaphore.test-semaphore.holders')
 
     def test_semaphore_two(self):
         "Test semaphores with max>1"

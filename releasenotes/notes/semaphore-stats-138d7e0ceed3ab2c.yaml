@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    The previously undocumented stat
+    :stat:`zuul.tenant.<tenant>.semaphore.<semaphore>.holders` is now
+    documented.  It previously also emitted metrics for global
+    semaphores, but does so no longer.  Instead, see the new stat
+    :stat:`zuul.global_semaphore.<semaphore>.holders`.

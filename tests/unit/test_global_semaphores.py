@@ -167,3 +167,12 @@ class TestGlobalSemaphores(ZuulTestCase):
             dict(name='test-global-semaphore',
                  result='SUCCESS', changes='2,1'),
         ], ordered=False)
+
+        self.assertReportedStat(
+            'zuul.global_semaphore.global-semaphore.holders',
+            value='0', kind='g')
+        self.assertReportedStat(
+            'zuul.global_semaphore.global-semaphore.holders',
+            value='1', kind='g')
+        self.assertUnReportedStat(
+            'zuul.tenant.tenant-one.semaphore.global-semaphore.holders')

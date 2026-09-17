@@ -64,12 +64,16 @@ class SemaphoreHandler(ZooKeeperSimpleBase):
         if self.statsd is None:
             return
         try:
+            is_global = semaphore_path.startswith(self.global_semaphore_root)
             semaphore_quoted = semaphore_path.split('/')[-1]
             semaphore_name = unquote(semaphore_quoted)
             # statsd safe key:
             semaphore_key = semaphore_name.replace('.', '_').replace('/', '_')
-            key = (f'zuul.tenant.{self.tenant_name}'
-                   f'.semaphore.{semaphore_key}')
+            if is_global:
+                key = (f'zuul.global_semaphore.{semaphore_key}')
+            else:
+                key = (f'zuul.tenant.{self.tenant_name}'
+                       f'.semaphore.{semaphore_key}')
             self.statsd.gauge(f'{key}.holders', num_holders)
         except Exception:
             self.log.exception("Unable to send semaphore stats:")

@@ -424,6 +424,20 @@ These metrics are emitted by the Zuul :ref:`scheduler`:
          The amount of data written to ZooKeeper during a single
          pipeline processing run.
 
+.. stat:: zuul.tenant.<tenant>.semaphore.<semaphore>.holders
+   :type: gauge
+
+   The number of jobs currently holding this semaphore.  This is only
+   emitted for tenant semaphores.  For global semaphores, see
+   :stat:`zuul.global_semaphore.<semaphore>.holders`.
+
+.. stat:: zuul.global_semaphore.<semaphore>.holders
+   :type: gauge
+
+   The number of jobs currently holding this semaphore.  This is only
+   emitted for global semaphores.  For tenant semaphores, see
+   :stat:`zuul.tenant.<tenant>.semaphore.<semaphore>.holders`
+
 .. stat:: zuul.executor.<executor>
 
    Holds metrics emitted by individual executors.  The ``<executor>``
