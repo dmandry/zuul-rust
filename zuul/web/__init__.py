@@ -1698,6 +1698,9 @@ class ZuulWebAPI(object):
                 # We limit the reason to 4096 chars to limit the
                 # zk node size.
                 reason = str(reason[:4096])
+            info = body.get('info')
+            if info:
+                info = str(info[:4096])
             tqs._set(
                 trigger_queue_discarding=bool(
                     body.get('trigger_queue_discarding',
@@ -1709,6 +1712,7 @@ class ZuulWebAPI(object):
                     body.get('result_queue_paused',
                              current_state.result_queue_paused)),
                 reason=reason,
+                info=info,
             )
             tqs.internalCreate(ctx)
 

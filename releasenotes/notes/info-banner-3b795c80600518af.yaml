@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    Tenant admins may now use the tenant management event dialog in
+    the web UI to add an "info" banner that appears at the top of the
+    status page.  This can be used to make users aware of operational
+    issues.

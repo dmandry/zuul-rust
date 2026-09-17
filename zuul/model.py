@@ -12238,6 +12238,7 @@ class TenantEventState(zkobject.ZKObject):
             trigger_queue_paused=False,
             result_queue_paused=False,
             reason=None,
+            info=None,
         )
 
     def getPath(self):
@@ -12249,6 +12250,7 @@ class TenantEventState(zkobject.ZKObject):
             "trigger_queue_paused": self.trigger_queue_paused,
             "result_queue_paused": self.result_queue_paused,
             "reason": self.reason,
+            "info": self.info,
         }
         return data
 
