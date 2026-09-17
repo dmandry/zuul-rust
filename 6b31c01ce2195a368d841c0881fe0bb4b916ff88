@@ -16,6 +16,24 @@
       "message": "Should we add a release note for this? Previously Zuul would have enqueued changes that it thought were mergeable, ran builds for those changes, then when reporting back and trying to submit the changes find they aren\u0027t actually mergeable now. After this change Zuul should avoid enqueuing the changes in the first place. The end result is the same (no merge occurs), but there are some subtle behavior differences in how we get there that users may notice. Specifically whether or not we run jobs and log an error when attempting to merge a change.\n\nAll that to say some people may end up confused after this change lands and a release note may help?",
       "revId": "6b31c01ce2195a368d841c0881fe0bb4b916ff88",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a524d295_ac1601c5",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-17T21:21:46Z",
+      "side": 1,
+      "message": "My rubric is usually \"would a user change their behavior with this knowledge\", and I think the answer is no -- users currently enqueing changes with the current behavior either:\n1) are being surprised when zuul tries and fails to merge the change\n2) know not to enqueue changes that are not mergeable\n\nThe users in #1 will no longer be surprised.  The users in #2 will still not enqueue changes that are not mergeable.\n\nOr put another way, this is a bug fix that makes the behavior be what everyone expects it to be, and it\u0027s doubtful anyone has workarounds for this that they would need to know to stop using.",
+      "parentUuid": "84eeabaa_59310b4d",
+      "revId": "6b31c01ce2195a368d841c0881fe0bb4b916ff88",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
