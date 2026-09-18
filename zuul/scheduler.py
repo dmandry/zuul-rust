@@ -257,6 +257,7 @@ class Scheduler(threading.Thread):
             commandsocket.ReplCommand.name: self.startRepl,
             commandsocket.NoReplCommand.name: self.stopRepl,
         }
+        self.command_audit_logger = logging.getLogger("zuul.command.audit")
         self._stopped = False
 
         self._zuul_app = app
@@ -454,6 +455,9 @@ class Scheduler(threading.Thread):
             try:
                 command, args = self.command_socket.get()
                 if command != '_stop':
+                    self.command_audit_logger.info(
+                        "Running %s command with these args: %s",
+                        command, json.dumps(args))
                     self.command_map[command](*args)
             except Exception:
                 self.log.exception("Exception while processing command")

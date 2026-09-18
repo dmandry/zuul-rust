@@ -4237,6 +4237,41 @@ class TestScheduler(ZuulTestCase):
             else:
                 time.sleep(0)
 
+    def test_command_socket_audit_logging(self):
+        """Test that commands over socket are logged properly"""
+        # record previous tenant reconfiguration state, which may not be set
+        old = self.scheds.first.sched.tenant_layout_state.get(
+            'tenant-one', EMPTY_LAYOUT_STATE)
+        self.waitUntilSettled()
+
+        command_socket = self.scheds.first.config.get(
+            'scheduler', 'command_socket')
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.connect(command_socket)
+            s.sendall('tenant-reconfigure ["tenant-one"]\n'.encode('utf8'))
+
+        # Wait for full reconfiguration. Note that waitUntilSettled is not
+        # reliable here because the reconfigure event may arrive in the
+        # event queue after waitUntilSettled.
+        start = time.time()
+        while True:
+            if time.time() - start > 15:
+                raise Exception("Timeout waiting for full reconfiguration")
+            new = self.scheds.first.sched.tenant_layout_state.get(
+                'tenant-one', EMPTY_LAYOUT_STATE)
+            if old < new:
+                break
+            else:
+                time.sleep(0)
+
+        logs = self._log_stream.getvalue()
+        # Two separate assertions because there may be variable width
+        # spacing between log fields and simple string search is probably
+        # quicker than regexes.
+        self.assertIn('zuul.command.audit', logs)
+        self.assertIn('Running tenant-reconfigure '
+                      'command with these args: ["tenant-one"]', logs)
+
     def test_double_live_reconfiguration_shared_queue(self):
         # This was a real-world regression.  A change is added to
         # gate; a reconfigure happens, a second change which depends
