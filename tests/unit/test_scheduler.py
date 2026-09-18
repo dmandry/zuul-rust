@@ -4209,6 +4209,15 @@ class TestScheduler(ZuulTestCase):
         self.assertGreater(new.last_reconfigure_event_ltime,
                            old.last_reconfigure_event_ltime)
 
+        # Check that we log the reconfiguration command was received.
+        logs = self._log_stream.getvalue()
+        # Two separate assertions because there may be variable width
+        # spacing between log fields and simple string search is probably
+        # quicker than regexes.
+        self.assertIn('zuul.command.audit', logs)
+        self.assertIn('Received full-reconfigure '
+                      'command with these args: []', logs)
+
     def test_tenant_reconfiguration_command_socket(self):
         "Test that single-tenant reconfiguration via command socket works"
 
@@ -4236,6 +4245,15 @@ class TestScheduler(ZuulTestCase):
                 break
             else:
                 time.sleep(0)
+
+        # Check that we log the reconfiguration command was received.
+        logs = self._log_stream.getvalue()
+        # Two separate assertions because there may be variable width
+        # spacing between log fields and simple string search is probably
+        # quicker than regexes.
+        self.assertIn('zuul.command.audit', logs)
+        self.assertIn("Received tenant-reconfigure "
+                      "command with these args: ['tenant-one']", logs)
 
     def test_double_live_reconfiguration_shared_queue(self):
         # This was a real-world regression.  A change is added to

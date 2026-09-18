@@ -69,6 +69,7 @@ class NoReplCommand(Command):
 
 class CommandSocket(object):
     log = logging.getLogger("zuul.CommandSocket")
+    audit_log = logging.getLogger("zuul.command.audit")
 
     def __init__(self, path):
         self.running = False
@@ -125,6 +126,9 @@ class CommandSocket(object):
                 if args:
                     args = json.loads(args[0])
                 if parts[0] != '_stop':
+                    self.audit_log.info(
+                        "Received %s command with these args: %s",
+                        parts[0], args)
                     self.queue.put((parts[0], args))
             except Exception:
                 self.log.exception("Exception in socket handler")
