@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7d0aacff_f708166c",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 4273,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-18T00:54:13Z",
+      "side": 1,
+      "message": "This test is basically only adding these two assertions to the code from the previous two test cases. If we want we could roll this into the existing test cases instead and avoid adding a new test case. I wasn\u0027t sure how unittesting proper we want to get about being very specific about a new test for each tested behavior.",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b618c30f_ca2822b0",
+        "filename": "zuul/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 460,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-18T00:54:13Z",
+      "side": 1,
+      "message": "I added the logging here at the point where we decide to run the command rather than in CommandSocket._socketListener (https://opendev.org/zuul/zuul/src/branch/master/zuul/lib/commandsocket.py#L105-L130) for two reasons.\n\nThe first is that there are some internal commands that may be handled by the system that don\u0027t actually cause command actions like reconfiguration etc to take place. I\u0027m not sure those add value to audit logging and may just create noise?\n\nSecond, the socketListener cares about things like moving bytes around, bytes received, and errors on the socket. I think it makes sense to have debug logging for that independent of the higher level logical actions that we\u0027re actually interested in logging for audit purposes?\n\nIf we prefer we can probably just update the logger used at https://opendev.org/zuul/zuul/src/branch/master/zuul/lib/commandsocket.py#L116 to be zuul.command.audit and bump the log level to INFO and record it at a byte level instead.",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
