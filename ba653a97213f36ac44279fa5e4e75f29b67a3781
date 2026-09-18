@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "73453535_7f5b0784",
+        "filename": "zuul/lib/keystorage.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 81,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-18T09:24:20Z",
+      "side": 1,
+      "message": "nit: `or not create` I think would be more idiomatic (also similar in the methods below)",
+      "range": {
+        "startLine": 81,
+        "startChar": 31,
+        "endLine": 81,
+        "endChar": 46
+      },
+      "revId": "ba653a97213f36ac44279fa5e4e75f29b67a3781",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
