@@ -278,20 +278,29 @@ class UploadJob:
     def _handleCompression(self, path):
         if path.endswith('.zst'):
             orig_path = path
+            inflated_path = path[:-len('.zst')]
             try:
-                subprocess.run(["zstd", "-dq", path],
+                subprocess.run(["zstd", "-dq", orig_path],
                                cwd=self.launcher.temp_dir, check=True,
                                capture_output=True)
-                path = path[:-len('.zst')]
-                self.log.debug("Decompressed image to %s", path)
+                self.log.debug("Decompressed image to %s", inflated_path)
+            except Exception:
+                # It is possible for zstd to create the inflated file and
+                # fail. In that case we want to deleted the new file to
+                # prevent leaks.
+                if os.path.exists(inflated_path):
+                    os.unlink(inflated_path)
+                    self.log.info("Deleted decompressed image %s",
+                                  inflated_path)
+                raise
             finally:
                 # Regardless of whether the decompression succeeded,
                 # delete the original.  If it did succeed, the
                 # original may already be gone.
                 if os.path.exists(orig_path):
                     os.unlink(orig_path)
-                    self.log.info("Deleted %s", orig_path)
-        return path
+                    self.log.info("Deleted zst source image %s", orig_path)
+        return inflated_path
 
     def _validateChecksum(self, path):
         artifact = self.image_build_artifact
@@ -429,7 +438,7 @@ class UploadJob:
                 if path:
                     try:
                         os.unlink(path)
-                        self.log.info("Deleted %s", path)
+                        self.log.info("UploadJob deleted %s", path)
                     except Exception:
                         self.log.exception("Unable to delete %s", path)
                 self.log.debug("Finished upload job for %s with %s uploads",
@@ -2786,7 +2795,7 @@ class Launcher:
                         os.unlink(path)
                     except Exception:
                         self.log.exception("Error deleting %s", path)
-                    self.log.info("Deleted %s", path)
+                    self.log.info("Deleted leaked file %s", path)
         except Exception:
             self.log.exception("Error cleanning temp dir")
 
@@ -3246,7 +3255,7 @@ class Launcher:
             # orphaned.
             if os.path.exists(path):
                 os.unlink(path)
-                self.log.info("Deleted %s", path)
+                self.log.info("Deleted failed download destination %s", path)
             raise
         self.log.debug("Downloaded %s bytes to %s", size, path)
         return path
