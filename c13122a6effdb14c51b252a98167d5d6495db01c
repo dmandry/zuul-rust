@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b87d7225_2a46b876",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 3
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-18T00:07:38Z",
+      "side": 1,
+      "message": "Thank you for the clarifications inline.",
+      "revId": "c13122a6effdb14c51b252a98167d5d6495db01c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "59290ab3_cb3f95a3",
@@ -36,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "23a8dd31_4a427ba1",
+        "filename": "zuul/driver/openstack/openstackendpoint.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 442,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-18T00:07:38Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "9eece855_21d4d6f8",
+      "revId": "c13122a6effdb14c51b252a98167d5d6495db01c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "9ec57219_f8ff088e",
@@ -67,6 +102,24 @@
       "side": 1,
       "message": "It would likely cause a duplicate upload.  I\u0027m not sure I\u0027m comfortable making it a no-op though.\n\nThe case you describe would only arise if someone made two different openstack connections in zuul.conf for the same cloud and project -- esentially an exact duplicate connection.  That does not sound reasonable to me, and I don\u0027t know what the user\u0027s expected behavior would be.  I\u0027d prefer not to assume that it\u0027s okay to share an image in that case.  In fact, I\u0027d be pretty easily convinced that we should probit that at the config parser level.\n\nIn short, at least until we have a use case for that, I think I\u0027d like to take the most conservative approach.",
       "parentUuid": "9ec57219_f8ff088e",
+      "revId": "c13122a6effdb14c51b252a98167d5d6495db01c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f0fb9c94_10264af1",
+        "filename": "zuul/driver/openstack/openstackendpoint.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 649,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-18T00:07:38Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "ad247e36_f830078f",
       "revId": "c13122a6effdb14c51b252a98167d5d6495db01c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
