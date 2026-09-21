@@ -150,6 +150,7 @@ class BlobStore:
                                   flag)
                 if ret:
                     return key
+                self.context.log.debug("Adding blob: %s", key)
                 self._retry(
                     locked_context,
                     self._retryableSave,
