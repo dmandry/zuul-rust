@@ -1200,6 +1200,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 self.log.debug("Found existing import task %s",
                                task_id)
                 return task_id
+        tags = tag_dict_to_list(metadata)
         while True:
             try:
                 with self.rate_limiter:
@@ -1214,7 +1215,15 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                         TagSpecifications=[
                             {
                                 'ResourceType': 'import-snapshot-task',
-                                'Tags': tag_dict_to_list(metadata),
+                                'Tags': tags,
+                            },
+                            {
+                                'ResourceType': 'snapshot',
+                                'Tags': tags,
+                            },
+                            {
+                                'ResourceType': 'image',
+                                'Tags': tags,
                             },
                         ]
                     )
@@ -1303,6 +1312,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 self.log.debug("Found existing import task %s",
                                task_id)
                 return task_id
+        tags = tag_dict_to_list(metadata)
         while True:
             try:
                 with self.rate_limiter:
@@ -1318,7 +1328,15 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                         TagSpecifications=[
                             {
                                 'ResourceType': 'import-image-task',
-                                'Tags': tag_dict_to_list(metadata),
+                                'Tags': tags,
+                            },
+                            {
+                                'ResourceType': 'snapshot',
+                                'Tags': tags,
+                            },
+                            {
+                                'ResourceType': 'image',
+                                'Tags': tags,
                             },
                         ]
                     )
@@ -1433,6 +1451,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 self.log.debug("Found existing image %s",
                                image_id)
                 return image_id
+        tags = tag_dict_to_list(metadata)
         with self.rate_limiter:
             resp = self.ec2_client.copy_image(
                 Name=image_name,
@@ -1441,8 +1460,12 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 CopyImageTags=False,
                 TagSpecifications=[
                     {
+                        'ResourceType': 'snapshot',
+                        'Tags': tags,
+                    },
+                    {
                         'ResourceType': 'image',
-                        'Tags': tag_dict_to_list(metadata),
+                        'Tags': tags,
                     },
                 ]
             )
