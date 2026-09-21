@@ -714,6 +714,59 @@ class TestAwsDriver(AwsBaseTest):
                 value='1',
                 kind='g')
 
+        # The rest of this method checks the snapshot and image tagging
+        snapshot_uuids = set()
+        image_uuids = set()
+
+        # moto doesn't do the tagging that aws does, so we need to
+        # check these manually.
+        for tag_spec in self.copy_image_calls[0]['TagSpecifications']:
+            if tag_spec['ResourceType'] == 'snapshot':
+                tags = zuul.driver.aws.awsendpoint.tag_list_to_dict(
+                    tag_spec['Tags'])
+                upload_id = tags.get('zuul_upload_uuid')
+                if upload_id:
+                    snapshot_uuids.add(upload_id)
+            if tag_spec['ResourceType'] == 'image':
+                tags = zuul.driver.aws.awsendpoint.tag_list_to_dict(
+                    tag_spec['Tags'])
+                upload_id = tags.get('zuul_upload_uuid')
+                if upload_id:
+                    image_uuids.add(upload_id)
+        for tag_spec in self.register_image_calls[0]['TagSpecifications']:
+            if tag_spec['ResourceType'] == 'image':
+                tags = zuul.driver.aws.awsendpoint.tag_list_to_dict(
+                    tag_spec['Tags'])
+                upload_id = tags.get('zuul_upload_uuid')
+                if upload_id:
+                    image_uuids.add(upload_id)
+
+        # The original (non-copied) image will have the tag set by the
+        # awsendpoint import method.
+        paginator = self.ec2_client.get_paginator('describe_snapshots')
+        for page in paginator.paginate(OwnerIds=['self']):
+            for snapshot in page['Snapshots']:
+                tags = zuul.driver.aws.awsendpoint.tag_list_to_dict(
+                    snapshot['Tags'])
+                upload_id = tags.get('zuul_upload_uuid')
+                if upload_id:
+                    snapshot_uuids.add(upload_id)
+        paginator = self.ec2_client.get_paginator('describe_images')
+        for page in paginator.paginate(Owners=['self']):
+            for image in page['Images']:
+                tags = zuul.driver.aws.awsendpoint.tag_list_to_dict(
+                    image['Tags'])
+                upload_id = tags.get('zuul_upload_uuid')
+                if upload_id:
+                    image_uuids.add(upload_id)
+
+        name = 'review.example.com%2Forg%2Fcommon-config/debian-local'
+        uploads = self.launcher.image_upload_registry.getUploadsForImage(
+            name)
+        for upload in uploads:
+            self.assertIn(upload.uuid, snapshot_uuids)
+            self.assertIn(upload.uuid, image_uuids)
+
     @simple_layout('layouts/aws/nodepool-image-copy.yaml',
                    enable_nodepool=True)
     @return_data(
