@@ -2434,6 +2434,7 @@ class Launcher:
                     state = node.State.FAILED
                     log.exception("Marking node %s as %s", node, state)
                     node.nodescan_request = None
+                    node.unassign(ctx)
                     node.setState(state)
                     # If we are a subnode, then declare the main node
                     # and any READY subnodes as failed as well.

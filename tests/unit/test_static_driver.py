@@ -128,6 +128,69 @@ class TestStaticDriver(ZuulTestCase):
     def test_static_node_lifecycle(self):
         self._test_static_node_lifecycle('debian-normal')
 
+    @simple_layout('layouts/static/nodepool.yaml', enable_nodepool=True)
+    @okay_tracebacks('_checkNodescanRequest')
+    def test_static_node_reuse_failure(self):
+        # Test that a used node which and fails its nodescan on reuse
+        # is eventually cycled back to ready.
+        label = 'debian-normal'
+        self._waitForRegistration()
+        for _ in iterate_timeout(
+                30, "scheduler and launcher to have the same layout"):
+            if (self.scheds.first.sched.local_layout_state.get(
+                    "tenant-one") ==
+                self.launcher.local_layout_state.get("tenant-one")):
+                break
+
+        ctx = self.createZKContext(None)
+        nodeset = model.NodeSet()
+        nodeset.addNode(model.Node("node", label))
+
+        request = self.requestNodes([n.label for n in nodeset.getNodes()])
+        client = LauncherClient(self.zk_client, None)
+        request = client.getRequest(request.uuid)
+        self.assertEqual(request.state, model.NodesetRequest.State.FULFILLED)
+        self.assertEqual(len(request.nodes), 1)
+
+        client.acceptNodeset(request, nodeset)
+        self.waitUntilSettled()
+
+        node = nodeset.getNodes()[0]
+        pnode = node._provider_node
+
+        client.useNodeset(nodeset)
+        self.waitUntilSettled()
+
+        def my_advance(*args, **kw):
+            raise Exception("Test exception")
+
+        with mock.patch.object(
+            zuul.launcher.server.NodescanRequest, 'advance', my_advance
+        ):
+            # Returning the node triggers a nodescan as part of
+            # the reuse code path
+            client.returnNodeset(nodeset)
+            self.waitUntilSettled()
+
+            with mock.patch.object(
+                    zuul.driver.static.staticendpoint,
+                    'DELETE_RECYCLE_TIME', 0
+            ):
+                for _ in iterate_timeout(
+                        60, "node to be rebuilding or failed"):
+                    pnode.refresh(ctx)
+                    if pnode.state in (pnode.State.REBUILDING,
+                                       pnode.State.FAILED):
+                        break
+
+        with mock.patch.object(
+            zuul.driver.static.staticendpoint, 'DELETE_RECYCLE_TIME', 0
+        ):
+            for _ in iterate_timeout(60, "node to be marked ready"):
+                pnode.refresh(ctx)
+                if pnode.state == pnode.State.READY:
+                    break
+
     @simple_layout('layouts/static/nodepool-dereg.yaml', enable_nodepool=True)
     @okay_tracebacks('_checkNodescanRequest')
     def test_static_failure(self):
