@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2737fba9_7fdb4f6a",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2444,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-22T21:13:55Z",
+      "side": 1,
+      "message": "Here\u0027s my understanding: if we are able to change the state of any subnode, then they aren\u0027t assigned to a request, so they don\u0027t trigger the condition you\u0027re concerned about.  And any ones that we can\u0027t lock will come into this method on their own when finished (benefitting from the fix you just made).\n\nDoes that sound right?  Or am I missing something (meaning we need to do something more for subnodes)?",
+      "revId": "cafd6f7e6a00b97111a3ce132caa36f3897599b4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
