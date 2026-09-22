@@ -24,8 +24,8 @@ ARG IMAGE_FLAVOR=
 FROM quay.io/opendevorg/python-base:3.14-trixie${IMAGE_FLAVOR} AS zuul-base
 
 # This is a mirror of:
-# FROM docker.io/library/node:22-trixie AS node-base
-FROM quay.io/opendevmirror/node:22-trixie AS node-base
+# FROM docker.io/library/node:26-trixie AS node-base
+FROM quay.io/opendevmirror/node:26-trixie AS node-base
 
 # This is a mirror of:
 # FROM golang:1.25-trixie AS go-base
