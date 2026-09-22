@@ -24,8 +24,8 @@ ARG IMAGE_FLAVOR=
 FROM quay.io/opendevorg/python-base:3.14-trixie${IMAGE_FLAVOR} AS zuul-base
 
 # This is a mirror of:
-# FROM docker.io/library/node:22-trixie AS node-base
-FROM quay.io/opendevmirror/node:22-trixie AS node-base
+# FROM docker.io/library/node:26-trixie AS node-base
+FROM quay.io/opendevmirror/node:26-trixie AS node-base
 
 # This is a mirror of:
 # FROM golang:1.25-trixie AS go-base
@@ -36,6 +36,9 @@ FROM quay.io/opendevorg/python-builder:3.14-trixie AS builder-base
 FROM node-base AS js-builder
 
 COPY web /tmp/src
+
+# corepack installs the package manager configured in package.json
+RUN npm install -g --allow-scripts=corepack,yarn corepack@latest && corepack enable
 # Explicitly run the Javascript build
 RUN cd /tmp/src && yarn install --frozen-lockfile && yarn list && yarn build
 
