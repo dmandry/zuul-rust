@@ -15,6 +15,10 @@
 
 set -e
 
+# Extract node version from .nvmrc. This let's us declare a version in
+# one place and have it work for both nvm and nodeenv.
+NODE_VERSION=$(cat .nvmrc)
+
 # This script checks if yarn is installed in the current path. If it is not,
 # it will use nodeenv to install node, npm and yarn.
 # Finally, it will install pip things.
@@ -24,7 +28,7 @@ then
     # Initialize nodeenv and tell it to re-use the currently active virtualenv
     attempts=0
     set +e
-    until nodeenv --python-virtualenv -n 22.21.1 ; do
+    until nodeenv --python-virtualenv -n 26.9.0 ; do
         ((attempts++))
         if [[ $attempts > 2 ]]
         then

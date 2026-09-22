@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
+      // node 25+ unconditionally defines localStorage global
+      // that hides the jsdom localStorage vitest uses.
+      execArgv: ['--no-experimental-webstorage'],
     },
     resolve: {
       alias: {
