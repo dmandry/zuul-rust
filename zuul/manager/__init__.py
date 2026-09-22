@@ -112,7 +112,7 @@ class PipelineManager(metaclass=ABCMeta):
         return self._live_blobs
 
     def resetLiveBlobs(self):
-        self._love_blobs = None
+        self._live_blobs = None
 
     @contextlib.contextmanager
     def currentContext(self, ctx):

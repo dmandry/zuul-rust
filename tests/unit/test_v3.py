@@ -8617,33 +8617,65 @@ class TestSecrets(ZuulTestCase):
             'zuul.model.Job.SECRET_BLOB_SIZE',
             1))
 
+        context = self.scheds.first.sched.createZKContext(None, self.log)
+        bs = BlobStore(context)
+
         A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
 
-        with self.scheds.first.sched.createZKContext(None, self.log)\
-             as context:
-            bs = BlobStore(context)
-            # 1 secret, 2 repo states (project1 and common-config)
-            self.assertEqual(len(bs), 3)
+        # 1 secret, 2 repo states (project1 and common-config)
+        self.assertEqual(len(bs), 3)
 
-            self.scheds.first.sched._runBlobStoreCleanup()
-            self.assertEqual(len(bs), 3)
+        self.scheds.first.sched._runBlobStoreCleanup()
+        self.assertEqual(len(bs), 3)
 
-            self.executor_server.hold_jobs_in_build = False
-            self.executor_server.release()
-            self.waitUntilSettled()
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
 
-            self.assertEqual(A.reported, 1, "A should report success")
-            self.assertHistory([
-                dict(name='project1-secret', result='SUCCESS', changes='1,1'),
-            ])
-            self.assertEqual(
-                [{'secret_name': self.secret}],
-                self._getSecrets('project1-secret', 'playbooks'))
+        self.assertEqual(A.reported, 1, "A should report success")
+        self.assertHistory([
+            dict(name='project1-secret', result='SUCCESS', changes='1,1'),
+        ])
+        self.assertEqual(
+            [{'secret_name': self.secret}],
+            self._getSecrets('project1-secret', 'playbooks'))
 
-            self.scheds.first.sched._runBlobStoreCleanup()
-            self.assertEqual(len(bs), 0)
+        self.scheds.first.sched._runBlobStoreCleanup()
+        self.assertEqual(len(bs), 0)
+
+        # Perform the test again to make sure the live blob detection
+        # works.  Clear the executor secrets cache so we don't benefit
+        # from it.
+        self.executor_server.secrets_cache.clear()
+
+        self.executor_server.hold_jobs_in_build = True
+        B = self.fake_gerrit.addFakeChange('org/project1', 'master', 'B')
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        # 1 secret, 2 repo states (project1 and common-config)
+        self.assertEqual(len(bs), 3)
+
+        self.scheds.first.sched._runBlobStoreCleanup()
+        self.assertEqual(len(bs), 3)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertEqual(B.reported, 1, "B should report success")
+        self.assertHistory([
+            dict(name='project1-secret', result='SUCCESS', changes='1,1'),
+            dict(name='project1-secret', result='SUCCESS', changes='2,1'),
+        ])
+        self.assertEqual(
+            [{'secret_name': self.secret}],
+            self._getSecrets('project1-secret', 'playbooks'))
+
+        self.scheds.first.sched._runBlobStoreCleanup()
+        self.assertEqual(len(bs), 0)
 
     def test_oidc_single(self):
         # Test that oidc token is generated correctly when there is
