@@ -34,6 +34,24 @@
       "parentUuid": "a33da9e5_3d9d6dcd",
       "revId": "aaaadefcc94b03246e0e904ca6610d54d2db678c",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "375d6b18_a49ff7d1",
+        "filename": "doc/source/drivers/mqtt.rst",
+        "patchSetId": 10
+      },
+      "lineNbr": 333,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-23T20:37:59Z",
+      "side": 1,
+      "message": "I think that\u0027s perfect: user indicates topics, we subscribe to them.",
+      "parentUuid": "a33da9e5_3d9d6dcd",
+      "revId": "aaaadefcc94b03246e0e904ca6610d54d2db678c",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
