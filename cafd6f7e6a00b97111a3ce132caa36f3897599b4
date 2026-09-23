@@ -34,6 +34,24 @@
       "parentUuid": "2737fba9_7fdb4f6a",
       "revId": "cafd6f7e6a00b97111a3ce132caa36f3897599b4",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5433b477_bd711f5c",
+        "filename": "zuul/launcher/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2444,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-23T14:52:17Z",
+      "side": 1,
+      "message": "I agree with the analysis; I think the question is whether that is correct or not.\n\nAll of the below is only considering static nodes.\n\nIf the main node is rebuilding, the only task it really has is the nodescan; it should be a fairly small window.  If we finish a job on a subnode and happen to do this nodescan at the same time as the main node, if that happens to fail, then I think that failure is just as valid as the nodescan on the main node failing.  Generally, we would expect it to fail anyway since the subnode just failed.\n\nKeep in mind that the static driver applies a delay between going from FAILED -\u003e REBUILDING, so it\u0027s not a fast loop.  It should spend most of its time FAILED, then briefly REBUILDING.  That small window is when this condition where a nodescan on either the main or subnode can send it back to FAILING.\n\nIn other words, it loops either way, there\u0027s just two opportunities to fail in this case.\n\nThat seems okay to me.  Maybe we should have a test to confirm that and codify it.  Maybe a combination of the test you just added plus test_static_subnodes_reuse_failure.",
+      "parentUuid": "2737fba9_7fdb4f6a",
+      "revId": "cafd6f7e6a00b97111a3ce132caa36f3897599b4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
