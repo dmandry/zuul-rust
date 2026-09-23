@@ -541,8 +541,10 @@ class BaseProvider(zkobject.PolymorphicZKObjectMixin,
             (driver, zk_client, connection, tenant_name,
              canonical_name, config, system_id) = args
             config = config.copy()
-            config.pop('_source_context')
-            config.pop('_start_mark')
+            # MODEL_API <= 37: these can be removed since we no longer
+            # serialize them.
+            config.pop('_source_context', None)
+            config.pop('_start_mark', None)
             attrs = dict(
                 driver=driver,
                 connection=connection,

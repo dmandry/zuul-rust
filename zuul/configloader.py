@@ -502,8 +502,8 @@ class SectionParser(object):
         section.abstract = conf.get('abstract')
         section.connection = conf.get('connection')
         section.description = conf.get('description')
-        section.source_context = conf.get('_source_context')
-        section.start_mark = conf.get('_start_mark')
+        section.source_context = conf.pop('_source_context')
+        section.start_mark = conf.pop('_start_mark')
         section.config = conf
         return section
 
@@ -538,8 +538,8 @@ class ProviderParser(object):
         provider_config = model.ProviderConfig(conf['name'],
                                                conf['section'])
         provider_config.description = conf.get('description')
-        provider_config.source_context = conf.get('_source_context')
-        provider_config.start_mark = conf.get('_start_mark')
+        provider_config.source_context = conf.pop('_source_context')
+        provider_config.start_mark = conf.pop('_start_mark')
         provider_config.config = conf
         return provider_config
 
