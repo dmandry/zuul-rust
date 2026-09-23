@@ -3760,7 +3760,8 @@ class ConfigLoader(object):
     def createDynamicLayout(self, item, files,
                             additional_project_branches,
                             ansible_manager,
-                            include_config_projects=False):
+                            include_config_projects=False,
+                            layout_uuid=None):
         abide = self.scheduler.abide
         tenant = item.manager.tenant
         event_id = item.event
@@ -3787,7 +3788,7 @@ class ConfigLoader(object):
                                          additional_project_branches,
                                          False, item, pcontext)
 
-        layout = model.Layout(tenant, item.layout_uuid)
+        layout = model.Layout(tenant, layout_uuid or item.layout_uuid)
         log.debug("Created layout id %s", layout.uuid)
         for e in pcontext.error_list:
             layout.loading_errors.addError(e)
