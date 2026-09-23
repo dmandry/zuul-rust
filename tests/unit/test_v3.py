@@ -1832,6 +1832,77 @@ class TestInRepoConfig(ZuulTestCase):
             dict(name='project-test1', result='SUCCESS', changes='1,2'),
             dict(name='project-test2', result='SUCCESS', changes='1,2')])
 
+    @simple_layout('layouts/simple.yaml')
+    def test_dynamic_config_change_series(self):
+        # Test that if we have a change series stacked on a dynamic
+        # config update, we only run merge jobs and generate the
+        # layout for the config update once.
+        self.executor_server.hold_jobs_in_build = True
+        file_dict = {'zuul.yaml': ''}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
+        C = self.fake_gerrit.addFakeChange('org/project', 'master', 'C')
+        C.setDependsOn(B, 1)
+        B.setDependsOn(A, 1)
+
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.fake_gerrit.addEvent(C.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        items = self.getAllItems('tenant-one', 'check')
+        layout_uuid = items[0].layout_uuid
+        # We should be using a uuid5-based id because it's a dynamic
+        # layout
+        self.assertEqual('5', layout_uuid[12])
+        self.assertEqual(layout_uuid, items[1].layout_uuid)
+        self.assertEqual(layout_uuid, items[2].layout_uuid)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        for k in self.merge_job_history.keys():
+            for x in self.merge_job_history[k]:
+                self.log.debug('Merge job %s %s', k, x)
+        self.assertEqual(3, len(self.merge_job_history['merge']))
+
+    @simple_layout('layouts/simple.yaml')
+    def test_dynamic_config_change_series_slow(self):
+        # Like the above test, but slower, to make sure we still reuse
+        # the layouts if changes arrive later.
+        self.executor_server.hold_jobs_in_build = True
+        file_dict = {'zuul.yaml': ''}
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
+                                           files=file_dict)
+        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B')
+        C = self.fake_gerrit.addFakeChange('org/project', 'master', 'C')
+        C.setDependsOn(B, 1)
+        B.setDependsOn(A, 1)
+
+        self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+        self.fake_gerrit.addEvent(C.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        items = self.getAllItems('tenant-one', 'check')
+        layout_uuid = items[0].layout_uuid
+        # We should be using a uuid5-based id because it's a dynamic
+        # layout
+        self.assertEqual('5', layout_uuid[12])
+        self.assertEqual(layout_uuid, items[1].layout_uuid)
+        self.assertEqual(layout_uuid, items[2].layout_uuid)
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+        for k in self.merge_job_history.keys():
+            for x in self.merge_job_history[k]:
+                self.log.debug('Merge job %s %s', k, x)
+        self.assertEqual(3, len(self.merge_job_history['merge']))
+
     def test_in_repo_branch(self):
         in_repo_conf = textwrap.dedent(
             """

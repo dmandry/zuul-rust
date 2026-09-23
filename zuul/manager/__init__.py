@@ -18,6 +18,7 @@ import logging
 import textwrap
 import time
 import urllib
+import uuid
 from abc import ABCMeta, abstractmethod
 
 from zuul import exceptions
@@ -1418,7 +1419,7 @@ class PipelineManager(metaclass=ABCMeta):
                     severity_error = True
         return relevant_errors, severity_error
 
-    def _loadDynamicLayout(self, item):
+    def _loadDynamicLayout(self, item, layout_uuid):
         log = get_annotated_logger(self.log, item.event)
         # Load layout
         # Late import to break an import loop
@@ -1450,7 +1451,8 @@ class PipelineManager(metaclass=ABCMeta):
                     files,
                     additional_project_branches,
                     self.sched.ansible_manager,
-                    include_config_projects=True)
+                    include_config_projects=True,
+                    layout_uuid=layout_uuid)
                 trusted_errors = len(filter_severity(
                     trusted_layout.loading_errors.errors,
                     errors=True, warnings=False)) > 0
@@ -1464,7 +1466,8 @@ class PipelineManager(metaclass=ABCMeta):
                     files,
                     additional_project_branches,
                     self.sched.ansible_manager,
-                    include_config_projects=False)
+                    include_config_projects=False,
+                    layout_uuid=layout_uuid)
                 untrusted_errors = len(filter_severity(
                     untrusted_layout.loading_errors.errors,
                     errors=True, warnings=False)) > 0
@@ -1570,6 +1573,20 @@ class PipelineManager(metaclass=ABCMeta):
 
         return self.getLayout(parent_item)
 
+    def _getLayoutId(self, item):
+        # If we're generating a dynamic layout, use a UUID that is
+        # based on the current tenant layout plus any items ahead.
+        items = [item]
+        items.extend(i for i in item.items_ahead
+                     if i not in items)
+        items.reverse()
+        changes = [
+            c for i in items for c in i.changes
+            if c.updatesConfig(self.tenant)
+        ]
+        change_str = ''.join(c.ref for c in changes).encode('utf8')
+        return uuid.uuid5(uuid.UUID(self.tenant.layout.uuid), change_str).hex
+
     def getLayout(self, item):
         log = get_annotated_logger(self.log, item.event)
         layout = self._layout_cache.get(item.layout_uuid)
@@ -1602,6 +1619,14 @@ class PipelineManager(metaclass=ABCMeta):
         if not item.updatesConfig():
             return self.getFallbackLayout(item)
         # Else this item updates the config,
+
+        # Calculate the layout id.  Use it if it's cached, otherwise
+        # proceed to merge operations to generate it.
+        layout_uuid = self._getLayoutId(item)
+        if layout := self._layout_cache.get(layout_uuid):
+            log.debug("Dynamic layout found in cache")
+            return layout
+
         # ask the merger for the result.
         build_set = item.current_build_set
         if build_set.merge_state != build_set.COMPLETE:
@@ -1618,7 +1643,7 @@ class PipelineManager(metaclass=ABCMeta):
 
         log.debug("Preparing dynamic layout for: %s", item)
         start = time.time()
-        layout = self._loadDynamicLayout(item)
+        layout = self._loadDynamicLayout(item, layout_uuid)
         self.reportPipelineTiming('layout_generation_time', start)
         return layout
 
@@ -1768,6 +1793,22 @@ class PipelineManager(metaclass=ABCMeta):
             repo_state_state=item.current_build_set.PENDING)
         return True
 
+    def findMatchingPendingMergeItem(self, item):
+        # In some cases we may be able to avoid repeating merge
+        # operations for identical items.  This method looks for an
+        # item ahead in the pipeline with the same set of dependent
+        # changes with a pending merge operation.
+        for i in self.state.getAllItems():
+            if i is item:
+                # Don't look any further
+                return None
+            if ((i.current_build_set.dependent_changes ==
+                 item.current_build_set.dependent_changes) and
+                (i.current_build_set.merge_state ==
+                 item.current_build_set.PENDING)):
+                return i
+        return None
+
     def prepareItem(self, item):
         build_set = item.current_build_set
         tenant = self.tenant
@@ -1819,11 +1860,31 @@ class PipelineManager(metaclass=ABCMeta):
         # If this change alters config or is live, schedule merge and
         # build a layout.
         if build_set.merge_state == build_set.NEW:
-            if item.live or item.updatesConfig():
+            need_merge = False
+            need_config_files = item.updatesConfig()
+            if item.live:
+                need_merge = True
+            elif need_config_files:
+                # We only need a merge for a non-live item if it
+                # updates the config and we don't have a cached layout
+                # for it already.
+                if not self.getLayout(item):
+                    # If there is another item in the pipeline with
+                    # the same changes waiting on a merge, then
+                    # wait for that item to generate a layout before
+                    # we do our own merge (we should be able to use
+                    # the results if it doesn't fail).
+                    if other := self.findMatchingPendingMergeItem(item):
+                        log = get_annotated_logger(self.log, item.event)
+                        log.debug("Deferring merge operation, "
+                                  "waiting on %s", other)
+                        return False
+                    need_merge = True
+            if need_merge:
                 files, dirs = None, None
                 # We only need to request config/dirs files if any of
                 # the changes updates the config.
-                if item.updatesConfig():
+                if need_config_files:
                     # Collect extra config files and dirs of required changes.
                     extra_config_files = set()
                     extra_config_dirs = set()
