@@ -37,6 +37,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "b61d58d1_65a67158",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 4273,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-23T20:34:28Z",
+      "side": 1,
+      "message": "I think it would be fine (slightly preferable) to roll it into the other test case for efficiency.",
+      "parentUuid": "7d0aacff_f708166c",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "b618c30f_ca2822b0",
         "filename": "zuul/scheduler.py",
         "patchSetId": 1
@@ -48,6 +66,24 @@
       "writtenOn": "2026-09-18T00:54:13Z",
       "side": 1,
       "message": "I added the logging here at the point where we decide to run the command rather than in CommandSocket._socketListener (https://opendev.org/zuul/zuul/src/branch/master/zuul/lib/commandsocket.py#L105-L130) for two reasons.\n\nThe first is that there are some internal commands that may be handled by the system that don\u0027t actually cause command actions like reconfiguration etc to take place. I\u0027m not sure those add value to audit logging and may just create noise?\n\nSecond, the socketListener cares about things like moving bytes around, bytes received, and errors on the socket. I think it makes sense to have debug logging for that independent of the higher level logical actions that we\u0027re actually interested in logging for audit purposes?\n\nIf we prefer we can probably just update the logger used at https://opendev.org/zuul/zuul/src/branch/master/zuul/lib/commandsocket.py#L116 to be zuul.command.audit and bump the log level to INFO and record it at a byte level instead.",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bb636a80_deb26a04",
+        "filename": "zuul/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 460,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-23T20:34:28Z",
+      "side": 1,
+      "message": "Are there any internal commands other than _stop?  That\u0027s also being special-cased here (which... I\u0027m not sure it needs to be since I don\u0027t think we put stop events on the queue... I guess that\u0027s belt and suspenders.\n\nAssuming that\u0027s the case, maybe we should move the audit logger into commandsocket so that we automatically get it for every service.  We still shouldn\u0027t log \"_stop\" or any other internal commands.  I think if we put the logger at line 128 in commandsocket.py that should do it?\n\nOtherwise, if we decide it should stay here, I think we\u0027d need to copy this to all the services, which sounds not as good.",
+      "parentUuid": "b618c30f_ca2822b0",
       "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
