@@ -53,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "df07dfc0_d8458d26",
+        "filename": "tests/unit/test_scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 4273,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-24T00:19:24Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "b61d58d1_65a67158",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "b618c30f_ca2822b0",
@@ -84,6 +102,24 @@
       "side": 1,
       "message": "Are there any internal commands other than _stop?  That\u0027s also being special-cased here (which... I\u0027m not sure it needs to be since I don\u0027t think we put stop events on the queue... I guess that\u0027s belt and suspenders.\n\nAssuming that\u0027s the case, maybe we should move the audit logger into commandsocket so that we automatically get it for every service.  We still shouldn\u0027t log \"_stop\" or any other internal commands.  I think if we put the logger at line 128 in commandsocket.py that should do it?\n\nOtherwise, if we decide it should stay here, I think we\u0027d need to copy this to all the services, which sounds not as good.",
       "parentUuid": "b618c30f_ca2822b0",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "c21edbb5_8237dc1b",
+        "filename": "zuul/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 460,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-24T00:19:24Z",
+      "side": 1,
+      "message": "Pointing out that we would need to apply similar logging to each service that listened on a command socket convinced me to put this in the command socket itself. For whatever reason in my head only the scheduler dealt with command sockets but that isn\u0027t the case. And now that I\u0027ve written this down it occurs to me that I should probably add some test coverage for something other than the scheduler? \n\nOne thing worth noting is that we do put the stop events on the queue but we don\u0027t do that in CommandSocket._socketListener() that happens in CommandSocket.stop(). That means we need to keep the condition here in Scheduler.runCommand() (and elsewhere) to properly ignore the unknown command. The comment in CommandSocket.stop() covers this behavior.",
+      "parentUuid": "bb636a80_deb26a04",
       "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
