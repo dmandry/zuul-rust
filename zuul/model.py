@@ -4815,9 +4815,6 @@ class Job(ConfigObject):
                     # and store the key in the playbook secrets dict.
                     blob_key = blobstore.put(secret_serialized, live_blobs)
                     if live_blobs is not None:
-                        # TODO: this is probably too verbose to keep once
-                        # the blob store changes have settled down.
-                        context.log.debug("Using blob %s", blob_key)
                         live_blobs.add(blob_key)
                     playbook['secrets'][secret_key] = {'blob': blob_key}
                 else:
