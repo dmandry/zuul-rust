@@ -10,6 +10,15 @@ information, may be provided via a configuration file (e.g.,
 ``clouds.yaml``) or environment variables.  See the `OpenStack SDK`_
 for more information.
 
+Image uploads are supported using the
+:value:`provider[openstack].images[zuul].upload-methods.upload` and
+:value:`provider[openstack].images[zuul].upload-methods.copy` methods.
+The :value:`provider[openstack].images[zuul].upload-methods.import`
+method is not currently supported.  In order for Zuul to use the
+`copy` method, the image must be created as a `shared` image by adding
+``visibility: shared`` to
+:attr:`provider[openstack].images[zuul].tags`.
+
 Connection Configuration
 ------------------------
 

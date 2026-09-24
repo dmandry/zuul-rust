@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    The OpenStack driver now supports the OpenStack image sharing
+    feature so that if multiple providers in different OpenStack
+    projects require the same Zuul image to be uploaded, it may be
+    uploaded to one project and shared with the other.
