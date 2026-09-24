@@ -145,6 +145,26 @@ class TestModelUpgrade(ZuulTestCase):
         branches1 = connection1.getProjectBranches(project1, tenant1)
         self.assertEqual(['master'], branches1)
 
+        # Missing wait for settled here?
+        #
+        # Logs between the two upgrade triggers doesn't show anything obvious:
+        # 2026-09-24 00:50:24,412 zuul.test                        DEBUG    Trigger upgrade on scheduler-0 and check
+        # 2026-09-24 00:50:24,412 zuul.BranchCache.gerrit          INFO     Waiting for branch cache upgrade lock
+        # 2026-09-24 00:50:24,414 zuul.Scheduler.LayoutUpdate      DEBUG    Aquired tenant-one read tenant lock
+        # 2026-09-24 00:50:24,416 zuul.Scheduler.LayoutUpdate      DEBUG    Released tenant-one read tenant lock
+        # 2026-09-24 00:50:24,417 zuul.Scheduler-1                 DEBUG    Processing tenant management events in tenant-one
+        # 2026-09-24 00:50:24,422 zuul.zk.ZooKeeper                DEBUG    Initialize cache at /zuul/cache/connection/gerrit/project
+        # 2026-09-24 00:50:24,429 zuul.zk.ZooKeeper                DEBUG    Cache at /zuul/cache/connection/gerrit/project is ready
+        # 2026-09-24 00:50:24,429 zuul.BranchCache.gerrit          INFO     Upgrading cache
+        # 2026-09-24 00:50:24,429 zuul.BranchCache.gerrit          INFO     Upgrading project org/common-config (object loading errors during upgrade are normal)
+        # 2026-09-24 00:50:24,431 zuul.Scheduler-1                 DEBUG    Aquired tenant-one read tenant lock
+        # 2026-09-24 00:50:24,441 zuul.Scheduler-1                 DEBUG    Processing tenant trigger events in tenant-one
+        # 2026-09-24 00:50:24,442 zuul.BranchCacheNew.gerrit       ERROR    Exception loading ZKObject at /zuul/cache/connection/gerrit/project/data/org%2Fcommon-config
+        # 2026-09-24 00:50:24,453 zuul.BranchCache.gerrit          INFO     Upgrading project org/project (object loading errors during upgrade are normal)
+        # 2026-09-24 00:50:24,463 zuul.BranchCacheNew.gerrit       ERROR    Exception loading ZKObject at /zuul/cache/connection/gerrit/project/data/org%2Fproject
+        # 2026-09-24 00:50:24,468 zuul.test                        DEBUG    Trigger upgrade on scheduler-1 and check
+        # 2026-09-24 00:50:24,468 zuul.Scheduler-0                 DEBUG    Submitting tenant reconfiguration event for tenant-one due to event <TriggerEvent 0x7c24e82d34d0 None> in project org/project, ltime 1303655
+
         old_ltime1 = connection1._branch_cache._old_cache.ltime
         old_ltime2 = connection2._branch_cache._old_cache.ltime
         new_ltime1 = connection1._branch_cache._new_cache.ltime
@@ -154,11 +174,16 @@ class TestModelUpgrade(ZuulTestCase):
         self.assertNotEqual(None, new_ltime1)
         self.assertEqual(None, new_ltime2)
         self.assertTrue(new_ltime1 > stage1_ltime)
-        stage2_ltime = new_ltime1
+        stage2_ltime = new_ltime1  # 1303645 per failed assertion below
+
+        # Something is updating the connection1._branch_cache._new_cache.ltime
+        # between the line above and the setting of the event.zuul_event_ltime
+        # a few lines below. As cache ltime increases to 1303649.
+        # Do we need to wait for settled before collecting the ltimes above?
 
         self.log.debug("Trigger upgrade on scheduler-1 and check")
         event = model.TriggerEvent()
-        event.zuul_event_ltime = self.zk_client.getCurrentLtime()
+        event.zuul_event_ltime = self.zk_client.getCurrentLtime() # 1303655 per test log above
 
         first.sched.reconfigureTenant(tenant1, project1, event)
         self.waitUntilSettled()
@@ -187,6 +212,7 @@ class TestModelUpgrade(ZuulTestCase):
         new_ltime2 = connection2._branch_cache._new_cache.ltime
         self.assertEqual(stage1_ltime, old_ltime1)
         self.assertEqual(stage1_ltime, old_ltime2)
+        # testtools.matchers._impl.MismatchError: 1303645 != 1303649
         self.assertEqual(stage2_ltime, new_ltime1)
         self.assertEqual(stage2_ltime, new_ltime2)
 
