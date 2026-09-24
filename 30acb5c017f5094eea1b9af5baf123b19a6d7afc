@@ -122,6 +122,24 @@
       "parentUuid": "bb636a80_deb26a04",
       "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f3dd4b2f_80a4da35",
+        "filename": "zuul/scheduler.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 460,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-24T00:24:08Z",
+      "side": 1,
+      "message": "Actually it doesn\u0027t look like we have any explicit testing of executor, merger, launcher, etc command socket handling that I can find. If we\u0027re already happy with the existing coverage of the command handling then the scheduler coverage is probably sufficient. Particularly since I just moved the log handling into CommandSocket.\n\nLet me know if there is a location to test that more broadly or if you want to add it, but I think for now this is probably sufficient?",
+      "parentUuid": "c21edbb5_8237dc1b",
+      "revId": "30acb5c017f5094eea1b9af5baf123b19a6d7afc",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
