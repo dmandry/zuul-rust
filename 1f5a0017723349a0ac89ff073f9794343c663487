@@ -33,6 +33,98 @@
       "message": "recheck",
       "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a52bcde3_052f003a",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-25T09:36:49Z",
+      "side": 1,
+      "message": "`self.listener_election.is_still_valid()` only checks whether the ZooKeeper session is active, not whether this instance is currently the elected leader.\nhttps://opendev.org/zuul/zuul/src/commit/1f5a0017723349a0ac89ff073f9794343c663487/zuul/zk/election.py#L44\n\nthe else branch is never taken under normal operation. Every scheduler receives the MQTT message and pushes duplicate trigger events to ZooKeeper.",
+      "range": {
+        "startLine": 71,
+        "startChar": 0,
+        "endLine": 72,
+        "endChar": 34
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "b3edd65a_90169ccf",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 122,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-25T09:36:49Z",
+      "side": 1,
+      "message": "`is_still_valid()` is True on all healthy schedulers, every scheduler subscribes to the broker topics during tenant reconfiguration.",
+      "range": {
+        "startLine": 116,
+        "startChar": 0,
+        "endLine": 122,
+        "endChar": 45
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f0a13490_3abdaccf",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-25T09:36:49Z",
+      "side": 1,
+      "message": "Potential bug with client_id in multi-scheduler deployments:\n\nIf client_id is specified in the connection config, all scheduler instances initialize their MQTT client using that exact same ID.\n\nWhen a client connects with an ID already in use, the broker must terminate the existing connection. In a multi-scheduler deployment, this causes the schedulers to enter an infinite disconnect/reconnect loop fighting each other for the connection.\n\nSuggestion: If client_id is provided in the configuration, append a unique scheduler component identifier (or a random suffix) so each scheduler instance has a distinct client ID on the broker",
+      "range": {
+        "startLine": 133,
+        "startChar": 0,
+        "endLine": 133,
+        "endChar": 62
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d6308169_4134002c",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-25T09:36:49Z",
+      "side": 1,
+      "message": "Does it make sense to support regex here?",
+      "range": {
+        "startLine": 103,
+        "startChar": 0,
+        "endLine": 106,
+        "endChar": 38
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
