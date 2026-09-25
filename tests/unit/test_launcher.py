@@ -1487,6 +1487,7 @@ class TestLauncher(LauncherBaseTestCase):
             def max_zxid(self):
                 waiting_event.set()
                 go_event.wait()
+                time.sleep(0.5)
                 return super().max_zxid
 
         self.patch(self.launcher.api.requests_cache,
