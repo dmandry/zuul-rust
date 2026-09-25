@@ -18,7 +18,7 @@ PrettyTable
 babel>=1.0
 netaddr
 kazoo
-sqlalchemy>=2.0.0
+sqlalchemy>=2.0.0,<2.1.0  # TODO(corvus): unknown issue with psycopg-binary
 alembic
 cryptography>=39.0.0
 cachecontrol
