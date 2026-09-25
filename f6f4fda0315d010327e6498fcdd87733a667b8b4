@@ -26,6 +26,24 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "5ff2decf_cf193f93",
+        "filename": "zuul/lib/keystorage.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 37,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-25T14:16:54Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "be3fed4c_5166e83d",
+      "revId": "f6f4fda0315d010327e6498fcdd87733a667b8b4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "90ae434f_1b09ee73",
         "filename": "zuul/lib/keystorage.py",
         "patchSetId": 4
@@ -61,6 +79,24 @@
         "endLine": 336,
         "endChar": 72
       },
+      "revId": "f6f4fda0315d010327e6498fcdd87733a667b8b4",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "64718c05_c7827dbd",
+        "filename": "zuul/lib/keystorage3.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 336,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-25T14:16:54Z",
+      "side": 1,
+      "message": "Done.",
+      "parentUuid": "7b098c8c_a68521e4",
       "revId": "f6f4fda0315d010327e6498fcdd87733a667b8b4",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
