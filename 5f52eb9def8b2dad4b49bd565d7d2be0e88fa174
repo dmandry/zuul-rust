@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "08b52f58_c471631e",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-25T15:42:43Z",
+      "side": 1,
+      "message": "recheck only a single test case failed and appears to be unrelated to sqlalchemy.",
+      "revId": "5f52eb9def8b2dad4b49bd565d7d2be0e88fa174",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
