@@ -55,7 +55,14 @@ CA_DIR=$SCRIPT_DIR/ca
 mkdir -p $CA_DIR
 $SCRIPT_DIR/zk-ca.sh $CA_DIR zuul-test-zookeeper
 
-${ROOTCMD} USER_ID=$(id -u) ${COMPOSE} up -d
+# Per-container user namespaces require containers outside a shared pod.
+export USER_ID=$(id -u)
+if [ "${COMPOSE}" == "podman-compose" ]; then
+  ${ROOTCMD} ZUUL_TMPFS_OPTIONS="U,mode=0700" ${COMPOSE} \
+    --pod-args='--infra=true --share= --userns=keep-id' up -d
+else
+  ${ROOTCMD} ZUUL_TMPFS_OPTIONS="uid=${USER_ID}" ${COMPOSE} up -d
+fi
 
 echo "Waiting for mysql"
 timeout 30 bash -c "until ${ROOTCMD} ${MYSQL} -e 'show databases'; do sleep 0.5; done"
