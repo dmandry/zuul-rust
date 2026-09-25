@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e1ec4282_13f93ec1",
+        "filename": "zuul/lib/keystorage.py",
+        "patchSetId": 4
+      },
+      "lineNbr": 24,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-09-25T13:21:49Z",
+      "side": 0,
+      "message": "Need to keep that one :)",
+      "revId": "6d7e7b52168a1b151908336190d2aee7ac7e6dca",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
