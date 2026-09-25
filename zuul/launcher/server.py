@@ -2087,8 +2087,10 @@ class Launcher:
                     # Wait for the cache to update and try again
                     self.wake_event.set()
                     return
+                # Cache is up to date but our request could be stale.
+                request = self.api.getNodesetRequest(node.request_id)
             else:
-                # TODO: remove this when 3.9 is mandatory
+                # TODO: remove this when zookeeper 3.9 is mandatory
                 if node.state in node.ASSIGNABLE_STATES:
                     self.log.debug("Waiting for request cache to sync "
                                    "for request %s and node %s", request, node)
