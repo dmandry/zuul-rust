@@ -60,6 +60,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "fb046f0b_5bb7cede",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-26T19:52:55Z",
+      "side": 1,
+      "message": "I think handling the unexpected session disconnection case asking the _run method to stop looping and reperform elections is correct so I\u0027ve kept the else condition here.\n\nThat said you are correct that the condition to determine when it is safe to forward events was insufficient. I have added the additional condition in patchset 12 with some conversation below about whether this is sufficient.",
+      "parentUuid": "a52bcde3_052f003a",
+      "range": {
+        "startLine": 71,
+        "startChar": 0,
+        "endLine": 72,
+        "endChar": 34
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "b3edd65a_90169ccf",
         "filename": "zuul/driver/mqtt/mqttconnection.py",
         "patchSetId": 11
@@ -71,6 +95,30 @@
       "writtenOn": "2026-09-25T09:36:49Z",
       "side": 1,
       "message": "`is_still_valid()` is True on all healthy schedulers, every scheduler subscribes to the broker topics during tenant reconfiguration.",
+      "range": {
+        "startLine": 116,
+        "startChar": 0,
+        "endLine": 122,
+        "endChar": 45
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "43576c61_f901aeb1",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 122,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-26T19:52:55Z",
+      "side": 1,
+      "message": "Good catch. I think I noticed that RendezvousElection is checking for lock validity in is_still_valid but EventReceiverElection is based on a kazoo election which does not. I\u0027ve posted some inline comments around the updates I made to hopefully address this problem sufficiently. And if not we can continue the discussion there (as gerrit has decoupled this comment from the code in question).",
+      "parentUuid": "b3edd65a_90169ccf",
       "range": {
         "startLine": 116,
         "startChar": 0,
@@ -104,6 +152,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "abd435b0_788be2ab",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-26T19:52:55Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "f0a13490_3abdaccf",
+      "range": {
+        "startLine": 133,
+        "startChar": 0,
+        "endLine": 133,
+        "endChar": 62
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "d6308169_4134002c",
@@ -117,6 +189,30 @@
       "writtenOn": "2026-09-25T09:36:49Z",
       "side": 1,
       "message": "Does it make sense to support regex here?",
+      "range": {
+        "startLine": 103,
+        "startChar": 0,
+        "endLine": 106,
+        "endChar": 38
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bef4f603_b003ad78",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-26T19:52:55Z",
+      "side": 1,
+      "message": "Are you suggesting that we allow a raw regex against the payload itself rather than jsonpath lookups or are you suggesting that we do regex checks of the resulting jsonpath lookup value rather than a direct comparison like we do on line 106?\n\nI think checking the jsonpath lookup values using regex may be fine and give more flexibility. I don\u0027t think a raw regex against the entire payload makes sense to me. I\u0027m guessing this wasn\u0027t what you meant and the jsonpath lookup value comparison happening via regex is what you meant, but the whole block is highlighted so I\u0027m not quite sure where we want to make a regex match check.",
+      "parentUuid": "d6308169_4134002c",
       "range": {
         "startLine": 103,
         "startChar": 0,

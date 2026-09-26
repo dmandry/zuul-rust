@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bc2e8e8e_ac182fff",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 81,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-26T19:52:55Z",
+      "side": 1,
+      "message": "Is this sufficient for handling the case where on_message() and subscribe() need to only take action if the current process is the election leader? I looked at doing a contenders check but that appears to go out to zookeeper on every call which could be a performance concern on a busy mqtt message bus.\n\nInstead I\u0027m simply tracking whether or not we are the leader based on whether or not we enter the portion of code run by the election system. I\u0027m not familiar enough with zookeeper and kazoo\u0027s behavior here to know if that is still too prone to race conditions to be valid.\n\nI think this approach is similar to the extra checks in RendezvousElection around is_winner.",
+      "revId": "e3ddf8bed6a7c711afae4e8dbde27a9980061901",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
