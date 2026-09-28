@@ -211,7 +211,7 @@ class TestZuulTriggerProjectChangeMerged(ZuulTestCase):
         self.assertEqual(D.reported, 0)
         self.assertEqual(E.reported, 0)
         self.assertIn(
-            "Merge Failed.\n\nThis change or one of its cross-repo "
+            "Merge failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
             "upload a new revision.",
@@ -247,7 +247,7 @@ class TestZuulTriggerProjectChangeMerged(ZuulTestCase):
         self.assertEqual(D.reported, 2)
         self.assertEqual(E.reported, 1)
         self.assertIn(
-            "Merge Failed.\n\nThis change or one of its cross-repo "
+            "Merge failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
             "upload a new revision.",

@@ -46,6 +46,11 @@ const buildResultLegendData = [
         symbol: { fill: '#EF9234' },
     },
     {
+        name: 'MERGE_ERROR',
+        // PF orange-200
+        symbol: { fill: '#EF9234' },
+    },
+    {
         name: 'MERGE_FAILURE',
         // PF orange-200
         symbol: { fill: '#EF9234' },

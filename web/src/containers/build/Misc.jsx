@@ -63,6 +63,11 @@ const RESULT_ICON_CONFIGS = {
     color: 'var(--pf-global--warning-color--100)',
     badgeColor: 'orange',
   },
+  MERGE_ERROR: {
+    icon: ExclamationIcon,
+    color: 'var(--pf-global--warning-color--100)',
+    badgeColor: 'orange',
+  },
   MERGE_FAILURE: {
     icon: ExclamationIcon,
     color: 'var(--pf-global--warning-color--100)',

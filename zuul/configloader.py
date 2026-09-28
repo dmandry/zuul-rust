@@ -1565,6 +1565,7 @@ class PipelineParser(object):
         'success': 'success_actions',
         'failure': 'failure_actions',
         'merge-conflict': 'merge_conflict_actions',
+        'merge-error': 'merge_error_actions',
         'config-error': 'config_error_actions',
         'no-jobs': 'no_jobs_actions',
         'disabled': 'disabled_actions',
@@ -1619,6 +1620,7 @@ class PipelineParser(object):
                     'failure-message': str,
                     'start-message': str,
                     'merge-conflict-message': str,
+                    'merge-error-message': str,
                     'enqueue-message': str,
                     'no-jobs-message': str,
                     'footer-message': str,
@@ -1642,8 +1644,8 @@ class PipelineParser(object):
         pipeline['reject'] = self.getDriverSchema('reject')
         pipeline['trigger'] = vs.Required(self.getDriverSchema('trigger'))
         for action in ['enqueue', 'start', 'success', 'failure',
-                       'merge-conflict', 'no-jobs', 'disabled',
-                       'dequeue', 'config-error']:
+                       'merge-conflict', 'merge-error', 'no-jobs',
+                       'disabled', 'dequeue', 'config-error']:
             pipeline[action] = self.getDriverSchema('reporter')
         return vs.Schema(pipeline)
 
@@ -1664,12 +1666,17 @@ class PipelineParser(object):
         pipeline.failure_message = conf.get('failure-message',
                                             "Build failed.")
         pipeline.merge_conflict_message = conf.get(
-            'merge-conflict-message', "Merge Failed.\n\nThis change or one "
+            'merge-conflict-message', "Merge conflict.\n\nThis change or one "
             "of its cross-repo dependencies was unable to be "
             "automatically merged with the current state of its "
             "repository. Please rebase the change and upload a new "
             "revision.")
-
+        pipeline.merge_error_message = conf.get(
+            'merge-error-message', "Merge error.\n\nThis change or one "
+            "of its cross-repo dependencies was unable to be "
+            "automatically merged with the current state of its "
+            "repository, possibly due to an infrastructure error. Please "
+            "contact an administrator if the error persists.")
         pipeline.success_message = conf.get('success-message',
                                             "Build succeeded.")
         pipeline.footer_message = conf.get('footer-message', "")
@@ -1709,6 +1716,10 @@ class PipelineParser(object):
         # If merge-conflict actions aren't explicit, use the failure actions
         if not pipeline.merge_conflict_actions:
             pipeline.merge_conflict_actions = pipeline.failure_actions
+
+        # If merge-error actions aren't explicit, use the failure actions
+        if not pipeline.merge_error_actions:
+            pipeline.merge_error_actions = pipeline.failure_actions
 
         # If config-error actions aren't explicit, use the failure actions
         if not pipeline.config_error_actions:

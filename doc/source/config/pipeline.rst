@@ -224,13 +224,25 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
         The full URL to information about the item in the web UI
 
    .. attr:: merge-conflict-message
-      :default: Merge failed. This change or one of its cross-repo
+      :default: Merge conflict. This change or one of its cross-repo
                 dependencies was unable to be automatically merged
                 with the current state of its repository. Please
                 rebase the change and upload a new revision.
 
       The introductory text in the message reported when a change
-      fails to merge with the current state of the repository.
+      fails to merge with the current state of the repository due to a
+      conflict.
+
+   .. attr:: merge-error-message
+      :default: Merge error. This change or one of its cross-repo
+                dependencies was unable to be automatically merged
+                with the current state of its repository, possibly due
+                to an infrastructure error. Please contact an
+                administrator if the error persists.
+
+      The introductory text in the message reported when a change
+      fails to merge with the current state of the repository due to
+      an infrastructure issue.
 
    .. attr:: no-jobs-message
 
@@ -377,9 +389,16 @@ success, the pipeline reports back to Gerrit with ``Verified`` vote of
    .. attr:: merge-conflict
 
       These reporters describe what Zuul should do if it is unable to
-      merge the patchset into the current state of the target
-      branch. If no merge-conflict reporters are listed then the
-      ``failure`` reporters will be used.
+      merge the patchset into the current state of the target branch
+      due to a conflict. If no merge-conflict reporters are listed
+      then the ``failure`` reporters will be used.
+
+   .. attr:: merge-error
+
+      These reporters describe what Zuul should do if it is unable to
+      merge the patchset into the current state of the target branch
+      due to an infrastructure issue. If no merge-error reporters
+      are listed then the ``failure`` reporters will be used.
 
    .. attr:: config-error
 
