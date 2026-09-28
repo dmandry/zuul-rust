@@ -57,6 +57,23 @@
       "message": "Nit: this time we don\u0027t need assertHistory since we do need getJobFromHistory for the branch attribute.",
       "revId": "275b40d9747c2cece462aefac655521feb2c9a9b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "71ed6ec1_b9adf0e3",
+        "filename": "zuul/driver/github/githubtrigger.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 144,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T17:06:28Z",
+      "side": 1,
+      "message": "Clark see this note ^",
+      "revId": "275b40d9747c2cece462aefac655521feb2c9a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
