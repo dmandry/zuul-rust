@@ -220,6 +220,7 @@ class MergeClient(object):
                     merge_request.build_set_uuid,
                     merged=False,
                     updated=False,
+                    conflict=False,
                     commit=None,
                     files=None,
                     repo_state=None,

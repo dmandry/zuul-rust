@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    A new pipeline reporter, :attr:`pipeline.merge-error`, is
+    available for customizing the reports and behavior for items that
+    encounter infrastructure errors (as opposed to textual merge
+    conflicts) during the merge phase.

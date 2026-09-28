@@ -1983,7 +1983,11 @@ class PipelineManager(metaclass=ABCMeta):
                     ):
                     self.reportStart(item)
                 if item.current_build_set.unable_to_merge:
-                    failing_reasons.append("it has a merge conflict")
+                    if item.current_build_set.merge_conflict:
+                        failing_reasons.append("it has a merge conflict")
+                    else:
+                        failing_reasons.append(
+                            "it encountered a merge error")
                 if item.current_build_set.has_blocking_errors:
                     failing_reasons.append("it has an invalid configuration")
                 if ready and self.provisionNodes(item):
@@ -2360,7 +2364,7 @@ class PipelineManager(metaclass=ABCMeta):
                 build_set.setFiles(event.files)
         if not (event.merged or event.updated):
             log.info("Unable to merge %s" % item)
-            item.setUnableToMerge(event.errors)
+            item.setUnableToMerge(event.errors, event.conflict)
 
     def _onGlobalRepoStateCompleted(self, event, build_set):
         item = build_set.item
@@ -2573,11 +2577,16 @@ class PipelineManager(metaclass=ABCMeta):
             action = 'config-error'
             actions = self.pipeline.config_error_actions
             item.setReportedResult('CONFIG_ERROR')
-        elif item.didMergerFail():
+        elif item.current_build_set.merge_conflict:
             log.debug("Merge conflict")
             action = 'merge-conflict'
             actions = self.pipeline.merge_conflict_actions
             item.setReportedResult('MERGE_CONFLICT')
+        elif item.current_build_set.unable_to_merge:
+            log.debug("Merge error")
+            action = 'merge-error'
+            actions = self.pipeline.merge_error_actions
+            item.setReportedResult('MERGE_ERROR')
         elif item.wasDequeuedNeedingChange():
             log.debug("Dequeued needing change")
             action = 'failure'

@@ -33,6 +33,7 @@ import git
 import gitdb
 import paramiko
 from zuul.lib import strings
+from zuul.exceptions import MergeConflict
 
 import zuul.model
 
@@ -722,7 +723,11 @@ class Repo(object):
                     **self._getTimestampEnv(timestamp)):
                 # Use a custom message to avoid introducing
                 # merger/executor path details
-                repo.git.merge(message=msg, *args)
+                try:
+                    repo.git.merge(message=msg, *args)
+                except Exception:
+                    log.exception("Exception while merging a change:")
+                    raise MergeConflict() from None
             if ops is not None:
                 ops.append(zuul.model.MergeOp(
                     cmd=['git', 'merge', '-m', msg, *args],
@@ -744,10 +749,14 @@ class Repo(object):
             log.debug("Squash-Merging %s with args %s", ref, args)
             with repo.git.custom_environment(
                     **self._getTimestampEnv(timestamp)):
-                repo.git.merge(*args)
-                # Use a custom message to avoid introducing
-                # merger/executor path details
-                repo.git.commit(message=msg, allow_empty=True)
+                try:
+                    repo.git.merge(*args)
+                    # Use a custom message to avoid introducing
+                    # merger/executor path details
+                    repo.git.commit(message=msg, allow_empty=True)
+                except Exception:
+                    log.exception("Exception while merging a change:")
+                    raise MergeConflict() from None
             if ops is not None:
                 ops.append(zuul.model.MergeOp(
                     cmd=['git', 'merge', *args],
@@ -781,8 +790,9 @@ class Repo(object):
                 try:
                     repo.git.rebase(*args)
                 except Exception:
+                    log.exception("Exception while merging a change:")
                     repo.git.rebase(abort=True)
-                    raise
+                    raise MergeConflict() from None
             if ops is not None:
                 ops.append(zuul.model.MergeOp(
                     cmd=['git', 'rebase', *args],
@@ -880,7 +890,11 @@ class Repo(object):
                         **self._getTimestampEnv(timestamp)):
                     # Use a custom message to avoid introducing
                     # merger/executor path details
-                    repo.git.merge(message=msg, *args)
+                    try:
+                        repo.git.merge(message=msg, *args)
+                    except Exception:
+                        log.exception("Exception while merging a change:")
+                        raise MergeConflict() from None
                 op = zuul.model.MergeOp(
                     cmd=['git', 'merge', '-m', msg, *args],
                     path=self.workspace_project_path,
@@ -893,8 +907,12 @@ class Repo(object):
                 # option, which will cause it to make an empty commit
                 with repo.git.custom_environment(
                         **self._getTimestampEnv(timestamp)):
-                    repo.git.cherry_pick("FETCH_HEAD",
-                                         keep_redundant_commits=True)
+                    try:
+                        repo.git.cherry_pick("FETCH_HEAD",
+                                             keep_redundant_commits=True)
+                    except Exception:
+                        log.exception("Exception while merging a change:")
+                        raise MergeConflict() from None
                 op = zuul.model.MergeOp(
                     cmd=['git', 'cherry-pick', 'FETCH_HEAD',
                          '--keep-redundant-commits'],
@@ -1412,6 +1430,8 @@ class Merger(object):
             # usually benign merge conflicts
             log.debug("Unable to merge %s", item, exc_info=True)
             return None, None
+        except MergeConflict:
+            raise
         except Exception:
             log.exception("Exception while merging a change:")
             return None, None
@@ -1541,14 +1561,20 @@ class Merger(object):
                         process_worker=process_worker)
                 except BrokenProcessPool:
                     raise
+                except MergeConflict:
+                    # We've already logged the traceback
+                    if errors is not None:
+                        errors.append(err_msg)
+                    return zuul.model.MergeOperationResultConflict()
                 except Exception:
                     self.log.exception("Error merging item %s", item)
                     if errors is not None:
                         errors.append(err_msg)
+                    return zuul.model.MergeOperationResultError()
                 if not hexsha:
                     if errors is not None:
                         errors.append(err_msg)
-                    return None
+                    return zuul.model.MergeOperationResultError()
                 if files or dirs:
                     repo = self.getRepo(item['connection'], item['project'])
                     repo_files = repo.getFiles(files, dirs, commit=hexsha)
@@ -1558,9 +1584,13 @@ class Merger(object):
                         project=item['project'],
                         branch=item['branch'],
                         files=repo_files)
-        return (
-            hexsha, list(read_files.values()), repo_state, recent,
-            orig_hexsha, ops
+        return zuul.model.MergeOperationResultNormal(
+            commit=hexsha,
+            files=list(read_files.values()),
+            repo_state=repo_state,
+            recent=recent,
+            orig_commit=orig_hexsha,
+            ops=ops,
         )
 
     def setBulkRepoState(self, repo_state, zuul_event_id,

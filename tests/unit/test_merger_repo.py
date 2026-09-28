@@ -25,6 +25,7 @@ import testtools
 
 from zuul.merger.merger import MergerTree, Repo, SparsePaths
 import zuul.model
+import zuul.exceptions
 from zuul.model import MergeRequest
 from tests.base import (
     BaseTestCase,
@@ -169,6 +170,7 @@ class TestMergerRepo(ZuulTestCase):
         work_repo.reset()
         work_repo.checkout("foobar")
 
+    @okay_tracebacks('Could not apply')
     def test_rebase_merge_conflict_abort(self):
         """Test that a failed rebase is properly aborted and related
         directories are cleaned up."""
@@ -190,7 +192,7 @@ class TestMergerRepo(ZuulTestCase):
         item = {"ref": "refs/heads/feature"}
         # We expect the rebase to fail because of a conflict, but the
         # rebase will be aborted.
-        with testtools.ExpectedException(git.exc.GitCommandError):
+        with testtools.ExpectedException(zuul.exceptions.MergeConflict):
             work_repo.rebaseMerge(item, "master")
 
         # Assert that the failed rebase doesn't leave any temporary
@@ -1053,7 +1055,7 @@ class TestMerger(ZuulTestCase):
             merger.updateRepo(item['connection'], item['project'])
         result = merger.mergeChanges([item_a, item_b, item_c])
         self.assertIsNotNone(result)
-        merge_state = result[3]
+        merge_state = result.recent
 
         cache_repo = merger.getRepo('gerrit', 'org/project')
         repo = cache_repo.createRepoObject(zuul_event_id="dummy")

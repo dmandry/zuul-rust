@@ -153,6 +153,7 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
             'success': self._formatItemReportSuccess,
             'failure': self._formatItemReportFailure,
             'merge-conflict': self._formatItemReportMergeConflict,
+            'merge-error': self._formatItemReportMergeError,
             'merge-failure': self._formatItemReportMergeFailure,
             'config-error': self._formatItemReportConfigError,
             'no-jobs': self._formatItemReportNoJobs,
@@ -242,8 +243,10 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
             msg = "{}\n{}".format(
                 msg, self._formatItemReportOtherChanges(item,
                                                         change_annotations))
-        elif item.didMergerFail():
+        elif item.current_build_set.merge_conflict:
             msg = item.manager.pipeline.merge_conflict_message
+        elif item.current_build_set.unable_to_merge:
+            msg = item.manager.pipeline.merge_error_message
         elif item.current_build_set.has_blocking_errors:
             msg = str(item.getConfigErrors(
                 errors=True, warnings=False)[0].error)
@@ -271,6 +274,9 @@ class BaseReporter(object, metaclass=abc.ABCMeta):
 
     def _formatItemReportMergeConflict(self, item, change, with_jobs, short):
         return item.manager.pipeline.merge_conflict_message
+
+    def _formatItemReportMergeError(self, item, change, with_jobs, short):
+        return item.manager.pipeline.merge_error_message
 
     def _formatItemReportMergeFailure(self, item, change, with_jobs, short):
         return 'This change was not merged by the code review system.\n'

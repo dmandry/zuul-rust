@@ -39,6 +39,14 @@ class RevNotFound(Exception):
 
 
 class MergeFailure(Exception):
+    # An upstream connection was unable to merge (ie, submit) the
+    # change into the target branch.
+    pass
+
+
+class MergeConflict(Exception):
+    # The Zuul merger was unable to merge the change, most likely due
+    # to the content (not the infrastructure).
     pass
 
 
