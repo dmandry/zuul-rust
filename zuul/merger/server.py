@@ -1,5 +1,5 @@
 # Copyright 2014 OpenStack Foundation
-# Copyright 2021-2022, 2024 Acme Gating, LLC
+# Copyright 2021-2022, 2024, 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -32,7 +32,11 @@ from zuul.lib.logutil import get_annotated_logger
 from zuul.lib import tracing
 from zuul.merger import merger
 from zuul.model import (
-    FilesChangesCompletedEvent, MergeCompletedEvent, MergeRequest
+    FilesChangesCompletedEvent,
+    MergeCompletedEvent,
+    MergeOperationResultNormal,
+    MergeOperationResultConflict,
+    MergeRequest,
 )
 from zuul.lib.monitoring import MonitoringServer
 from zuul.version import get_version_string
@@ -322,10 +326,13 @@ class BaseMergeServer(metaclass=ABCMeta):
             zuul_event_id=zuul_event_id,
             errors=errors)
 
-        if ret is not None:
+        if isinstance(ret, MergeOperationResultNormal):
             result['merged'] = True
-            (result['commit'], result['files'], result['repo_state'],
-             recent, orig_commit, ops) = ret
+            result['commit'] = ret.commit
+            result['files'] = ret.files
+            result['repo_state'] = ret.repo_state
+        if isinstance(ret, MergeOperationResultConflict):
+            result['conflict'] = True
         return result
 
     def refstate(self, merge_request, args):
@@ -378,6 +385,7 @@ class BaseMergeServer(metaclass=ABCMeta):
                        sys.getsizeof(payload))
         merged = result.get("merged", False)
         updated = result.get("updated", False)
+        conflict = result.get("conflict", False)
         commit = result.get("commit")
         repo_state = result.get("repo_state", {})
         item_in_branches = result.get("item_in_branches", [])
@@ -427,6 +435,7 @@ class BaseMergeServer(metaclass=ABCMeta):
                     merge_request.build_set_uuid,
                     merged,
                     updated,
+                    conflict,
                     commit,
                     files,
                     repo_state,
