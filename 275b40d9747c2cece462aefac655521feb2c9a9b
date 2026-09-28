@@ -26,6 +26,24 @@
     {
       "unresolved": false,
       "key": {
+        "uuid": "21fa16c1_eb405ad1",
+        "filename": "tests/unit/test_circular_dependencies.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 4879,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T17:05:56Z",
+      "side": 1,
+      "message": "The github driver is curerntly mid-transition in a schema validation change.  In many cases, it will only log a configuration warning, not an error, if the schema doesn\u0027t match.  Without this change, the fixture config adds a deprecation warning to the config errors list, but not an actual error.  This change clears the warning.",
+      "parentUuid": "08d41f07_ded36523",
+      "revId": "275b40d9747c2cece462aefac655521feb2c9a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
         "uuid": "67594f88_eed79650",
         "filename": "tests/unit/test_github_driver.py",
         "patchSetId": 9
