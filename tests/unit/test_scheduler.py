@@ -1660,7 +1660,7 @@ class TestScheduler(ZuulTestCase):
         self.assertEqual(B.data['status'], 'NEW')
         self.assertEqual(C.data['status'], 'MERGED')
         self.assertEqual(A.reported, 2)
-        self.assertIn('Merge Failed', B.messages[-1])
+        self.assertIn('Merge conflict', B.messages[-1])
         self.assertEqual(C.reported, 2)
 
         self.assertHistory([
@@ -5601,7 +5601,7 @@ For CI problems and help debugging, contact ci@example.org"""
 
         tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
         self.assertEqual(
-            "Merge Failed.\n\nThis change or one of its cross-repo "
+            "Merge conflict.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
             "current state of its repository. Please rebase the change and "
             "upload a new patchset.",
@@ -5642,7 +5642,7 @@ For CI problems and help debugging, contact ci@example.org"""
             )
         )
 
-    def test_merge_failure_reports(self):
+    def test_merge_conflict_reports(self):
         """Check that when a change fails to merge the correct message is sent
         to the correct reporter"""
         self.commitConfigUpdate('common-config',
@@ -5678,8 +5678,8 @@ For CI problems and help debugging, contact ci@example.org"""
         self.assertIn('Error merging gerrit/org/project',
                       self.smtp_messages[0]['body'])
 
-    def test_default_merge_failure_reports(self):
-        """Check that the default merge failure reports are correct."""
+    def test_default_merge_conflict_reports(self):
+        """Check that the default merge conflict reports are correct."""
 
         # A should report success, B should report merge failure.
         A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
@@ -5698,7 +5698,7 @@ For CI problems and help debugging, contact ci@example.org"""
         self.assertEqual(A.data['status'], 'MERGED')
         self.assertEqual(B.data['status'], 'NEW')
         self.assertIn('Build succeeded', A.messages[1])
-        self.assertIn('Merge Failed', B.messages[0])
+        self.assertIn('Merge conflict', B.messages[0])
         self.assertIn('automatically merged', B.messages[0])
         self.assertIn('Error merging gerrit/org/project', B.messages[0])
         self.assertNotIn('logs.example.com', B.messages[0])
@@ -5707,6 +5707,38 @@ For CI problems and help debugging, contact ci@example.org"""
             self.scheds.first.connections.connections[
                 'database'].getBuildsets())
         self.assertEqual(buildsets[0].result, 'MERGE_CONFLICT')
+        self.assertIn('This change or one of', buildsets[0].message)
+
+    @okay_tracebacks('with id dne')
+    def test_default_merge_error_reports(self):
+        """Check that the default merge error reports are correct."""
+
+        # A should report success, B should report merge failure.
+        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A')
+        A.addPatchset({'conflict': 'foo'})
+        B = self.fake_gerrit.addFakeChange('org/project', 'dne', 'B')
+        B.addPatchset({'conflict': 'bar'})
+        A.addApproval('Code-Review', 2)
+        B.addApproval('Code-Review', 2)
+        self.fake_gerrit.addEvent(A.addApproval('Approved', 1))
+        self.fake_gerrit.addEvent(B.addApproval('Approved', 1))
+        self.waitUntilSettled()
+
+        self.assertEqual(3, len(self.history))  # A jobs
+        self.assertEqual(A.reported, 2)
+        self.assertEqual(B.reported, 1)
+        self.assertEqual(A.data['status'], 'MERGED')
+        self.assertEqual(B.data['status'], 'NEW')
+        self.assertIn('Build succeeded', A.messages[1])
+        self.assertIn('Merge error', B.messages[0])
+        self.assertIn('automatically merged', B.messages[0])
+        self.assertIn('Error merging gerrit/org/project', B.messages[0])
+        self.assertNotIn('logs.example.com', B.messages[0])
+        self.assertNotIn('SKIPPED', B.messages[0])
+        buildsets = list(
+            self.scheds.first.connections.connections[
+                'database'].getBuildsets())
+        self.assertEqual(buildsets[0].result, 'MERGE_ERROR')
         self.assertIn('This change or one of', buildsets[0].message)
 
     def test_submit_failure(self):
@@ -6741,6 +6773,12 @@ For CI problems and help debugging, contact ci@example.org"""
         self.fake_gerrit.addEvent(A.getPatchsetCreatedEvent(1))
         self.waitUntilSettled()
         self.assertIn('Unable to update gerrit/org/project', A.messages[0])
+        self.assertIn('Merge error', A.messages[0])
+        buildsets = list(
+            self.scheds.first.connections.connections[
+                'database'].getBuildsets())
+        self.assertEqual(buildsets[0].result, 'MERGE_ERROR')
+        self.assertIn('This change or one of', buildsets[0].message)
 
     @simple_layout('layouts/vars.yaml')
     def test_jobdata(self):

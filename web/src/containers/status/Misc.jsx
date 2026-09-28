@@ -41,6 +41,13 @@ const QUEUE_ITEM_ICON_CONFIGS = {
     color: 'var(--zuul-color-warning)',
     variant: 'warning',
   },
+  // TODO: identify a new color for merge error since it indicates
+  // possible infrastructure failure.
+  MERGE_ERROR: {
+    icon: ExclamationIcon,
+    color: 'var(--zuul-color-warning)',
+    variant: 'warning',
+  },
   QUEUED: {
     icon: OutlinedClockIcon,
     color: 'var(--zuul-color-info)',
@@ -144,6 +151,12 @@ const JOB_STATE_ICON_CONFIGS = {
     variant: 'danger',
     labelColor: 'red',
   },
+  MERGE_ERROR: {
+    icon: TimesIcon,
+    color: 'var(--zuul-color-danger)',
+    variant: 'danger',
+    labelColor: 'red',
+  },
 }
 
 const DEFAULT_JOB_STATE_ICON_CONFIG = {
@@ -167,6 +180,9 @@ const getQueueItemIconConfig = (item) => {
     let reasons = item.failing_reasons.join(', ')
     if (reasons.match(/merge conflict/)) {
       return QUEUE_ITEM_ICON_CONFIGS['MERGE_CONFLICT']
+    }
+    if (reasons.match(/merge error/)) {
+      return QUEUE_ITEM_ICON_CONFIGS['MERGE_ERROR']
     }
     return QUEUE_ITEM_ICON_CONFIGS['FAILURE']
   }
