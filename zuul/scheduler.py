@@ -3159,7 +3159,7 @@ class Scheduler(threading.Thread):
                 # Always retry if the executor just went away
                 build.retry = True
             # TODO: Remove merger_failure in v6.0
-            if result in ["MERGE_CONFLICT", "MERGER_FAILURE"]:
+            if result in ["MERGE_CONFLICT", "MERGE_ERROR", "MERGER_FAILURE"]:
                 # The build result MERGE_CONFLICT is a bit misleading here
                 # because when we got here we know that there are no merge
                 # conflicts. Instead this is most likely caused by some

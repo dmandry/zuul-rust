@@ -138,6 +138,22 @@ SCHEME_FLAT = 'flat'
 SCHEME_UNIQUE = 'unique'
 
 
+MergeOperationResultNormal = namedtuple("MergeOperationResultNormal", (
+    "commit",
+    "files",
+    "repo_state",
+    "recent",
+    "orig_commit",
+    "ops",
+))
+
+
+MergeOperationResultConflict = namedtuple("MergeOperationResultConflict", ())
+
+
+MergeOperationResultError = namedtuple("MergeOperationResultErrer", ())
+
+
 def add_debug_line(debug_messages, msg, indent=0):
     if debug_messages is None:
         return
@@ -581,6 +597,7 @@ class Pipeline(object):
         self.description = None
         self.failure_message = None
         self.merge_conflict_message = None
+        self.merge_error_message = None
         self.success_message = None
         self.footer_message = None
         self.enqueue_message = None
@@ -598,6 +615,7 @@ class Pipeline(object):
         self.success_actions = []
         self.failure_actions = []
         self.merge_conflict_actions = []
+        self.merge_error_actions = []
         self.no_jobs_actions = []
         self.disabled_actions = []
         self.dequeue_actions = []
@@ -621,6 +639,7 @@ class Pipeline(object):
             self.success_actions +
             self.failure_actions +
             self.merge_conflict_actions +
+            self.merge_error_actions +
             self.no_jobs_actions +
             self.disabled_actions +
             self.dequeue_actions
@@ -6762,6 +6781,7 @@ class BuildSet(zkobject.ZKObject):
             dependent_changes=None,
             merger_items=None,
             unable_to_merge=False,
+            merge_conflict=False,
             config_errors=None,  # ConfigurationErrorList or None
             failing_reasons=[],
             debug_messages=[],
@@ -6881,6 +6901,7 @@ class BuildSet(zkobject.ZKObject):
             "dependent_changes": self.dependent_changes,
             "merger_items": self.merger_items,
             "unable_to_merge": self.unable_to_merge,
+            "merge_conflict": self.merge_conflict,
             "config_errors": (self.config_errors.getPath()
                               if self.config_errors else None),
             "failing_reasons": self.failing_reasons,
@@ -7685,9 +7706,6 @@ class QueueItem(zkobject.ZKObject):
                 return True
         return False
 
-    def didMergerFail(self):
-        return self.current_build_set.unable_to_merge
-
     def getConfigErrors(self, errors=True, warnings=True):
         if self.current_build_set.config_errors:
             return filter_severity(self.current_build_set.config_errors.errors,
@@ -8182,10 +8200,11 @@ class QueueItem(zkobject.ZKObject):
             dequeued_missing_requirements=True)
         self._setAllJobsSkipped('Missing pipeline requirements')
 
-    def setUnableToMerge(self, errors=None):
+    def setUnableToMerge(self, errors=None, conflict=False):
         with self.current_build_set.activeContext(
                 self.manager.current_context):
             self.current_build_set.unable_to_merge = True
+            self.current_build_set.merge_conflict = conflict
             if errors:
                 for msg in errors:
                     self.current_build_set.warning_messages.append(msg)
@@ -9425,12 +9444,13 @@ class MergeCompletedEvent(ResultEvent):
     """
 
     def __init__(self, request_uuid, build_set_uuid, merged, updated,
-                 commit, files, repo_state, item_in_branches,
+                 conflict, commit, files, repo_state, item_in_branches,
                  errors, elapsed_time, span_info=None, zuul_event_id=None):
         self.request_uuid = request_uuid
         self.build_set_uuid = build_set_uuid
         self.merged = merged
         self.updated = updated
+        self.conflict = conflict
         self.commit = commit
         self.files = files or []
         self.repo_state = repo_state or {}
@@ -9442,10 +9462,10 @@ class MergeCompletedEvent(ResultEvent):
 
     def __repr__(self):
         return ('<MergeCompletedEvent job: %s buildset: %s merged: %s '
-                'updated: %s commit: %s errors: %s>' % (
+                'updated: %s conflict: %s commit: %s errors: %s>' % (
                     self.request_uuid, self.build_set_uuid,
-                    self.merged, self.updated, self.commit,
-                    self.errors))
+                    self.merged, self.updated, self.conflict,
+                    self.commit, self.errors))
 
     def toDict(self):
         return {
@@ -9453,6 +9473,7 @@ class MergeCompletedEvent(ResultEvent):
             "build_set_uuid": self.build_set_uuid,
             "merged": self.merged,
             "updated": self.updated,
+            "conflict": self.conflict,
             "commit": self.commit,
             "files": list(self.files),
             "repo_state": dict(self.repo_state),
@@ -9470,6 +9491,7 @@ class MergeCompletedEvent(ResultEvent):
             data.get("build_set_uuid"),
             data.get("merged"),
             data.get("updated"),
+            data.get("conflict"),
             data.get("commit"),
             list(data.get("files", [])),
             dict(data.get("repo_state", {})),

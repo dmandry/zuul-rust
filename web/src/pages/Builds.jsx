@@ -90,6 +90,7 @@ class BuildsPageComponent extends React.Component {
           'SKIPPED',
           'NODE_FAILURE',
           'MERGE_CONFLICT',
+          'MERGE_ERROR',
           'MERGE_FAILURE',
           'CONFIG_ERROR',
           'TIMED_OUT',
