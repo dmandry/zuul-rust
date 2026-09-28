@@ -1,6 +1,29 @@
 {
   "comments": [
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "08d41f07_ded36523",
+        "filename": "tests/unit/test_circular_dependencies.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 4879,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-28T16:55:47Z",
+      "side": 1,
+      "message": "This file was not updated as part of the change to handle edited events. But looking at it is already handling edited events: https://opendev.org/zuul/zuul/src/branch/master/tests/fixtures/layouts/dependency_removal_gate.yaml#L22 The commit message asserts this is an error, but this file is in use by the prior test case as well so that doesn\u0027t seem to be the case.\n\nIs the commit message accurate? Or maybe there are particular corner cases that are fine?",
+      "range": {
+        "startLine": 4879,
+        "startChar": 28,
+        "endLine": 4879,
+        "endChar": 57
+      },
+      "revId": "275b40d9747c2cece462aefac655521feb2c9a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "67594f88_eed79650",
