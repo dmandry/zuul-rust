@@ -108,6 +108,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "f9cd5937_88f9b15b",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T13:49:34Z",
+      "side": 1,
+      "message": "I don\u0027t think the original version of this code was wrong, because we unsubscribe if we lose the election.\n\n* If we are disconnected from ZK, then is_still_valid is false, we don\u0027t forward messages, we set the stop event, unsubscribe, and we don\u0027t get any more messages until we win the election again.\n\n* If we are disconnected from mqtt, then we stop getting mqtt messages because we are disconnected, we do not automatically re-subscribe on re-connect, we set the stop event, and restart the election.\n\nIn either case, we either don\u0027t receive or don\u0027t forward any messages.\n\nI\u0027m curious about what case wasn\u0027t handled by the original code?\n\nI think this approach could be valid as well, with some changes; I\u0027ll leave other comments for that.",
+      "parentUuid": "b8b2c334_eef04251",
+      "range": {
+        "startLine": 71,
+        "startChar": 0,
+        "endLine": 72,
+        "endChar": 34
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "b3edd65a_90169ccf",
         "filename": "zuul/driver/mqtt/mqttconnection.py",
         "patchSetId": 11
@@ -202,6 +226,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "b9e8f359_a88630d4",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T13:49:34Z",
+      "side": 1,
+      "message": "Why do we set the client_id at all?  Why don\u0027t we get rid of it?  We\u0027re not using a persistent session, which would be the main benefit, and we\u0027re handling our own connection mutexing.\n\nIf we wanted to keep in, then the more zuul-ish way of making it unique would be to use the hostname.\n\nBut I think we should just drop it.",
+      "parentUuid": "abd435b0_788be2ab",
+      "range": {
+        "startLine": 133,
+        "startChar": 0,
+        "endLine": 133,
+        "endChar": 62
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "d6308169_4134002c",
         "filename": "zuul/driver/mqtt/mqttmodel.py",
         "patchSetId": 11
@@ -261,6 +309,30 @@
       "side": 1,
       "message": "I think cheking the jsonpath lookup values using regex is good.",
       "parentUuid": "bef4f603_b003ad78",
+      "range": {
+        "startLine": 103,
+        "startChar": 0,
+        "endLine": 106,
+        "endChar": 38
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "fdbd4e78_e29694bb",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T13:49:34Z",
+      "side": 1,
+      "message": "Doesn\u0027t jsonpath allow regexes?\n\nCan you provide an example of something you want to match, and we can see if we can just express that in jsonpath, or if we need something more complex?",
+      "parentUuid": "ad34506f_ff264c96",
       "range": {
         "startLine": 103,
         "startChar": 0,

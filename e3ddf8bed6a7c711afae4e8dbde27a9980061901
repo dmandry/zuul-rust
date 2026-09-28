@@ -34,6 +34,29 @@
       "parentUuid": "bc2e8e8e_ac182fff",
       "revId": "e3ddf8bed6a7c711afae4e8dbde27a9980061901",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "01e4ec86_babf39e0",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 110,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T13:49:34Z",
+      "side": 1,
+      "message": "If the idea of the leader flag is to somehow handle something completely unexpected (other than the normal mqtt or zk disconnects that we have planned for), then we should make this more robust by setting election_leader\u003dFalse in a finally block here.  I think this is only necessary if we decide we want to keep the election_leader flag.",
+      "range": {
+        "startLine": 110,
+        "startChar": 25,
+        "endLine": 110,
+        "endChar": 34
+      },
+      "revId": "e3ddf8bed6a7c711afae4e8dbde27a9980061901",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
