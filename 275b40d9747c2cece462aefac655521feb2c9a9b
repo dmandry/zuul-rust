@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "67594f88_eed79650",
+        "filename": "tests/unit/test_github_driver.py",
+        "patchSetId": 9
+      },
+      "lineNbr": 181,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-09-28T15:12:39Z",
+      "side": 1,
+      "message": "Nit: this time we don\u0027t need assertHistory since we do need getJobFromHistory for the branch attribute.",
+      "revId": "275b40d9747c2cece462aefac655521feb2c9a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
