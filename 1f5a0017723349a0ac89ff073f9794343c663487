@@ -272,6 +272,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "e5d73115_79771034",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 133,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-28T23:56:40Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "b9e8f359_a88630d4",
+      "range": {
+        "startLine": 133,
+        "startChar": 0,
+        "endLine": 133,
+        "endChar": 62
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "d6308169_4134002c",
