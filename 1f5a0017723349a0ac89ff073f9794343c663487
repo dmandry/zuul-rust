@@ -132,6 +132,30 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "57eb5490_e6e3ee56",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-28T23:42:14Z",
+      "side": 1,
+      "message": "After some discussion I think the confusion is that the comments are centered around _on_message() here. I think the case that actually matters is tenant reconfiguration occurs which triggers new subscribe() calls in https://review.opendev.org/c/zuul/zuul/+/994836/12/zuul/driver/mqtt/__init__.py line 67. Given that I\u0027ll keep the flag indicating that the process is the running leader (or not) and set it up to unset in a finally block.\n\nI\u0027ll keep this check here in on_message for symmetry.",
+      "parentUuid": "f9cd5937_88f9b15b",
+      "range": {
+        "startLine": 71,
+        "startChar": 0,
+        "endLine": 72,
+        "endChar": 34
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "b3edd65a_90169ccf",
         "filename": "zuul/driver/mqtt/mqttconnection.py",
         "patchSetId": 11
@@ -333,6 +357,30 @@
       "side": 1,
       "message": "Doesn\u0027t jsonpath allow regexes?\n\nCan you provide an example of something you want to match, and we can see if we can just express that in jsonpath, or if we need something more complex?",
       "parentUuid": "ad34506f_ff264c96",
+      "range": {
+        "startLine": 103,
+        "startChar": 0,
+        "endLine": 106,
+        "endChar": 38
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ba5bad9c_26e961b1",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-09-28T23:42:14Z",
+      "side": 1,
+      "message": "An example would be great just to make sure I understand the suggestion.",
+      "parentUuid": "fdbd4e78_e29694bb",
       "range": {
         "startLine": 103,
         "startChar": 0,
