@@ -82,6 +82,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "b8b2c334_eef04251",
+        "filename": "zuul/driver/mqtt/mqttconnection.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 72,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-28T12:26:46Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "fb046f0b_5bb7cede",
+      "range": {
+        "startLine": 71,
+        "startChar": 0,
+        "endLine": 72,
+        "endChar": 34
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "b3edd65a_90169ccf",
@@ -213,6 +237,30 @@
       "side": 1,
       "message": "Are you suggesting that we allow a raw regex against the payload itself rather than jsonpath lookups or are you suggesting that we do regex checks of the resulting jsonpath lookup value rather than a direct comparison like we do on line 106?\n\nI think checking the jsonpath lookup values using regex may be fine and give more flexibility. I don\u0027t think a raw regex against the entire payload makes sense to me. I\u0027m guessing this wasn\u0027t what you meant and the jsonpath lookup value comparison happening via regex is what you meant, but the whole block is highlighted so I\u0027m not quite sure where we want to make a regex match check.",
       "parentUuid": "d6308169_4134002c",
+      "range": {
+        "startLine": 103,
+        "startChar": 0,
+        "endLine": 106,
+        "endChar": 38
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ad34506f_ff264c96",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-28T12:26:46Z",
+      "side": 1,
+      "message": "I think cheking the jsonpath lookup values using regex is good.",
+      "parentUuid": "bef4f603_b003ad78",
       "range": {
         "startLine": 103,
         "startChar": 0,
