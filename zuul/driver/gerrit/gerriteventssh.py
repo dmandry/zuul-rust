@@ -44,6 +44,7 @@ class GerritSSHEventListener(threading.Thread):
             "watcher")
         self.keepalive = int(connection_config.get('keepalive', 60))
         self._stopped = False
+        self.daemon = True
 
     def _read(self, fd):
         while True:

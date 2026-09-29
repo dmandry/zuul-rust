@@ -98,8 +98,14 @@ class Scheduler(zuul.cmd.ZuulDaemonApp):
                                               self.args.disable_pipelines)
         if self.args.validate_tenants is None:
             self.connections.registerScheduler(self.sched)
-            self.connections.load(self.sched.zk_client,
-                                  self.sched.component_registry)
+            try:
+                self.connections.load(self.sched.zk_client,
+                                      self.sched.component_registry)
+            except Exception:
+                # Some connections wait for the primed event
+                self.sched.primed_event.set()
+                self.connections.stop()
+                raise
 
         self.log.info('Starting scheduler')
         try:

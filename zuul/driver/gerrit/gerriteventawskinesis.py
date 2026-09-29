@@ -81,7 +81,7 @@ class GerritAWSKinesisEventListener:
                 gerrit_connection.connection_name,
                 f"aws_kinesis_{sid}")
             self._threads.append(threading.Thread(
-                target=self.run, args=(sid,)))
+                target=self.run, args=(sid,), daemon=True))
             self._caught_up[sid] = False
         self._stop_event = threading.Event()
         self._stopped = False
