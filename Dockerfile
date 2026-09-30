@@ -108,6 +108,7 @@ RUN useradd -u 10001 -m -d /var/lib/zuul -c "Zuul Daemon" zuul \
      fi
 
 VOLUME /var/lib/zuul
+ENTRYPOINT ["/usr/bin/dumb-init", "-c", "--"]
 CMD ["/usr/local/bin/zuul"]
 
 FROM zuul AS zuul-executor
