@@ -485,6 +485,30 @@
       },
       "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "74a1c0b3_cc3a3a1e",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 38827
+      },
+      "writtenOn": "2026-09-30T12:52:33Z",
+      "side": 1,
+      "message": "Sounds good. We checked with the stakeholders, and we do need that feature. We can merge this first and implement parameter passing as a follow-up once the basic functionality is in place.",
+      "parentUuid": "79810569_b11b5fc4",
+      "range": {
+        "startLine": 103,
+        "startChar": 0,
+        "endLine": 106,
+        "endChar": 38
+      },
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
