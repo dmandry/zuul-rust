@@ -119,6 +119,87 @@ class TestTenantValidationClient(BaseClientTestCase):
             b"global semaphore", out,
             "Expected error message not found")
 
+    def test_client_rbac_conf_check(self):
+        self.config.set(
+            'scheduler', 'tenant_config',
+            os.path.join(FIXTURE_DIR,
+                         'config/tenant-parser/invalid_role_rbac.yaml'))
+        with open(os.path.join(self.test_root, 't_role_rbac.conf'), 'w') as f:
+            self.config.write(f)
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', os.path.join(self.test_root, 't_role_rbac.conf'),
+             'tenant-conf-check'], stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.assertEqual(p.returncode, 1, "The command must exit 1")
+        self.assertIn(
+            b'Authorization Role "not_a_valid_role" was not found', out,
+            "Expected error message not found")
+
+        self.config.set(
+            'scheduler', 'tenant_config',
+            os.path.join(FIXTURE_DIR,
+                         'config/tenant-parser/invalid_rule_rbac.yaml'))
+        with open(os.path.join(self.test_root, 't_rule_rbac.conf'), 'w') as f:
+            self.config.write(f)
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', os.path.join(self.test_root, 't_rule_rbac.conf'),
+             'tenant-conf-check'], stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.assertEqual(p.returncode, 1, "The command must exit 1")
+        self.assertIn(
+            b'Authorization Rule "auth-rule-three" was not found', out,
+            "Expected error message not found")
+
+        self.config.set(
+            'scheduler', 'tenant_config',
+            os.path.join(FIXTURE_DIR,
+                         'config/tenant-parser/invalid_root_role_rbac.yaml'))
+        with open(os.path.join(self.test_root, 'r_role_rbac.conf'), 'w') as f:
+            self.config.write(f)
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', os.path.join(self.test_root, 'r_role_rbac.conf'),
+             'tenant-conf-check'], stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.assertEqual(p.returncode, 1, "The command must exit 1")
+        self.assertIn(
+            b'Authorization Role "not_a_valid_role" was not found', out,
+            "Expected error message not found")
+
+        self.config.set(
+            'scheduler', 'tenant_config',
+            os.path.join(FIXTURE_DIR,
+                         'config/tenant-parser/invalid_root_rule_rbac.yaml'))
+        with open(os.path.join(self.test_root, 'r_rule_rbac.conf'), 'w') as f:
+            self.config.write(f)
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', os.path.join(self.test_root, 'r_rule_rbac.conf'),
+             'tenant-conf-check'], stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.assertEqual(p.returncode, 1, "The command must exit 1")
+        self.assertIn(
+            b'Authorization Rule "auth-rule-three" was not found', out,
+            "Expected error message not found")
+
+        self.config.set(
+            'scheduler', 'tenant_config',
+            os.path.join(FIXTURE_DIR,
+                         'config/tenant-parser/rbac.yaml'))
+        with open(os.path.join(self.test_root, 'rbac.conf'), 'w') as f:
+            self.config.write(f)
+        p = subprocess.Popen(
+            [os.path.join(sys.prefix, 'bin/zuul-admin'),
+             '-c', os.path.join(self.test_root, 'rbac.conf'),
+             'tenant-conf-check'], stdout=subprocess.PIPE)
+        out, _ = p.communicate()
+        self.assertEqual(p.returncode, 0, "The command must exit 0")
+        self.assertIn(
+            b'Tenants config validated with success', out,
+            "Expected error message not found")
+
 
 class TestWebTokenClient(BaseClientTestCase):
     config_file = 'zuul-admin-web.conf'
