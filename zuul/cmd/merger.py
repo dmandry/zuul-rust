@@ -15,6 +15,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import logging
 import signal
 
 import zuul.cmd
@@ -31,6 +32,7 @@ class Merger(zuul.cmd.ZuulDaemonApp):
         return parser
 
     def exit_handler(self, signum, frame):
+        self.log.debug('SIGTERM received running stop handler')
         self.merger.stop()
         self.merger.join()
 
@@ -40,6 +42,7 @@ class Merger(zuul.cmd.ZuulDaemonApp):
         self.configure_connections(sources=True)
 
         self.setup_logging('merger', 'log_config')
+        self.log = logging.getLogger('zuul.merger')
 
         self.merger = zuul.merger.server.MergeServer(
             self.config, self.connections)

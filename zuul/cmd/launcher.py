@@ -33,6 +33,7 @@ class LauncherApp(zuul.cmd.ZuulDaemonApp):
         return parser
 
     def exit_handler(self, signum, frame):
+        self.log.debug('SIGTERM received running stop handler')
         if self.launcher:
             self.launcher.stop()
             self.launcher.join()

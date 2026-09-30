@@ -1057,12 +1057,14 @@ class Scheduler(threading.Thread):
         self.log.debug("Now profiling %s", self._profile_pipelines)
 
     def startRepl(self):
+        self.log.debug("Start repl server")
         if self.repl:
             return
         self.repl = zuul.lib.repl.REPLServer(self)
         self.repl.start()
 
     def stopRepl(self):
+        self.log.debug("Stop repl server")
         if not self.repl:
             return
         self.repl.stop()
