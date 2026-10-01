@@ -5603,8 +5603,7 @@ For CI problems and help debugging, contact ci@example.org"""
         self.assertEqual(
             "Merge failed.\n\nThis change or one of its cross-repo "
             "dependencies was unable to be automatically merged with the "
-            "current state of its repository. Please rebase the change and "
-            "upload a new patchset.",
+            "current state of its repository. Please rebase the change.",
             tenant.layout.pipeline_managers['check'].
             pipeline.merge_conflict_message)
         self.assertEqual(

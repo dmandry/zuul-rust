@@ -1669,8 +1669,7 @@ class PipelineParser(object):
             'merge-conflict-message', "Merge conflict.\n\nThis change or one "
             "of its cross-repo dependencies was unable to be "
             "automatically merged with the current state of its "
-            "repository. Please rebase the change and upload a new "
-            "patchset.")
+            "repository. Please rebase the change.")
         pipeline.merge_error_message = conf.get(
             'merge-error-message', "Merge error.\n\nThis change or one "
             "of its cross-repo dependencies was unable to be "
