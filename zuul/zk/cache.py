@@ -102,7 +102,7 @@ class ZuulTreeCache(abc.ABC):
     def max_zxid(self):
         # Until we're ready, the max_zxid is unreliable while we are
         # walking the tree to re-sync.
-        if self._ready:
+        if self._ready.is_set():
             return self._max_zxid
         return WatchedEvent.NO_ZXID
 
