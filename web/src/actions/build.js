@@ -86,7 +86,9 @@ export function renderTree(tenant, build, path, obj, textRenderer, defaultRender
   if (log_url.endsWith('/')) {
     log_url = log_url.slice(0, -1)
   }
-  if (obj.mimetype === 'text/plain') {
+  if (obj.mimetype === 'text/plain' ||
+      obj.mimetype === 'application/json' ||
+      obj.mimetype === 'application/yaml') {
     node.name = textRenderer(tenant, build, path, name, log_url, obj)
   } else {
     node.name = defaultRenderer(log_url, path, name, obj)
