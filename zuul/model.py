@@ -1390,10 +1390,8 @@ class Project(object):
         self.connection_name = source.connection.connection_name
         self.canonical_hostname = source.canonical_hostname
         self.canonical_name = source.canonical_hostname + '/' + name
-        self.private_secrets_key = None
-        self.public_secrets_key = None
-        self.private_ssh_key = None
-        self.public_ssh_key = None
+        self.secrets_key_info = None
+        self.ssh_key_info = None
         # foreign projects are those referenced in dependencies
         # of layout projects, this should matter
         # when deciding whether to enqueue their changes
@@ -3544,12 +3542,15 @@ class Secret(ConfigObject):
 
         return secret_data
 
-    def decrypt(self, private_key):
+    def decrypt(self, key_info):
         """Return a copy of this secret with any encrypted data decrypted.
         Note that the original remains encrypted."""
 
         r = Secret(self.name, self.source_context)
-        r.secret_data = self._decrypt(private_key, self.secret_data)
+        for private_key in key_info.private_keys:
+            # TODO: Handle multiple key with an exception handler
+            r.secret_data = self._decrypt(private_key, self.secret_data)
+            break
         return r
 
     def _decryptForCollection(self, private_key, secret_data):
@@ -3565,12 +3566,14 @@ class Secret(ConfigObject):
             for v in secret_data:
                 yield from self._decryptForCollection(private_key, v)
 
-    def collectEncryptedValues(self, private_key):
+    def collectEncryptedValues(self, key_info):
         """Return a list of the decrypted contents of encrypted values
         in this secret"""
 
-        return [x for x in self._decryptForCollection(
-            private_key, self.secret_data)]
+        for private_key in key_info.private_keys:
+            # TODO: Handle multiple key with an exception handler
+            ret = self._decryptForCollection(private_key, self.secret_data)
+            return [x for x in ret]
 
     def serialize(self, layout):
         # The output of this method is used by the executor
@@ -3804,7 +3807,7 @@ class PlaybookContext(ConfigObject):
             project = layout.tenant.getProject(
                 self.source_context.project_canonical_name)[1]
             # Decrypt a copy of the secret to verify it can be done
-            secret.decrypt(project.private_secrets_key)
+            secret.decrypt(project.secrets_key_info)
         # TODO: if we remove the implicit max=1 semaphore, validate
         # references here.
 
@@ -11461,8 +11464,7 @@ class Tenant(object):
         self.allowed_triggers = None
         self.allowed_reporters = None
         self.use_nodepool = True
-        self.private_ssh_key = None
-        self.public_ssh_key = None
+        self.ssh_key_info = None
         # The unparsed configuration from the main zuul config for
         # this tenant.
         self.unparsed_config = None
