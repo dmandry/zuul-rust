@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "af918830_ec558616",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 21,
+      "author": {
+        "id": 37112
+      },
+      "writtenOn": "2026-10-01T13:47:48Z",
+      "side": 1,
+      "message": "nit: typo in messages\n\n```suggestion\nA new pipeline reporter is also added so that the messages and\n```",
+      "range": {
+        "startLine": 21,
+        "startChar": 50,
+        "endLine": 21,
+        "endChar": 59
+      },
+      "revId": "04def8f0997b65cb69658b5e3401b3f84ce63b9f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7296a6fc_706f26d4",
+        "filename": "doc/source/config/pipeline.rst",
+        "patchSetId": 1
+      },
+      "lineNbr": 227,
+      "author": {
+        "id": 37112
+      },
+      "writtenOn": "2026-10-01T13:47:48Z",
+      "side": 1,
+      "message": "Should this read `Merge conflict` instead of `Merge error`? (the attribute is called `merge-conflict-message`, confusing to have merge-error-message and report \"Merge error\" for conflicts).",
+      "range": {
+        "startLine": 227,
+        "startChar": 22,
+        "endLine": 227,
+        "endChar": 27
+      },
+      "revId": "04def8f0997b65cb69658b5e3401b3f84ce63b9f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
