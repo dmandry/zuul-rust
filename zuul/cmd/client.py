@@ -1092,6 +1092,9 @@ class Client(zuul.cmd.ZuulApp):
 
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
+
+        COMPONENT_REGISTRY.create(zk_client)
+
         try:
             password = self.config["keystore"]["password"]
         except KeyError:
@@ -1116,6 +1119,9 @@ class Client(zuul.cmd.ZuulApp):
 
         zk_client = ZooKeeperClient.fromConfig(self.config)
         zk_client.connect()
+
+        COMPONENT_REGISTRY.create(zk_client)
+
         try:
             password = self.config["keystore"]["password"]
         except KeyError:
