@@ -44,7 +44,6 @@ from tests.base import (
     FIXTURE_DIR,
     RecordingExecutorServer,
     SSLZuulTestCase,
-    TestConnectionRegistry,
     ZuulTestCase,
     iterate_timeout,
     okay_tracebacks,
@@ -97,26 +96,7 @@ class TestSchedulerZone(ZuulTestCase):
         config.remove_option('executor', 'zone')
         config.set('executor', 'command_socket',
                    os.path.join(self.test_root, 'executor2.socket'))
-        executor_connections = TestConnectionRegistry(
-            self.config, self.test_config, self.additional_event_queues,
-            self.upstream_root, self.poller_events,
-            self.git_url_with_auth, self.addCleanup)
-        executor_connections.configure(self.config, sources=True)
-        self.executor_server_unzoned = RecordingExecutorServer(
-            config,
-            connections=executor_connections,
-            jobdir_root=self.jobdir_root,
-            _run_ansible=self.run_ansible,
-            _test_root=self.test_root,
-            log_console_port=self.log_console_port)
-        self.executor_server_unzoned.start()
-        self.addCleanup(self._shutdown_executor)
-
-    def _shutdown_executor(self):
-        self.executor_server_unzoned.hold_jobs_in_build = False
-        self.executor_server_unzoned.release()
-        self.executor_server_unzoned.stop()
-        self.executor_server_unzoned.join()
+        self.executor_server_unzoned = self.createExecutor(config)
 
     def setup_config(self, config_file: str):
         config = super(TestSchedulerZone, self).setup_config(config_file)

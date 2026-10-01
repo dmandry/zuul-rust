@@ -279,6 +279,37 @@ The following sections of ``zuul.conf`` are used by the scheduler:
 
       Encryption password for private data stored in Zookeeper.
 
+      Typically this is a single value.  To rotate keys, multiple
+      values may be supplied, each on its own line.  The first value
+      is always the desired (new) key, subsequent values are older
+      keys.  Once all of the components in the cluster have been
+      restarted with the new values, all existing key material will be
+      re-encrypted with the new key.  After that point, old keys may
+      be removed.
+
+      For example, with an original configuration of:
+
+      .. code-block:: ini
+
+         [keystore]
+         password = password1
+
+      Zuul may be instructed to rotate to `password` with:
+
+      .. code-block:: ini
+
+         [keystore]
+         password =
+             password2
+             password1
+
+      After rotation, this may be simplified to:
+
+      .. code-block:: ini
+
+         [keystore]
+         password = password2
+
 .. attr:: scheduler
 
    .. attr:: command_socket
