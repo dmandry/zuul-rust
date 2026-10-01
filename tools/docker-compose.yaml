@@ -3,8 +3,9 @@ version: "3"
 services:
   mysql:
     container_name: zuul-test-mariadb
+    user: "0"
     # Roughly matches version in Ubuntu Noble
-    image: mariadb:10.11
+    image: docker.io/library/mariadb:10.11
     environment:
       - MYSQL_ROOT_PASSWORD=insecure_worker
     ports:
@@ -16,7 +17,8 @@ services:
 
   postgres:
     container_name: zuul-test-postgres
-    image: postgres:latest
+    user: "0"
+    image: docker.io/library/postgres:latest
     environment:
       - POSTGRES_USER=openstack_citest
       - POSTGRES_PASSWORD=openstack_citest
@@ -28,15 +30,15 @@ services:
   zookeeper:
     container_name: zuul-test-zookeeper
     user: "${USER_ID}"
-    image: zookeeper
+    image: docker.io/library/zookeeper
     environment:
       - ZOO_AUTOPURGE_PURGEINTERVAL=1
       - ZOO_LOG4J_PROP=WARN
     ports:
       - "2281:2281"
     tmpfs:
-      - /data:uid=${USER_ID}
-      - /datalog:uid=${USER_ID}
+      - /data:${ZUUL_TMPFS_OPTIONS}
+      - /datalog:${ZUUL_TMPFS_OPTIONS}
     volumes:
       - "./ca:/var/certs:z"
       - "./zoo.cfg:/conf/zoo.cfg:z"
