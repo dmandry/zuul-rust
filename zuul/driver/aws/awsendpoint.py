@@ -2069,28 +2069,10 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             if label.security_group_ids:
                 template_data['SecurityGroupIds'] = label.security_group_ids
 
-            if label.imds_http_tokens == 'required':
-                template_data['MetadataOptions'] = {
-                    'HttpTokens': 'required',
-                    'HttpEndpoint': 'enabled',
-                    'HttpProtocolIpv6': 'enabled',
-                }
-            elif label.imds_http_tokens == 'optional':
-                template_data['MetadataOptions'] = {
-                    'HttpTokens': 'optional',
-                    'HttpEndpoint': 'enabled',
-                    'HttpProtocolIpv6': 'enabled',
-                }
-
             if flavor.nested_virtualization:
                 template_data['CpuOptions'] = {
                     'NestedVirtualization': 'enabled'
                 }
-
-            if label.userdata:
-                userdata_base64 = base64.b64encode(
-                    label.userdata.encode('utf-8')).decode('utf-8')
-                template_data['UserData'] = userdata_base64
 
             template_args = dict(
                 LaunchTemplateData=template_data,
@@ -2189,6 +2171,19 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 override_dict['Priority'] = priority
                 priority += 1
 
+            if label.imds_http_tokens == 'required':
+                override_dict['MetadataOptions'] = {
+                    'HttpTokens': 'required',
+                    'HttpEndpoint': 'enabled',
+                    'HttpProtocolIpv6': 'enabled',
+                }
+            elif label.imds_http_tokens == 'optional':
+                override_dict['MetadataOptions'] = {
+                    'HttpTokens': 'optional',
+                    'HttpEndpoint': 'enabled',
+                    'HttpProtocolIpv6': 'enabled',
+                }
+
             # Duplicate overrides for each subnet
             if label.subnet_ids:
                 for subnet_id in label.subnet_ids:
@@ -2220,6 +2215,13 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 },
             }
 
+        extra_launch_template_spec = {}
+        if label.userdata:
+            userdata_base64 = base64.b64encode(
+                label.userdata.encode('utf-8')).decode('utf-8')
+            extra_launch_template_spec[
+                "LaunchTemplateSpecificationUserData"] = userdata_base64
+
         args = {
             **capacity_type_option,
             'LaunchTemplateConfigs': [
@@ -2227,6 +2229,7 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                     'LaunchTemplateSpecification': {
                         'LaunchTemplateName': launch_template_name,
                         'Version': '$Latest',
+                        **extra_launch_template_spec,
                     },
                     'Overrides': overrides,
                 },
