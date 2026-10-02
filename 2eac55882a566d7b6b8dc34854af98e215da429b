@@ -16,6 +16,24 @@
       "message": "It feels like waiting 5 min for a PR to be merges is a bit too much. In the current `mergePull` implementation we have a sleep of 5s with five attempts.\n\nThe problem I see here is that a pending merge (and I don\u0027t have a good grasp what could be the reason for that; maybe missing requirements / reviews?) could block pipeline processing during that time and with that the whole scheduler.",
       "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "6ac85984_c318a71b",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2372,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:29:49Z",
+      "side": 1,
+      "message": "This should not take long under normal circumstances, usually a few seconds.  The only reason we might not get an answer is due to an error on github\u0027s side, for example, if they drop the request entirely.\n\nI don\u0027t know why it might take longer than a few seconds.  I don\u0027t know if github has a fixed or scalable set of asynchronous workers to handle merges, but presumably they did this for a reason and expect that sometimes it might take a little while.  I think it\u0027s reasonable for us to have a generous timeout, so that if it takes 65 seconds to merge a pull request, we don\u0027t discard 6 hours of gate pipeline work.  Again, this is the time at which we give up waiting for a response from github, there\u0027s no way for us to influence the amount of time github takes.\n\nCompared to the normal synchronous merge -- I don\u0027t think the retry handler applies to the PUT request we send for a synchronous merge (it only handles GET 5xx errors).  Instead, I think we would rely on the requests session read timeout, which is 300.  With this setup, our timeout for waiting for the async pull is the same as a synchronous pull*.\n\n* (But we could spend longer in this method in the pathological case that github took 300s to return from the async status fetch call -- if that happened at the start of the process, then it\u0027s 300s.  If it happened at the end, then it\u0027s 300+300\u003d600.  But these calls are supposed to be instantaneous, so that\u0027s very unexpected.)",
+      "parentUuid": "f0f5c5ca_b3353740",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
