@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "f0f5c5ca_b3353740",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2372,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-02T10:53:33Z",
+      "side": 1,
+      "message": "It feels like waiting 5 min for a PR to be merges is a bit too much. In the current `mergePull` implementation we have a sleep of 5s with five attempts.\n\nThe problem I see here is that a pending merge (and I don\u0027t have a good grasp what could be the reason for that; maybe missing requirements / reviews?) could block pipeline processing during that time and with that the whole scheduler.",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
