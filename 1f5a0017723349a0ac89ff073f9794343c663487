@@ -509,6 +509,42 @@
       },
       "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "29f08b5b_aaef8921",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:35Z",
+      "side": 1,
+      "message": "Thanks!",
+      "parentUuid": "d6308169_4134002c",
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "cbe15a56_24c69fe8",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 11
+      },
+      "lineNbr": 106,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:35Z",
+      "side": 1,
+      "message": "Thanks!",
+      "parentUuid": "d6308169_4134002c",
+      "revId": "1f5a0017723349a0ac89ff073f9794343c663487",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
