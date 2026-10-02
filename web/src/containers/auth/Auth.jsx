@@ -197,7 +197,7 @@ class AuthContainerComponent extends React.Component {
             <p key="permissions">Permissions:</p>
             <List>
               {
-                Object.entries(user.permissions).map((perm, value) =>
+                Object.entries(user.permissions).map(([perm, value]) =>
                   (value && <ListItem key="{perm}">{perm}</ListItem>))
               }
             </List>
