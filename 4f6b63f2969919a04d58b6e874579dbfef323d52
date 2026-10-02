@@ -16,6 +16,96 @@
       "message": "This seems a bit limiting.  Could we do the following instead?\n\n* When parsing config, if the user specifies a string, use regex, otherwise just store the value.\n* Here, check whether the expected value is a ZuulRegex instance, and if so, perform this string check and match; and if not, perform the old simple equality check.\n\nI think it would be useful to be able to match on boolean fields, etc. (I\u0027m imagining something like \"final: true\").",
       "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a850137b_77caf7cf",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:29Z",
+      "side": 1,
+      "message": "Unresolved.",
+      "parentUuid": "95a462ae_c5ae33be",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "2e091162_69c4e55d",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:29Z",
+      "side": 1,
+      "message": "Unresolved.",
+      "parentUuid": "95a462ae_c5ae33be",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0fdab15c_8c6fcd7f",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:29Z",
+      "side": 1,
+      "message": "Unresolved.",
+      "parentUuid": "95a462ae_c5ae33be",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "6f0d0315_080d1824",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:29Z",
+      "side": 1,
+      "message": "Unresolved.",
+      "parentUuid": "95a462ae_c5ae33be",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "51d0ae1b_961a3420",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-02T14:46:29Z",
+      "side": 1,
+      "message": "Unresolved.",
+      "parentUuid": "95a462ae_c5ae33be",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
