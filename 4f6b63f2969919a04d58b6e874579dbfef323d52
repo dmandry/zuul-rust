@@ -124,6 +124,24 @@
       "parentUuid": "a850137b_77caf7cf",
       "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "15d8c185_f407919e",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-03T17:38:13Z",
+      "side": 1,
+      "message": "I\u0027ve just realized I didn\u0027t allow boolean which was the previous example given. I\u0027ll update it really quickly to support booleans too.",
+      "parentUuid": "4f72ab1f_a94d1bac",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
