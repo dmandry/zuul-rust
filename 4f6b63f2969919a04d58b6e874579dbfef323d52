@@ -106,6 +106,24 @@
       "parentUuid": "95a462ae_c5ae33be",
       "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4f72ab1f_a94d1bac",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-03T17:36:55Z",
+      "side": 1,
+      "message": "I updated things to support json primitive types so str, int, float, null should all work now in addition to zuul regexes. The reason I didn\u0027t add list and dict as well is that a zuul regex is a dict and I\u0027m not sure there is a good way to distinguish a zuul regex dict from an arbitrary dict to match. I figured if we aren\u0027t doing dicts then not doing lists avoids confusion in behavior.\n\nBut if we want to do lists and arbitrary dicts and can think of a good way to represent that within the zuul config without confusing users we can update this change to do that.",
+      "parentUuid": "a850137b_77caf7cf",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
