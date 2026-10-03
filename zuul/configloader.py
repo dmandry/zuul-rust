@@ -1905,11 +1905,13 @@ class AuthorizationRoleParser(object):
             vs.Any(bool, {
                 'conditions': vs.All(
                     # Validate conditions keys
-                    vs.Schema({vs.Required(vs.Any('project', 'ref')): object}),
+                    vs.Schema({vs.Required(
+                        vs.Any('project', 'ref', 'pipeline')): object}),
                     # Validate conditions data
                     vs.Schema({
                         vs.Optional('project'): str,
-                        vs.Optional('ref'): str
+                        vs.Optional('ref'): str,
+                        vs.Optional('pipeline'): str,
                     })
                 )
             })
@@ -1919,11 +1921,13 @@ class AuthorizationRoleParser(object):
             vs.Any(bool, {
                 'conditions': vs.All(
                     # Validate conditions keys
-                    vs.Schema({vs.Required(vs.Any('project', 'ref')): object}),
+                    vs.Schema({vs.Required(
+                        vs.Any('project', 'ref', 'pipeline')): object}),
                     # Validate conditions data
                     vs.Schema({
                         vs.Optional('project'): str,
-                        vs.Optional('ref'): str
+                        vs.Optional('ref'): str,
+                        vs.Optional('pipeline'): str,
                     })
                 )
             })

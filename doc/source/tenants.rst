@@ -1046,6 +1046,10 @@ permission.
             Further conditions may be applied with the following
             attributes:
 
+            .. attr:: pipeline
+
+               The name of a pipeline.
+
             .. attr:: project
 
                The name of a project.
@@ -1065,6 +1069,10 @@ permission.
 
             Further conditions may be applied with the following
             attributes:
+
+            .. attr:: pipeline
+
+               The name of a pipeline.
 
             .. attr:: project
 

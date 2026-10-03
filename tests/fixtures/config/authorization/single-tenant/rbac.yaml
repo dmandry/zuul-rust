@@ -26,6 +26,8 @@
       dequeue:
         conditions:
           project: org/project
+          ref: refs/heads/stable
+          pipeline: periodic
 - role:
     name: dequeue2
     permissions:

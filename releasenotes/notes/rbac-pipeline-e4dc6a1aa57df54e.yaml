@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    The :attr:`role.permissions.enqueue.conditions.pipeline` and
+    :attr:`role.permissions.dequeue.conditions.pipeline` configuration
+    attributes are now available in the tenant config file to further
+    restrict permission to enqueue and dequeue through the admin API.
