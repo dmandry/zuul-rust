@@ -34,6 +34,24 @@
       "parentUuid": "f0f5c5ca_b3353740",
       "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "904a9742_6b15263a",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2372,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-03T05:47:03Z",
+      "side": 1,
+      "message": "I\u0027m just thinking there is a good reason why Github made this an async merge API. But in Zuul we are turning it back into a synchronous merge operation.\n\nIn contrast the 300s for the sync merge is a request level timeout. We should not hit that as it\u0027s for exceptional case. But here the whole API seems to indicate that it can take longer to merge a PR.\n\nI think the main reason for why this is async is, that you can queue a PR for merge w/o the parent PR in the stack being ready. I guess Github will merge the PR when the parent becomes ready?!\n\nWith Zuul that (having a non merged parent PR) shouldn\u0027t happen as we merge PRs in order and if any of them fails we don\u0027t continue with that the rest of the stack.\n\nGiven that I\u0027d suggest to start with a lower timeout (60s?). I think in most cases where this takes longer there is something wrong and we should probably not wait 5min.",
+      "parentUuid": "6ac85984_c318a71b",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
