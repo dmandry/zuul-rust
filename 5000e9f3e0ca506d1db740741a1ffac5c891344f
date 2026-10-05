@@ -33,6 +33,86 @@
       "message": "I\u0027m assuming that an existing zuul system that has projects with galaxy.yml in the roles might behave differently? I think it\u0027s OK, it\u0027s probably an upgrade note.",
       "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e12639fd_7f205f41",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 10
+      },
+      "lineNbr": 1329,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-05T17:29:59Z",
+      "side": 1,
+      "message": "It doesn\u0027t look like any of the new test cases cover the use of this override. Not sure if that is important enough to add.",
+      "range": {
+        "startLine": 1328,
+        "startChar": 21,
+        "endLine": 1329,
+        "endChar": 1
+      },
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "7f46b7dc_ed1e2f20",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 2543,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-05T17:29:59Z",
+      "side": 1,
+      "message": "Was this just a missing ansible path? Or is plugins/ specific to collections?",
+      "range": {
+        "startLine": 2543,
+        "startChar": 30,
+        "endLine": 2543,
+        "endChar": 40
+      },
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "4442eed9_66759230",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 2877,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-05T17:29:59Z",
+      "side": 1,
+      "message": "I guess its better to report a broken galaxy.yml than it is to fallback on treating this like a regular role repo?",
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "139ac19e_37db0ddc",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 2879,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-05T17:29:59Z",
+      "side": 1,
+      "message": "Do we need to raise RoleNotFoundError here if namespace and/or name are None? I think you could have a yaml file that is valid yaml that doesn\u0027t supply the correct values making it effectively as broken as invalid yaml?",
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
