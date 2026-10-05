@@ -19,6 +19,7 @@ import voluptuous as v
 import time
 
 from zuul import model
+from zuul.lib.gitutil import parse_commit_message
 from zuul.lib.logutil import get_annotated_logger
 from zuul.reporter import BaseReporter
 from zuul.exceptions import MergeFailure
@@ -372,9 +373,8 @@ class GithubReporter(BaseReporter):
         if change.body_text:
             message.append(change.body_text)
         merge_message = "\n\n".join(message)
-
         if change.reviews:
-            review_users = []
+            body, trailers = parse_commit_message(merge_message)
             for r in change.reviews:
                 name = r['by']['name']
                 email = r['by']['email']
@@ -388,9 +388,15 @@ class GithubReporter(BaseReporter):
                     review_message += ' Anonymous'
                 if email:
                     review_message += ' <{}>'.format(email)
-                review_users.append(review_message)
-            merge_message += '\n\n'
-            merge_message += '\n'.join(review_users)
+                trailers.append(review_message)
+            if body[-1].strip():
+                # Add a blank line to start the trailer block if there
+                # was not one before.
+                body.append('')
+            body.extend(trailers)
+            # Add a trailing newline.
+            body.append('')
+            merge_message = '\n'.join(body)
 
         return merge_message
 
