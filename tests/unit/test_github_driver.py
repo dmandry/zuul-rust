@@ -854,28 +854,45 @@ class TestGithubDriver(ZuulTestCase):
     @simple_layout('layouts/merging-github.yaml', driver='github')
     def test_report_pull_merge_message_reviewed_by(self):
         # pipeline merges the pull request on success
-        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A')
+        body = "This is the PR body\n\nIssue: 1234\n"
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A',
+                                                 body_text=body)
 
         self.fake_github.emitEvent(A.getCommentAddedEvent('merge me'))
         self.waitUntilSettled()
         self.assertTrue(A.is_merged)
         # assert that no 'Reviewed-By' is in merge commit message
-        self.assertThat(A.merge_message,
-                        Not(MatchesRegex(r'.*Reviewed-By.*', re.DOTALL)))
+        A_lines = A.merge_message.split('\n')
+        self.assertEqual([
+            'A',
+            '',
+            'This is the PR body',
+            '',
+            'Issue: 1234',
+            '',
+        ], A_lines)
 
-        B = self.fake_github.openFakePullRequest('org/project', 'master', 'B')
+        B = self.fake_github.openFakePullRequest('org/project', 'master', 'B',
+                                                 body_text=body)
         B.addReview('derp', 'APPROVED')
 
         self.fake_github.emitEvent(B.getCommentAddedEvent('merge me'))
         self.waitUntilSettled()
         self.assertTrue(B.is_merged)
         # assert that single 'Reviewed-By' is in merge commit message
-        self.assertThat(B.merge_message,
-                        MatchesRegex(
-                            r'.*Reviewed-by: derp <derp@example.com>.*',
-                            re.DOTALL))
+        B_lines = B.merge_message.split('\n')
+        self.assertEqual([
+            'B',
+            '',
+            'This is the PR body',
+            '',
+            'Issue: 1234',
+            'Reviewed-by: derp <derp@example.com>',
+            '',
+        ], B_lines)
 
-        C = self.fake_github.openFakePullRequest('org/project', 'master', 'C')
+        C = self.fake_github.openFakePullRequest('org/project', 'master', 'C',
+                                                 body_text=body)
         C.addReview('derp', 'APPROVED')
         C.addReview('herp', 'COMMENTED')
 
@@ -883,14 +900,17 @@ class TestGithubDriver(ZuulTestCase):
         self.waitUntilSettled()
         self.assertTrue(C.is_merged)
         # assert that multiple 'Reviewed-By's are in merge commit message
-        self.assertThat(C.merge_message,
-                        MatchesRegex(
-                            r'.*Reviewed-by: derp <derp@example.com>.*',
-                            re.DOTALL))
-        self.assertThat(C.merge_message,
-                        MatchesRegex(
-                            r'.*Reviewed-by: herp <herp@example.com>.*',
-                            re.DOTALL))
+        C_lines = C.merge_message.split('\n')
+        self.assertEqual([
+            'C',
+            '',
+            'This is the PR body',
+            '',
+            'Issue: 1234',
+            'Reviewed-by: derp <derp@example.com>',
+            'Reviewed-by: herp <herp@example.com>',
+            '',
+        ], C_lines)
 
     @simple_layout('layouts/dependent-github.yaml', driver='github')
     def test_draft_pr(self):
