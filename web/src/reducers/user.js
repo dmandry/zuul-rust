@@ -37,6 +37,7 @@ export default (state = {
   redirect: null,
   broadcastWaitStart: false,
   broadcastWaitFinish: false,
+  aclFetched: true,
 }, action) => {
   switch (action.type) {
     case USER_LOGGED_IN: {
@@ -50,6 +51,7 @@ export default (state = {
         isAdmin: false,
         tenant: undefined,
         broadcastWaitFinish: true,
+        aclFetched: false,
       }
     }
     case USER_LOGGED_OUT:
@@ -67,7 +69,8 @@ export default (state = {
       return {
         ...state,
         tenant: action.tenant,
-        isFetching: true
+        isFetching: true,
+        aclFetched: false,
       }
     case USER_ACL_FAIL:
       return {
@@ -75,7 +78,8 @@ export default (state = {
         isFetching: false,
         permissions: {},
         scope: [],
-        isAdmin: false
+        isAdmin: false,
+        aclFetched: true,
       }
     case USER_ACL_SUCCESS:
       return {
@@ -83,7 +87,8 @@ export default (state = {
         isFetching: false,
         permissions: action.permissions,
         scope: action.scope,
-        isAdmin: action.isAdmin
+        isAdmin: action.isAdmin,
+        aclFetched: true,
       }
     case USER_BROADCAST_WAIT_START:
       return {

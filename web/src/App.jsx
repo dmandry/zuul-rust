@@ -153,6 +153,12 @@ class AppComponent extends React.Component {
     if (auth.info.read_protected && user.scope.length<1) {
       return <AuthRequiredPage/>
     }
+    if (!user.aclFetched) {
+      // Since the menu contents depend on user ACLs, make sure that
+      // the fetch is completed.  The fetch is started by the Auth
+      // widget when the user is logged in.
+      return <Fetching />
+    }
     menu
       // Do not include '/tenants' route in white-label setup
       .filter(item =>
