@@ -4106,6 +4106,7 @@ class TestSnapshot(AnsibleZuulTestCase, LauncherBaseTestCase):
         def _updateNode(self):
             orig_updateNode(self)
             self.node.connection_type = 'local'
+            self.node.python_path = '/usr/bin/python3'
         self.patch(zuul.driver.aws.awsendpoint.AwsCreateStateMachine,
                    '_updateNode',
                    _updateNode)
