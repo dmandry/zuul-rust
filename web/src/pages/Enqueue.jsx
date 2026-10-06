@@ -238,6 +238,9 @@ function EnqueuePage(props) {
         widgets.push(renderCheckbox(param))
       }
     })
+    if (!widgets.length) {
+      widgets.push("No parameters available")
+    }
     return widgets
   }
 
@@ -293,17 +296,19 @@ function EnqueuePage(props) {
           defaultRef={currentRef}
           buttonText="Fetch"
         />
-        <Form style={{maxWidth: "40em"}}>
-          {parameterWidgets}
-          <ActionGroup>
-            <Button
-              variant="primary"
-              onClick={submitEnqueue}
-            >
-              Enqueue
-            </Button>
-          </ActionGroup>
-        </Form>
+        { parameterList === undefined? <></> :
+          <Form style={{maxWidth: "40em"}}>
+            {parameterWidgets}
+            <ActionGroup>
+              <Button
+                variant="primary"
+                onClick={submitEnqueue}
+              >
+                Enqueue
+              </Button>
+            </ActionGroup>
+          </Form>
+        }
       </PageSection>
     </>
   )
