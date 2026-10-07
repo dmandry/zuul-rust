@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    The tenant and project public SSH keys are now available on the
+    "Project" page in the web UI.  They remain available at their own
+    dedicated URL, but in some cases (such as when read-only
+    authentication is required) they may be easier to access through
+    the web UI.
