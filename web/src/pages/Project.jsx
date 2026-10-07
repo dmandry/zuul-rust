@@ -21,11 +21,16 @@ import {
   PageSectionVariants,
   Text,
   TextContent,
+  DescriptionList,
+  DescriptionListGroup,
+  DescriptionListDescription,
+  DescriptionListTerm,
 } from '@patternfly/react-core'
 import Project from '../containers/project/Project'
 import JobGraph from '../containers/jobgraph/JobGraph'
 import { fetchProjectIfNeeded } from '../actions/project'
 import { Fetchable } from '../containers/Fetching'
+import SSHKey from '../containers/SSHKey'
 
 
 function ProjectPage(props) {
@@ -49,18 +54,38 @@ function ProjectPage(props) {
       <PageSection variant={props.preferences.darkMode ? PageSectionVariants.dark : PageSectionVariants.light}>
         <TextContent>
           <Text component="h2">Project {projectName}</Text>
-        <Fetchable
-          isFetching={remoteData.isFetching}
-          fetchCallback={updateData}
-        />
+          <Fetchable
+            isFetching={remoteData.isFetching}
+            fetchCallback={updateData}
+          />
         </TextContent>
         {tenantProjects && tenantProjects[projectName] &&
          <>
            <Project project={tenantProjects[projectName]} />
+         <DescriptionList isHorizontal
+                          style={{'--pf-c-description-list--RowGap': '0.5rem'}}
+                          className='pf-u-m-xl'>
+           <DescriptionListGroup key={1}>
+             <DescriptionListTerm>
+               Project SSH key
+             </DescriptionListTerm>
+             <DescriptionListDescription>
+               <SSHKey projectName={projectName}/>
+             </DescriptionListDescription>
+           </DescriptionListGroup>
+           <DescriptionListGroup key={1}>
+             <DescriptionListTerm>
+               Tenant SSH key
+             </DescriptionListTerm>
+             <DescriptionListDescription>
+               <SSHKey/>
+             </DescriptionListDescription>
+           </DescriptionListGroup>
+        </DescriptionList>
            <JobGraph project={tenantProjects[projectName]} />
          </>
         }
-    </PageSection>
+      </PageSection>
     </>
   )
 }
