@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "613aa61c_64a9b9f5",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2262,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-07T20:42:54Z",
+      "side": 1,
+      "message": "This wasn\u0027t introduced by this change, but I think this was a mistake.  I don\u0027t think the Exception constructor interpolates like that, so I think we\u0027re going to get a an Exception whose message is a repr of a tuple.\n\nWe should probably just go ahead and fstring this, but if you\u0027d prefer the % operator that\u0027s fine.",
+      "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "65dedb3e_4198d131",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2265,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-07T20:42:54Z",
+      "side": 1,
+      "message": "Ditto.",
+      "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "e363ea10_608c346d",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2268,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-07T20:42:54Z",
+      "side": 1,
+      "message": "This is fine, better not to fstring here.",
+      "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
