@@ -193,8 +193,7 @@ class DatabaseSession(object):
         q = self.session().query(
             self.connection.buildModel.id).\
             join(self.connection.buildSetModel).\
-            join(self.connection.refModel).\
-            group_by(self.connection.buildModel.id)
+            join(self.connection.refModel)
 
         # If the query planner isn't able to reduce either the number
         # of rows returned by the buildset or build tables, then it
@@ -214,9 +213,14 @@ class DatabaseSession(object):
         # has created some poor query plans in that case.  Currently
         # the only time this gets called with provides is from the
         # scheduler which has several other criteria which narrow down
-        # the query.
+        # the query.  This is also the only join that can produce
+        # multiple build ids, so we only add "group by" here.
+        # TODO: "group by" was chosen over "distinct" due to poor
+        # behavior in some versions of mysql.  Check whether that's
+        # still relevant since distinct can perform better.
         if provides:
-            q = q.outerjoin(self.connection.providesModel)
+            q = q.group_by(self.connection.buildModel.id).\
+                outerjoin(self.connection.providesModel)
 
         q = self.listFilter(q, buildset_table.c.tenant, tenant)
         q = self.listFilterFuzzy(q, buildset_table.c.pipeline, pipeline)
@@ -359,8 +363,7 @@ class DatabaseSession(object):
             self.connection.buildModel.id,
             self.connection.buildModel.end_time).\
             join(self.connection.buildSetModel).\
-            join(self.connection.refModel).\
-            group_by(self.connection.buildModel.id)
+            join(self.connection.refModel)
 
         # See note above about the hint.
         if not (project):
@@ -463,6 +466,7 @@ class DatabaseSession(object):
         buildset_ref_table = self.connection.zuul_buildset_ref_table
         ref_table = self.connection.zuul_ref_table
 
+        # Group by is required due to the association table buildset_ref.
         q = self.session().query(
             self.connection.buildSetModel.id).\
             join(self.connection.buildSetRefModel).\
