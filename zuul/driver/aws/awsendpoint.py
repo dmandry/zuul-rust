@@ -2064,6 +2064,9 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 'MaintenanceOptions': {
                     'AutoRecovery': 'disabled',
                 },
+                'MetadataOptions': {
+                    'HttpProtocolIpv6': 'enabled',
+                },
             }
 
             if label.security_group_ids:
@@ -2379,13 +2382,11 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
             args['MetadataOptions'] = {
                 'HttpTokens': 'required',
                 'HttpEndpoint': 'enabled',
-                'HttpProtocolIpv6': 'enabled',
             }
         elif label.imds_http_tokens == 'optional':
             args['MetadataOptions'] = {
                 'HttpTokens': 'optional',
                 'HttpEndpoint': 'enabled',
-                'HttpProtocolIpv6': 'enabled',
             }
 
         if dedicated_host_id:
