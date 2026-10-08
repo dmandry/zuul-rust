@@ -52,6 +52,24 @@
       "parentUuid": "6ac85984_c318a71b",
       "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "97a1ca3c_ee2f5d87",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2372,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-08T13:31:20Z",
+      "side": 1,
+      "message": "Yes, I think we both agree that the reason the API is async is because it can be used to merge multiple commits at once.  That should not be an issue here since we merge commits in sequence.\n\nIf github can\u0027t merge a PR, it returns 400 immediately.  It doesn\u0027t just sits around waiting for it to become ready in the future.  There is a github feature for that, the merge queue, which is a pale imitation of zuul\u0027s gate pipeline.  But that is not this feature.\n\nGithub is trying to merge changes asap, but, since we could be making a request to merge a stack of 100 changes, presumably they just don\u0027t want to occupy a connection slot for that long.\n\nIn real-world testing, this is very fast.  So this timeout serves the same purpose of the other one: it is a timeout for an exceptional situation.  Just like we never expect to hit the 300s timeout waiting for a sync merge request, we also never expect to hit this 300s timeout waiting for an async merge request.",
+      "parentUuid": "904a9742_6b15263a",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
