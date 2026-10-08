@@ -22,6 +22,23 @@
       },
       "revId": "4a240cfae7471ded7f42e60173cbc22ce01d19b1",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ee0ffb40_301684f9",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 2
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-08T21:19:56Z",
+      "side": 1,
+      "message": "This seems fine if we\u0027re happy with the index length concern in the parent change.",
+      "revId": "4a240cfae7471ded7f42e60173cbc22ce01d19b1",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
