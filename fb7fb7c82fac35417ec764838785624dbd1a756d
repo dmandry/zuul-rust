@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "f8630bd0_ee7c744b",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2382,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-08T16:26:33Z",
+      "side": 0,
+      "message": "Done",
+      "parentUuid": "5e70bb03_497d7bf6",
+      "revId": "fb7fb7c82fac35417ec764838785624dbd1a756d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "bf2b2538_6c1b913e",
@@ -31,6 +49,24 @@
       "writtenOn": "2026-10-08T14:04:02Z",
       "side": 0,
       "message": "Same.",
+      "revId": "fb7fb7c82fac35417ec764838785624dbd1a756d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "67b2fea0_b34037f0",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2388,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-08T16:26:33Z",
+      "side": 0,
+      "message": "Done",
+      "parentUuid": "bf2b2538_6c1b913e",
       "revId": "fb7fb7c82fac35417ec764838785624dbd1a756d",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
