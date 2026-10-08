@@ -2249,20 +2249,23 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
 
         with self.rate_limiter(log.debug, "Created fleet"):
             resp = self.ec2_client.create_fleet(**args)
+            fleet_id = resp.get("FleetId")
 
             if resp['Instances']:
                 instance_id = resp['Instances'][0]['InstanceIds'][0]
             else:
                 if resp['Errors']:
                     error = resp['Errors'][0]
-                    raise Exception("Couldn't create fleet instance because "
-                                    "of %s: %s", error["ErrorCode"],
-                                    error["ErrorMessage"])
-                raise Exception("Couldn't create fleet instance because "
-                                "empty instance list was returned")
+                    raise Exception("Couldn't create fleet instance "
+                                    f"(FleetId={fleet_id}) because of "
+                                    f"{error['ErrorCode']}: "
+                                    f"{error['ErrorMessage']}")
+                raise Exception("Couldn't create fleet instance "
+                                f"(FleetId={fleet_id}) because empty "
+                                "instance list was returned")
 
-            log.debug("Created VM %s as instance %s using EC2 Fleet API",
-                      hostname, instance_id)
+            log.debug("Created VM %s as instance %s using EC2 Fleet API "
+                      "(FleetID=%s)", hostname, instance_id, fleet_id)
 
             # Only return instance id in creating state, the state machine will
             # refresh until the instance object is returned otherwise it can
