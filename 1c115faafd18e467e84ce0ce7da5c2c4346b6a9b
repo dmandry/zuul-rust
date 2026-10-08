@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "85c2efce_1d757127",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2262,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-08T04:58:45Z",
+      "side": 1,
+      "message": "Good point! This was taken more or less verbatim from Nodepool. I fixed it there as well: https://review.opendev.org/c/zuul/nodepool/+/1009407",
+      "parentUuid": "613aa61c_64a9b9f5",
+      "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "65dedb3e_4198d131",
@@ -35,6 +53,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "6ec6d290_de62dbf9",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2265,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-08T04:58:45Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "65dedb3e_4198d131",
+      "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "e363ea10_608c346d",
@@ -48,6 +84,24 @@
       "writtenOn": "2026-10-07T20:42:54Z",
       "side": 1,
       "message": "This is fine, better not to fstring here.",
+      "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "2f22d936_2b9515dd",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2268,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-08T04:58:45Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "e363ea10_608c346d",
       "revId": "1c115faafd18e467e84ce0ce7da5c2c4346b6a9b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
