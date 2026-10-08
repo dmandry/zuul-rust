@@ -2064,6 +2064,9 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 'MaintenanceOptions': {
                     'AutoRecovery': 'disabled',
                 },
+                'MetadataOptions': {
+                    'HttpProtocolIpv6': 'enabled',
+                },
             }
 
             if label.security_group_ids:
@@ -2175,13 +2178,11 @@ class AwsProviderEndpoint(BaseProviderEndpoint):
                 override_dict['MetadataOptions'] = {
                     'HttpTokens': 'required',
                     'HttpEndpoint': 'enabled',
-                    'HttpProtocolIpv6': 'enabled',
                 }
             elif label.imds_http_tokens == 'optional':
                 override_dict['MetadataOptions'] = {
                     'HttpTokens': 'optional',
                     'HttpEndpoint': 'enabled',
-                    'HttpProtocolIpv6': 'enabled',
                 }
 
             # Duplicate overrides for each subnet
