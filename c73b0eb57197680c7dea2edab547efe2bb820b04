@@ -22,6 +22,30 @@
       },
       "revId": "c73b0eb57197680c7dea2edab547efe2bb820b04",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "444d4d0b_76e50d79",
+        "filename": "zuul/driver/sql/sqlconnection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 929,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-08T21:30:33Z",
+      "side": 1,
+      "message": "To followup here utf8mb4 strings use 4 byte characters. SQL_MAX_STRING_LENGTH is defined as 255. So we have 2 * 255 * 4 strings \u003d 2040 bytes + the datetime and boolean lengths. That should be well under mariadb + innodb\u0027s 3072 byte limit.",
+      "parentUuid": "93066ceb_6852f16c",
+      "range": {
+        "startLine": 929,
+        "startChar": 21,
+        "endLine": 929,
+        "endChar": 37
+      },
+      "revId": "c73b0eb57197680c7dea2edab547efe2bb820b04",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
