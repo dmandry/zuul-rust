@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "93066ceb_6852f16c",
+        "filename": "zuul/driver/sql/sqlconnection.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 929,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-08T21:18:16Z",
+      "side": 1,
+      "message": "These two columns are defined as sa.Column(sa.String(SQL_MAX_STRING_LENGTH)) which can be quite large. I seem to recall mysql and mariadb having relatively small max index byte length sizes so I\u0027m not sure how we\u0027re able to define this index given those column sizes.",
+      "range": {
+        "startLine": 929,
+        "startChar": 21,
+        "endLine": 929,
+        "endChar": 37
+      },
+      "revId": "c73b0eb57197680c7dea2edab547efe2bb820b04",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
