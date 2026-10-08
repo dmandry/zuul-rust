@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "5e70bb03_497d7bf6",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2382,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-08T14:04:02Z",
+      "side": 0,
+      "message": "This shouldn\u0027t be removed; this is the single instance path, not the create-fleet path, and this was not altered by the previous change.",
+      "revId": "fb7fb7c82fac35417ec764838785624dbd1a756d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "bf2b2538_6c1b913e",
+        "filename": "zuul/driver/aws/awsendpoint.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 2388,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-08T14:04:02Z",
+      "side": 0,
+      "message": "Same.",
+      "revId": "fb7fb7c82fac35417ec764838785624dbd1a756d",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
