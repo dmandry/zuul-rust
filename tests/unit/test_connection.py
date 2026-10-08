@@ -132,7 +132,7 @@ class TestSQLConnectionMysql(ZuulTestCase):
         self.assertEqual(8, len(indexes_ref))
         self.assertEqual(3, len(indexes_buildset))
         self.assertEqual(2, len(indexes_buildset_ref))
-        self.assertEqual(5, len(indexes_build))
+        self.assertEqual(6, len(indexes_build))
         self.assertEqual(1, len(indexes_artifact))
         self.assertEqual(1, len(indexes_provides))
         self.assertEqual(1, len(indexes_build_event))
