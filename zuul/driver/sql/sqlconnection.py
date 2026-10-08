@@ -924,6 +924,9 @@ class SQLConnection(BaseConnection):
                      ref_id)
             sa.Index(self.table_prefix + 'zuul_build_end_time_idx',
                      end_time)
+            # An index specifically for the build time query
+            sa.Index(self.table_prefix + 'zuul_build_time_idx',
+                     job_name, result, final, end_time)
 
             @property
             def duration(self):
