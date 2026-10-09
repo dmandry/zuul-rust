@@ -1,4 +1,5 @@
 # Copyright 2020 Red Hat, inc.
+# Copyright 2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -24,6 +25,7 @@ import zuul.model
 from zuul.lib import yamlutil
 
 from tests.base import (
+    FIXTURE_DIR,
     AnsibleZuulTestCase,
     iterate_timeout,
     simple_layout,
@@ -538,6 +540,35 @@ class TestZuulClientAdmin(BaseTestWeb):
         data = resp.json()
         self.assertEqual(None, data['state']['info'])
         self.assertEqual(None, data['state']['reason'])
+
+    def test_ssh_key_get(self):
+        token = self._getToken()
+        # In testing, tenant and project both have the same ssh key
+        with open(os.path.join(FIXTURE_DIR, 'ssh.pub'), 'rb') as f:
+            public_ssh = f.read()
+
+        p = subprocess.Popen(
+            ['zuul-client',
+             '--zuul-url', self.base_url, '--auth-token', token,
+             'ssh-key-get',
+             '--tenant', 'tenant-one',
+             ],
+            stdout=subprocess.PIPE)
+        output, error = p.communicate()
+        self.assertEqual(p.returncode, 0, output)
+        self.assertEqual(public_ssh.strip(), output.strip())
+
+        p = subprocess.Popen(
+            ['zuul-client',
+             '--zuul-url', self.base_url, '--auth-token', token,
+             'ssh-key-get',
+             '--tenant', 'tenant-one',
+             '--project', 'org/project',
+             ],
+            stdout=subprocess.PIPE)
+        output, error = p.communicate()
+        self.assertEqual(p.returncode, 0, output)
+        self.assertEqual(public_ssh.strip(), output.strip())
 
 
 class TestZuulClientQueryData(BaseTestWeb):
