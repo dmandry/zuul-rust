@@ -88,6 +88,41 @@
       "parentUuid": "97a1ca3c_ee2f5d87",
       "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "b778c572_60192a17",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2372,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-09T13:09:35Z",
+      "side": 1,
+      "message": "Yes, I agree that there could be some possible combination of features, now or in the future, that could surprise us.  And in that case, I agree that having a shorter timeout would be a good defence.  But at the moment at least, to the best of our ability, we have tried to make this behave as much like the sync path as possible.\n\nWe specifically guard against the use of merge queues by setting the \"merge_action\" to \"direct_merge\" below.",
+      "parentUuid": "97a1ca3c_ee2f5d87",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "d4fbf0d5_44d78a78",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2401,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-09T13:09:35Z",
+      "side": 1,
+      "message": "This means don\u0027t use a merge queue.",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
