@@ -198,7 +198,7 @@ function formatProviderName(providerName) {
 }
 
 function formatHostname(hostName) {
-  if (hostName !== null) {
+  if (hostName) {
     return hostName.split('.')[0]
   } else {
     return hostName
