@@ -70,6 +70,24 @@
       "parentUuid": "904a9742_6b15263a",
       "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "79137a7a_952b09c9",
+        "filename": "zuul/driver/github/githubconnection.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 2372,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-09T09:53:07Z",
+      "side": 1,
+      "message": "My concern is that we don\u0027t control the combination of Github features that a project can configure. I\u0027m fine with giving it a shot as-is, but I could imagine interesting edge cases in practice.\n\nI think we at least guard against using merge queues with stacked PRs as we\u0027d still fail the merge on the `enqueued` status.",
+      "parentUuid": "97a1ca3c_ee2f5d87",
+      "revId": "2eac55882a566d7b6b8dc34854af98e215da429b",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
