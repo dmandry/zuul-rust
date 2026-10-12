@@ -156,6 +156,10 @@ function fetchTenantInfo(apiPrefix) {
   return makeRequest(apiPrefix + 'info')
 }
 
+function fetchTenantSSHKey(apiPrefix) {
+  return makeRequest(apiPrefix + 'tenant-ssh-key/ssh.pub')
+}
+
 function fetchOpenApi() {
   return Axios.get(getHomepageUrl() + 'openapi.yaml')
 }
@@ -295,6 +299,10 @@ function fetchPipelines(apiPrefix) {
 
 function fetchProject(apiPrefix, projectName) {
   return makeRequest(apiPrefix + 'project/' + projectName)
+}
+
+function fetchProjectSSHKey(apiPrefix, projectName) {
+  return makeRequest(apiPrefix + 'project-ssh-key/' + projectName + '.pub')
 }
 
 function fetchProjects(apiPrefix) {
@@ -490,12 +498,14 @@ export {
   fetchOpenApi,
   fetchPipelines,
   fetchProject,
+  fetchProjectSSHKey,
   fetchProjects,
   fetchProviders,
   fetchSemaphores,
   fetchStatus,
   fetchSystemEvents,
   fetchTenantInfo,
+  fetchTenantSSHKey,
   fetchTenantStatus,
   fetchTenants,
   fetchUserAuthorizations,
