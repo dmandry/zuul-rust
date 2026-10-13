@@ -3965,23 +3965,11 @@ class AnsibleJob(object):
                     algorithm=algorithm)
             iat = int(time.time())
             ttl = oidc_config['ttl']
-            if 'name' in oidc_config:
-                # MODEL_API >= 35
-                secret_name = oidc_config['name']
-            else:
-                secret_name = oidc_name
+            secret_name = oidc_config['name']
             exp = iat + ttl
             tenant = self.arguments['zuul']['tenant']
-            canonical_project_name = oidc_config.get(
-                '_source_project_canonical_name')
-            if canonical_project_name is None:
-                # MODEL_API >= 36
-                # Remove this fallback; this should only happen during
-                # the Zuul upgrade where we added the new attr
-                self.log.warning("Using backwards-compatible project "
-                                 "cname for OIDC secret")
-                canonical_project_name = \
-                    self.arguments['zuul']['project']['canonical_name']
+            canonical_project_name = oidc_config[
+                '_source_project_canonical_name']
             sub = f'secret:{tenant}/{canonical_project_name}/{secret_name}'
             iss = oidc_config.get('iss', self.arguments["zuul_root_url"])
 
@@ -3992,6 +3980,8 @@ class AnsibleJob(object):
                 'job-name': self.arguments['zuul']['job'],
                 'playbook': playbook.canonical_name_and_path,
                 'pipeline': self.arguments['zuul']['pipeline'],
+                'project': self.arguments['zuul']['project'][
+                    'canonical_name'],
                 'tenant': tenant,
                 'iat': iat,
                 'exp': exp,

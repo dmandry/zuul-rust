@@ -1,0 +1,6 @@
+---
+features:
+  - |
+    OIDC secrets now include an additional claim, the Zuul project
+    under test.  Note the caveat in the documentation about circular
+    dependencies and deduplicated jobs.

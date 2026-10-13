@@ -9082,11 +9082,14 @@ class TestSecrets(ZuulTestCase):
             expected_iss="https://zuul.example.com",
             expected_claim='my_claim_value',
             expected_ttl=300,
+            expected_project=None,
     ):
 
         if expected_sub is None:
             expected_sub = ('secret:tenant-one/review.example.com'
                             f'/org/project2/{oidc_name}')
+        if expected_project is None:
+            expected_project = 'review.example.com/org/project2'
 
         # Check header
         header_base64 = oidc_token.split('.')[0]
@@ -9110,6 +9113,7 @@ class TestSecrets(ZuulTestCase):
         self.assertEqual(build_uuid, payload['build-uuid'])
         self.assertEqual('project2-oidc-secret', payload['job-name'])
         self.assertEqual(expected_playbook, payload['playbook'])
+        self.assertEqual(expected_project, payload['project'])
         self.assertEqual('check', payload['pipeline'])
         self.assertEqual('tenant-one', payload['tenant'])
         self.assertEqual('sts.amazonaws.com', payload['aud'])

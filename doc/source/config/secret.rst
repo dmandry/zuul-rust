@@ -70,6 +70,13 @@ for use in matching.  Caution is advised when using these.
 **pipeline**
    The name of the pipeline the currently running build is in.
 
+**project**
+   The name of the project that triggered the job.  If the job is part
+   of a buildset for changes with circular dependencies and the job
+   was deduplicated, this will be only one of the possible values of
+   projects that comprise that buildset, selected arbitrarily.  In
+   this case consider only relying on the **sub** instead.
+
 **tenant**
    The name of the Zuul tenant the running build is in.
 
