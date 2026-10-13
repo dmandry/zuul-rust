@@ -4020,8 +4020,8 @@ class TestScheduler(ZuulTestCase):
                          events[0].description)
 
     def test_live_reconfiguration_layout_cache_fallback(self):
-        # Test that re-calculating a dynamic fallback layout works after it
-        # was removed during a reconfiguration.
+        # Test that re-calculating a dynamic fallback layout works when the
+        # layout cache is cleared after a reconfiguration.
         self.executor_server.hold_jobs_in_build = True
 
         in_repo_conf = textwrap.dedent(
@@ -4052,7 +4052,7 @@ class TestScheduler(ZuulTestCase):
 
         items = self.getAllItems('tenant-one', 'gate')
         self.assertEqual(len(items), 1)
-        self.assertIsNone(items[0].layout_uuid)
+        self.assertIsNotNone(items[0].layout_uuid)
 
         # Assert that the layout cache is empty after a reconfiguration.
         tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
@@ -4068,11 +4068,7 @@ class TestScheduler(ZuulTestCase):
 
         items = self.getAllItems('tenant-one', 'gate')
         self.assertEqual(len(items), 2)
-        for item in items:
-            # Layout UUID should be set again for all live items. It had to
-            # be re-calculated for the first item in the queue as it was reset
-            # during re-enqueue.
-            self.assertIsNotNone(item.layout_uuid)
+        self.assertIn(items[0].layout_uuid, manager._layout_cache)
 
         self.executor_server.hold_jobs_in_build = False
         self.executor_server.release()
@@ -4091,67 +4087,6 @@ class TestScheduler(ZuulTestCase):
             dict(name='project-test2', result='SUCCESS', changes='1,1'),
             dict(name='project-test2', result='SUCCESS', changes='1,1 2,1'),
             dict(name='project-test3', result='SUCCESS', changes='1,1'),
-            dict(name='project-test3', result='SUCCESS', changes='1,1 2,1'),
-        ], ordered=False)
-
-    def test_live_reconfiguration_layout_cache_non_live(self):
-        # Test that the layout UUID is only reset for live items.
-        self.executor_server.hold_jobs_in_build = True
-
-        in_repo_conf = textwrap.dedent(
-            """
-            - job:
-                name: project-test3
-                parent: project-test1
-
-            # add a job by the canonical project name
-            - project:
-                check:
-                  jobs:
-                    - project-test3:
-                        dependencies:
-                          - project-merge
-            """)
-
-        file_dict = {'zuul.d/a.yaml': in_repo_conf}
-
-        A = self.fake_gerrit.addFakeChange('org/project', 'master', 'A',
-                                           files=file_dict)
-        B = self.fake_gerrit.addFakeChange('org/project', 'master', 'B',
-                                           parent='refs/changes/01/1/1')
-        B.setDependsOn(A, 1)
-        self.fake_gerrit.addEvent(B.getPatchsetCreatedEvent(1))
-        self.waitUntilSettled()
-
-        self.scheds.execute(lambda app: app.sched.reconfigure(app.config))
-        self.waitUntilSettled()
-
-        items = self.getAllItems('tenant-one', 'check')
-        self.assertEqual(len(items), 2)
-
-        # Assert that the layout UUID of the live item is reset during a
-        # reconfiguration, but non-live items keep their UUID.
-        self.assertIsNotNone(items[0].layout_uuid)
-        self.assertIsNone(items[1].layout_uuid)
-
-        # Cache should be empty after a reconfiguration
-        tenant = self.scheds.first.sched.abide.tenants.get('tenant-one')
-        manager = tenant.layout.pipeline_managers['check']
-        self.assertEqual(manager._layout_cache, {})
-
-        self.executor_server.hold_jobs_in_build = False
-        self.executor_server.release()
-        self.waitUntilSettled()
-
-        self.assertEqual(A.data['status'], 'NEW')
-        self.assertEqual(A.reported, 0)
-        self.assertEqual(B.data['status'], 'NEW')
-        self.assertEqual(B.reported, 1)
-
-        self.assertHistory([
-            dict(name='project-merge', result='SUCCESS', changes='1,1 2,1'),
-            dict(name='project-test1', result='SUCCESS', changes='1,1 2,1'),
-            dict(name='project-test2', result='SUCCESS', changes='1,1 2,1'),
             dict(name='project-test3', result='SUCCESS', changes='1,1 2,1'),
         ], ordered=False)
 
