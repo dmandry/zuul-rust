@@ -70,9 +70,9 @@ class GraphQLClient:
                       query_name, response)
         return response
 
-    def fetch_canmerge(self, github, change, zuul_event_id=None):
+    def fetch_canmerge(self, github, change_key, branch, zuul_event_id=None):
         log = get_annotated_logger(self.log, zuul_event_id)
-        owner, repo = change.project.name.split('/')
+        owner, repo = change_key.project_name.split('/')
         result = {}
         cursor = None
         matching_rules = []
@@ -83,9 +83,9 @@ class GraphQLClient:
                 data = self._run_query(log, github, 'canmerge',
                                        owner=owner,
                                        repo=repo,
-                                       pull=change.number,
-                                       head_sha=change.patchset,
-                                       ref_name=change.branch,
+                                       pull=int(change_key.stable_id),
+                                       head_sha=change_key.revision,
+                                       ref_name=branch,
                                        )
 
                 repository = nested_get(data, 'data', 'repository')
@@ -95,7 +95,7 @@ class GraphQLClient:
                                        owner=owner,
                                        repo=repo,
                                        cursor=cursor,
-                                       ref_name=change.branch,
+                                       ref_name=branch,
                                        )
 
             # Find corresponding rule to our branch
@@ -109,7 +109,7 @@ class GraphQLClient:
                 rule for rule in rules
                 for ref in nested_get(
                     rule, 'matchingRefs', 'nodes', default=[])
-                if ref.get('name') == change.branch
+                if ref.get('name') == branch
             ])
 
             rules_pageinfo = nested_get(
@@ -121,7 +121,7 @@ class GraphQLClient:
 
         if len(matching_rules) > 1:
             log.warn('More than one branch protection rule '
-                     'matches change %s', change)
+                     'matches change %s', change_key)
             return result
         elif len(matching_rules) == 1:
             matching_rule = matching_rules[0]

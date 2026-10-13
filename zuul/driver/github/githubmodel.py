@@ -27,6 +27,44 @@ from zuul.driver.util import time_to_seconds, to_list
 EMPTY_GIT_REF = '0' * 40  # git sha of all zeros, used during creates/deletes
 
 
+def gh_timestamp_to_date(timestamp):
+    return time.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
+
+
+def status_as_tuple(status):
+    """Translate a status into a tuple of user, context, state"""
+
+    creator = status.get('creator')
+    if not creator:
+        user = "Unknown"
+    else:
+        user = creator.get('login')
+    context = status.get('context')
+    state = status.get('state')
+    # Normalize state to lowercase as the Graphql and REST API are not
+    # consistent in this regard.
+    state = state.lower() if state else state
+    return (user, context, state)
+
+
+def check_as_tuple(check):
+    """Translate a check into a tuple of app, name, conclusion"""
+
+    # A check_run does not contain any "creator" information like a status, but
+    # only the app for/by which it was created.
+    app = check.get("app")
+    if app:
+        slug = app.get("slug")
+    else:
+        slug = "Unknown"
+    name = check.get("name")
+    conclusion = check.get("conclusion")
+    # Normalize conclusion to lowercase as the Graphql and REST API are not
+    # consistent in this regard.
+    conclusion = conclusion.lower() if conclusion else conclusion
+    return (slug, name, conclusion)
+
+
 class PullRequest(Change):
     def __init__(self, project):
         super(PullRequest, self).__init__(project)
@@ -104,6 +142,106 @@ class PullRequest(Change):
         self.required_contexts = set(data.get("required_contexts", []))
         self.contexts = set(tuple(c) for c in data.get("contexts", []))
         self.branch_protected = data.get("branch_protected", False)
+
+    def update(self, server, log, pull, reviews, canmerge_data):
+        self.pr, pr_obj = pull
+        self.is_current_patchset = (self.pr.get('head').get('sha') ==
+                                    self.patchset)
+        self.ref = "refs/pull/%s/head" % self.number
+        self.branch = self.pr.get('base').get('ref')
+        self.base_sha = self.pr.get('base').get('sha')
+        self.commit_id = self.pr.get('head').get('sha')
+        self.owner = self.pr.get('user').get('login')
+        # Don't overwrite the files list. The change object is bound to a
+        # specific revision and thus the changed files won't self. This is
+        # important if we got the files later because of the 300 files limit.
+        if not self.files:
+            self.files = self.pr.get('files')
+            # Github's pull requests files API only returns at max
+            # the first 300 changed files of a PR in alphabetical order.
+            # https://developer.github.com/v3/pulls/#list-pull-requests-files
+            if self.files is None:
+                log.warning("Got no files of PR.")
+            elif len(self.files) < self.pr.get('changed_files', 0):
+                log.warning("Got only %s files but PR has %s files.",
+                            len(self.files),
+                            self.pr.get('changed_files', 0))
+                # In this case explicitly set self.files to None to signalize
+                # that we need to ask the mergers later in pipeline processing.
+                # We cannot query the files here using the mergers because this
+                # can slow down the github event queue considerably.
+                self.files = None
+        self.title = self.pr.get('title')
+        self.open = self.pr.get('state') == 'open'
+
+        # Never change the is_merged attribute back to unmerged. This is
+        # crucial so this cannot race with mergePull wich sets this attribute
+        # after a successful merge.
+        if not self.is_merged:
+            self.is_merged = self.pr.get('merged')
+        # Similarly, never overwrite merge_commit_sha which is set by
+        # mergePull.
+        if self.is_merged and not self.merge_commit_sha:
+            self.merge_commit_sha = self.pr.get('merge_commit_sha')
+
+        self.labels = self.pr.get('labels')
+        # ensure message is at least an empty string
+        message = self.pr.get("body") or ""
+        if self.title:
+            if message:
+                message = "{}\n\n{}".format(self.title, message)
+            else:
+                message = self.title
+        self.message = message
+        self.body_text = self.pr.get("body_text")
+
+        # Note(tobiash): The updated_at timestamp is a moving target that is
+        # not bound to the pull request 'version' we can solve that by just not
+        # updating the timestamp if the pull request is updated in the cache.
+        # This way the old pull request object retains its old timestamp and
+        # the update check works.
+        if not self.updated_at:
+            self.updated_at = int(time.mktime(gh_timestamp_to_date(
+                self.pr.get('updated_at'))))
+
+        # Note: Github returns different urls for the pr:
+        #  - url: this is the url meant for api use
+        #  - html_url: this is the url meant for use in browser (this is what
+        #              self.url means)
+        self.url = self.pr.get('html_url')
+        self.uris = [
+            'https://%s/%s/pull/%s' % (
+                server, self.project.name, self.number),
+        ]
+
+        # reviews from getPullReviews
+        self.reviews = reviews
+        # Canmerge data from updateCanMergeInfo
+        self.updateCanMergeData(canmerge_data)
+
+    def updateCanMergeData(self, canmerge_data):
+        self.contexts = self._getCanMergeContexts(canmerge_data)
+        self.draft = canmerge_data.get('isDraft', False)
+        self.mergeable = (canmerge_data.get('mergeable', 'MERGEABLE').lower()
+                          in ('mergeable', 'unknown'))
+        self.review_decision = canmerge_data['reviewDecision']
+        self.unresolved_conversations = canmerge_data.get(
+            'unresolvedConversations', False)
+        self.unsigned_commits = canmerge_data.get(
+            'unsignedCommits', False)
+        self.required_contexts = set(
+            canmerge_data['requiredStatusCheckContexts']
+        )
+        self.branch_protected = canmerge_data['protected']
+
+    def _getCanMergeContexts(self, canmerge_data):
+        contexts = set(
+            status_as_tuple(s) for s in canmerge_data["status"].values()
+        )
+        contexts.update(set(
+            check_as_tuple(c) for c in canmerge_data["checks"].values()
+        ))
+        return contexts
 
 
 class GithubTriggerEvent(TriggerEvent):
