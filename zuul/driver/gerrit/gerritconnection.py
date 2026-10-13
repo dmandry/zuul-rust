@@ -17,7 +17,6 @@
 import collections
 import copy
 import datetime
-import enum
 import itertools
 import json
 import logging
@@ -63,6 +62,7 @@ from zuul.lib.changenetwork import (
     ChangeNetworkFuture,
     ChangeNetworkConflict,
     ChangeNetworkManager,
+    QueryHistory,
 )
 from zuul.lib.logutil import get_annotated_logger
 from zuul.model import Ref, Tag, Branch, Project, FalseWithReason
@@ -182,27 +182,6 @@ class GerritChangeData(object):
                     break
             else:
                 self.needed_by.append((change['_change_number'], ps))
-
-
-class QueryHistory:
-    class Query(enum.Enum):
-        SEEN = 1  # Not a real query, just that we've seen the change
-        CHANGE = 2  # The main change query
-
-    def __init__(self):
-        self.queries = collections.defaultdict(lambda: dict())
-
-    def getByKey(self, query, change_key):
-        if not isinstance(change_key, ChangeKey):
-            raise Exception("Must supply a ChangeKey")
-        key = (change_key.stable_id, change_key.revision)
-        return self.queries[query].get(key)
-
-    def add(self, query, change):
-        if not isinstance(change, GerritChange):
-            raise Exception("Must supply a GerritChange")
-        key = (change.number, change.patchset)
-        self.queries[query][key] = change
 
 
 class PeekQueue:

@@ -12,8 +12,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import collections
+import enum
 import threading
 import weakref
+
+from zuul.model import Change
+from zuul.zk.change_cache import ChangeKey
 
 
 class ChangeNetworkFuture:
@@ -129,3 +134,24 @@ class ChangeNetworkManager:
             except ValueError:
                 pass
             future.setComplete()
+
+
+class QueryHistory:
+    class Query(enum.Enum):
+        SEEN = 1  # Not a real query, just that we've seen the change
+        CHANGE = 2  # The main change query
+
+    def __init__(self):
+        self.queries = collections.defaultdict(lambda: dict())
+
+    def getByKey(self, query, change_key):
+        if not isinstance(change_key, ChangeKey):
+            raise Exception("Must supply a ChangeKey")
+        key = (change_key.stable_id, change_key.revision)
+        return self.queries[query].get(key)
+
+    def add(self, query, change):
+        if not isinstance(change, Change):
+            raise Exception("Must supply a Change")
+        key = (str(change.number), str(change.patchset))
+        self.queries[query][key] = change

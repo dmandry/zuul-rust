@@ -1731,6 +1731,47 @@ class TestGithubDriver(ZuulTestCase):
             self.waitUntilSettled()
             cache_mock.assert_not_called()
 
+    @simple_layout('layouts/gate-github.yaml', driver='github')
+    def test_stacked_prs(self):
+        path = os.path.join(self.upstream_root, 'org/project')
+        base_sha = git.Repo(path).head.object.hexsha
+        A = self.fake_github.openFakePullRequest('org/project', 'master', 'A',
+                                                 base_sha=base_sha)
+        B = self.fake_github.openFakePullRequest('org/project', 'master', 'B',
+                                                 base_sha=A.head_sha)
+        C = self.fake_github.openFakePullRequest('org/project', 'master', 'C',
+                                                 base_sha=B.head_sha)
+        self.fake_github.createStack(A, B, C)
+        A.addReview('derp', 'APPROVED')
+        B.addReview('derp', 'APPROVED')
+        C.addReview('derp', 'APPROVED')
+
+        self.fake_github.emitEvent(B.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+        self.assertHistory([
+            dict(name='project-test1', result='SUCCESS',
+                 changes="%s,%s" % (A.number, A.head_sha)),
+            dict(name='project-test2', result='SUCCESS',
+                 changes="%s,%s" % (A.number, A.head_sha)),
+            dict(name='project-test1', result='SUCCESS',
+                 changes="%s,%s %s,%s" % (A.number, A.head_sha,
+                                          B.number, B.head_sha)),
+            dict(name='project-test2', result='SUCCESS',
+                 changes="%s,%s %s,%s" % (A.number, A.head_sha,
+                                          B.number, B.head_sha)),
+            dict(name='project-test1', result='SUCCESS',
+                 changes="%s,%s %s,%s %s,%s" % (A.number, A.head_sha,
+                                                B.number, B.head_sha,
+                                                C.number, C.head_sha)),
+            dict(name='project-test2', result='SUCCESS',
+                 changes="%s,%s %s,%s %s,%s" % (A.number, A.head_sha,
+                                                B.number, B.head_sha,
+                                                C.number, C.head_sha)),
+        ], ordered=False)
+        self.assertTrue(A.is_merged)
+        self.assertTrue(B.is_merged)
+        self.assertTrue(C.is_merged)
+
 
 class TestMultiGithubDriver(ZuulTestCase):
     config_file = 'zuul-multi-github.conf'
