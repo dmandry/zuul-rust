@@ -24,6 +24,7 @@ from zuul.model import Change, TriggerEvent, EventFilter, RefFilter
 from zuul.model import FalseWithReason
 from zuul.driver.util import time_to_seconds, to_list
 
+
 EMPTY_GIT_REF = '0' * 40  # git sha of all zeros, used during creates/deletes
 
 
@@ -65,6 +66,14 @@ def check_as_tuple(check):
     return (slug, name, conclusion)
 
 
+class GithubChangeData:
+    def __init__(self, pull, reviews, canmerge_data, zuul_query_ltime):
+        self.pr, self.pr_obj = pull
+        self.reviews = reviews
+        self.canmerge_data = canmerge_data
+        self.zuul_query_ltime = zuul_query_ltime
+
+
 class PullRequest(Change):
     def __init__(self, project):
         super(PullRequest, self).__init__(project)
@@ -84,6 +93,7 @@ class PullRequest(Change):
         self.contexts = set()
         self.branch_protected = False
         self.merge_commit_sha = None
+        self.zuul_query_ltime = None
 
     @property
     def status(self):
@@ -143,8 +153,17 @@ class PullRequest(Change):
         self.contexts = set(tuple(c) for c in data.get("contexts", []))
         self.branch_protected = data.get("branch_protected", False)
 
-    def update(self, server, log, pull, reviews, canmerge_data):
-        self.pr, pr_obj = pull
+    def update(self, server, log, data):
+        if not (self.zuul_query_ltime and
+                self.zuul_query_ltime > data.zuul_query_ltime):
+            # If our query is older than the existing change data, it
+            # means that another scheduler raced us and won.  Skip the
+            # update to avoid having is_merged flap.
+            self.zuul_query_ltime = data.zuul_query_ltime
+            self._update(server, log, data)
+
+    def _update(self, server, log, data):
+        self.pr = data.pr
         self.is_current_patchset = (self.pr.get('head').get('sha') ==
                                     self.patchset)
         self.ref = "refs/pull/%s/head" % self.number
@@ -215,9 +234,9 @@ class PullRequest(Change):
         ]
 
         # reviews from getPullReviews
-        self.reviews = reviews
+        self.reviews = data.reviews
         # Canmerge data from updateCanMergeInfo
-        self.updateCanMergeData(canmerge_data)
+        self.updateCanMergeData(data.canmerge_data)
 
     def updateCanMergeData(self, canmerge_data):
         self.contexts = self._getCanMergeContexts(canmerge_data)
