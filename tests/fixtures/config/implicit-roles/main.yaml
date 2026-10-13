@@ -7,3 +7,4 @@
         untrusted-projects:
           - org/norole-project
           - org/role-project
+          - org/collection-project

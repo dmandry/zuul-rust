@@ -553,6 +553,7 @@ class JobDirPlaybookRole(object):
         self.role_path = None
         self.checkout_description = None
         self.checkout = None
+        self.collection_path = None
 
     def toDict(self, jobdir_root=None):
         # This is serialized to the zuul.playbook_context variable
@@ -560,13 +561,17 @@ class JobDirPlaybookRole(object):
             strip = len(jobdir_root) + 1
         else:
             strip = 0
-        return dict(
+        d = dict(
             link_name=self.link_name[strip:],
             link_target=self.link_target[strip:],
-            role_path=self.role_path[strip:],
             checkout_description=self.checkout_description,
             checkout=self.checkout,
         )
+        if self.role_path is not None:
+            d['role_path'] = self.role_path[strip:]
+        if self.collection_path is not None:
+            d['collection_path'] = self.collection_path[strip:]
+        return d
 
 
 class JobDirPlaybook(object):
@@ -601,6 +606,7 @@ class JobDirPlaybook(object):
         self.nesting_level = None
         self.cleanup = False
         self.ignore_result = False
+        self.collections_paths = []
 
     def addRole(self):
         count = len(self.roles)
@@ -2531,7 +2537,8 @@ class AnsibleJob(object):
                 paths.update({'roles/', 'tasks/', 'handlers/',
                               'templates/', 'files/', 'vars/',
                               'defaults/', 'meta/', 'library/',
-                              'module_utils/', 'lookup_plugins/'})
+                              'module_utils/', 'lookup_plugins/',
+                              'plugins/'})
         for iv in self.job.include_vars:
             # For each include-vars, add the contining dir
             key = (iv['connection'], iv['project'])
@@ -2866,6 +2873,25 @@ class AnsibleJob(object):
             self.prepareZuulRole(jobdir_playbook, role, args, role_info)
 
     def findRole(self, path, trusted=False):
+        # Check for galaxy.yml first: it is an explicit, unambiguous
+        # declaration that this repo is an Ansible collection, even
+        # if the collection also happens to contain a top-level
+        # roles/ (or, implausibly, tasks/) directory.
+        d = os.path.join(path, 'galaxy.yml')
+        if os.path.isfile(d):
+            try:
+                with open(d) as f:
+                    galaxy_data = yaml.safe_load(f)
+                namespace = galaxy_data.get('namespace')
+                name = galaxy_data.get('name')
+            except Exception:
+                raise RoleNotFoundError(
+                    "Unable to parse galaxy.yml in %s" % (path,))
+            if not (namespace and name):
+                raise RoleNotFoundError(
+                    "galaxy.yml in %s is missing namespace and/or "
+                    "name" % (path,))
+            return ('collection', namespace, name)
         d = os.path.join(path, 'tasks')
         if os.path.isdir(d):
             # None signifies that the repo is a bare role
@@ -2874,7 +2900,8 @@ class AnsibleJob(object):
         if os.path.isdir(d):
             # This repo has a collection of roles
             return d
-        # It is neither a bare role, nor a collection of roles
+        # It is neither a bare role, nor a collection of roles,
+        # nor a collection
         raise RoleNotFoundError("Unable to find role in %s" % (path,))
 
     def selectBranchForProject(self, project, project_default_branch,
@@ -2959,12 +2986,35 @@ class AnsibleJob(object):
                 self.log.debug("Implicit role not found in %s", link)
                 return
             raise
+        if isinstance(role_path, tuple):
+            _kind, namespace, coll_name = role_path
+            self._setupCollection(jobdir_playbook, role_info, path, namespace,
+                                  coll_name)
+            return
         if role_path is None:
             # In the case of a bare role, add the containing directory
             role_path = role_info.root
         role_info.role_path = role_path
         self.log.debug("Adding role path %s", role_path)
         jobdir_playbook.roles_path.append(role_path)
+
+    def _setupCollection(self, jobdir_playbook, role_info, path, namespace,
+                         name):
+        ac_base = os.path.join(jobdir_playbook.root,
+                               'collections', 'ansible_collections')
+        coll_link = os.path.join(ac_base, namespace, name)
+        coll_link = os.path.realpath(coll_link)
+        if not coll_link.startswith(os.path.realpath(ac_base)):
+            raise ExecutorError(
+                "Invalid collection namespace/name: %s/%s" % (namespace, name))
+        os.makedirs(os.path.dirname(coll_link), exist_ok=True)
+        os.symlink(path, coll_link)
+
+        role_info.collection_path = coll_link
+        collections_root = os.path.join(jobdir_playbook.root, 'collections')
+        self.log.debug("Adding collection path %s", collections_root)
+        if collections_root not in jobdir_playbook.collections_paths:
+            jobdir_playbook.collections_paths.append(collections_root)
 
     def prepareKubeConfig(self, jobdir, data):
         kube_cfg_path = jobdir.kubeconfig
@@ -3179,7 +3229,8 @@ class AnsibleJob(object):
                 zuul_vars['playbook_context'][pb_phase].append(dict(
                     path=pb.path[strip:],
                     roles=[ri.toDict(self.jobdir.root) for ri in pb.roles
-                           if ri.role_path is not None],
+                           if ri.role_path is not None or
+                           ri.collection_path is not None],
                 ))
 
         # The zuul vars in the debug inventory.yaml file should not
@@ -3362,6 +3413,10 @@ class AnsibleJob(object):
             if jobdir_playbook.roles_path:
                 config.write('roles_path = %s\n' % ':'.join(
                     jobdir_playbook.roles_path))
+
+            if jobdir_playbook.collections_paths:
+                config.write('collections_paths = %s\n' % ':'.join(
+                    jobdir_playbook.collections_paths))
 
             # On playbooks with secrets we want to prevent the
             # printing of args since they may be passed to a task or a
