@@ -58,6 +58,30 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "a7cb2cdd_ce5d3ec9",
+        "filename": "doc/source/job-content.rst",
+        "patchSetId": 10
+      },
+      "lineNbr": 1329,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-10-13T09:06:52Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "e12639fd_7f205f41",
+      "range": {
+        "startLine": 1328,
+        "startChar": 21,
+        "endLine": 1329,
+        "endChar": 1
+      },
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "7f46b7dc_ed1e2f20",
@@ -71,6 +95,30 @@
       "writtenOn": "2026-10-05T17:29:59Z",
       "side": 1,
       "message": "Was this just a missing ansible path? Or is plugins/ specific to collections?",
+      "range": {
+        "startLine": 2543,
+        "startChar": 30,
+        "endLine": 2543,
+        "endChar": 40
+      },
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "be3eaf4a_bf1deb03",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 2543,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-10-13T09:06:52Z",
+      "side": 1,
+      "message": "It\u0027s collection specific:\nClassic Ansible roles spread their plugins across separate top-level dirs — library/ (modules), module_utils/, lookup_plugins/, filter_plugins/, action_plugins/\nAnsible collections, by contrast, consolidate all plugin types under one directory: plugins/modules/, plugins/filter/, plugins/action/,\n  plugins/lookup/, etc.",
+      "parentUuid": "7f46b7dc_ed1e2f20",
       "range": {
         "startLine": 2543,
         "startChar": 30,
@@ -98,6 +146,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "de55087d_45b20e99",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 2877,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-10-13T09:06:52Z",
+      "side": 1,
+      "message": "Yes, we don\u0027t want to silently try installing the collection as a bare role and installing it using the wrong mechanism.\nI added a regression test to test that angle.",
+      "parentUuid": "4442eed9_66759230",
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "139ac19e_37db0ddc",
@@ -111,6 +177,24 @@
       "writtenOn": "2026-10-05T17:29:59Z",
       "side": 1,
       "message": "Do we need to raise RoleNotFoundError here if namespace and/or name are None? I think you could have a yaml file that is valid yaml that doesn\u0027t supply the correct values making it effectively as broken as invalid yaml?",
+      "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "3ee4d2cd_84f2fcb1",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 10
+      },
+      "lineNbr": 2879,
+      "author": {
+        "id": 22629
+      },
+      "writtenOn": "2026-10-13T09:06:52Z",
+      "side": 1,
+      "message": "Right, we do - fixed.",
+      "parentUuid": "139ac19e_37db0ddc",
       "revId": "5000e9f3e0ca506d1db740741a1ffac5c891344f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
