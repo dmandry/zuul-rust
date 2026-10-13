@@ -96,29 +96,43 @@
     opts: -i 8192
     dev: "{{ opt_partition }}"
 
-# Rackspace at least does not have enough room for two devstack
-# installs on the primary partition.  We copy in the existing /opt to
-# the new partition on the ephemeral device, and then overmount /opt
-# to there for the test runs.
+# NOTE(1): The following is in the original openstack version of this
+# role; it's kept here to more easily track changes and potentially
+# reconverge in the future.
 #
-# NOTE(ianw): the existing "mount" touches fstab.  There is currently (Sep2017)
-# work in [1] to split mount & fstab into separate parts, but for now we bundle
-# it into an atomic shell command
-# [1] https://github.com/ansible/ansible/pull/27174
-- name: Copy old /opt
+# # Rackspace at least does not have enough room for two devstack
+# # installs on the primary partition.  We copy in the existing /opt to
+# # the new partition on the ephemeral device, and then overmount /opt
+# # to there for the test runs.
+# #
+# # NOTE(ianw): the existing "mount" touches fstab.  There is currently (Sep2017)
+# # work in [1] to split mount & fstab into separate parts, but for now we bundle
+# # it into an atomic shell command
+# # [1] https://github.com/ansible/ansible/pull/27174
+# - name: Copy old /opt
+#   become: yes
+#   register: moving_opt
+#   shell: |
+#     mount {{ opt_partition }} /mnt
+#     find /opt/ -mindepth 1 -maxdepth 1 -print -exec mv {} /mnt/ \;
+#     umount /mnt
+#     df -h
+#   tags:
+#     - skip_ansible_lint
+#
+# - name: Output data from old /opt
+#   debug:
+#     var: moving_opt
+
+# NOTE(1): In Zuul, we don't need the contents of opt at this point in
+# the job, so we just delete it.
+- name: Delete old /opt
   become: yes
-  register: moving_opt
   shell: |
-    mount {{ opt_partition }} /mnt
-    find /opt/ -mindepth 1 -maxdepth 1 -print -exec mv {} /mnt/ \;
-    umount /mnt
+    find /opt/ -mindepth 1 -maxdepth 1 -print -exec rm -fr {} \;
     df -h
   tags:
     - skip_ansible_lint
-
-- name: Output data from old /opt
-  debug:
-    var: moving_opt
 
 # This overmounts any existing /opt
 - name: Add opt to fstab and mount
