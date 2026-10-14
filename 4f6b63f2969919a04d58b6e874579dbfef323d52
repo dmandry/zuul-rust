@@ -142,6 +142,24 @@
       "parentUuid": "4f72ab1f_a94d1bac",
       "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "49e73df8_1449d33a",
+        "filename": "zuul/driver/mqtt/mqttmodel.py",
+        "patchSetId": 14
+      },
+      "lineNbr": 112,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-14T20:06:13Z",
+      "side": 1,
+      "message": "I can think of 3 ways to resolve that:\n\n1) What you\u0027ve done here: don\u0027t allow dicts/lists, and if someone wants to match a payload that has a dict/list, they just have to put that in the jsonpath (ie, match that foo.a\u003d1 and foo.b\u003d2 instead of foo\u003d{a:1, b:2}).\n\n2) Add a new attribute, required-payload-regex.  Everything there is interpreted as a regex (like this current patchset) and everything in required-payload is literal (as earlier patchset).\n\n3) Accept the overlap: if the payload is a dict that looks like a zuul regex (regex key, optional negate key, nothing else), then it\u0027s a regex, otherwise it\u0027s literal.  This only means people can\u0027t match dicts that look like zuul regexes as literals.  But, like option 1, they could still use a more specific json path for that.\n\nI don\u0027t like #2, it doesn\u0027t seem like it\u0027s necessary.\n\nI do like #3 and would be in favor of it.  But I think #1 may be sufficient and it\u0027s simpler.  We can always start with #1 and expand to #3 later -- it\u0027s forward compatible.",
+      "parentUuid": "15d8c185_f407919e",
+      "revId": "4f6b63f2969919a04d58b6e874579dbfef323d52",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
