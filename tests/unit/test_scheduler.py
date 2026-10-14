@@ -1651,6 +1651,9 @@ class TestScheduler(ZuulTestCase):
             dict(name='project-test1', result='SUCCESS', changes='1,1 3,1'),
             dict(name='project-test2', result='SUCCESS', changes='1,1 3,1'),
         ], ordered=False)
+        # Merge jobs: A; A,B; A,B,C; A,C
+        self.assertEqual(4, len(self.merge_job_history.get(
+            zuul.model.MergeRequest.MERGE)))
 
     def test_delayed_merge_conflict(self):
         "Test that delayed check merge conflicts are handled properly"
@@ -6693,6 +6696,8 @@ For CI problems and help debugging, contact ci@example.org"""
                 'database'].getBuildsets())
         self.assertEqual(buildsets[0].result, 'MERGE_ERROR')
         self.assertIn('This change or one of', buildsets[0].message)
+        self.assertEqual(5, len(self.merge_job_history.get(
+            zuul.model.MergeRequest.MERGE)))
 
     @simple_layout('layouts/vars.yaml')
     def test_jobdata(self):

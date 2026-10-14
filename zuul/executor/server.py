@@ -2047,7 +2047,8 @@ class AnsibleJob(object):
             if isinstance(ret, MergeOperationResultConflict):
                 result = dict(result='MERGE_CONFLICT')
             else:
-                result = dict(result='MERGE_ERROR')
+                # Retry on merge errors
+                result = dict(result='ABORTED')
             if self.executor_server.statsd:
                 base_key = "zuul.executor.{hostname}.merger"
                 self.executor_server.statsd.incr(base_key + ".FAILURE")

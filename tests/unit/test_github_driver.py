@@ -38,6 +38,7 @@ from zuul.zk.change_cache import ChangeKey
 
 from tests.util import random_sha1
 from tests.base import (
+    FIXTURE_DIR,
     AnsibleZuulTestCase,
     BaseTestCase,
     ZuulGithubAppTestCase,
@@ -232,6 +233,7 @@ class TestGithubDriver(ZuulTestCase):
 
     @simple_layout('layouts/basic-github.yaml', driver='github')
     def test_pull_github_files_error(self):
+        # Test that if github fails to give us files, we use fileschanges
         A = self.fake_github.openFakePullRequest(
             'org/project', 'master', 'A')
 
@@ -242,6 +244,29 @@ class TestGithubDriver(ZuulTestCase):
             self.waitUntilSettled()
         self.assertEqual(1, files_mock.call_count)
         self.assertEqual(2, len(self.history))
+        self.assertEqual(1, len(self.merge_job_history.get(
+            MergeRequest.FILES_CHANGES)))
+
+    @okay_tracebacks('git_fail.sh')
+    @simple_layout('layouts/basic-github.yaml', driver='github')
+    def test_pull_github_fileschanges_error(self):
+        # Test the fileschanges error retry code path (this isn't
+        # really github specific, but github exercises this path).
+        A = self.fake_github.openFakePullRequest(
+            'org/project', 'master', 'A')
+
+        self.patch(Repo, 'retry_attempts', 1)
+        self.patch(git.Git, 'GIT_PYTHON_GIT_EXECUTABLE',
+                   os.path.join(FIXTURE_DIR, 'git_fail.sh'))
+        with mock.patch("tests.fakegithub.FakePull.files") as files_mock:
+            files_mock.side_effect = github3.exceptions.ServerError(
+                mock.MagicMock())
+            self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+            self.waitUntilSettled()
+        self.assertEqual(1, files_mock.call_count)
+        self.assertEqual(0, len(self.history))
+        self.assertEqual(5, len(self.merge_job_history.get(
+            MergeRequest.FILES_CHANGES)))
 
     @simple_layout('layouts/basic-github.yaml', driver='github')
     def test_comment_event(self):
