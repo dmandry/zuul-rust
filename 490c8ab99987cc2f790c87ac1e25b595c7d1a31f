@@ -18,6 +18,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "c3c005e6_013ef037",
+        "filename": "tests/unit/test_executor.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 1342,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-14T13:19:41Z",
+      "side": 1,
+      "message": "Yep, it\u0027s harmless, and potentially helpful, but can be removed.",
+      "parentUuid": "f25189ad_1d563cfa",
+      "revId": "490c8ab99987cc2f790c87ac1e25b595c7d1a31f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "d533cacb_8a42f608",
@@ -31,6 +49,24 @@
       "writtenOn": "2026-10-14T09:15:06Z",
       "side": 1,
       "message": "Should this be removed?",
+      "revId": "490c8ab99987cc2f790c87ac1e25b595c7d1a31f",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "4e9f6abc_fce3400f",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 8
+      },
+      "lineNbr": 3299,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-14T13:19:41Z",
+      "side": 1,
+      "message": "Definitely.",
+      "parentUuid": "d533cacb_8a42f608",
       "revId": "490c8ab99987cc2f790c87ac1e25b595c7d1a31f",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
