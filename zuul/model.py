@@ -6799,6 +6799,7 @@ class BuildSet(zkobject.ZKObject):
             failing_reasons=[],
             debug_messages=[],
             warning_messages=[],
+            merge_count=0,
             merge_state=self.NEW,
             nodeset_info={},  # job -> NodesetInfo
             node_requests={},  # job -> request id
@@ -6806,7 +6807,9 @@ class BuildSet(zkobject.ZKObject):
             _files_path=None,  # The ZK path to the files object
             repo_state_keys=[],  # Refs (links) to blobstore repo_state
             tries={},
+            files_count=0,
             files_state=self.NEW,
+            repo_state_count=0,
             repo_state_state=self.NEW,
             span_info=None,
             configured=False,
@@ -9532,7 +9535,7 @@ class FilesChangesCompletedEvent(ResultEvent):
                  span_info=None):
         self.request_uuid = request_uuid
         self.build_set_uuid = build_set_uuid
-        self.files = files or []
+        self.files = files
         self.elapsed_time = elapsed_time
         self.span_info = span_info
 
@@ -9540,7 +9543,7 @@ class FilesChangesCompletedEvent(ResultEvent):
         return {
             "request_uuid": self.request_uuid,
             "build_set_uuid": self.build_set_uuid,
-            "files": list(self.files),
+            "files": self.files,
             "elapsed_time": self.elapsed_time,
             "span_info": self.span_info,
         }
@@ -9548,11 +9551,11 @@ class FilesChangesCompletedEvent(ResultEvent):
     @classmethod
     def fromDict(cls, data):
         return cls(
-            data.get("request_uuid"),
-            data.get("build_set_uuid"),
-            list(data.get("files", [])),
-            data.get("elapsed_time"),
-            data.get("span_info"),
+            data["request_uuid"],
+            data["build_set_uuid"],
+            data["files"],
+            data["elapsed_time"],
+            data["span_info"],
         )
 
 

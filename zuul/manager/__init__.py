@@ -1,4 +1,4 @@
-# Copyright 2021-2024 Acme Gating, LLC
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -37,6 +37,8 @@ from zuul.zk.locks import pipeline_lock
 from zuul.zk.components import COMPONENT_REGISTRY
 
 from opentelemetry import trace
+
+MAX_MERGER_RETRY = 5
 
 
 class DynamicChangeQueueContextManager(object):
@@ -2306,8 +2308,16 @@ class PipelineManager(metaclass=ABCMeta):
             source = self.sched.connections.getSource(
                 change.project.connection_name)
             if event.files is None:
+                attempt = build_set.files_count + 1
                 self.log.warning(
-                    "Did not receive expected merge files content")
+                    "Did not receive expected merge files content "
+                    "for %s (attempt: %s)", item, attempt)
+                if attempt < MAX_MERGER_RETRY:
+                    build_set.updateAttributes(
+                        self.current_context,
+                        files_state=build_set.NEW,
+                        files_count=attempt)
+                    return
                 files = None
             else:
                 files = event.files[i]
@@ -2324,25 +2334,40 @@ class PipelineManager(metaclass=ABCMeta):
 
     def onMergeCompleted(self, event, build_set):
         if build_set.merge_state == build_set.COMPLETE:
-            self._onGlobalRepoStateCompleted(event, build_set)
-            self.reportPipelineTiming('repo_state_time',
-                                      build_set.repo_state_request_time)
-            if event.elapsed_time:
-                self.reportPipelineTiming('merger_repo_state_op_time',
-                                          event.elapsed_time, elapsed=True)
+            if self._onGlobalRepoStateCompleted(event, build_set):
+                self.reportPipelineTiming('repo_state_time',
+                                          build_set.repo_state_request_time)
+                if event.elapsed_time:
+                    self.reportPipelineTiming('merger_repo_state_op_time',
+                                              event.elapsed_time, elapsed=True)
         else:
-            self._onMergeCompleted(event, build_set)
-            if build_set.files_state == build_set.COMPLETE:
-                # We're the second of the files/merger pair, report the stat
-                self.reportPipelineTiming('merge_request_time',
-                                          build_set.configured_time)
-            if event.elapsed_time:
-                self.reportPipelineTiming('merger_merge_op_time',
-                                          event.elapsed_time, elapsed=True)
+            if self._onMergeCompleted(event, build_set):
+                if build_set.files_state == build_set.COMPLETE:
+                    # We're the second of the files/merger pair,
+                    # report the stat
+                    self.reportPipelineTiming('merge_request_time',
+                                              build_set.configured_time)
+                if event.elapsed_time:
+                    self.reportPipelineTiming('merger_merge_op_time',
+                                              event.elapsed_time, elapsed=True)
 
     def _onMergeCompleted(self, event, build_set):
         item = build_set.item
         log = get_annotated_logger(self.log, item.event)
+        if not (event.merged or event.updated):
+            if event.conflict:
+                log.info("Merge conflict %s" % item)
+            else:
+                attempt = build_set.merge_count + 1
+                if attempt < MAX_MERGER_RETRY:
+                    log.warning(
+                        "Merge error on %s (attempt: %s)", item, attempt)
+                    build_set.updateAttributes(
+                        self.current_context,
+                        merge_state=build_set.NEW,
+                        merge_count=attempt)
+                    return False
+
         if isinstance(item.changes[0], model.Tag):
             # Since this is only used for Tag items, we know that
             # circular dependencies are not in play and there is only
@@ -2365,17 +2390,27 @@ class PipelineManager(metaclass=ABCMeta):
         if not (event.merged or event.updated):
             log.info("Unable to merge %s" % item)
             item.setUnableToMerge(event.errors, event.conflict)
+        return True
 
     def _onGlobalRepoStateCompleted(self, event, build_set):
         item = build_set.item
         if not event.updated:
-            self.log.info("Unable to get global repo state for %s", item)
+            attempt = build_set.repo_state_count + 1
+            if attempt < MAX_MERGER_RETRY:
+                self.log.warning(
+                    "Repo state error on %s (attempt: %s)", item, attempt)
+                build_set.updateAttributes(
+                    self.current_context,
+                    repo_state_state=build_set.NEW,
+                    repo_state_count=attempt)
+                return False
             item.setUnableToMerge(event.errors)
         else:
             self.log.info("Received global repo state for %s", item)
             with build_set.activeContext(self.current_context):
                 build_set.setExtraRepoState(event.repo_state)
                 build_set.repo_state_state = build_set.COMPLETE
+        return True
 
     def _handleNodeRequestFallback(self, log, build_set, job, old_request):
         if not job.incrementNodesetIndex():

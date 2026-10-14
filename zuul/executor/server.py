@@ -2040,14 +2040,17 @@ class AnsibleJob(object):
             # the refs we're trying to merge should be valid refs. If we
             # can't fetch them, it should resolve itself.
             self.log.exception("Could not fetch refs to merge from remote")
-            result = dict(result='ABORTED')
+            result = dict(result='ABORTED',
+                          error_detail="Merge error")
             self.executor_server.completeBuild(self.build_request, result)
             return None
         if not isinstance(ret, MergeOperationResultNormal):
             if isinstance(ret, MergeOperationResultConflict):
                 result = dict(result='MERGE_CONFLICT')
             else:
-                result = dict(result='MERGE_ERROR')
+                # Retry on merge errors
+                result = dict(result='ABORTED',
+                              error_detail="Merge error")
             if self.executor_server.statsd:
                 base_key = "zuul.executor.{hostname}.merger"
                 self.executor_server.statsd.incr(base_key + ".FAILURE")

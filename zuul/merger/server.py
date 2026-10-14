@@ -389,7 +389,6 @@ class BaseMergeServer(metaclass=ABCMeta):
         commit = result.get("commit")
         repo_state = result.get("repo_state", {})
         item_in_branches = result.get("item_in_branches", [])
-        files = result.get("files", {})
         errors = result.get("errors", [])
         elapsed_time = result.get("elapsed_time")
 
@@ -422,6 +421,8 @@ class BaseMergeServer(metaclass=ABCMeta):
                 merge_request,
             )
             if merge_request.job_type == MergeRequest.FILES_CHANGES:
+                # For a fileschanges job, files is [] or None on error
+                files = result.get("files")
                 event = FilesChangesCompletedEvent(
                     merge_request.uuid,
                     merge_request.build_set_uuid,
@@ -430,6 +431,9 @@ class BaseMergeServer(metaclass=ABCMeta):
                     merge_request.span_info,
                 )
             else:
+                # For a merge job, files is a dict
+                # TODO: is this default necessary, or can it be None?
+                files = result.get("files", {})
                 event = MergeCompletedEvent(
                     merge_request.uuid,
                     merge_request.build_set_uuid,
