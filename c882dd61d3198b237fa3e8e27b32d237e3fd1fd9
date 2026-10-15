@@ -20,6 +20,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "9978d207_0aef5366",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2051,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-15T13:53:53Z",
+      "side": 1,
+      "message": "We can do that.",
+      "parentUuid": "a217adb6_2dec2b6e",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "da0d3faf_5844be4a",
         "filename": "zuul/manager/__init__.py",
         "patchSetId": 1
@@ -37,6 +55,24 @@
     {
       "unresolved": true,
       "key": {
+        "uuid": "e000aa16_f45f32ac",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2310,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-15T13:53:53Z",
+      "side": 1,
+      "message": "The error handling here is that we just proceed without a files list.  I think that was always the intention, to treat this as best-effort.  I\u0027m open to changing that, but I don\u0027t think it\u0027s a bad choice.",
+      "parentUuid": "da0d3faf_5844be4a",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
         "uuid": "a2180dc1_f9fc60db",
         "filename": "zuul/model.py",
         "patchSetId": 1
@@ -48,6 +84,24 @@
       "writtenOn": "2026-10-15T07:05:38Z",
       "side": 1,
       "message": "Do we want to make the same change for the `MergeCompletedEvent`? Maybe instead of \"overloading\" the `files` attribute we should make this more similar to the `MergeCompletedEvent` and have an `updated` attribute.",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d0e309be_d1d187d9",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9538,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-15T13:53:53Z",
+      "side": 1,
+      "message": "I considered that, but it adds a lot of complexity and I don\u0027t think it\u0027s necessary.  With this change, it\u0027s now very clear whether or not there was a problem, and we don\u0027t need to store it twice.",
+      "parentUuid": "a2180dc1_f9fc60db",
       "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
