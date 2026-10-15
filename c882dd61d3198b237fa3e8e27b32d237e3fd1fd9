@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a217adb6_2dec2b6e",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2051,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-15T07:05:38Z",
+      "side": 1,
+      "message": "Do we want to include some `error_detail` so users know why the build was retried?",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "da0d3faf_5844be4a",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2310,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-15T07:05:38Z",
+      "side": 1,
+      "message": "I think so far we could not reach this branch as the `files` attribute was always coerced to `[]`. I\u0027m wondering if we are missing some error handling here similar to merge completed events where we call `setUnableToMerge()`.",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "a2180dc1_f9fc60db",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9538,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-15T07:05:38Z",
+      "side": 1,
+      "message": "Do we want to make the same change for the `MergeCompletedEvent`? Maybe instead of \"overloading\" the `files` attribute we should make this more similar to the `MergeCompletedEvent` and have an `updated` attribute.",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
