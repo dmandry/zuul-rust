@@ -1,6 +1,23 @@
 {
   "comments": [
     {
+      "unresolved": true,
+      "key": {
+        "uuid": "617c7986_c7398118",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 12
+      },
+      "lineNbr": 12,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T23:34:16Z",
+      "side": 1,
+      "message": "I had thought this would be useful for managing periodic jobs in central job config to control which periodic pipelines trigger for specific branches. I knew this was already possible using branch specific config if the pipeline configuration for projects lives in repo and on specific branches.\n\nIt turns out this is also already possible with centrally managed config as well using the branches config option on project config: https://zuul-ci.org/docs/zuul/latest/config/project.html#attr-project.branches This means that for both in repo branch specific config and centrally managed configuration you can already specify when periodic timer triggered jobs apply to specific branches.\n\nGiven that is there actually a need for this change? Multiple methods that solve the same problem are both confusing and an additional maintenance burden. Note I think the branches attribute in other pipeline triggers may predate the project config branches solution, but that has the benefit of being generic at a top level and can already be used in situations like this so I think we will prefer it.",
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": false,
       "key": {
         "uuid": "50ce0c45_eac2f875",
@@ -14,6 +31,23 @@
       "writtenOn": "2026-10-15T22:05:19Z",
       "side": 1,
       "message": "I -1\u0027d because I think the FalseWithReason entries (noted inline) may be logging the wrong objects.\n\nThe other comments are observations/nits and are not critical to being updated. Also the one about redundant filtering may be wrong though I suspect testing can confirm or deny that.",
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "a201c9d7_568b0b1d",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 12
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T23:34:16Z",
+      "side": 1,
+      "message": "As a followup to my previous review I was operating under the understanding that this change achieves something that is not currently possible in Zuul configuration. However, it turns out that isn\u0027t the case as detailed inline. Is there a good reason to add this functionality given this is already possible without any changes?",
       "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
