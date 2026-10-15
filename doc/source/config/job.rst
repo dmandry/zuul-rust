@@ -1073,6 +1073,13 @@ Here is an example of two job definitions:
             string).  If this entry is supplied, the ``name`` key in the
             dictionary must also be present.
 
+         .. attr:: regex
+
+            The entry is a :ref:`regular expression <regex>` intended
+            to match the name of a project.  It may match the either
+            the project name (e.g., ``org/project``) or the project
+            canonical name (e.g., ``review.example.com/org/project``).
+
          .. attr:: change
 
             The entry matches the project of the current change under test.
@@ -1083,8 +1090,10 @@ Here is an example of two job definitions:
 
       .. attr:: name
 
-         Only used with the ``name`` type, this string is the name of
-         the project to match.
+         Only used with the ``name`` and ``regex`` types.  When used
+         with ``name``, this string is the name of the project to
+         match.  When used with ``regex`` it is the :ref:`regular
+         expression <regex>` to match.
 
    .. attr:: exclude-projects
       :default: null
@@ -1118,6 +1127,18 @@ Here is an example of two job definitions:
             string).  If this entry is supplied, the ``name`` key in the
             dictionary must also be present.
 
+         .. attr:: regex
+
+            The entry is a :ref:`regular expression <regex>` intended
+            to match the name of a project.  It may match the either
+            the project name (e.g., ``org/project``) or the project
+            canonical name (e.g., ``review.example.com/org/project``).
+
+            Because the regular expression is applied to both forms of
+            the project name, the ``negate`` attribute is ineffective
+            when used with ``exclude-project``; consider using
+            ``include-project`` instead.
+
          .. attr:: change
 
             The entry matches the project of the current change under test.
@@ -1128,8 +1149,10 @@ Here is an example of two job definitions:
 
       .. attr:: name
 
-         Only used with the ``name`` type, this string is the name of
-         the project to match.
+         Only used with the ``name`` and ``regex`` types.  When used
+         with ``name``, this string is the name of the project to
+         match.  When used with ``regex`` it is the :ref:`regular
+         expression <regex>` to match.
 
    .. attr:: vars
 

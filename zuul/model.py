@@ -56,7 +56,7 @@ from zuul.exceptions import (
     SecretEncryptedWithObsoleteKey,
     UnknownConnection,
 )
-from zuul.lib.re2util import filter_allowed_disallowed
+from zuul.lib.re2util import filter_allowed_disallowed, ZuulRegex
 from zuul.lib import tracing
 from zuul.lib import yamlutil as yaml
 from zuul.lib.capabilities import capabilities_registry
@@ -4232,6 +4232,9 @@ class FrozenJob(zkobject.ZKObject):
         data['ref'] = self.ref
         data['other_refs'] = self.other_refs
 
+        for key in ('include_projects', 'exclude_projects'):
+            data[key] = self._serializeIncludeExcludeProjects(data[key])
+
         # Use json_dumps to strip any ZuulMark entries
         return json_dumps(data, sort_keys=True).encode("utf8")
 
@@ -4284,6 +4287,9 @@ class FrozenJob(zkobject.ZKObject):
         # MODEL_API <= 38
         data.setdefault('secret_exposure', 'ignore')
 
+        for key in ('include_projects', 'exclude_projects'):
+            data[key] = self._deserializeIncludeExcludeProjects(data[key])
+
         for job_data_key in self.job_data_attributes:
             job_data = data.pop(job_data_key, None)
             if job_data:
@@ -4308,6 +4314,26 @@ class FrozenJob(zkobject.ZKObject):
             else:
                 data['_' + job_data_key] = None
         return data
+
+    def _serializeIncludeExcludeProjects(self, plist):
+        if not plist:
+            return plist
+        new_list = []
+        for ptype, pname in plist:
+            if ptype == 'regex':
+                pname = pname.serialize()
+            new_list.append((ptype, pname))
+        return new_list
+
+    def _deserializeIncludeExcludeProjects(self, plist):
+        if not plist:
+            return plist
+        new_list = []
+        for ptype, pname in plist:
+            if ptype == 'regex':
+                pname = ZuulRegex.deserialize(pname)
+            new_list.append((ptype, pname))
+        return new_list
 
     def _save(self, context, *args, **kw):
         # Before saving, update the buildset with the new job version
@@ -4485,6 +4511,10 @@ class FrozenJob(zkobject.ZKObject):
                 if ptype == 'name':
                     if pname == project.canonical_name:
                         include = True
+                elif ptype == 'regex':
+                    if (pname.fullmatch(project.name) or
+                        pname.fullmatch(project.canonical_name)):
+                        include = True
                 elif ptype == 'change':
                     if change.project.canonical_name == project.canonical_name:
                         include = True
@@ -4503,6 +4533,10 @@ class FrozenJob(zkobject.ZKObject):
         for (ptype, pname) in self.exclude_projects:
             if ptype == 'name':
                 if pname == project.canonical_name:
+                    return False
+            elif ptype == 'regex':
+                if (pname.fullmatch(project.name) or
+                    pname.fullmatch(project.canonical_name)):
                     return False
             elif ptype == 'change':
                 if change.project.canonical_name == project.canonical_name:
@@ -11628,12 +11662,15 @@ class Tenant(object):
         """Return all TPCs with a full match to either project name or
         canonical project name.
 
-        :arg str regex: The regex to match
+        :arg (str or ZuulRegex) regex: The regex to match
         :returns: A list of TenantProjectConfigs describing the found
             projects.
         """
 
-        matcher = re2.compile(regex)
+        if not isinstance(regex, ZuulRegex):
+            matcher = re2.compile(regex)
+        else:
+            matcher = regex
         projects = []
         result = []
 
@@ -11661,7 +11698,7 @@ class Tenant(object):
         """Return all projects with a full match to either project name or
         canonical project name.
 
-        :arg str regex: The regex to match
+        :arg (str or ZuulRegex) regex: The regex to match
         :returns: A list of tuples (trusted, project) describing the found
             projects.
         """

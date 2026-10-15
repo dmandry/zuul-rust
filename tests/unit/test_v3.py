@@ -1,5 +1,5 @@
 # Copyright 2012 Hewlett-Packard Development Company, L.P.
-# Copyright 2021 Acme Gating, LLC
+# Copyright 2021-2026 Acme Gating, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -13233,6 +13233,58 @@ class TestIncludeExcludeProjects(ZuulTestCase):
             dict(name='exclude-all-job', result='SUCCESS'),
             dict(name='exclude-all-but-change-job', result='SUCCESS'),
             dict(name='exclude-all-but-item-job', result='SUCCESS'),
+        ], ordered=False)
+
+    @simple_layout('layouts/include-exclude-projects-regex.yaml')
+    def test_include_exclude_projects_regex(self):
+        self.executor_server.hold_jobs_in_build = True
+        A = self.fake_gerrit.addFakeChange('org/project1', 'master', 'A')
+        B = self.fake_gerrit.addFakeChange('org/project2', 'master', 'B')
+        C = self.fake_gerrit.addFakeChange('org/project', 'master', 'C')
+        C.setDependsOn(B, 1)
+        B.setDependsOn(A, 1)
+        self.fake_gerrit.addEvent(C.getPatchsetCreatedEvent(1))
+        self.waitUntilSettled()
+
+        self.assertEqual(len(self.builds), 6)
+
+        expected_map = {
+            'normal-job': ['org/project', 'org/project1', 'org/project2'],
+            'include-job': ['org/project'],
+            'exclude-job': ['org/project', 'org/project2'],
+            'both-job': ['org/project', 'org/project1'],
+            'include-none-job': [],
+            'exclude-all-job': [],
+        }
+        projects = [
+            'review.example.com/org/project',
+            'review.example.com/org/project1',
+            'review.example.com/org/project2',
+        ]
+        for build in self.builds:
+            expected = expected_map[build.job.name]
+            workspace_cnames = set()
+            for p in projects:
+                path = os.path.join(build.jobdir.src_root, p)
+                if os.path.exists(path):
+                    workspace_cnames.add(p)
+            expected_cnames = set(
+                f'review.example.com/{p}' for p in expected
+            )
+            self.assertEqual(expected_cnames, workspace_cnames,
+                             f'for {build.job.name}')
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertHistory([
+            dict(name='normal-job', result='SUCCESS'),
+            dict(name='include-job', result='SUCCESS'),
+            dict(name='exclude-job', result='SUCCESS'),
+            dict(name='both-job', result='SUCCESS'),
+            dict(name='include-none-job', result='SUCCESS'),
+            dict(name='exclude-all-job', result='SUCCESS'),
         ], ordered=False)
 
     def test_dynamic_playbook_checkout(self):

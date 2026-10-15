@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    The job :attr:`job.include-projects` and
+    :attr:`job.exclude-projects` attributes now accept a regular
+    expression to match projects that should be included or excluded
+    when preparing the workspace.

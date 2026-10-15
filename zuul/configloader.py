@@ -715,11 +715,13 @@ class JobParser(object):
                    'override-checkout': str}
 
     include_project_name = {'type': 'name', 'name': str}
+    include_project_regex = {'type': 'regex', 'name': vs.Any(ZUUL_REGEX, str)}
     include_project_change = {'type': 'change'}
     include_project_item = {'type': 'item'}
     job_include_project = vs.Any(
         str,
         include_project_name,
+        include_project_regex,
         include_project_change,
         include_project_item,
     )
@@ -1144,9 +1146,13 @@ class JobParser(object):
                                     'type': 'name',
                                     'name': conf_project,
                                 }
+                            name = conf_project.get('name')
+                            if conf_project['type'] == 'regex':
+                                name = make_regex(conf_project['name'],
+                                                  self.pcontext)
                             conf_project = (
                                 conf_project['type'],
-                                conf_project.get('name'),
+                                name,
                             )
                             new_projects.add(conf_project)
                     setattr(job, f'{attr}_projects', new_projects)

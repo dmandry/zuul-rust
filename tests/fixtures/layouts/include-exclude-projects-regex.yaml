@@ -1,0 +1,91 @@
+- pipeline:
+    name: check
+    manager: independent
+    trigger:
+      gerrit:
+        - event: patchset-created
+    success:
+      gerrit:
+        Verified: 1
+    failure:
+      gerrit:
+        Verified: -1
+
+- queue:
+    name: shared
+    allow-circular-dependencies: true
+        
+- job:
+    name: base
+    parent: null
+    run: playbooks/base.yaml
+    nodeset:
+      nodes:
+        - label: ubuntu-xenial
+          name: controller
+    exclude-projects:
+      - org/project-unused
+
+- job:
+    name: normal-job
+
+- job:
+    name: include-job
+    include-projects:
+      type: regex
+      name: org/project
+
+- job:
+    name: exclude-job
+    exclude-projects:
+      - type: regex
+        name: org/project1
+
+- job:
+    name: both-job
+    include-projects:
+      type: regex
+      name:
+        regex: org/project.*
+    exclude-projects:
+      - type: regex
+        name:
+          regex: org/project2
+
+- job:
+    name: include-none-job
+    include-projects:
+      type: regex
+      name:
+        regex: .*
+        negate: true
+
+- job:
+    name: exclude-all-job
+    exclude-projects:
+      type: regex
+      name:
+        regex: .*
+
+- project:
+    name: org/project
+    queue: shared
+    check:
+      jobs:
+        - normal-job
+        - include-job
+        - exclude-job
+        - both-job
+        - include-none-job
+        - exclude-all-job
+        
+- project:
+    name: org/project1
+    queue: shared
+
+- project:
+    name: org/project2
+    queue: shared
+
+- project:
+    name: org/project-unused

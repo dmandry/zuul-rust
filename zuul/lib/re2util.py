@@ -72,6 +72,13 @@ class ZuulRegex:
                 elif isinstance(e.args[0], str):
                     self.re2_failure_message = e.args[0]
 
+    def __str__(self):
+        if self.negate:
+            negated = ' (negated'
+        else:
+            negated = ''
+        return f'{self.pattern}{negated}'
+
     def __eq__(self, other):
         return (isinstance(other, ZuulRegex) and
                 self.pattern == other.pattern and
