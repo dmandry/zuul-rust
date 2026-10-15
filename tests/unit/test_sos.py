@@ -746,20 +746,20 @@ class TestScaleOutScheduler(ZuulTestCase):
             # The requests come back sorted by priority.
 
             # Change A, first change for project, high relative priority.
-            self.assertEqual(reqs[0]['_oid'], '200-0000000000')
+            self.assertEqual(reqs[0]['_oid'], '500-0000000000')
             self.assertEqual(reqs[0]['relative_priority'], 0)
 
             # Change C, first change for project1, high relative priority.
-            self.assertEqual(reqs[1]['_oid'], '200-0000000002')
+            self.assertEqual(reqs[1]['_oid'], '500-0000000002')
             self.assertEqual(reqs[1]['relative_priority'], 0)
 
             # Change B, second change for project, lower relative priority.
-            self.assertEqual(reqs[2]['_oid'], '200-0000000001')
+            self.assertEqual(reqs[2]['_oid'], '500-0000000001')
             self.assertEqual(reqs[2]['relative_priority'], 1)
 
             # Change D, first change for project2 shared with project1,
             # lower relative priority than project1.
-            self.assertEqual(reqs[3]['_oid'], '200-0000000003')
+            self.assertEqual(reqs[3]['_oid'], '500-0000000003')
             self.assertEqual(reqs[3]['relative_priority'], 1)
 
             # Fulfill only the first request
@@ -773,16 +773,16 @@ class TestScaleOutScheduler(ZuulTestCase):
             reqs = self.fake_nodepool.getNodeRequests()
 
             # Change B, now first change for project, equal priority.
-            self.assertEqual(reqs[0]['_oid'], '200-0000000001')
+            self.assertEqual(reqs[0]['_oid'], '500-0000000001')
             self.assertEqual(reqs[0]['relative_priority'], 0)
 
             # Change C, now first change for project1, equal priority.
-            self.assertEqual(reqs[1]['_oid'], '200-0000000002')
+            self.assertEqual(reqs[1]['_oid'], '500-0000000002')
             self.assertEqual(reqs[1]['relative_priority'], 0)
 
             # Change D, first change for project2 shared with project1,
             # still lower relative priority than project1.
-            self.assertEqual(reqs[2]['_oid'], '200-0000000003')
+            self.assertEqual(reqs[2]['_oid'], '500-0000000003')
             self.assertEqual(reqs[2]['relative_priority'], 1)
 
             self.fake_nodepool.unpause()
@@ -823,17 +823,17 @@ class TestScaleOutScheduler(ZuulTestCase):
 
             # Change A, first change for shared queue, high relative
             # priority.
-            self.assertEqual(reqs[0]['_oid'], '100-0000000000')
+            self.assertEqual(reqs[0]['_oid'], '300-0000000000')
             self.assertEqual(reqs[0]['relative_priority'], 0)
 
             # Change C, first change for independent project, high
             # relative priority.
-            self.assertEqual(reqs[1]['_oid'], '100-0000000002')
+            self.assertEqual(reqs[1]['_oid'], '300-0000000002')
             self.assertEqual(reqs[1]['relative_priority'], 0)
 
             # Change B, second change for shared queue, lower relative
             # priority.
-            self.assertEqual(reqs[2]['_oid'], '100-0000000001')
+            self.assertEqual(reqs[2]['_oid'], '300-0000000001')
             self.assertEqual(reqs[2]['relative_priority'], 1)
 
             self.fake_nodepool.unpause()

@@ -1,0 +1,13 @@
+---
+features:
+  - |
+    The :attr:`pipeline.precedence` configuration attribute
+    now accepts additional values in order to facilitate more
+    fine-grained control over pipeline precedence.
+upgrade:
+  - |
+    The underlying pipeline precedence values have changed in order to
+    accomodate finer-grained control.  During upgrade, items enqueued
+    with old values may temporarily take precedence over items
+    enqueued with newer values.  Once those old items are complete,
+    precedence will behave normally.

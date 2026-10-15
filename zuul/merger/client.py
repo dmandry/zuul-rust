@@ -23,7 +23,7 @@ from zuul.model import (
     FilesChangesCompletedEvent,
     MergeCompletedEvent,
     MergeRequest,
-    PRECEDENCE_HIGH,
+    PRECEDENCE_MAXIMUM,
     PRECEDENCE_NORMAL,
 )
 from zuul.zk.event_queues import PipelineResultEventQueue
@@ -123,7 +123,7 @@ class MergeClient(object):
             MergeRequest.REF_STATE, data, build_set, precedence, event=event)
 
     def getFiles(self, connection_name, project_name, branch, files, dirs=[],
-                 precedence=PRECEDENCE_HIGH, event=None):
+                 precedence=PRECEDENCE_MAXIMUM, event=None):
         data = dict(connection=connection_name,
                     project=project_name,
                     branch=branch,
@@ -139,7 +139,7 @@ class MergeClient(object):
         )
         return job
 
-    def getFilesChanges(self, changes, precedence=PRECEDENCE_HIGH,
+    def getFilesChanges(self, changes, precedence=PRECEDENCE_MAXIMUM,
                         build_set=None, needs_result=False,
                         event=None):
         changes_data = []
@@ -166,7 +166,7 @@ class MergeClient(object):
         return job
 
     def getFilesChangesRaw(self, connection_name, project_name, branch, tosha,
-                           precedence=PRECEDENCE_HIGH,
+                           precedence=PRECEDENCE_MAXIMUM,
                            build_set=None, needs_result=False,
                            event=None):
         changes_data = [dict(
