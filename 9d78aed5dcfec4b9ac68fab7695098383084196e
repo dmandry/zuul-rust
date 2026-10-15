@@ -16,6 +16,24 @@
       "message": "Do we need to bump the model API version due to the new `MERGE_ERROR` result? There are also changes to other ZK objects (e.g. the buildset) that I could imagine might cause problems when not all parts of the system understand them.",
       "revId": "9d78aed5dcfec4b9ac68fab7695098383084196e",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f7c6e852_7cf615bc",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 5
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1
+      },
+      "writtenOn": "2026-10-15T13:58:58Z",
+      "side": 1,
+      "message": "I don\u0027t believe so:\n\nIf the scheduler gets a job result from the executor it doesn\u0027t understand, it treats it as failure.  That seems like an acceptable upgrade path.\n\nThe new buildset attributes have defaults, so they shouldn\u0027t need explicit model updates.  But let me know if you see one I missed!",
+      "parentUuid": "0a77595d_2689d629",
+      "revId": "9d78aed5dcfec4b9ac68fab7695098383084196e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
   ]
 }
