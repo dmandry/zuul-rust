@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "cee50714_d415f73f",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 40,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 0,
+      "message": "See nit about making unrelated changes.",
+      "revId": "53041093bdb2ad4f8fdf7812926ed10911a34f91",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "34bd982a_9287f4c8",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 42,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 0,
+      "message": "See nit about making unrelated changes.",
+      "revId": "53041093bdb2ad4f8fdf7812926ed10911a34f91",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}

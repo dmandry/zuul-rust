@@ -1,0 +1,101 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "50ce0c45_eac2f875",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 12
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 1,
+      "message": "I -1\u0027d because I think the FalseWithReason entries (noted inline) may be logging the wrong objects.\n\nThe other comments are observations/nits and are not critical to being updated. Also the one about redundant filtering may be wrong though I suspect testing can confirm or deny that.",
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "8e50ab8e_b9c110e9",
+        "filename": "zuul/driver/timer/__init__.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 193,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 1,
+      "message": "I think this may be redundant with the event filter\u0027s matches() method. Essentially we\u0027re creating an event to be processed by the pipeline which applies event filters here. But we\u0027re only doing it if the branch matches. Then later in the pipeline we check if the branch in the event matches the pipeline. The pipeline must still filter as not all pipelines will match all events, but I don\u0027t think it is necessary here as we could let the pipeline do all of the filtering instead?\n\nThat said I don\u0027t think it hurts to limit the number of events the pipelines have to filter so I\u0027m not sure this needs to be changed.",
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "d2c95dee_bce40d14",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 54,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 1,
+      "message": "I think we want to use self._types here as that is a list of human readable patterns. But self.types is a list of ZuulRegex objects.",
+      "range": {
+        "startLine": 54,
+        "startChar": 16,
+        "endLine": 54,
+        "endChar": 26
+      },
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "87a6a861_bda9cc0b",
+        "filename": "zuul/driver/timer/timermodel.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 64,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 1,
+      "message": "I think we want to use self._branches here as that is a list of human readable patterns. self.branches is a list of ZuulRegex objects.",
+      "range": {
+        "startLine": 64,
+        "startChar": 16,
+        "endLine": 64,
+        "endChar": 29
+      },
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": true,
+      "key": {
+        "uuid": "ecf5d745_a5ece884",
+        "filename": "zuul/driver/timer/timertrigger.py",
+        "patchSetId": 12
+      },
+      "lineNbr": 27,
+      "author": {
+        "id": 4146
+      },
+      "writtenOn": "2026-10-15T22:05:19Z",
+      "side": 1,
+      "message": "Nit: I think I mentioned this on an earlier review (maybe on another change?), but it is helpful if we don\u0027t change unrelated code to the change in question. Reformatting and removing unrelated lines of code etc adds noise to the code review process.",
+      "revId": "85f74a01590074022aa3ab7e3a1c675dc8bd0804",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
