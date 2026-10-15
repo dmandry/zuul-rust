@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "0a77595d_2689d629",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 5
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-15T06:16:13Z",
+      "side": 1,
+      "message": "Do we need to bump the model API version due to the new `MERGE_ERROR` result? There are also changes to other ZK objects (e.g. the buildset) that I could imagine might cause problems when not all parts of the system understand them.",
+      "revId": "9d78aed5dcfec4b9ac68fab7695098383084196e",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    }
+  ]
+}
