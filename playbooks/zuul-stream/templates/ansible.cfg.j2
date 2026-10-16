@@ -8,3 +8,4 @@ callback_plugins = {{ ansible_user_dir }}/src/opendev.org/zuul/zuul/zuul/ansible
 stdout_callback = zuul_stream
 library = {{ ansible_user_dir }}/src/opendev.org/zuul/zuul/zuul/ansible/{{ zuul_ansible_version }}/library
 retry_files_enabled = False
+display_traceback = error

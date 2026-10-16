@@ -16,11 +16,11 @@
   shell: |
     egrep "^.+\| {{ item.node }} \| ok: Item: Runtime" {{ item.filename }}
 
-- name: Validate output - failed shell task
+- name: Validate output - task with module exception
   shell: |
     egrep "^.+\| {{ item.node }} \| .*Exception.*:.*Test module failure exception task" {{ item.filename }}
 
-- name: Validate output - item loop with exception
+- name: Validate output - item loop with module exception
   shell: |
     egrep "^.+\| {{ item.node }} \| .*Exception.*:.*Test module failure exception loop" {{ item.filename }}
 
