@@ -36,6 +36,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "d50f8775_017e138f",
+        "filename": "zuul/executor/server.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2051,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-16T05:29:22Z",
+      "side": 1,
+      "message": "Done",
+      "parentUuid": "9978d207_0aef5366",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "da0d3faf_5844be4a",
@@ -71,6 +89,24 @@
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     },
     {
+      "unresolved": false,
+      "key": {
+        "uuid": "a60a77be_3845a7f5",
+        "filename": "zuul/manager/__init__.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 2310,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-16T05:29:22Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "e000aa16_f45f32ac",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
       "unresolved": true,
       "key": {
         "uuid": "a2180dc1_f9fc60db",
@@ -102,6 +138,24 @@
       "side": 1,
       "message": "I considered that, but it adds a lot of complexity and I don\u0027t think it\u0027s necessary.  With this change, it\u0027s now very clear whether or not there was a problem, and we don\u0027t need to store it twice.",
       "parentUuid": "a2180dc1_f9fc60db",
+      "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
+      "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f465f844_9525316d",
+        "filename": "zuul/model.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 9538,
+      "author": {
+        "id": 27582
+      },
+      "writtenOn": "2026-10-16T05:29:22Z",
+      "side": 1,
+      "message": "Acknowledged",
+      "parentUuid": "d0e309be_d1d187d9",
       "revId": "c882dd61d3198b237fa3e8e27b32d237e3fd1fd9",
       "serverId": "4a232e18-c5a9-48ee-94c0-e04e7cca6543"
     }
