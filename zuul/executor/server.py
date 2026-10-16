@@ -3509,9 +3509,8 @@ class AnsibleJob(object):
             config.write('internal_poll_interval = 0.01\n')
 
             if self.ansible_callbacks:
-                config.write('callbacks_enabled =\n')
-                for callback in self.ansible_callbacks.keys():
-                    config.write('    %s,\n' % callback)
+                callbacks = ','.join(self.ansible_callbacks.keys())
+                config.write(f'callbacks_enabled = {callbacks}\n')
 
             config.write('[ssh_connection]\n')
             # NOTE(pabelanger): Try up to 3 times to run a task on a host, this
