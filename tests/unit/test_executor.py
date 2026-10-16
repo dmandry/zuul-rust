@@ -1341,6 +1341,8 @@ class ExecutorFactsMixin:
             output = f.read()
             self.assertIn(f'Ansible version={self.ansible_major_minor}',
                           output)
+            self.assertIn(f"Datetime={date_time['date']}",
+                          output)
 
 
 class TestExecutorFacts11(AnsibleZuulTestCase, ExecutorFactsMixin):
