@@ -1255,7 +1255,16 @@ class TestScheduler(zuul.scheduler.Scheduler):
     _launcher_client_class = HoldableLauncherClient
 
 
-class TestLauncher(zuul.launcher.server.Launcher):
+def _launcher_base():
+    # Opt-in only. The default test run keeps using the Python launcher
+    # in zuul.launcher.server, which this branch does not modify.
+    if os.environ.get('ZUUL_LAUNCHER_IMPL') == 'rust':
+        import zuul_launcher_py
+        return zuul_launcher_py.Launcher
+    return zuul.launcher.server.Launcher
+
+
+class TestLauncher(_launcher_base()):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self._test_lock = threading.Lock()

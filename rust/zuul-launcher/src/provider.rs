@@ -80,7 +80,7 @@ impl std::fmt::Display for AdvanceError {
     }
 }
 
-pub trait StateMachine: Send {
+pub trait StateMachine: Send + Sync {
     fn advance(&mut self) -> Result<(), AdvanceError>;
     fn complete(&self) -> bool;
     fn state_name(&self) -> String;
@@ -109,7 +109,7 @@ pub struct EndpointInfo {
     pub limits: QuotaInformation,
 }
 
-pub trait Provider: Send {
+pub trait Provider: Send + Sync {
     fn name(&self) -> &str;
     fn canonical_name(&self) -> &str;
     fn driver_name(&self) -> &str;

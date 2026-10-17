@@ -84,6 +84,20 @@ struct MemoryState {
     session_alive: bool,
 }
 
+/// Operations the launcher needs from a ZooKeeper session. `MemoryZk` is the
+/// in-memory test double; the PyO3 harness supplies a TLS client.
+pub trait ZkOps: Send + Sync {
+    fn session_id(&self) -> i64;
+    fn ensure_path(&self, path: &str) -> Result<(), ZkError>;
+    fn create(&self, path: &str, data: &[u8], mode: CreateMode) -> Result<String, ZkError>;
+    fn delete(&self, path: &str, recursive: bool) -> Result<(), ZkError>;
+    fn exists(&self, path: &str) -> Result<Option<ZkStat>, ZkError>;
+    fn get(&self, path: &str) -> Result<(Vec<u8>, ZkStat), ZkError>;
+    fn set(&self, path: &str, data: &[u8], version: i32) -> Result<ZkStat, ZkError>;
+    fn get_children(&self, path: &str) -> Result<Vec<String>, ZkError>;
+    fn expire_session(&self) {}
+}
+
 #[derive(Clone)]
 pub struct MemoryZk {
     inner: Arc<Mutex<MemoryState>>,
@@ -296,6 +310,36 @@ impl MemoryZk {
     }
 }
 
+impl ZkOps for MemoryZk {
+    fn session_id(&self) -> i64 {
+        MemoryZk::session_id(self)
+    }
+    fn ensure_path(&self, path: &str) -> Result<(), ZkError> {
+        MemoryZk::ensure_path(self, path)
+    }
+    fn create(&self, path: &str, data: &[u8], mode: CreateMode) -> Result<String, ZkError> {
+        MemoryZk::create(self, path, data, mode)
+    }
+    fn delete(&self, path: &str, recursive: bool) -> Result<(), ZkError> {
+        MemoryZk::delete(self, path, recursive)
+    }
+    fn exists(&self, path: &str) -> Result<Option<ZkStat>, ZkError> {
+        MemoryZk::exists(self, path)
+    }
+    fn get(&self, path: &str) -> Result<(Vec<u8>, ZkStat), ZkError> {
+        MemoryZk::get(self, path)
+    }
+    fn set(&self, path: &str, data: &[u8], version: i32) -> Result<ZkStat, ZkError> {
+        MemoryZk::set(self, path, data, version)
+    }
+    fn get_children(&self, path: &str) -> Result<Vec<String>, ZkError> {
+        MemoryZk::get_children(self, path)
+    }
+    fn expire_session(&self) {
+        MemoryZk::expire_session(self)
+    }
+}
+
 fn parent_path(path: &str) -> String {
     match path.rfind('/') {
         Some(0) => "/".into(),
@@ -319,7 +363,7 @@ pub struct HeldLock {
 }
 
 pub fn acquire_lock(
-    zk: &MemoryZk,
+    zk: &dyn ZkOps,
     lock_path: &str,
     identifier: &str,
     read: bool,
@@ -357,7 +401,7 @@ fn random_mix() -> u128 {
         .unwrap_or(1)
 }
 
-fn lock_is_winner(zk: &MemoryZk, lock_path: &str, child: &str, read: bool) -> Result<bool, ZkError> {
+fn lock_is_winner(zk: &dyn ZkOps, lock_path: &str, child: &str, read: bool) -> Result<bool, ZkError> {
     let kids = zk.get_children(lock_path)?;
     let Some(mine) = sequence_of(child) else {
         return Ok(false);
@@ -434,7 +478,7 @@ pub struct ComponentInfo {
 
 #[derive(Clone)]
 pub struct LauncherApi {
-    pub zk: MemoryZk,
+    pub zk: Arc<dyn ZkOps>,
     pub hostname: String,
     pub connection_filter: Option<Vec<String>>,
     pub requests: HashMap<String, NodesetRequest>,
@@ -451,7 +495,7 @@ pub struct LauncherApi {
 }
 
 impl LauncherApi {
-    pub fn new(zk: MemoryZk, hostname: &str, filter: Option<Vec<String>>) -> Self {
+    pub fn new(zk: Arc<dyn ZkOps>, hostname: &str, filter: Option<Vec<String>>) -> Self {
         let mut api = Self {
             zk,
             hostname: hostname.to_string(),
@@ -915,7 +959,7 @@ impl LauncherApi {
     }
 }
 
-pub fn system_id(zk: &MemoryZk) -> Result<String, ZkError> {
+pub fn system_id(zk: &dyn ZkOps) -> Result<String, ZkError> {
     match zk.get("/zuul-system") {
         Ok((data, _)) => {
             let v = jsonutil::loads(&String::from_utf8_lossy(&data)).unwrap_or(json!({}));
@@ -935,7 +979,7 @@ pub fn system_id(zk: &MemoryZk) -> Result<String, ZkError> {
 }
 
 pub fn register_component(
-    zk: &MemoryZk,
+    zk: &dyn ZkOps,
     hostname: &str,
     state: &str,
     filter: &Option<Vec<String>>,
@@ -947,7 +991,7 @@ pub fn register_component(
 }
 
 pub fn set_component(
-    zk: &MemoryZk,
+    zk: &dyn ZkOps,
     path: &str,
     hostname: &str,
     state: &str,

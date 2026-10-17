@@ -8,7 +8,7 @@ use crate::mmh3;
 use crate::model::{self, node_state, request_state, NodesetRequest, ProviderNode, QuotaInformation};
 use crate::nodescan::{NodescanRequest, NodescanWorker};
 use crate::provider::{AdvanceError, Provider, StateMachine};
-use crate::zk::{self, ComponentInfo, LauncherApi, MemoryZk};
+use crate::zk::{self, ComponentInfo, LauncherApi, ZkOps};
 use rand::seq::SliceRandom;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -55,8 +55,8 @@ pub struct Launcher {
 }
 
 impl Launcher {
-    pub fn new(hostname: &str, zk: MemoryZk) -> Self {
-        let system_id = zk::system_id(&zk).unwrap_or_else(|_| "system".into());
+    pub fn new(hostname: &str, zk: Arc<dyn ZkOps>) -> Self {
+        let system_id = zk::system_id(zk.as_ref()).unwrap_or_else(|_| "system".into());
         let api = LauncherApi::new(zk, hostname, None);
         Self {
             hostname: hostname.into(),

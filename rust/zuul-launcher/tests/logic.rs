@@ -101,7 +101,7 @@ fn quota_rounding_matches_python() {
 #[test]
 fn unassigned_sort_ready_before_building_before_requested() {
     let zk = MemoryZk::new();
-    let mut launcher = Launcher::new("launcher-a.example.com", zk);
+    let mut launcher = Launcher::new("launcher-a.example.com", Arc::new(zk));
     let provider = Arc::new(MemoryProvider::static_like("p1", "debian"));
     launcher.add_provider("tenant-a", provider);
     launcher.state = "running".into();
@@ -133,7 +133,7 @@ fn unassigned_sort_ready_before_building_before_requested() {
 #[test]
 fn process_provider_node_branches() {
     let zk = MemoryZk::new();
-    let mut launcher = Launcher::new("launcher-a.example.com", zk);
+    let mut launcher = Launcher::new("launcher-a.example.com", Arc::new(zk));
     launcher.state = "running".into();
     launcher.now = 1_700_000_100.0;
 
@@ -237,7 +237,7 @@ fn process_provider_node_branches() {
 #[test]
 fn fake_zk_assign_reuse_and_min_ready() {
     let zk = MemoryZk::new();
-    let mut launcher = Launcher::new("launcher-a.example.com", zk.clone());
+    let mut launcher = Launcher::new("launcher-a.example.com", Arc::new(zk.clone()));
     launcher.state = "running".into();
     launcher.now = 1_700_000_200.0;
     launcher.api.components = vec![
@@ -286,7 +286,7 @@ fn fake_zk_assign_reuse_and_min_ready() {
     } else {
         assert!(created.is_empty(), "loser must not create min-ready nodes");
         // Run the winner as a second launcher sharing the same zk.
-        let mut other = Launcher::new("launcher-b.example.com", zk.clone());
+        let mut other = Launcher::new("launcher-b.example.com", Arc::new(zk.clone()));
         other.api.sync();
         other.state = "running".into();
         other.now = launcher.now;
