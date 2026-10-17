@@ -243,6 +243,7 @@
     vars: &zuul_image_vars
       promote_container_image_method: intermediate-registry
       promote_container_image_job: zuul-upload-image
+      promote_container_image_using_buildset: true
       container_command: docker
       container_build_extra_env:
         DOCKER_BUILDKIT: 1
