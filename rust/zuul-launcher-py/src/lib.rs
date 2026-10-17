@@ -200,7 +200,9 @@ fn connect_rust(slf: &Bound<'_, PyLauncher>, py: Python<'_>) -> PyResult<()> {
 
 fn call_py(py: Python<'_>, name: &str, args: impl IntoPy<Py<PyTuple>>) -> PyResult<()> {
     let dict = PyDict::new_bound(py);
-    py.run_bound(BOOTSTRAP, None, Some(&dict))?;
+    // Same dict for globals and locals so imports are visible inside
+    // the helper functions (Python binds a function's globals at def time).
+    py.run_bound(BOOTSTRAP, Some(&dict), Some(&dict))?;
     let func = dict
         .get_item(name)?
         .ok_or_else(|| PyRuntimeError::new_err(format!("missing helper {name}")))?;
