@@ -9696,6 +9696,9 @@ class TriggerEvent(AbstractEvent):
     def isPatchsetCreated(self):
         return False
 
+    def isTitleChanged(self):
+        return False
+
     def isMessageChanged(self):
         return False
 

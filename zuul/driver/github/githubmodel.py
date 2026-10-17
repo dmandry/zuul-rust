@@ -115,6 +115,7 @@ class PullRequest(Change):
         )
 
     def isUpdateOf(self, other):
+        print("%s %s" % (self.updated_at, other.updated_at))
         if (self.project == other.project and
             hasattr(other, 'number') and self.number == other.number and
             hasattr(other, 'patchset') and self.patchset != other.patchset and
@@ -231,7 +232,18 @@ class PullRequest(Change):
         # updating the timestamp if the pull request is updated in the cache.
         # This way the old pull request object retains its old timestamp and
         # the update check works.
+        # TODO(clarkb) Currently this check means that we don't update the
+        # updated at field when a PR is edited. If we drop the check then
+        # we update the PR in place and checks that determine if one version
+        # of a PR is an update of another fail beacuse those checks see a
+        # consistent version. It seems like we've treated updated_at as an
+        # inconsiquential field and only thinsg like change number or
+        # patchset/sha make a difference in those comparisons. Need to figure
+        # out how to make updated_at consequential or find another method for
+        # evicting old versions of changes in queues before reenqueing them.
         if not self.updated_at:
+            log.debug('clarkb updating updated_at to %s' %
+                      self.pr.get('updated_at'))
             self.updated_at = int(time.mktime(gh_timestamp_to_date(
                 self.pr.get('updated_at'))))
 
@@ -289,6 +301,7 @@ class GithubTriggerEvent(TriggerEvent):
         self.status = None
         self.commits = []
         self.body_edited = None
+        self.title_edited = None
         self.branch_protection_changed = None
         self.default_branch_changed = None
 
@@ -304,6 +317,7 @@ class GithubTriggerEvent(TriggerEvent):
         d["status"] = self.status
         d["commits"] = self.commits
         d["body_edited"] = self.body_edited
+        d["title_edited"] = self.title_edited
         d["branch_protection_changed"] = self.branch_protection_changed
         d["default_branch_changed"] = self.default_branch_changed
         return d
@@ -320,6 +334,7 @@ class GithubTriggerEvent(TriggerEvent):
         self.status = d["status"]
         self.commits = d["commits"]
         self.body_edited = d["body_edited"]
+        self.title_edited = d.get("title_edited")
         self.branch_protection_changed = d.get("branch_protection_changed")
         self.default_branch_changed = d.get("default_branch_changed")
 
@@ -333,6 +348,9 @@ class GithubTriggerEvent(TriggerEvent):
         if self.type == 'pull_request':
             return self.action in ['opened', 'changed']
         return False
+
+    def isTitleChanged(self):
+        return bool(self.title_edited)
 
     def isMessageChanged(self):
         return bool(self.body_edited)

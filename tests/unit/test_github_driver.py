@@ -612,6 +612,43 @@ class TestGithubDriver(ZuulTestCase):
         self.assertEqual(1, len(self.history))
         self.assertEqual(1, self.countJobResults(self.history, 'ABORTED'))
 
+    @simple_layout('layouts/dequeue-info-edit-github.yaml', driver='github')
+    def test_dequeue_pull_info_edited(self):
+        self.executor_server.hold_jobs_in_build = True
+
+        A = self.fake_github.openFakePullRequest(
+            'org/one-job-project', 'master', 'A')
+        self.fake_github.emitEvent(A.getPullRequestOpenedEvent())
+        self.waitUntilSettled()
+
+        self.assertEqual(len(self.builds), 1)
+        self.assertEqual(self.builds[0].name, 'one-job-project-merge')
+        # Use hasChanges because that checks the commit subject
+        # which we modify below using editTitle. hasChanges should show
+        # us that the change updated in the pipeline correctly.
+        self.assertTrue(self.builds[0].hasChanges(A))
+
+        # Github Events have one second resolution in updated_at field
+        # If that updated_at field has not updated then we don't dequeue
+        # so sleep for a second to ensure that updated at field changes.
+        # TODO(clarkb) can we set updated_at to old time + 1 second without
+        # advancing the wall clock one second?
+        time.sleep(1)
+        self.fake_github.emitEvent(A.editTitle('New Title'))
+        self.waitUntilSettled()
+
+        self.assertEqual(len(self.builds), 1)
+        self.assertEqual(self.builds[0].name, 'one-job-project-merge')
+        self.assertTrue(self.builds[0].hasChanges(A))
+
+        self.executor_server.hold_jobs_in_build = False
+        self.executor_server.release()
+        self.waitUntilSettled()
+
+        self.assertEqual(2, len(self.history))
+        self.assertEqual(1, self.countJobResults(self.history, 'ABORTED'))
+        self.assertEqual(1, self.countJobResults(self.history, 'SUCCESS'))
+
     @simple_layout('layouts/basic-github.yaml', driver='github')
     def test_git_https_url(self):
         """Test that git_ssh option gives git url with ssh"""

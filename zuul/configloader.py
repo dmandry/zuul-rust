@@ -1634,6 +1634,7 @@ class PipelineParser(object):
                     'footer-message': str,
                     'dequeue-message': str,
                     'dequeue-on-new-patchset': bool,
+                    'dequeue-on-info-edit': bool,
                     'ignore-dependencies': bool,
                     'post-review': bool,
                     'disable-after-consecutive-failures':
@@ -1692,6 +1693,8 @@ class PipelineParser(object):
         )
         pipeline.dequeue_on_new_patchset = conf.get(
             'dequeue-on-new-patchset', True)
+        pipeline.dequeue_on_info_edit = conf.get(
+            'dequeue-on-info-edit', False)
         pipeline.ignore_dependencies = conf.get(
             'ignore-dependencies', False)
         pipeline.post_review = conf.get(

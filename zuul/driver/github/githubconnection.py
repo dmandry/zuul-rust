@@ -472,6 +472,7 @@ class GithubEventProcessor(object):
                 change = None
                 if event.change_number:
                     change_key = self.connection.source.getChangeKey(event)
+                    self.log.debug("clarkb get change updates change?")
                     change = self.connection._getChange(
                         change_key,
                         refresh=True,
@@ -555,6 +556,8 @@ class GithubEventProcessor(object):
             event.action = 'edited'
             if 'body' in self.body.get('changes', {}):
                 event.body_edited = True
+            if 'title' in self.body.get('changes', {}):
+                event.title_edited = True
         elif action == 'converted_to_draft':
             event.action = action
         elif action == 'ready_for_review':
@@ -2116,6 +2119,7 @@ class GithubConnection(ZKChangeCacheMixin, ZKBranchCacheMixin, BaseConnection):
         self._sha_pr_cache.update(project_name, pr)
 
         log.debug('Got PR %s#%s', project_name, number)
+        self.log.debug("Clarkb got PR %s" % pr)
         return (pr, probj)
 
     def canMerge(self, change, allow_needs, event=None, allow_refresh=False):

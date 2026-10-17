@@ -2783,6 +2783,7 @@ class Scheduler(threading.Thread):
         log = get_annotated_logger(
             self.log, event.zuul_event_id
         )
+        log.debug("clarkb processing trigger event")
         trusted, project = tenant.getProject(event.canonical_project_name)
         if project is None:
             return
@@ -2799,9 +2800,22 @@ class Scheduler(threading.Thread):
         # removing old versions so that we have the latest information
         # for the whole dependency cycle when we enqueue.
         if event.isPatchsetCreated() or event.isMessageChanged():
+            log.debug("clarkb refreshing deps")
             manager.refreshDeps(change, event)
+            log.debug("clarkb deps refreshed")
 
-        if event.isPatchsetCreated():
+        dequeue_on_info_edit = manager.pipeline.dequeue_on_info_edit and \
+            (event.isMessageChanged() or event.isTitleChanged())
+        if event.isPatchsetCreated() or dequeue_on_info_edit:
+            # TODO(clarkb) This is not working for dequeue_on_info_edit
+            # because either updated_at is not updated if keeping the original
+            # code in githubmodel.PullRequest._update() or if we remove the
+            # condition around updated_at updates the change is updated
+            # before we call removeOldVersionsOfChange here. Either way
+            # isUpdateOf's comparison of the updated_at values never
+            # shows a delta because the change passed to
+            # removeOldVersionsOfChange matches the change in the pipeline
+            # and isUpdateOf fails.
             manager.removeOldVersionsOfChange(change, event)
         elif event.isChangeAbandoned():
             manager.removeAbandonedChange(change, event)

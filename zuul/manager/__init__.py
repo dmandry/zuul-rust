@@ -516,6 +516,8 @@ class PipelineManager(metaclass=ABCMeta):
             if not item.live:
                 continue
             for item_change in item.changes:
+                self.log.debug("clarkb change %s isUpdateOf change %s" %
+                               (change, item_change))
                 if change.isUpdateOf(item_change):
                     return item, item_change
         return None, None
