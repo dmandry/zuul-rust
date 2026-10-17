@@ -2705,7 +2705,17 @@ class ZuulTestCase(BaseTestCase):
         launcher._start_cleanup = False
         launcher._stats_interval = 1
         launcher.start()
+        # The Rust swap is opt-in. Tests that build a second launcher stop
+        # it themselves only on the success path; a timeout before that
+        # leaves a non-daemon thread behind and the worker cannot exit.
+        # Cleanups run even when the test fails. stop/join are idempotent.
+        if os.environ.get('ZUUL_LAUNCHER_IMPL') == 'rust':
+            self.addCleanup(self._stopLauncher, launcher)
         return launcher
+
+    def _stopLauncher(self, launcher):
+        launcher.stop()
+        launcher.join()
 
     def createZKContext(self, lock=None):
         if lock is None:

@@ -261,6 +261,11 @@ def run(launcher):
 
 
 def stop(launcher):
+    # Tests create extra launchers and also stop the primary one from
+    # shutdown(). A second stop must not touch the command socket again.
+    if getattr(launcher, "_stop_called", False):
+        return
+    launcher._stop_called = True
     launcher.log.debug("Stopping launcher")
     launcher._running = False
     launcher.stop_event.set()
@@ -285,6 +290,8 @@ def stop(launcher):
 
 
 def join(launcher):
+    if getattr(launcher, "_join_called", False):
+        return
     launcher.log.debug("Joining launcher")
     launcher.launcher_thread.join()
     launcher.join_event.set()
@@ -294,4 +301,5 @@ def join(launcher):
     launcher.nodescan_worker.join()
     launcher.monitoring_server.join()
     launcher._close_rust_session()
+    launcher._join_called = True
     launcher.log.debug("Joined launcher")
