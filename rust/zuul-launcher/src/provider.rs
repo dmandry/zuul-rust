@@ -2029,9 +2029,97 @@ pub fn driver_delete(driver: &str) -> Box<dyn StateMachine> {
     }
 }
 
+/// Temporary adapter for Azure / OpenStack / Kubernetes while those
+/// drivers still lack Rust endpoint-op state machines. One `step` /
+/// `fail` call runs the Python SM so azul and the SDK fakes stay
+/// reachable. AWS does not use this.
+pub struct RemoteMachine {
+    pub kind: String,
+    pub driver: String,
+    pub provider: String,
+    pub node_uuid: String,
+    pub label: String,
+    pub state: String,
+    pub start_time: f64,
+    pub complete: bool,
+    pub interface_ip: Option<String>,
+    pub updates: Option<Value>,
+}
+
+impl RemoteMachine {
+    pub fn new(kind: &str, driver: &str, provider: &str, node: &ProviderNode, label: &Label) -> Self {
+        Self {
+            kind: kind.into(),
+            driver: driver.into(),
+            provider: provider.into(),
+            node_uuid: node.uuid(),
+            label: label.name.clone(),
+            state: "start".into(),
+            start_time: 0.0,
+            complete: false,
+            interface_ip: None,
+            updates: None,
+        }
+    }
+}
+
+impl StateMachine for RemoteMachine {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        let result = cloud::invoke(
+            "step",
+            &json!({
+                "kind": self.kind,
+                "driver": self.driver,
+                "provider": self.provider,
+                "node_uuid": self.node_uuid,
+                "label": self.label,
+            }),
+        )?;
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result.get("complete").and_then(|v| v.as_bool()).unwrap_or(false);
+        self.interface_ip = result
+            .get("interface_ip")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        self.updates = result.get("node").cloned();
+        Ok(())
+    }
+    fn fail(&mut self) {
+        let result = cloud::invoke(
+            "fail",
+            &json!({
+                "kind": self.kind,
+                "driver": self.driver,
+                "provider": self.provider,
+                "node_uuid": self.node_uuid,
+                "label": self.label,
+            }),
+        );
+        self.complete = true;
+        self.state = "complete".into();
+        if let Ok(value) = result {
+            if let Some(state) = value.get("state").and_then(|v| v.as_str()) {
+                self.state = state.to_string();
+            }
+            self.complete = value.get("complete").and_then(|v| v.as_bool()).unwrap_or(true);
+            self.updates = value.get("node").cloned();
+        }
+    }
+    fn complete(&self) -> bool { self.complete }
+    fn state_name(&self) -> String { self.state.clone() }
+    fn start_time(&self) -> f64 { self.start_time }
+    fn set_start_time(&mut self, t: f64) { self.start_time = t; }
+    fn interface_ip(&self) -> Option<String> { self.interface_ip.clone() }
+    fn node_updates(&self) -> Option<Value> { self.updates.clone() }
+    fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
+}
+
 /// Cloud-backed provider. AWS create/delete state machines run in Rust
-/// and call fine-grained endpoint ops through `cloud`. Other drivers
-/// use the offline call-order stubs until they gain the same adapters.
+/// and call fine-grained endpoint ops through `cloud`. Other non-static
+/// drivers keep a temporary RemoteMachine adapter until they gain the
+/// same endpoint-op path. Static stays fully Rust.
 pub struct CloudProvider {
     pub name: String,
     pub canonical_name: String,
@@ -2077,11 +2165,38 @@ impl Provider for CloudProvider {
         if self.driver_name == "aws" {
             return Box::new(AwsCreate::from_provider(self, node, label));
         }
+        if cloud::enabled() && self.driver_name != "static" {
+            return Box::new(RemoteMachine::new(
+                "create",
+                &self.driver_name,
+                &self.canonical_name,
+                node,
+                label,
+            ));
+        }
         driver_create(&self.driver_name)
     }
     fn delete_machine(&self, node: &ProviderNode) -> Box<dyn StateMachine> {
         if self.driver_name == "aws" {
             return Box::new(AwsDelete::from_provider(self, node));
+        }
+        if cloud::enabled() && self.driver_name != "static" {
+            let label_name = node.label();
+            let label = self
+                .labels
+                .get(&label_name)
+                .cloned()
+                .unwrap_or_else(|| default_label(&label_name, false));
+            return Box::new(RemoteMachine::new(
+                "delete",
+                &self.driver_name,
+                &self.canonical_name,
+                node,
+                &label,
+            ));
+        }
+        if self.driver_name == "static" {
+            return Box::new(StaticDelete::new(node.reuse_flag()));
         }
         driver_delete(&self.driver_name)
     }
