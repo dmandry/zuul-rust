@@ -990,6 +990,7 @@ def _accept_requested(launcher, _data):
     that method runs. Accepted requests go through _checkRequest, which
     keeps both nodes of a request on one provider after a retry.
     """
+    from kazoo.exceptions import NoNodeError
     from opentelemetry import trace
     from zuul.launcher.server import NodesetRequestError
     from zuul.lib import tracing as zuul_tracing
@@ -1062,12 +1063,20 @@ def _accept_requested(launcher, _data):
                     ctx, event_state=request.EventState.COMPLETE
                 )
                 request.releaseLock(ctx)
+        except NoNodeError:
+            # The test deleted the request between the cache read and
+            # refresh. Python sleeps long enough to miss this; our poll
+            # hits it. A missing request is not a launcher error.
+            continue
         finally:
             if request.hasLock():
-                ctx = ZKContext(
-                    launcher.zk_client, None, launcher.stop_event, log
-                )
-                request.releaseLock(ctx)
+                try:
+                    ctx = ZKContext(
+                        launcher.zk_client, None, launcher.stop_event, log
+                    )
+                    request.releaseLock(ctx)
+                except NoNodeError:
+                    pass
     return {"ok": True}
 
 

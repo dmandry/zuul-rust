@@ -1066,8 +1066,23 @@ impl Launcher {
     pub fn process_nodes(&mut self) {
         let ids = self.matching_ids("matching_nodes");
         for id in ids {
+            let before = self.api.nodes.get(&id).map(|n| n.state()).unwrap_or_default();
             if let Err(e) = self.process_provider_node(&id) {
                 self.messages.push(format!("node {id}: {e}"));
+            }
+            let Some(node) = self.api.nodes.get(&id) else {
+                continue;
+            };
+            let after = node.state();
+            // The pass that fails a slot host must not go on to delete
+            // its subnodes. The cache has to show the failed main node
+            // with the subnodes still present.
+            if before != after
+                && !node.subnodes().is_empty()
+                && matches!(after.as_str(), node_state::FAILED | node_state::TEMPFAILED)
+            {
+                self.wake();
+                break;
             }
         }
     }
@@ -1361,8 +1376,12 @@ impl Launcher {
         let ids = main.subnodes();
         for sub_id in ids {
             // _setSubnodeStates ignores a subnode getProviderNode cannot
-            // see. The crash test hides every node that way.
-            if cloud::enabled() && !self.python_node_present(&sub_id) {
+            // see. Failure still has to be copied: the assigned slot is
+            // what _checkRequest retries, and the crash test hides nodes.
+            if cloud::enabled()
+                && !matches!(state, node_state::FAILED | node_state::TEMPFAILED)
+                && !self.python_node_present(&sub_id)
+            {
                 continue;
             }
             let Some(mut sub) = self.api.nodes.get(&sub_id).cloned() else {
