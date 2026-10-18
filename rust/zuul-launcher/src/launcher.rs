@@ -787,8 +787,9 @@ impl Launcher {
         let mut all: HashSet<String> = order.iter().cloned().collect();
         let mut per_label: Vec<Vec<String>> = Vec::new();
         // Providers already used by non-failed nodes in this request
-        // (server.py existing_provider_names) drive locality.
-        let mut existing_providers: HashMap<String, i64> = HashMap::new();
+        // (server.py existing_provider_names Counter) drive locality.
+        // Vec preserves first-encountered order for most_common ties.
+        let mut existing_providers: Vec<(String, i64)> = Vec::new();
         for (i, label_name) in request.labels().iter().enumerate() {
             let mut failures: HashMap<String, i64> = HashMap::new();
             if let Some(pnd) = request.provider_node_data().get(i) {
@@ -811,7 +812,14 @@ impl Launcher {
                         if node.state() != node_state::FAILED
                             && node.state() != node_state::TEMPFAILED
                         {
-                            *existing_providers.entry(node.provider()).or_insert(0) += 1;
+                            let pname = node.provider();
+                            if let Some((_, c)) =
+                                existing_providers.iter_mut().find(|(n, _)| n == &pname)
+                            {
+                                *c += 1;
+                            } else {
+                                existing_providers.push((pname, 1));
+                            }
                         }
                     }
                 }
@@ -842,13 +850,23 @@ impl Launcher {
         // Prefer the most common existing provider, then preferred_provider,
         // then the first provider that can supply every label.
         let mut main: Option<String> = None;
-        if let Some((name, _)) = existing_providers.iter().max_by(|a, b| {
-            a.1.cmp(b.1).then(a.0.cmp(b.0))
-        }) {
+        // Match collections.Counter.most_common(): highest count wins;
+        // ties keep first-encountered insertion order (not alphabetical).
+        let mut most_common: Option<(String, i64)> = None;
+        for (name, count) in &existing_providers {
+            match &most_common {
+                None => most_common = Some((name.clone(), *count)),
+                Some((_, best)) if *count > *best => {
+                    most_common = Some((name.clone(), *count));
+                }
+                _ => {}
+            }
+        }
+        if let Some((name, _)) = most_common {
             messages.push(format!(
                 "Using most common provider {name} from {existing_providers:?}"
             ));
-            main = Some(name.clone());
+            main = Some(name);
         } else if let Some(pref) = request
             .preferred_provider()
             .filter(|n| order.iter().any(|p| p == n))

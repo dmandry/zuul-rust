@@ -1876,12 +1876,14 @@ def _emit_upload_workers_gauge(launcher, value):
 def _upload_artifact_job(launcher, data):
     """One UploadJob per artifact on the 1-worker upload pool.
 
-    Honors MonkeyPatch of zuul.launcher.server.UploadJob.run (tests count
-    and block on that entry). The body runs Rust-planned jobs through
-    _upload_job_run (SDK getImage*Job.run boundary).
+    Honors MonkeyPatch of zuul.launcher.server.UploadJob.run. Planning is
+    Rust-supplied (`planned`); lock/UPLOADING/finalize/release match
+    server.py UploadJob._run so ZK versions stay coherent. Only
+    getImage*Job.run crosses the SDK/patch boundary.
     """
     import types
 
+    from zuul.lib.logutil import get_annotated_logger
     from zuul.launcher.server import UploadJob
 
     _bind_missing_methods(launcher)
@@ -1909,22 +1911,144 @@ def _upload_artifact_job(launcher, data):
     job = UploadJob(launcher, iba, uploads, all_uploads)
 
     def _rust_run(self):
-        for spec in planned:
-            kind = spec.get("kind") or "upload"
-            payload = {
-                "kind": "copy" if kind == "copy-dependent" else kind,
-                "upload_uuid": spec.get("upload_uuid"),
-                "dependents": spec.get("dependents") or [],
-            }
-            if spec.get("source_external_id"):
-                payload["source_external_id"] = spec["source_external_id"]
-            if spec.get("source_provider"):
-                payload["source_provider"] = spec["source_provider"]
-            _upload_job_run(launcher, payload)
+        path = None
+        locked = []
+        with launcher.createZKContext(None, self.log) as ctx:
+            try:
+                self.log.debug(
+                    "Starting upload job for %s", self.image_build_artifact
+                )
+                # Acquire all locks + set UPLOADING once (server.py).
+                self._acquireUploadLocks(ctx, locked)
+                if not locked:
+                    return
+                locked_by_uuid = {u.uuid: u for u in locked}
+                # Top-level planned jobs (imports, ready copies, uploads).
+                # Dependents run after a successful source, still under
+                # the locks acquired above.
+                for spec in planned:
+                    upload_uuid = spec.get("upload_uuid")
+                    upload = locked_by_uuid.get(upload_uuid)
+                    if upload is None:
+                        continue
+                    kind = spec.get("kind") or "upload"
+                    if kind == "copy-dependent":
+                        # Only run when a source schedules us.
+                        continue
+                    log = get_annotated_logger(self.log, upload=upload.uuid)
+                    path_ref = {"path": path}
+                    external_id = _endpoint_upload_execute(
+                        launcher,
+                        upload,
+                        iba,
+                        kind,
+                        spec,
+                        path_ref,
+                        log,
+                    )
+                    if path_ref.get("path"):
+                        path = path_ref["path"]
+                    try:
+                        self.finalizeUpload(upload, ctx, log)
+                        if (
+                            not upload.validated
+                            and upload.state == upload.State.READY
+                        ):
+                            launcher.addImageValidateEvent(upload)
+                    except Exception:
+                        log.exception(
+                            "Unable to update state for %s", upload
+                        )
+                    try:
+                        upload.releaseLock(ctx)
+                        log.debug("Released upload lock for %s", upload)
+                        locked.remove(upload)
+                        locked_by_uuid.pop(upload.uuid, None)
+                    except Exception:
+                        log.exception(
+                            "Unable to release lock for %s", upload
+                        )
+                    # Dependent copies after a successful source.
+                    if external_id:
+                        for dep_uuid in spec.get("dependents") or []:
+                            dep = locked_by_uuid.get(dep_uuid)
+                            if dep is None:
+                                continue
+                            dep_log = get_annotated_logger(
+                                self.log, upload=dep.uuid
+                            )
+                            dep_log.debug("Scheduling copy for %s", dep)
+                            _endpoint_upload_execute(
+                                launcher,
+                                dep,
+                                iba,
+                                "copy",
+                                {
+                                    "source_external_id": external_id,
+                                    "source_provider": spec.get(
+                                        "source_provider"
+                                    ),
+                                },
+                                {"path": None},
+                                dep_log,
+                            )
+                            try:
+                                self.finalizeUpload(dep, ctx, dep_log)
+                                if (
+                                    not dep.validated
+                                    and dep.state == dep.State.READY
+                                ):
+                                    launcher.addImageValidateEvent(dep)
+                            except Exception:
+                                dep_log.exception(
+                                    "Unable to update state for %s", dep
+                                )
+                            try:
+                                dep.releaseLock(ctx)
+                                dep_log.debug(
+                                    "Released upload lock for %s", dep
+                                )
+                                locked.remove(dep)
+                                locked_by_uuid.pop(dep.uuid, None)
+                            except Exception:
+                                dep_log.exception(
+                                    "Unable to release lock for %s", dep
+                                )
+                # Leftover locks (skipped dependents / unplanned): finalize
+                # like UploadJob's unused-lock loop.
+                for upload in locked[:]:
+                    log = get_annotated_logger(self.log, upload=upload.uuid)
+                    try:
+                        self.finalizeUpload(upload, ctx, log)
+                    except Exception:
+                        log.exception(
+                            "Unable to update state for %s", upload
+                        )
+                    try:
+                        upload.releaseLock(ctx)
+                        log.debug(
+                            "Released unused upload lock for %s", upload
+                        )
+                        locked.remove(upload)
+                    except Exception:
+                        log.exception(
+                            "Unable to release unused lock for %s", upload
+                        )
+            finally:
+                if path:
+                    try:
+                        os.unlink(path)
+                        self.log.info("UploadJob deleted %s", path)
+                    except Exception:
+                        self.log.exception("Unable to delete %s", path)
+                self.log.debug(
+                    "Finished upload job for %s with %s uploads",
+                    self.image_build_artifact,
+                    len(locked),
+                )
+        launcher.wake_event.set()
 
     job._run = types.MethodType(_rust_run, job)
-    # Sync Python queue so UploadJob.run's finally discard matches
-    # server.py and duplicate checkMissingUploads calls no-op.
     for upload in uploads:
         launcher.upload_uuids_in_queue.add(upload.uuid)
     _emit_upload_workers_gauge(launcher, 1)
@@ -1935,29 +2059,192 @@ def _upload_artifact_job(launcher, data):
     return {"ok": True, "planned": len(planned)}
 
 
-def _upload_job_run(launcher, data):
-    """Run one planned upload/import/copy job via provider job classes.
+def _endpoint_upload_execute(
+    launcher, upload, iba, kind, spec, path_ref, log
+):
+    """SDK-boundary EndpointUploadJob._run: getImage*Job.run + external_id.
 
-    Constructs AwsImageUploadJob / AwsImageImportJob / AwsImageCopyJob
-    (or azure/openstack equivalents) through provider.getImage*Job and
-    calls .run() so unittest patches of those methods apply. Updates the
-    ImageUpload in ZK (lock, UPLOADING, external_id, READY/FAILED).
+    Caller holds the upload lock and has already set UPLOADING. Matches
+    server.py EndpointUploadJob (createZKContext(upload._lock) for the
+    attribute write; exceptions logged as 'Error in endpoint upload job').
     """
+    external_id = None
+    timer = nullcontext()
+    if hasattr(launcher, "statsd_timer"):
+        timer = launcher.statsd_timer(
+            "zuul.image.%s.upload.%s.duration"
+            % (
+                _statsd_name(upload.canonical_name),
+                _statsd_name(upload.endpoint_name),
+            )
+        )
+    try:
+        with timer:
+            log.info("Starting upload %s", upload)
+            provider_cname = upload.providers[0]
+            provider = launcher._getProviderByCanonicalName(provider_cname)
+            provider_image = None
+            for image in provider.images.values():
+                if image.canonical_name == upload.canonical_name:
+                    provider_image = image
+                    break
+            if provider_image is None:
+                raise Exception(
+                    "Unable to find image %s" % upload.canonical_name
+                )
+            metadata = provider.getUploadTags(
+                launcher.system.system_id,
+                provider_image,
+                upload.uuid,
+            )
+            image_name = "%s-%s" % (provider_image.name, upload.uuid)
+            md5 = iba.md5sum
+            sha256 = iba.sha256
+            image_format = iba.format
+            if kind == "import":
+                job = provider.getImageImportJob(
+                    iba.url,
+                    provider_image,
+                    image_name,
+                    image_format,
+                    metadata,
+                    md5,
+                    sha256,
+                )
+                if job is None:
+                    raise Exception("no import job for %s" % upload.uuid)
+                external_id = job.run()
+            elif kind == "copy":
+                source_external_id = spec.get("source_external_id")
+                if not source_external_id:
+                    raise Exception("copy requires source_external_id")
+                source_provider = provider
+                if spec.get("source_provider"):
+                    source_provider = launcher._getProviderByCanonicalName(
+                        spec["source_provider"]
+                    )
+                job = provider.getImageCopyJob(
+                    source_provider,
+                    provider_image,
+                    image_name,
+                    image_format,
+                    metadata,
+                    md5,
+                    sha256,
+                )
+                if job is None:
+                    raise Exception("no copy job for %s" % upload.uuid)
+                external_id = job.run(source_external_id)
+            else:
+                path = path_ref.get("path")
+                if not path:
+                    path = _upload_download(launcher, iba)
+                    if not path:
+                        raise Exception(
+                            "Unable to download artifact %s" % iba
+                        )
+                    # Match UploadJob: decompress + checksum before upload.
+                    path = _upload_decompress(launcher, path, log)
+                    _upload_validate_checksum(iba, path, log)
+                    path_ref["path"] = path
+                job = provider.getImageUploadJob(
+                    provider_image,
+                    image_name,
+                    image_format,
+                    metadata,
+                    md5,
+                    sha256,
+                )
+                if job is None:
+                    raise Exception("no upload job for %s" % upload.uuid)
+                external_id = job.run(path)
+            log.info("Finished upload %s", upload)
+            if external_id:
+                with launcher.createZKContext(upload._lock, log) as ctx:
+                    upload.updateAttributes(ctx, external_id=external_id)
+    except Exception:
+        log.exception("Error in endpoint upload job")
+        return None
+    return external_id
+
+
+def _statsd_name(name):
+    from zuul.launcher.server import _normalize_statsd_name
+
+    return _normalize_statsd_name(name)
+
+
+def _upload_decompress(launcher, path, log):
+    """Match UploadJob._handleCompression for .zst artifacts."""
+    import subprocess
+
+    inflated_path = path
+    if path.endswith(".zst"):
+        orig_path = path
+        inflated_path = path[: -len(".zst")]
+        try:
+            subprocess.run(
+                ["zstd", "-dq", orig_path],
+                cwd=launcher.temp_dir,
+                check=True,
+                capture_output=True,
+            )
+            log.debug("Decompressed image to %s", inflated_path)
+        except Exception:
+            if os.path.exists(inflated_path):
+                os.unlink(inflated_path)
+                log.info("Deleted decompressed image %s", inflated_path)
+            raise
+        finally:
+            if os.path.exists(orig_path):
+                os.unlink(orig_path)
+                log.info("Deleted zst source image %s", orig_path)
+    return inflated_path
+
+
+def _upload_validate_checksum(iba, path, log):
+    """Match UploadJob._validateChecksum."""
+    import hashlib
+
+    if not iba.sha256:
+        log.debug(
+            "Image build artifact %s has no sha256 checksum, "
+            "skipping validation",
+            iba,
+        )
+        return
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while data := f.read(4096):
+            h.update(data)
+    digest = h.hexdigest()
+    if digest != iba.sha256:
+        raise Exception(
+            "Downloaded file %s sha256 digest %s does not match "
+            "artifact %s digest %s" % (path, digest, iba, iba.sha256)
+        )
+
+
+def _upload_job_run(launcher, data):
+    """Legacy single-upload entry (upload.job_run) for isolated SDK runs.
+
+    Prefer upload.artifact_job which owns locking. This path still locks
+    one upload for callers that invoke job_run directly.
+    """
+    from zuul.lib.logutil import get_annotated_logger
     from zuul.zk.exceptions import LockException
 
     _bind_missing_methods(launcher)
     kind = data.get("kind") or "upload"
     upload_uuid = data["upload_uuid"]
-    source_external_id = data.get("source_external_id")
-    dependents = list(data.get("dependents") or [])
     upload = launcher.image_upload_registry.getItem(upload_uuid)
     if upload is None:
         raise Exception("upload %s not found" % upload_uuid)
     iba = launcher.image_build_registry.getItem(upload.artifact_uuid)
     if iba is None:
         raise Exception("artifact %s not found" % upload.artifact_uuid)
-    path = None
-    external_id = None
+    log = get_annotated_logger(launcher.log, upload=upload.uuid)
+    path_ref = {"path": None}
     try:
         with launcher.createZKContext(None, launcher.log) as ctx:
             try:
@@ -1969,7 +2256,10 @@ def _upload_job_run(launcher, data):
                             "state": upload.state,
                             "skipped": True,
                         }
-                    if upload.state != upload.State.PENDING and upload.state != upload.State.UPLOADING:
+                    if upload.state not in (
+                        upload.State.PENDING,
+                        upload.State.UPLOADING,
+                    ):
                         return {
                             "external_id": upload.external_id,
                             "state": upload.state,
@@ -1977,102 +2267,10 @@ def _upload_job_run(launcher, data):
                         }
                     with upload.activeContext(ctx):
                         upload.state = upload.State.UPLOADING
-                    provider_cname = upload.providers[0]
-                    provider = launcher._getProviderByCanonicalName(provider_cname)
-                    provider_image = None
-                    for image in provider.images.values():
-                        if image.canonical_name == upload.canonical_name:
-                            provider_image = image
-                            break
-                    if provider_image is None:
-                        raise Exception(
-                            "Unable to find image %s" % upload.canonical_name
-                        )
-                    metadata = provider.getUploadTags(
-                        launcher.system.system_id,
-                        provider_image,
-                        upload.uuid,
-                    )
-                    image_name = "%s-%s" % (provider_image.name, upload.uuid)
-                    args = dict(
-                        provider_image=provider_image,
-                        image_name=image_name,
-                        image_format=iba.format,
-                        metadata=metadata,
-                        md5=iba.md5sum,
-                        sha256=iba.sha256,
+                    external_id = _endpoint_upload_execute(
+                        launcher, upload, iba, kind, data, path_ref, log
                     )
                     try:
-                        if kind == "import":
-                            job = provider.getImageImportJob(
-                                iba.url,
-                                args["provider_image"],
-                                args["image_name"],
-                                args["image_format"],
-                                args["metadata"],
-                                args["md5"],
-                                args["sha256"],
-                            )
-                            if job is None:
-                                raise Exception(
-                                    "no import job for %s" % upload_uuid
-                                )
-                            external_id = job.run()
-                        elif kind == "copy":
-                            if not source_external_id:
-                                raise Exception(
-                                    "copy requires source_external_id"
-                                )
-                            source_provider = provider
-                            if data.get("source_provider"):
-                                source_provider = (
-                                    launcher._getProviderByCanonicalName(
-                                        data["source_provider"]
-                                    )
-                                )
-                            job = provider.getImageCopyJob(
-                                source_provider,
-                                args["provider_image"],
-                                args["image_name"],
-                                args["image_format"],
-                                args["metadata"],
-                                args["md5"],
-                                args["sha256"],
-                            )
-                            if job is None:
-                                raise Exception(
-                                    "no copy job for %s" % upload_uuid
-                                )
-                            external_id = job.run(source_external_id)
-                        else:
-                            # upload: download then AwsImageUploadJob.run
-                            path = _upload_download(launcher, iba)
-                            job = provider.getImageUploadJob(
-                                args["provider_image"],
-                                args["image_name"],
-                                args["image_format"],
-                                args["metadata"],
-                                args["md5"],
-                                args["sha256"],
-                            )
-                            if job is None:
-                                raise Exception(
-                                    "no upload job for %s" % upload_uuid
-                                )
-                            external_id = job.run(path)
-                        if external_id:
-                            upload.updateAttributes(
-                                ctx, external_id=external_id
-                            )
-                    except Exception:
-                        # Match EndpointUploadJob.run: log and finalize
-                        # without external_id (retry copy or FAILED).
-                        launcher.log.exception(
-                            "Error in endpoint upload job"
-                        )
-                    # Match UploadJob.finalizeUpload (catch BadVersion etc.).
-                    try:
-                        upload.refresh(ctx)
                         with upload.activeContext(ctx):
                             if upload.external_id:
                                 upload.state = upload.State.READY
@@ -2088,7 +2286,7 @@ def _upload_job_run(launcher, data):
                         ):
                             launcher.addImageValidateEvent(upload)
                     except Exception:
-                        launcher.log.exception(
+                        log.exception(
                             "Unable to update state for %s", upload
                         )
             except LockException:
@@ -2096,69 +2294,18 @@ def _upload_job_run(launcher, data):
                 return {"locked": False, "external_id": None}
     finally:
         launcher.upload_uuids_in_queue.discard(upload_uuid)
+        path = path_ref.get("path")
         if path and os.path.exists(path):
             try:
                 os.unlink(path)
             except Exception:
                 launcher.log.exception("Unable to delete %s", path)
-    # Dependent copies after a successful source. If the source failed,
-    # finalize leftovers like UploadJob's unused-lock loop so skipped
-    # copy targets become DELETING/FAILED instead of stuck PENDING.
-    if external_id:
-        for dep_uuid in dependents:
-            try:
-                _upload_job_run(
-                    launcher,
-                    {
-                        "kind": "copy",
-                        "upload_uuid": dep_uuid,
-                        "source_external_id": external_id,
-                    },
-                )
-            except Exception:
-                launcher.log.exception("Dependent copy %s failed", dep_uuid)
-    else:
-        for dep_uuid in dependents:
-            try:
-                _finalize_failed_upload(launcher, dep_uuid)
-            except Exception:
-                launcher.log.exception(
-                    "Unable to finalize dependent upload %s", dep_uuid
-                )
     launcher.wake_event.set()
     return {
-        "external_id": external_id,
+        "external_id": getattr(upload, "external_id", None),
         "state": getattr(upload, "state", None),
         "locked": True,
     }
-
-
-def _finalize_failed_upload(launcher, upload_uuid):
-    """finalizeUpload for an upload with no external_id (retry or FAILED)."""
-    from zuul.zk.exceptions import LockException
-
-    upload = launcher.image_upload_registry.getItem(upload_uuid)
-    if upload is None:
-        return
-    with launcher.createZKContext(None, launcher.log) as ctx:
-        try:
-            with upload.locked(ctx, blocking=False):
-                upload.refresh(ctx)
-                if upload.external_id or upload.state in (
-                    upload.State.READY,
-                    upload.State.FAILED,
-                    upload.State.DELETING,
-                ):
-                    return
-                with upload.activeContext(ctx):
-                    if upload.attempt < 2:
-                        upload.copy(ctx)
-                        upload.state = upload.State.DELETING
-                        launcher.upload_deleted_event.set()
-                    else:
-                        upload.state = upload.State.FAILED
-        except LockException:
-            launcher.image_updated_event.set()
 
 
 def _upload_download(launcher, iba):
