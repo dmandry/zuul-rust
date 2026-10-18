@@ -1986,19 +1986,20 @@ def _upload_job_run(launcher, data):
                 os.unlink(path)
             except Exception:
                 launcher.log.exception("Unable to delete %s", path)
-    # Dependent copies (same config hash) after a successful upload/import.
-    for dep_uuid in dependents:
-        try:
-            _upload_job_run(
-                launcher,
-                {
-                    "kind": "copy",
-                    "upload_uuid": dep_uuid,
-                    "source_external_id": external_id,
-                },
-            )
-        except Exception:
-            launcher.log.exception("Dependent copy %s failed", dep_uuid)
+    # Dependent copies (same config hash) only after a successful source.
+    if external_id:
+        for dep_uuid in dependents:
+            try:
+                _upload_job_run(
+                    launcher,
+                    {
+                        "kind": "copy",
+                        "upload_uuid": dep_uuid,
+                        "source_external_id": external_id,
+                    },
+                )
+            except Exception:
+                launcher.log.exception("Dependent copy %s failed", dep_uuid)
     launcher.wake_event.set()
     return {
         "external_id": external_id,
