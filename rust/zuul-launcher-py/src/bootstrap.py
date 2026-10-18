@@ -776,6 +776,7 @@ def cloud_call(launcher, op, payload):
         elif result.get("error_kind") == "other":
             launcher.log.exception("cloud op %s failed", op)
         else:
+            # missing_provider / quota / capacity: info, no traceback
             launcher.log.info(
                 "cloud op %s %s: %s",
                 op,
@@ -793,6 +794,10 @@ def _cloud_error(exc):
         return {"error_kind": "quota", "message": message}
     if isinstance(exc, getattr(exceptions, "CapacityException", ())):
         return {"error_kind": "capacity", "message": message}
+    # Provider lookup misses during stop/reload (connection_filter
+    # recreate) are expected; do not log.exception for checkLogs.
+    if isinstance(exc, LookupError) and "Unable to find provider" in str(exc):
+        return {"error_kind": "missing_provider", "message": message}
     return {"error_kind": "other", "message": message}
 
 
@@ -801,7 +806,7 @@ def _find_provider(launcher, canonical):
         for provider in providers:
             if provider.canonical_name == canonical or provider.name == canonical:
                 return provider
-    raise Exception("Unable to find provider %s" % canonical)
+    raise LookupError("Unable to find provider %s" % canonical)
 
 
 def _choose_launcher_for_endpoint(launcher, endpoint):

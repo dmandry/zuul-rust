@@ -722,6 +722,10 @@ impl Launcher {
         }
         self.api.write_request(&req).map_err(|e| e.to_string())?;
         self.messages.append(&mut messages);
+        // Wake so a peer launcher that owns the new nodes (launcher_score)
+        // can process them on the next pass; same-launcher process_nodes
+        // also runs in this process_once after process_requests.
+        self.wake();
         Ok(())
     }
 
