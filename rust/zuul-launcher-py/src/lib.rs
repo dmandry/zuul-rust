@@ -59,6 +59,26 @@ impl PyLauncher {
         call_py(py, "start", (slf,))
     }
 
+    /// Start Rust cleanup / stats / upload pools (called from bootstrap.start).
+    fn start_rust_workers(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let rust = slf.borrow().rust.clone();
+        let mut guard = rust.lock().unwrap();
+        if let Some(launcher) = guard.as_mut() {
+            launcher.start_workers();
+        }
+        Ok(())
+    }
+
+    /// Stop Rust cleanup / stats / upload pools (called from bootstrap.stop).
+    fn stop_rust_workers(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let rust = slf.borrow().rust.clone();
+        let mut guard = rust.lock().unwrap();
+        if let Some(launcher) = guard.as_mut() {
+            launcher.stop_workers();
+        }
+        Ok(())
+    }
+
     fn stop(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {
         call_py(py, "stop", (slf,))
     }
@@ -112,12 +132,38 @@ impl PyLauncher {
                 return Ok(());
             }
         }
+        // Feed layout/image/delete events into Rust maintain_images_and_uploads.
+        let flags_json = call_py_value(py, "maintenance_flags", (slf,))?;
+        let flags_text: String = flags_json.extract(py)?;
         let hostname: String = slf.getattr("hostname")?.extract()?;
         let rust = slf.borrow().rust.clone();
         let (events, stats) = py.allow_threads(|| {
             let _cloud = zuul_launcher::cloud::enter(&hostname);
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
+                if let Ok(flags) = zuul_launcher::jsonutil::loads(&flags_text) {
+                    if flags
+                        .get("layout_updated")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        launcher.layout_updated = true;
+                    }
+                    if flags
+                        .get("image_updated")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        launcher.image_updated = true;
+                    }
+                    if flags
+                        .get("upload_deleted")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        launcher.upload_deleted = true;
+                    }
+                }
                 let _active = zuul_launcher::cloud::enter_launcher(
                     launcher as *mut _ as *mut (),
                 );
@@ -137,7 +183,7 @@ impl PyLauncher {
         if stats != "[]" {
             call_py(py, "emit_stats", (slf, stats))?;
         }
-        call_py(py, "maintain_uploads", (slf,))?;
+        // maintain_images_and_uploads runs inside process_once (no Python duplicate).
         // No ChildrenWatch in this loop, so poll again after MAX_SLEEP
         // instead of waiting out MIN_INTERVAL.
         if slf.getattr("_running")?.is_truthy()? {
@@ -163,7 +209,17 @@ impl PyLauncher {
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        call_py(py, "call_launcher", (slf, "checkMissingUploads"))
+        let hostname: String = slf.getattr("hostname")?.extract()?;
+        let rust = slf.borrow().rust.clone();
+        py.allow_threads(|| {
+            let _cloud = zuul_launcher::cloud::enter(&hostname);
+            let mut guard = rust.lock().unwrap();
+            if let Some(launcher) = guard.as_mut() {
+                launcher.api.sync();
+                launcher.check_missing_uploads();
+            }
+        });
+        Ok(())
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]
@@ -173,7 +229,17 @@ impl PyLauncher {
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        call_py(py, "call_launcher", (slf, "checkOldImages"))
+        let hostname: String = slf.getattr("hostname")?.extract()?;
+        let rust = slf.borrow().rust.clone();
+        py.allow_threads(|| {
+            let _cloud = zuul_launcher::cloud::enter(&hostname);
+            let mut guard = rust.lock().unwrap();
+            if let Some(launcher) = guard.as_mut() {
+                launcher.api.sync();
+                launcher.check_old_images();
+            }
+        });
+        Ok(())
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]

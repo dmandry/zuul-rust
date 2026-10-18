@@ -1014,6 +1014,36 @@ impl LauncherApi {
         self.reindex();
         Ok(())
     }
+
+    /// Persist an image upload (ImageUpload ZKObject, zlib JSON).
+    pub fn write_upload(&mut self, upload: &ImageUpload) -> Result<(), ZkError> {
+        let path = format!("/zuul/image-uploads/uploads/{}", upload.uuid());
+        let bytes = dumps_compressed(&upload.serialize());
+        self.zk.ensure_path("/zuul/image-uploads/uploads")?;
+        self.zk
+            .ensure_path(&format!("/zuul/image-uploads/locks/{}", upload.uuid()))?;
+        if self.zk.exists(&path)?.is_some() {
+            let ver = self.zk.get(&path)?.1.version;
+            self.zk.set(&path, &bytes, ver)?;
+        } else {
+            self.zk.create(&path, &bytes, CreateMode::Persistent)?;
+        }
+        self.uploads.insert(upload.uuid(), upload.clone());
+        Ok(())
+    }
+
+    /// Delete an image upload znode (and its lock directory).
+    pub fn delete_upload(&mut self, upload_uuid: &str) -> Result<(), ZkError> {
+        let path = format!("/zuul/image-uploads/uploads/{upload_uuid}");
+        match self.zk.delete(&path, false) {
+            Ok(()) | Err(ZkError::NoNode) => {}
+            Err(e) => return Err(e),
+        }
+        let lock_path = format!("/zuul/image-uploads/locks/{upload_uuid}");
+        let _ = self.zk.delete(&lock_path, true);
+        self.uploads.remove(upload_uuid);
+        Ok(())
+    }
 }
 
 pub fn system_id(zk: &dyn ZkOps) -> Result<String, ZkError> {

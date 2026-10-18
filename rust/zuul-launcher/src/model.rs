@@ -1031,6 +1031,15 @@ impl ImageUpload {
             }
         })
     }
+    pub fn set_external_id(&mut self, external_id: Option<&str>) {
+        self.fields.insert(
+            "external_id".into(),
+            match external_id {
+                Some(id) => json!(id),
+                None => Value::Null,
+            },
+        );
+    }
     pub fn timestamp(&self) -> f64 {
         self.fields
             .get("timestamp")

@@ -12,7 +12,9 @@ use crate::model::{
     UPLOAD_STATES,
 };
 use crate::nodescan::{NodescanRequest, NodescanWorker};
-use crate::provider::{AdvanceError, Provider, StateMachine, StaticNodeConfig};
+use crate::provider::{
+    AdvanceError, AwsSnapshot, Provider, StateMachine, StaticNodeConfig,
+};
 use crate::upload::{PlannedJob, UploadArgs, UploadPlanner};
 use crate::workers::{
     matching_endpoints, CleanupWorker, EndpointRef, StatsWorker, UploadPools,
@@ -67,8 +69,9 @@ pub struct Launcher {
     pub cleanup_worker: Option<CleanupWorker>,
     pub stats_worker: Option<StatsWorker>,
     pub upload_pools: Option<UploadPools>,
-    pub upload_uuids_in_queue: HashSet<String>,
-    pub upload_uuids_in_delete_queue: HashSet<String>,
+    /// Shared with upload pool workers so they can discard finished uuids.
+    pub upload_uuids_in_queue: Arc<Mutex<HashSet<String>>>,
+    pub upload_uuids_in_delete_queue: Arc<Mutex<HashSet<String>>>,
     /// Pending (provider, label) keys for quota deferral within one
     /// process_requests pass. Shared with the accept_one PyO3 hook so
     /// patched `_acceptRequest` still sees the same deferral set.
@@ -135,12 +138,28 @@ impl Launcher {
             cleanup_worker: None,
             stats_worker: None,
             upload_pools: None,
-            upload_uuids_in_queue: HashSet::new(),
-            upload_uuids_in_delete_queue: HashSet::new(),
+            upload_uuids_in_queue: Arc::new(Mutex::new(HashSet::new())),
+            upload_uuids_in_delete_queue: Arc::new(Mutex::new(HashSet::new())),
             accept_pending: HashSet::new(),
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
+        }
+    }
+
+    fn queue_contains(set: &Arc<Mutex<HashSet<String>>>, uuid: &str) -> bool {
+        set.lock().map(|g| g.contains(uuid)).unwrap_or(false)
+    }
+
+    fn queue_insert(set: &Arc<Mutex<HashSet<String>>>, uuid: String) {
+        if let Ok(mut g) = set.lock() {
+            g.insert(uuid);
+        }
+    }
+
+    fn queue_discard(set: &Arc<Mutex<HashSet<String>>>, uuid: &str) {
+        if let Ok(mut g) = set.lock() {
+            g.remove(uuid);
         }
     }
 
@@ -390,6 +409,9 @@ impl Launcher {
         // active, REQUESTED accepts go through launcher._acceptRequest
         // (accept_one) so unittest patches of that method still fire;
         // the method itself drives Rust accept_request_by_uuid.
+        // Refresh provider quota (including unmanaged usage from the
+        // cleanup worker) before accept_one nests another cloud call.
+        self.refresh_cloud_quotas();
         self.accept_pending.clear();
         let unassigned = self.unassigned_nodes();
         let mut pending = self.accept_pending.clone();
@@ -437,7 +459,22 @@ impl Launcher {
         let mut pending = self.accept_pending.clone();
         let result = self.accept_request(&req, &unassigned, &mut pending);
         self.accept_pending = pending;
-        result
+        match result {
+            Err(err) if err.contains("No provider") => {
+                // Match process_nodeset_request: mark FAILED rather than
+                // surfacing the error through the accept_one adapter
+                // (that path only logs and leaves the request REQUESTED).
+                let mut req = self
+                    .api
+                    .requests
+                    .get(uuid)
+                    .cloned()
+                    .unwrap_or(req);
+                self.finish_request(&mut req, request_state::FAILED);
+                Ok(())
+            }
+            other => other,
+        }
     }
 
     fn process_nodeset_request(
@@ -804,18 +841,40 @@ impl Launcher {
         pct
     }
 
+    /// Pull getProviderQuota (endpoint limits minus unmanaged) into the
+    /// Rust cache. Must run outside nested accept_one cloud calls so the
+    /// Python quota_cache from CleanupWorker is visible.
+    fn refresh_cloud_quotas(&mut self) {
+        if !cloud::enabled() {
+            return;
+        }
+        let names: Vec<String> = self
+            .tenant_providers
+            .values()
+            .flat_map(|list| list.iter().map(|p| p.canonical_name().to_string()))
+            .collect();
+        for name in names {
+            if let Ok(value) =
+                cloud::invoke("provider_quota", &json!({ "provider": name }))
+            {
+                let q = cloud::quota_from_payload(&value);
+                self.quota_cache.insert(name, (q, self.now));
+            }
+        }
+    }
+
     fn provider_quota(&self, provider: &dyn Provider) -> QuotaInformation {
+        if let Some((q, ts)) = self.quota_cache.get(provider.canonical_name()) {
+            if self.now - ts < MAX_QUOTA_AGE {
+                return q.copy();
+            }
+        }
         if cloud::enabled() {
             if let Ok(value) = cloud::invoke(
                 "provider_quota",
                 &json!({"provider": provider.canonical_name()}),
             ) {
                 return cloud::quota_from_payload(&value);
-            }
-        }
-        if let Some((q, ts)) = self.quota_cache.get(provider.canonical_name()) {
-            if self.now - ts < MAX_QUOTA_AGE {
-                return q.copy();
             }
         }
         let mut quota = provider.endpoint().limits.copy();
@@ -1976,9 +2035,9 @@ impl Launcher {
             let shared = cleanup_shared.lock().unwrap().clone();
             let matched =
                 matching_endpoints(&shared.hostname, &shared.components, &shared.endpoints);
-            for endpoint in matched {
-                // Cloud list_resources / delete_resource when providers are live.
-                let _ = endpoint;
+            let _ = matched;
+            if cloud::enabled() {
+                let _ = cloud::invoke("cleanup.tick", &json!({}));
             }
         }));
 
@@ -1995,7 +2054,9 @@ impl Launcher {
             }
         }));
 
-        self.upload_pools = Some(UploadPools::new(&self.hostname));
+        if self.upload_pools.is_none() {
+            self.upload_pools = Some(UploadPools::new(&self.hostname));
+        }
         self.refresh_worker_shared();
     }
 
@@ -2108,10 +2169,12 @@ impl Launcher {
         }
     }
 
-    /// Image retention / delete queue (checkOldImages). Job bodies are no-ops
-    /// until cloud delete is wired.
+    /// Image retention / delete queue (checkOldImages).
     pub fn check_old_images(&mut self) {
         self.upload_deleted = false;
+        if self.upload_pools.is_none() {
+            self.upload_pools = Some(UploadPools::new(&self.hostname));
+        }
         let Some(pools) = self.upload_pools.as_ref() else {
             return;
         };
@@ -2201,34 +2264,51 @@ impl Launcher {
             .map(|u| u.uuid())
             .collect();
         for uuid in to_delete {
-            if self.upload_uuids_in_delete_queue.contains(&uuid) {
+            if Self::queue_contains(&self.upload_uuids_in_delete_queue, &uuid) {
                 continue;
             }
-            self.upload_uuids_in_delete_queue.insert(uuid.clone());
+            Self::queue_insert(&self.upload_uuids_in_delete_queue, uuid.clone());
             let job = PlannedJob {
                 kind: "delete".into(),
                 upload_uuid: uuid,
                 source_external_id: None,
                 dependents: Vec::new(),
             };
-            pools.submit_upload(job, |_job| {});
+            let delete_q = self.upload_uuids_in_delete_queue.clone();
+            pools.submit_upload(job, move |job| {
+                Self::run_upload_delete(&job, &delete_q);
+            });
         }
     }
 
     /// Pending uploads via UploadPlanner into the three pools (checkMissingUploads).
     pub fn check_missing_uploads(&mut self) {
         self.image_updated = false;
+        if self.upload_pools.is_none() {
+            self.upload_pools = Some(UploadPools::new(&self.hostname));
+        }
         let Some(pools) = self.upload_pools.as_ref() else {
             return;
         };
+        // Crashed uploads (UPLOADING, unlocked): reset to PENDING in ZK.
+        let crashed: Vec<String> = self
+            .api
+            .uploads
+            .values()
+            .filter(|u| u.state() == upload_state::UPLOADING && !u.is_locked)
+            .map(|u| u.uuid())
+            .collect();
+        for uuid in crashed {
+            if let Some(mut u) = self.api.uploads.get(&uuid).cloned() {
+                u.set_state(upload_state::PENDING);
+                let _ = self.api.write_upload(&u);
+            }
+        }
         let all: Vec<&model::ImageUpload> = self.api.uploads.values().collect();
         let mut pending: Vec<&model::ImageUpload> = Vec::new();
         let mut args: HashMap<String, UploadArgs> = HashMap::new();
         for upload in &all {
-            if upload.state() == upload_state::UPLOADING && !upload.is_locked {
-                // Crashed upload: reset to pending when cloud lock is available.
-            }
-            if self.upload_uuids_in_queue.contains(&upload.uuid()) {
+            if Self::queue_contains(&self.upload_uuids_in_queue, &upload.uuid()) {
                 continue;
             }
             if upload.state() != upload_state::PENDING {
@@ -2250,13 +2330,22 @@ impl Launcher {
             } else {
                 methods.push("upload".into());
             }
+            let artifact = self.api.artifacts.get(&upload.artifact_uuid());
+            let url = artifact
+                .and_then(|a| a.fields.get("url").and_then(|v| v.as_str()))
+                .unwrap_or("")
+                .to_string();
+            let image_format = artifact
+                .and_then(|a| a.fields.get("format").and_then(|v| v.as_str()))
+                .unwrap_or("")
+                .to_string();
             args.insert(
                 upload.uuid(),
                 UploadArgs {
                     provider: provider_name,
                     image_name: upload.canonical_name(),
-                    url: String::new(),
-                    image_format: String::new(),
+                    url,
+                    image_format,
                     methods,
                 },
             );
@@ -2265,28 +2354,87 @@ impl Launcher {
             return;
         }
         for u in &pending {
-            self.upload_uuids_in_queue.insert(u.uuid());
+            Self::queue_insert(&self.upload_uuids_in_queue, u.uuid());
         }
         let mut planner = UploadPlanner::new(pending, all, args);
         planner.plan();
-        for job in planner.import_jobs {
-            pools.submit_import(job, |_job| {});
+        // Attach dependents onto upload/import jobs (Python EndpointUploadJob).
+        let jobs_map = planner.jobs.clone();
+        let queue = self.upload_uuids_in_queue.clone();
+        for mut job in planner.import_jobs {
+            if let Some(full) = jobs_map.get(&job.upload_uuid) {
+                job.dependents = full.dependents.clone();
+            }
+            let q = queue.clone();
+            pools.submit_import(job, move |job| {
+                Self::run_upload_job(&job, &q);
+            });
         }
         for job in planner.copy_jobs {
-            pools.submit_endpoint_upload(job, |_job| {});
+            let q = queue.clone();
+            pools.submit_endpoint_upload(job, move |job| {
+                Self::run_upload_job(&job, &q);
+            });
         }
-        for job in planner.upload_jobs {
-            pools.submit_upload(job, |_job| {});
-        }
-        for job in planner.jobs.values() {
-            if job.kind == "copy-dependent" {
-                pools.submit_endpoint_upload(job.clone(), |_job| {});
+        for mut job in planner.upload_jobs {
+            if let Some(full) = jobs_map.get(&job.upload_uuid) {
+                job.dependents = full.dependents.clone();
             }
+            let q = queue.clone();
+            pools.submit_upload(job, move |job| {
+                Self::run_upload_job(&job, &q);
+            });
         }
+        // copy-dependent jobs run after their source finishes (see upload.job_run).
     }
 
-    /// Snapshot nodes (processNodeSnapshot). Cloud snapshot SM is stubbed.
+    fn run_upload_job(job: &PlannedJob, queue: &Arc<Mutex<HashSet<String>>>) {
+        if !cloud::enabled() {
+            Self::queue_discard(queue, &job.upload_uuid);
+            return;
+        }
+        let kind = if job.kind == "copy-dependent" {
+            "copy"
+        } else {
+            job.kind.as_str()
+        };
+        let mut payload = json!({
+            "kind": kind,
+            "upload_uuid": job.upload_uuid,
+            "dependents": job.dependents,
+        });
+        if let Some(src) = &job.source_external_id {
+            payload
+                .as_object_mut()
+                .unwrap()
+                .insert("source_external_id".into(), json!(src));
+        }
+        match cloud::invoke("upload.job_run", &payload) {
+            Ok(_) => {}
+            Err(e) => {
+                // Queue discard happens in the adapter finally; still clear
+                // the Rust set so a failed invoke cannot stick forever.
+                let _ = e;
+            }
+        }
+        Self::queue_discard(queue, &job.upload_uuid);
+    }
+
+    fn run_upload_delete(job: &PlannedJob, queue: &Arc<Mutex<HashSet<String>>>) {
+        if cloud::enabled() {
+            let _ = cloud::invoke(
+                "upload.delete",
+                &json!({ "upload_uuid": job.upload_uuid }),
+            );
+        }
+        Self::queue_discard(queue, &job.upload_uuid);
+    }
+
+    /// Snapshot nodes via Rust AwsSnapshot + snapshot.advance ZK adapter.
     pub fn process_snapshots(&mut self) {
+        if !cloud::enabled() {
+            return;
+        }
         let ids: Vec<String> = self
             .api
             .nodes
@@ -2294,8 +2442,93 @@ impl Launcher {
             .filter(|n| n.state() == node_state::SNAPSHOT)
             .map(|n| n.uuid())
             .collect();
-        for _id in ids {
-            // Provider getSnapshotStateMachine when cloud ops are available.
+        for id in ids {
+            let begin = match cloud::invoke(
+                "snapshot.advance",
+                &json!({ "node_uuid": id, "phase": "begin" }),
+            ) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            if begin.get("skip").and_then(|v| v.as_bool()).unwrap_or(false) {
+                continue;
+            }
+            let provider = begin
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let mut sm = AwsSnapshot::new();
+            sm.provider = provider;
+            sm.node_uuid = id.clone();
+            sm.volume_id = begin
+                .get("volume_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            sm.tags = begin.get("tags").cloned().unwrap_or_else(|| json!({}));
+            sm.region = begin
+                .get("region")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            sm.account_id = begin
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if let Some(state) = begin.get("snapshot_state") {
+                if let Some(s) = state.get("state").and_then(|v| v.as_str()) {
+                    sm.state = s.to_string();
+                }
+                if let Some(t) = state.get("start_time").and_then(|v| v.as_f64()) {
+                    sm.start_time = t;
+                }
+                if let Some(sid) = state.get("snapshot_id").and_then(|v| v.as_str()) {
+                    sm.snapshot_id = Some(sid.to_string());
+                    sm.snapshot_obj = Some(json!({ "SnapshotId": sid }));
+                }
+            }
+            if sm.start_time == 0.0 {
+                sm.start_time = self.now;
+            }
+            let timeout = begin
+                .get("snapshot_timeout")
+                .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)));
+            if let Some(to) = timeout {
+                if to > 0.0 && self.now - sm.start_time > to {
+                    let _ = cloud::invoke(
+                        "snapshot.advance",
+                        &json!({
+                            "node_uuid": id,
+                            "phase": "fail",
+                            "message": "Timeout snapshotting node",
+                        }),
+                    );
+                    continue;
+                }
+            }
+            match sm.advance() {
+                Ok(()) => {
+                    let _ = cloud::invoke(
+                        "snapshot.advance",
+                        &json!({
+                            "node_uuid": id,
+                            "phase": "commit",
+                            "state": sm.to_dict(),
+                            "complete": sm.complete(),
+                            "external_id": sm.external_id(),
+                        }),
+                    );
+                }
+                Err(e) => {
+                    let _ = cloud::invoke(
+                        "snapshot.advance",
+                        &json!({
+                            "node_uuid": id,
+                            "phase": "fail",
+                            "message": e.to_string(),
+                        }),
+                    );
+                }
+            }
         }
     }
 

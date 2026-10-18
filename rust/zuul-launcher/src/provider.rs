@@ -1356,11 +1356,11 @@ pub struct AwsSnapshot {
     pub volume_id: Option<String>,
     pub tags: Value,
     live: bool,
-    provider: String,
-    node_uuid: String,
-    snapshot_obj: Option<Value>,
-    account_id: Option<String>,
-    region: Option<String>,
+    pub provider: String,
+    pub node_uuid: String,
+    pub snapshot_obj: Option<Value>,
+    pub account_id: Option<String>,
+    pub region: Option<String>,
 }
 
 impl AwsSnapshot {

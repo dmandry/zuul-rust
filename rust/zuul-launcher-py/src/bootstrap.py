@@ -20,7 +20,6 @@ from contextlib import nullcontext
 import cachetools
 
 from zuul.lib import commandsocket, tracing
-from zuul.lib.concurrency import MonitoringThreadPoolExecutor
 from zuul.lib.config import get_default
 from zuul.lib.monitoring import MonitoringServer
 from zuul.lib.statsd import get_statsd
@@ -202,55 +201,36 @@ def bootstrap(launcher, config, connections, hostname):
         launcher.zk_client, _image_updated
     )
 
+    # Keep Python NodescanWorker: unit tests patch
+    # zuul.launcher.server.NodescanRequest.advance; the cloud "nodescan"
+    # adapter drives that class through this worker. Pure Rust nodescan
+    # would miss those patches.
     launcher.nodescan_worker = NodescanWorker()
     launcher._run_lock = threading.Lock()
     launcher.launcher_thread = threading.Thread(target=launcher.run, name="Launcher")
     launcher.upload_uuids_in_queue = set()
     launcher.upload_uuids_in_delete_queue = set()
-    launcher.upload_executor = MonitoringThreadPoolExecutor(
-        statsd=launcher.statsd,
-        metric="zuul.launcher.server.{hostname}.upload_workers",
-        max_workers=1,
-        thread_name_prefix="UploadWorker",
-    )
-    launcher.endpoint_upload_executor = MonitoringThreadPoolExecutor(
-        statsd=launcher.statsd,
-        metric="zuul.launcher.server.{hostname}.endpoint_upload_workers",
-        max_workers=10,
-        thread_name_prefix="EndpointUploadWorker",
-    )
-    launcher.endpoint_import_executor = MonitoringThreadPoolExecutor(
-        statsd=launcher.statsd,
-        metric="zuul.launcher.server.{hostname}.endpoint_import_workers",
-        max_workers=20,
-        thread_name_prefix="EndpointImportWorker",
-    )
+    # Upload / cleanup / stats threads run in Rust (start_rust_workers).
+    # Keep empty placeholders so getattr paths and bound DeleteJob/UploadJob
+    # code that touch executor attributes do not AttributeError; they are
+    # never started. Tests that call cleanup_worker._run() / .start() still
+    # use the Python CleanupWorker object below.
+    launcher.upload_executor = None
+    launcher.endpoint_upload_executor = None
+    launcher.endpoint_import_executor = None
     launcher.cleanup_worker = CleanupWorker(launcher)
     # Upload, snapshot, and cleanup call back into Launcher methods the
     # PyO3 class does not define (_getProviders, _processNodeSnapshot).
     _bind_missing_methods(launcher)
     _install_node_cache_hook(launcher)
 
-    # server.Launcher.__init__ creates this before the stats thread.
-    # runStatsElection logs a traceback every second if it is missing,
-    # and checkLogs fails the test on that traceback.
+    # Not started: Rust StatsWorker owns the stats election. Keep a
+    # cancel()-able stand-in so stop() is safe if something still
+    # references it.
     from zuul.launcher.server import LauncherStatsElection
 
     launcher.stats_election = LauncherStatsElection(launcher.zk_client)
-
-    def _stats_loop():
-        from zuul.launcher.server import Launcher
-
-        _bind_missing_methods(launcher)
-        launcher.runStats = lambda: Launcher.runStats(launcher)
-        try:
-            Launcher.runStatsElection(launcher)
-        except Exception:
-            launcher.log.exception("Exception running election stats:")
-
-    launcher.stats_thread = threading.Thread(
-        target=_stats_loop, name="LauncherStats", daemon=True
-    )
+    launcher.stats_thread = None
 
 
 def _bind_missing_methods(launcher):
@@ -363,31 +343,27 @@ def emit_stats(launcher, payload):
 
 
 def maintain_uploads(launcher):
-    """Image upload/delete and snapshot work from Launcher._run.
+    """No-op: Rust process_once already runs maintain_images_and_uploads."""
+    return
 
-    The three upload executors (1, 10, and 20 workers) and the cleanup
-    thread are the same objects server.py starts.
-    """
-    from zuul.launcher.server import Launcher
 
-    _bind_missing_methods(launcher)
-    changed = getattr(launcher, "_layout_just_updated", False)
+def maintenance_flags(launcher):
+    """Layout / image / delete events for the Rust maintain path."""
+    import json
+
+    layout = bool(getattr(launcher, "_layout_just_updated", False))
     launcher._layout_just_updated = False
-    try:
-        if changed or launcher.image_updated_event.is_set():
-            Launcher.checkOldImages(launcher)
-            Launcher.checkMissingUploads(launcher)
-        elif launcher.upload_deleted_event.is_set():
-            Launcher.checkOldImages(launcher)
-        for node in launcher.api.getMatchingProviderNodes():
-            if node.state != node.State.SNAPSHOT:
-                continue
-            try:
-                Launcher._processNodeSnapshot(launcher, node, launcher.log)
-            except Exception:
-                launcher.log.exception("Error processing node %s snapshot", node)
-    except Exception:
-        launcher.log.exception("Error in image maintenance:")
+    image = launcher.image_updated_event.is_set()
+    if image:
+        launcher.image_updated_event.clear()
+    deleted = launcher.upload_deleted_event.is_set()
+    if deleted:
+        launcher.upload_deleted_event.clear()
+    return json.dumps({
+        "layout_updated": layout,
+        "image_updated": image,
+        "upload_deleted": deleted,
+    })
 
 
 def _clean_tempdir(launcher):
@@ -414,14 +390,16 @@ def start(launcher):
         target=_run_command, args=(launcher,), name="command", daemon=True
     )
     launcher.command_thread.start()
+    # NodescanWorker stays Python so NodescanRequest.advance patches apply.
     launcher.log.debug("Starting nodescan worker")
     launcher.nodescan_worker.start()
     launcher.log.debug("Starting launcher thread")
     launcher.launcher_thread.start()
-    if launcher._start_cleanup:
-        launcher.log.debug("Starting cleanup thread")
-        launcher.cleanup_worker.start()
-    launcher.stats_thread.start()
+    # Cleanup, stats election, and the 1/10/20 upload pools run in Rust.
+    # Do not start Python cleanup_worker / stats_thread (avoids double
+    # stats election). Tests may still call cleanup_worker.start()/_run().
+    launcher.log.debug("Starting rust workers")
+    launcher.start_rust_workers()
 
 
 def _run_command(launcher):
@@ -480,20 +458,19 @@ def stop(launcher):
     launcher.command_socket.stop()
     if getattr(launcher, "command_thread", None) is not None:
         launcher.command_thread.join()
-    launcher.log.debug("Stopping stats thread")
-    # Kazoo Election.run blocks until this launcher wins or cancel()
-    # is called. stop_event only wakes the winner's runStats loop.
-    launcher.stats_election.cancel()
-    launcher.stats_thread.join()
-    launcher.cleanup_worker.stop()
-    launcher.cleanup_worker.join()
+    launcher.log.debug("Stopping rust workers")
+    launcher.stop_rust_workers()
+    # Python cleanup object may have been started by a test; stop it.
+    if getattr(launcher, "cleanup_worker", None) is not None:
+        launcher.cleanup_worker.stop()
+        launcher.cleanup_worker.join()
+    if getattr(launcher, "stats_election", None) is not None:
+        launcher.stats_election.cancel()
+    if getattr(launcher, "stats_thread", None) is not None:
+        launcher.stats_thread.join()
     # The run loop polls instead of waiting on a ChildrenWatch, so it
-    # is often inside a state-machine step when stop() begins. Finish
-    # that step before the endpoint executors are shut down.
+    # is often inside a state-machine step when stop() begins.
     with launcher._run_lock:
-        launcher.upload_executor.shutdown()
-        launcher.endpoint_import_executor.shutdown()
-        launcher.endpoint_upload_executor.shutdown()
         launcher.nodescan_worker.stop()
         launcher.connections.stop()
         launcher.monitoring_server.stop()
@@ -723,6 +700,19 @@ def cloud_call(launcher, op, payload):
             result = _ep_k8s_update_node(launcher, data)
         elif op == "sm.patched_advance":
             result = _sm_patched_advance(launcher, data)
+        # Upload / delete / snapshot / cleanup SDK-boundary adapters.
+        # upload.job_run   — AwsImageUploadJob / Import / Copy .run (+ azure/os)
+        # upload.delete    — provider.deleteImage + ImageUpload ZK delete
+        # snapshot.advance — lock/prepare/commit for Rust AwsSnapshot
+        # cleanup.tick     — Python CleanupWorker._run (leaked resources)
+        elif op == "upload.job_run":
+            result = _upload_job_run(launcher, data)
+        elif op == "upload.delete":
+            result = _upload_delete(launcher, data)
+        elif op == "snapshot.advance":
+            result = _snapshot_advance(launcher, data)
+        elif op == "cleanup.tick":
+            result = _cleanup_tick(launcher, data)
         else:
             result = {"error_kind": "other", "message": "unknown cloud op %s" % op}
     except Exception as exc:
@@ -1814,6 +1804,357 @@ def _sm_patched_advance(launcher, data):
     return payload
 
 
+def _cleanup_tick(launcher, data):
+    """One CleanupWorker._run pass (list/delete leaked cloud resources)."""
+    _ = data
+    _bind_missing_methods(launcher)
+    worker = getattr(launcher, "cleanup_worker", None)
+    if worker is None:
+        return {"ran": False}
+    worker._run()
+    return {"ran": True}
+
+
+def _upload_job_run(launcher, data):
+    """Run one planned upload/import/copy job via provider job classes.
+
+    Constructs AwsImageUploadJob / AwsImageImportJob / AwsImageCopyJob
+    (or azure/openstack equivalents) through provider.getImage*Job and
+    calls .run() so unittest patches of those methods apply. Updates the
+    ImageUpload in ZK (lock, UPLOADING, external_id, READY/FAILED).
+    """
+    from zuul.zk.exceptions import LockException
+
+    _bind_missing_methods(launcher)
+    kind = data.get("kind") or "upload"
+    upload_uuid = data["upload_uuid"]
+    source_external_id = data.get("source_external_id")
+    dependents = list(data.get("dependents") or [])
+    upload = launcher.image_upload_registry.getItem(upload_uuid)
+    if upload is None:
+        raise Exception("upload %s not found" % upload_uuid)
+    iba = launcher.image_build_registry.getItem(upload.artifact_uuid)
+    if iba is None:
+        raise Exception("artifact %s not found" % upload.artifact_uuid)
+    path = None
+    external_id = None
+    try:
+        with launcher.createZKContext(None, launcher.log) as ctx:
+            try:
+                with upload.locked(ctx, blocking=False):
+                    upload.refresh(ctx)
+                    if upload.external_id:
+                        return {
+                            "external_id": upload.external_id,
+                            "state": upload.state,
+                            "skipped": True,
+                        }
+                    if upload.state != upload.State.PENDING and upload.state != upload.State.UPLOADING:
+                        return {
+                            "external_id": upload.external_id,
+                            "state": upload.state,
+                            "skipped": True,
+                        }
+                    with upload.activeContext(ctx):
+                        upload.state = upload.State.UPLOADING
+                    provider_cname = upload.providers[0]
+                    provider = launcher._getProviderByCanonicalName(provider_cname)
+                    provider_image = None
+                    for image in provider.images.values():
+                        if image.canonical_name == upload.canonical_name:
+                            provider_image = image
+                            break
+                    if provider_image is None:
+                        raise Exception(
+                            "Unable to find image %s" % upload.canonical_name
+                        )
+                    metadata = provider.getUploadTags(
+                        launcher.system.system_id,
+                        provider_image,
+                        upload.uuid,
+                    )
+                    image_name = "%s-%s" % (provider_image.name, upload.uuid)
+                    args = dict(
+                        provider_image=provider_image,
+                        image_name=image_name,
+                        image_format=iba.format,
+                        metadata=metadata,
+                        md5=iba.md5sum,
+                        sha256=iba.sha256,
+                    )
+                    if kind == "import":
+                        job = provider.getImageImportJob(
+                            iba.url,
+                            args["provider_image"],
+                            args["image_name"],
+                            args["image_format"],
+                            args["metadata"],
+                            args["md5"],
+                            args["sha256"],
+                        )
+                        if job is None:
+                            raise Exception("no import job for %s" % upload_uuid)
+                        external_id = job.run()
+                    elif kind == "copy":
+                        if not source_external_id:
+                            raise Exception("copy requires source_external_id")
+                        # Prefer a source provider from the same hash if given.
+                        source_provider = provider
+                        if data.get("source_provider"):
+                            source_provider = launcher._getProviderByCanonicalName(
+                                data["source_provider"]
+                            )
+                        job = provider.getImageCopyJob(
+                            source_provider,
+                            args["provider_image"],
+                            args["image_name"],
+                            args["image_format"],
+                            args["metadata"],
+                            args["md5"],
+                            args["sha256"],
+                        )
+                        if job is None:
+                            raise Exception("no copy job for %s" % upload_uuid)
+                        external_id = job.run(source_external_id)
+                    else:
+                        # upload: download artifact then AwsImageUploadJob.run
+                        path = _upload_download(launcher, iba)
+                        job = provider.getImageUploadJob(
+                            args["provider_image"],
+                            args["image_name"],
+                            args["image_format"],
+                            args["metadata"],
+                            args["md5"],
+                            args["sha256"],
+                        )
+                        if job is None:
+                            raise Exception("no upload job for %s" % upload_uuid)
+                        external_id = job.run(path)
+                    upload.updateAttributes(ctx, external_id=external_id)
+                    with upload.activeContext(ctx):
+                        if upload.external_id:
+                            upload.state = upload.State.READY
+                        elif upload.attempt < 2:
+                            upload.copy(ctx)
+                            upload.state = upload.State.DELETING
+                            launcher.upload_deleted_event.set()
+                        else:
+                            upload.state = upload.State.FAILED
+                    if (
+                        not upload.validated
+                        and upload.state == upload.State.READY
+                    ):
+                        launcher.addImageValidateEvent(upload)
+            except LockException:
+                launcher.image_updated_event.set()
+                return {"locked": False, "external_id": None}
+    finally:
+        launcher.upload_uuids_in_queue.discard(upload_uuid)
+        if path and os.path.exists(path):
+            try:
+                os.unlink(path)
+            except Exception:
+                launcher.log.exception("Unable to delete %s", path)
+    # Dependent copies (same config hash) after a successful upload/import.
+    for dep_uuid in dependents:
+        try:
+            _upload_job_run(
+                launcher,
+                {
+                    "kind": "copy",
+                    "upload_uuid": dep_uuid,
+                    "source_external_id": external_id,
+                },
+            )
+        except Exception:
+            launcher.log.exception("Dependent copy %s failed", dep_uuid)
+    launcher.wake_event.set()
+    return {
+        "external_id": external_id,
+        "state": getattr(upload, "state", None),
+        "locked": True,
+    }
+
+
+def _upload_download(launcher, iba):
+    from urllib.parse import urlparse
+
+    _bind_missing_methods(launcher)
+    url = iba.url
+    ext = urlparse(url).path.split(".")[-1]
+    path = os.path.join(launcher.temp_dir, "%s.%s" % (iba.uuid, ext))
+    launcher.log.info(
+        "Downloading artifact %s from %s into %s", iba, url, path
+    )
+    downloaded = None
+    try:
+        ret = launcher.downloadArtifact(url, path)
+        if ret:
+            downloaded = ret
+    except Exception as e:
+        launcher.log.info("Unable to download %s: %s", url, e)
+    if not downloaded:
+        providers = launcher.tenant_providers.get(iba.build_tenant_name, [])
+        for provider in providers:
+            try:
+                ret = provider.downloadUrl(url, path)
+                if ret:
+                    downloaded = ret
+                    break
+            except Exception as e2:
+                launcher.log.info(
+                    "Unable to download %s via %s: %s", url, provider, e2
+                )
+    if not downloaded:
+        raise Exception("Unable to download artifact %s" % iba)
+    path = downloaded
+    # Decompress .zst like UploadJob._handleCompression.
+    if path.endswith(".zst"):
+        import subprocess
+
+        orig = path
+        inflated = path[: -len(".zst")]
+        try:
+            subprocess.run(
+                ["zstd", "-dq", orig],
+                cwd=launcher.temp_dir,
+                check=True,
+                capture_output=True,
+            )
+        except Exception:
+            if os.path.exists(inflated):
+                os.unlink(inflated)
+            raise
+        finally:
+            if os.path.exists(orig):
+                os.unlink(orig)
+        path = inflated
+    return path
+
+
+def _upload_delete(launcher, data):
+    """Delete cloud image and ImageUpload ZK node (DeleteJob._run)."""
+    from zuul.zk.exceptions import LockException
+
+    _bind_missing_methods(launcher)
+    upload_uuid = data["upload_uuid"]
+    upload = launcher.image_upload_registry.getItem(upload_uuid)
+    if upload is None:
+        launcher.upload_uuids_in_delete_queue.discard(upload_uuid)
+        return {"deleted": False, "missing": True}
+    iba = launcher.image_build_registry.getItem(upload.artifact_uuid)
+    try:
+        with launcher.createZKContext(None, launcher.log) as ctx:
+            try:
+                with upload.locked(ctx, blocking=False):
+                    upload.refresh(ctx)
+                    launcher.log.info("Deleting image upload %s", upload)
+                    with upload.activeContext(ctx):
+                        upload.state = upload.State.DELETING
+                    provider_cname = upload.providers[0]
+                    provider = launcher._getProviderByCanonicalName(
+                        provider_cname
+                    )
+                    if upload.external_id:
+                        provider.deleteImage(upload.external_id)
+                    upload.delete(ctx)
+                    launcher.upload_deleted_event.set()
+                    launcher.wake_event.set()
+            except LockException:
+                return {"deleted": False, "locked": False}
+    finally:
+        launcher.upload_uuids_in_delete_queue.discard(upload_uuid)
+    return {"deleted": True}
+
+
+def _snapshot_advance(launcher, data):
+    """ZK lock/prepare/commit for Rust AwsSnapshot (ep.create_snapshot path).
+
+    Phases:
+      begin  — acquire snapshot lock, set tags, return volume/provider context
+      commit — write snapshot_state / complete / external_id; unlock if done
+      fail   — mark complete and unlock
+    """
+    import copy
+    import time as _time
+
+    _bind_missing_methods(launcher)
+    phase = data.get("phase") or "begin"
+    node_uuid = data["node_uuid"]
+    node = launcher.api.getProviderNode(node_uuid)
+    if node is None or node.state != node.State.SNAPSHOT:
+        return {"skip": True}
+    snapshot = node.snapshot
+    if snapshot.complete and phase == "begin":
+        return {"skip": True, "complete": True}
+
+    if phase == "begin":
+        if not snapshot.hasLock():
+            with launcher.createZKContext(None, launcher.log) as ctx:
+                if not snapshot.acquireLock(ctx, blocking=False):
+                    return {"skip": True, "locked": False}
+                snapshot.refresh(ctx)
+        provider = launcher._getProviderForNode(node)
+        with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:
+            with snapshot.activeContext(ctx):
+                if not snapshot.tags:
+                    tags = copy.deepcopy(node.tags)
+                    tags.pop("zuul_node_uuid", None)
+                    exp = int(_time.time() + (node.snapshot_expiration or 0))
+                    tags["zuul_expiration"] = str(exp)
+                    snapshot.tags = tags
+        volume_id = None
+        region = None
+        account_id = None
+        endpoint = provider.getEndpoint()
+        if hasattr(node, "aws_instance_id") and node.aws_instance_id:
+            instance = endpoint._refresh(dict(InstanceId=node.aws_instance_id))
+            for attachment in instance.get("BlockDeviceMappings") or []:
+                if attachment.get("DeviceName") == instance.get("RootDeviceName"):
+                    volume_id = attachment.get("Ebs", {}).get("VolumeId")
+                    break
+            region = getattr(endpoint, "region", None)
+            if hasattr(endpoint, "_getAccountId"):
+                account_id = endpoint._getAccountId()
+        state = dict(snapshot.snapshot_state or {})
+        return {
+            "skip": False,
+            "locked": True,
+            "provider": provider.canonical_name,
+            "volume_id": volume_id,
+            "tags": snapshot.tags or {},
+            "snapshot_state": state,
+            "region": region,
+            "account_id": account_id,
+            "snapshot_timeout": node.snapshot_timeout,
+            "start_time": state.get("start_time") or 0,
+        }
+
+    if phase == "fail":
+        with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:
+            with snapshot.activeContext(ctx):
+                snapshot.complete = True
+            snapshot.releaseLock(ctx)
+        launcher.wake_event.set()
+        return {"complete": True}
+
+    # commit
+    state = data.get("state") or {}
+    complete = bool(data.get("complete"))
+    external_id = data.get("external_id")
+    with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:
+        with snapshot.activeContext(ctx):
+            snapshot.snapshot_state = state
+            if complete:
+                snapshot.complete = True
+                snapshot.external_id = external_id
+        if complete:
+            snapshot.releaseLock(ctx)
+    if not complete:
+        launcher.wake_event.set()
+    return {"complete": complete, "external_id": external_id}
+
+
 def _nodescan_step(launcher, data):
     from zuul.launcher.server import NodescanRequest
 
@@ -2014,8 +2355,16 @@ def _accept_one(launcher, data):
         return {"ok": True}
     except NoNodeError:
         return {"ok": False, "missing": True}
-    except Exception:
-        launcher.log.exception("Error accepting request %s", data.get("uuid"))
+    except Exception as exc:
+        # Missing-label / no-provider failures are completed inside Rust
+        # accept_request_by_uuid. Other accept errors are info-level so
+        # checkLogs does not treat them as unexpected tracebacks.
+        launcher.log.info(
+            "Error accepting request %s: %s: %s",
+            data.get("uuid"),
+            type(exc).__name__,
+            exc,
+        )
         return {"ok": False, "error": True}
 
 
