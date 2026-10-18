@@ -4,6 +4,7 @@
 pub mod cloud;
 pub mod codec;
 pub mod config;
+pub mod endpoint;
 pub mod jsonutil;
 pub mod launcher;
 pub mod layout;

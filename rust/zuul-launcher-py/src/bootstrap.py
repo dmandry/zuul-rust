@@ -38,7 +38,30 @@ from zuul.zk.system import ZuulSystem
 from zuul.launcher.server import CleanupWorker, NodescanWorker
 
 
+def _record_original_sms():
+    """Capture advance/_updateNode before unittest.mock patches them."""
+    if _ORIG_SM:
+        return
+    from zuul.driver.aws import awsendpoint
+
+    _ORIG_SM.update({
+        ("aws", "create"): awsendpoint.AwsCreateStateMachine.advance,
+        ("aws", "delete"): awsendpoint.AwsDeleteStateMachine.advance,
+        ("aws", "snapshot"): awsendpoint.AwsSnapshotStateMachine.advance,
+        ("aws", "update_node"): awsendpoint.AwsCreateStateMachine._updateNode,
+    })
+
+
+# Filled by _record_original_sms; must run before test patches.
+_ORIG_SM = {}
+try:
+    _record_original_sms()
+except Exception:
+    pass
+
+
 def bootstrap(launcher, config, connections, hostname):
+    _record_original_sms()
     launcher._running = True
     launcher._start_cleanup = True
     launcher.config = config
@@ -247,27 +270,37 @@ def call_launcher_args(launcher, name, args):
 
 
 def _attach_state_machines(launcher, node):
-    """Put the live Python state machine on the cached node.
+    """Put a state-machine stand-in on the cached node.
 
     test_launcher_failover reads create_state from ZooKeeper and
-    INSTANCE_CREATING from node.create_state_machine. The machine is
-    not serialized. Attaching it before the cache applies a new
-    create_state keeps that attribute from being None once create_state
-    is truthy.
+    INSTANCE_CREATING from node.create_state_machine. Rust drives the
+    real advance path; this only exposes class constants and toDict().
     """
     if node is None:
         return
-    machines = launcher.__dict__.get("_cloud_sms") or {}
+    machines = launcher.__dict__.setdefault("_cloud_sms", {})
     uuid = getattr(node, "uuid", None)
     if not uuid:
         return
-    for kind, attr in (
-        ("create", "create_state_machine"),
-        ("delete", "delete_state_machine"),
+    for kind, attr, state_attr in (
+        ("create", "create_state_machine", "create_state"),
+        ("delete", "delete_state_machine", "delete_state"),
     ):
         machine = machines.get((kind, uuid))
-        if machine is not None:
-            node._set(**{attr: machine})
+        if machine is None:
+            state = getattr(node, state_attr, None) or {}
+            if not state:
+                continue
+            cls = _sm_class_for_node(node, kind)
+            if cls is None:
+                continue
+            machine = _StateMachineRef(cls, state)
+            machines[(kind, uuid)] = machine
+        else:
+            state = getattr(node, state_attr, None) or {}
+            if state and hasattr(machine, "sync_from_state"):
+                machine.sync_from_state(state)
+        node._set(**{attr: machine})
 
 
 def _install_node_cache_hook(launcher):
@@ -525,12 +558,11 @@ def get_provider(launcher, tenant_name, provider_name):
 def cloud_call(launcher, op, payload):
     """Bridge used by the Rust driver state machines.
 
-    Moto, the responses fixture, the OpenStack and Kubernetes fakes, and
-    the tests' patches of AwsCreateStateMachine / endpoint methods are all
-    in-process. This shim drives the real Python provider state machine
-    (the 14.3.0 boto3 / azul / SDK call sequence) and copies the node
-    fields back. It is test-crate only; the shared launcher decides when
-    to create, delete, pack slots, scan, and fulfill.
+    Moto, the responses fixture, and unittest patches of endpoint methods
+    (and StateMachine.advance) live in-process. AWS create/delete run in
+    Rust and call fine-grained ep.* ops here; sm.patched_advance covers
+    tests that replace advance with a Mock. Legacy step/fail remain for
+    any leftover callers.
     """
     import json
 
@@ -570,6 +602,30 @@ def cloud_call(launcher, op, payload):
             result = _matching_nodes(launcher)
         elif op == "request_cache_ready":
             result = _request_cache_ready(launcher, data)
+        elif op == "ep.refresh":
+            result = _ep_refresh(launcher, data)
+        elif op == "ep.refresh_delete":
+            result = _ep_refresh_delete(launcher, data)
+        elif op == "ep.submit_create_instance":
+            result = _ep_submit_create_instance(launcher, data)
+        elif op == "ep.complete_create_instance":
+            result = _ep_complete_create_instance(launcher, data)
+        elif op == "ep.submit_allocate_host":
+            result = _ep_submit_allocate_host(launcher, data)
+        elif op == "ep.complete_allocate_host":
+            result = _ep_complete_allocate_host(launcher, data)
+        elif op == "ep.delete_instance":
+            result = _ep_delete_instance(launcher, data)
+        elif op == "ep.release_host":
+            result = _ep_release_host(launcher, data)
+        elif op == "ep.quota_for_label":
+            result = _ep_quota_for_label(launcher, data)
+        elif op == "ep.create_snapshot":
+            result = _ep_create_snapshot(launcher, data)
+        elif op == "ep.refresh_snapshot":
+            result = _ep_refresh(launcher, data)
+        elif op == "sm.patched_advance":
+            result = _sm_patched_advance(launcher, data)
         else:
             result = {"error_kind": "other", "message": "unknown cloud op %s" % op}
     except Exception as exc:
@@ -821,6 +877,8 @@ def _cloud_fail(launcher, data):
     machine = machines.get(key)
     if machine is None:
         return {"state": "complete", "complete": True, "node": {}}
+    if not hasattr(machine, "node") or not hasattr(machine, "fail"):
+        return {"state": "complete", "complete": True, "node": {}}
     with _mutable(machine.node):
         machine.fail()
     payload = {
@@ -830,6 +888,306 @@ def _cloud_fail(launcher, data):
     }
     if payload["complete"]:
         machines.pop(key, None)
+    return payload
+
+
+def _sm_class(driver, kind):
+    if driver != "aws":
+        return None
+    from zuul.driver.aws import awsendpoint
+
+    return {
+        "create": awsendpoint.AwsCreateStateMachine,
+        "delete": awsendpoint.AwsDeleteStateMachine,
+        "snapshot": awsendpoint.AwsSnapshotStateMachine,
+        "update_node": awsendpoint.AwsCreateStateMachine,
+    }.get(kind)
+
+
+def _sm_class_for_node(node, kind):
+    name = type(node).__name__
+    if "Aws" in name or hasattr(node, "aws_instance_id"):
+        return _sm_class("aws", kind)
+    return None
+
+
+class _StateMachineRef:
+    """Stand-in with class constants and toDict for cache attachment."""
+
+    def __init__(self, cls, state_dict):
+        self._cls = cls
+        for name in dir(cls):
+            if name.isupper():
+                setattr(self, name, getattr(cls, name))
+        self.sync_from_state(state_dict or {})
+
+    def sync_from_state(self, state_dict):
+        self.state = state_dict.get("state", getattr(self._cls, "START", "start"))
+        self.start_time = state_dict.get("start_time", 0)
+        self.complete = bool(state_dict.get("complete", False))
+        self.attempts = state_dict.get("attempts", 0)
+        self.image_external_id = state_dict.get("image_external_id")
+        self.snapshot_id = state_dict.get("snapshot_id")
+
+    def toDict(self):
+        data = {
+            "state": self.state,
+            "start_time": self.start_time,
+        }
+        if self.attempts:
+            data["attempts"] = self.attempts
+        if self.image_external_id is not None:
+            data["image_external_id"] = self.image_external_id
+        if self.snapshot_id is not None:
+            data["snapshot_id"] = self.snapshot_id
+        return data
+
+
+def _future_store(launcher):
+    return launcher.__dict__.setdefault("_ep_futures", {})
+
+
+def _store_future(launcher, future):
+    store = _future_store(launcher)
+    seq = launcher.__dict__.setdefault("_ep_future_seq", 0) + 1
+    launcher.__dict__["_ep_future_seq"] = seq
+    fid = "f%d" % seq
+    store[fid] = future
+    return fid
+
+
+def _provider_endpoint(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    endpoint = _ensure_endpoint(launcher, provider)
+    return provider, endpoint
+
+
+def _load_node(launcher, node_uuid):
+    from zuul.model import ProviderNode
+    from zuul.zk.zkobject import ZKContext
+
+    ctx = ZKContext(
+        launcher.zk_client, None, launcher.join_event, launcher.log
+    )
+    return ProviderNode.fromZK(ctx, path=ProviderNode._getPath(node_uuid))
+
+
+def _ep_refresh(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    obj = endpoint._refresh(data.get("obj") or {})
+    return {"obj": _jsonable(obj)}
+
+
+def _ep_refresh_delete(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    obj = endpoint._refreshDelete(data.get("obj"))
+    return {"obj": _jsonable(obj)}
+
+
+def _ep_submit_create_instance(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    image = provider.images[label.image]
+    launch_template_name = data.get("launch_template_name")
+    if not launch_template_name:
+        names = endpoint.provider_label_template_names.get(
+            provider.canonical_name, {}
+        )
+        launch_template_name = names.get(label.name)
+    image_external_id = data.get("image_external_id")
+    if not image_external_id and data.get("node_uuid"):
+        node = _load_node(launcher, data["node_uuid"])
+        image_external_id = call_launcher(
+            launcher, "getImageExternalId", node, provider
+        )
+    tags = data.get("tags") or {}
+    hostname = data.get("hostname") or ""
+    future = endpoint._submitCreateInstance(
+        provider,
+        label,
+        flavor,
+        image,
+        image_external_id,
+        tags,
+        hostname,
+        data.get("dedicated_host_id"),
+        launch_template_name,
+        launcher.log,
+    )
+    return {
+        "future_id": _store_future(launcher, future),
+        "launch_template_name": launch_template_name,
+        "image_external_id": image_external_id,
+    }
+
+
+def _ep_complete_create_instance(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    future = _future_store(launcher).get(data.get("future_id"))
+    if future is None:
+        return {"instance": None}
+    instance = endpoint._completeCreateInstance(future)
+    if instance is not None:
+        _future_store(launcher).pop(data.get("future_id"), None)
+    return {"instance": _jsonable(instance)}
+
+
+def _ep_submit_allocate_host(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    future = endpoint._submitAllocateHost(
+        label,
+        flavor,
+        data.get("tags") or {},
+        data.get("hostname") or "",
+        launcher.log,
+    )
+    return {"future_id": _store_future(launcher, future)}
+
+
+def _ep_complete_allocate_host(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    future = _future_store(launcher).get(data.get("future_id"))
+    if future is None:
+        return {"host": None}
+    host = endpoint._completeAllocateHost(future)
+    if host is not None:
+        _future_store(launcher).pop(data.get("future_id"), None)
+    return {"host": _jsonable(host)}
+
+
+def _ep_delete_instance(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    instance = endpoint._deleteInstance(data["instance_id"], launcher.log)
+    return {"instance": _jsonable(instance)}
+
+
+def _ep_release_host(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    host = endpoint._releaseHost(data["host_id"], launcher.log)
+    return {"host": _jsonable(host)}
+
+
+def _ep_quota_for_label(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    quota = endpoint.getQuotaForLabel(
+        label, flavor, data.get("instance_type")
+    )
+    return _quota_payload(quota)
+
+
+def _ep_create_snapshot(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    snapshot = endpoint._createSnapshot(
+        data.get("volume_id"), data.get("tags") or {}
+    )
+    return {"snapshot": _jsonable(snapshot)}
+
+
+def _callable_is_patched(current, original):
+    import unittest.mock as mock
+
+    if isinstance(current, mock.Mock):
+        return True
+    cur = getattr(current, "__func__", current)
+    orig = getattr(original, "__func__", original)
+    return cur is not orig
+
+
+def _sm_patched_advance(launcher, data):
+    """Run a Mock/replaced StateMachine.advance (or _updateNode).
+
+    Returns {"patched": false} when the class still has the original
+    callable so Rust continues its own state machine.
+    """
+    from types import SimpleNamespace
+
+    _record_original_sms()
+    driver = data.get("driver") or "aws"
+    kind = data.get("kind") or "create"
+    key = (driver, kind)
+    cls = _sm_class(driver, kind if kind != "update_node" else "create")
+    if cls is None:
+        return {"patched": False}
+    if kind == "update_node":
+        # Always run _updateNode (original or unittest replacement) so
+        # updateFromInstance and test patches of _updateNode apply.
+        current = getattr(cls, "_updateNode")
+        provider, endpoint = _provider_endpoint(launcher, data)
+        node = _load_node(launcher, data["node_uuid"])
+        label = provider.labels[data["label"]]
+        flavor = provider.flavors[label.flavor]
+        instance = data.get("instance") or {}
+        host = data.get("host")
+        with _mutable(node):
+            if data.get("aws_instance_id"):
+                node.aws_instance_id = data.get("aws_instance_id")
+            if data.get("aws_dedicated_host_id"):
+                node.aws_dedicated_host_id = data.get("aws_dedicated_host_id")
+            sm = SimpleNamespace(
+                endpoint=endpoint,
+                node=node,
+                label=label,
+                flavor=flavor,
+                instance=instance,
+                host=host,
+                provider=provider,
+                log=launcher.log,
+            )
+            current(sm)
+        machines = launcher.__dict__.setdefault("_cloud_sms", {})
+        machines[("create", data["node_uuid"])] = _StateMachineRef(
+            cls, {"state": "complete"}
+        )
+        cached = launcher.api.getProviderNode(data["node_uuid"])
+        _attach_state_machines(launcher, cached)
+        return {"patched": True, "node": _export_node(node)}
+
+    current = getattr(cls, "advance")
+    original = _ORIG_SM.get(key)
+    if original is None or not _callable_is_patched(current, original):
+        return {"patched": False}
+
+    ns = SimpleNamespace(
+        state=data.get("state") or cls.START,
+        complete=bool(data.get("complete")),
+        start_time=data.get("start_time") or 0,
+        snapshot_id=data.get("snapshot_id"),
+        log=launcher.log,
+    )
+    # Copy class constants tests may read.
+    for name in dir(cls):
+        if name.isupper():
+            setattr(ns, name, getattr(cls, name))
+    external = current(ns)
+    payload = {
+        "patched": True,
+        "state": getattr(ns, "state", None),
+        "complete": bool(getattr(ns, "complete", False)),
+    }
+    if external is not None:
+        payload["external_id"] = _jsonable(external)
+    if data.get("node_uuid"):
+        # Persist create/delete_state for failover-style assertions.
+        exported = {
+            "create_state"
+            if kind == "create"
+            else "delete_state"
+            if kind == "delete"
+            else "snapshot_state": {
+                "state": payload["state"],
+                "start_time": ns.start_time,
+            }
+        }
+        payload["node"] = exported
+        machines = launcher.__dict__.setdefault("_cloud_sms", {})
+        machines[(kind, data["node_uuid"])] = _StateMachineRef(
+            cls, exported.get("create_state") or exported.get("delete_state") or {}
+        )
     return payload
 
 

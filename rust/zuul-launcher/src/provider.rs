@@ -7,6 +7,7 @@
 
 use crate::cloud;
 use crate::config::quote_plus;
+use crate::endpoint;
 use crate::model::{ProviderNode, QuotaInformation};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -369,8 +370,10 @@ impl StateMachine for ScriptedMachine {
 }
 
 /// AWS create/delete from zuul/driver/aws/awsendpoint.py.
-/// A stub endpoint returns success immediately, so one advance() falls
-/// through the same states Python would when every future is done.
+/// Offline: a stub endpoint returns success immediately, so one
+/// advance() falls through the same states Python would when every
+/// future is done. Live: each endpoint method is invoked through
+/// cloud::invoke so moto and unittest patches apply.
 pub struct AwsCreate {
     pub state: String,
     pub start_time: f64,
@@ -388,6 +391,27 @@ pub struct AwsCreate {
     pub host_ready: bool,
     /// Stub: instance refresh reports running.
     pub instance_running: bool,
+    /// When set, advance() drives real endpoint ops via cloud::invoke.
+    live: bool,
+    provider: String,
+    label_name: String,
+    node_uuid: String,
+    hostname: String,
+    tags: Value,
+    fleet: bool,
+    spot: bool,
+    launch_template_name: Option<String>,
+    host_future_id: Option<String>,
+    create_future_id: Option<String>,
+    host_obj: Option<Value>,
+    instance_obj: Option<Value>,
+    node_properties: Map<String, Value>,
+    interface_ip: Option<String>,
+    updates: Option<Value>,
+    /// Node fields from a patched `_updateNode`, merged into updates.
+    patch_node: Option<Value>,
+    quota: Option<Value>,
+    setup_done: bool,
 }
 
 impl AwsCreate {
@@ -407,9 +431,116 @@ impl AwsCreate {
             create_future: false,
             host_ready: true,
             instance_running: true,
+            live: false,
+            provider: String::new(),
+            label_name: String::new(),
+            node_uuid: String::new(),
+            hostname: String::new(),
+            tags: json!({}),
+            fleet: false,
+            spot: false,
+            launch_template_name: None,
+            host_future_id: None,
+            create_future_id: None,
+            host_obj: None,
+            instance_obj: None,
+            node_properties: Map::new(),
+            interface_ip: None,
+            updates: None,
+            patch_node: None,
+            quota: None,
+            setup_done: true,
         };
         // AwsCreateStateMachine.__init__ always prices the label.
         machine.calls.push("getQuotaForLabel".into());
+        machine
+    }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode, label: &Label) -> Self {
+        let dedicated = label
+            .flavor
+            .as_ref()
+            .and_then(|name| provider.flavors.get(name))
+            .and_then(|flavor| {
+                flavor
+                    .raw
+                    .get("dedicated-host")
+                    .or_else(|| flavor.raw.get("dedicated_host"))
+                    .and_then(|v| v.as_bool())
+            })
+            .unwrap_or(false);
+        let mut machine = Self::new(dedicated);
+        machine.provider = provider.canonical_name.clone();
+        machine.label_name = label.name.clone();
+        machine.node_uuid = node.uuid();
+        let uuid = node.uuid();
+        let host_len = uuid.len().min(13);
+        machine.hostname = format!("np{}", &uuid[..host_len]);
+        machine.tags = node.fields.get("tags").cloned().unwrap_or_else(|| json!({}));
+        if let Some(obj) = machine.tags.as_object_mut() {
+            obj.insert("Name".into(), json!(machine.hostname));
+        }
+        machine.instance_id = node
+            .fields
+            .get("aws_instance_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        machine.host_id = node
+            .fields
+            .get("aws_dedicated_host_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        machine.launch_template_name = node
+            .fields
+            .get("aws_launch_template_name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        if let Some(props) = node.fields.get("node_properties").and_then(|v| v.as_object()) {
+            machine.node_properties = props.clone();
+        }
+        if let Some(cs) = node.fields.get("create_state") {
+            if let Some(state) = cs.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            machine.attempts = cs
+                .get("attempts")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            if let Some(id) = cs.get("image_external_id").and_then(|v| v.as_str()) {
+                machine.image_external_id = Some(id.to_string());
+            }
+            if let Some(t) = cs.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        if let Some(flavor_name) = &label.flavor {
+            if let Some(flavor) = provider.flavors.get(flavor_name) {
+                machine.fleet = flavor
+                    .raw
+                    .get("fleet")
+                    .map(|v| !v.is_null() && v != &json!(false))
+                    .unwrap_or(false);
+                let market = flavor
+                    .raw
+                    .get("market-type")
+                    .or_else(|| flavor.raw.get("market_type"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                machine.spot = market == "spot";
+            }
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            // Quota call is recorded once live_setup runs.
+            machine.calls.clear();
+            machine.visited = vec![machine.state.clone()];
+        }
         machine
     }
 
@@ -417,10 +548,111 @@ impl AwsCreate {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for AwsCreate {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        let quota = endpoint::quota_for_label(&self.provider, &self.label_name, None)?;
+        self.calls.push("getQuotaForLabel".into());
+        self.quota = Some(quota);
+        if let Some(host_id) = self.host_id.clone() {
+            let obj = json!({
+                "HostId": host_id,
+                "State": {"Name": "pending"},
+            });
+            self.host_obj = Some(endpoint::refresh(&self.provider, &obj)?);
+            self.calls.push("_refresh".into());
+        }
+        if let Some(instance_id) = self.instance_id.clone() {
+            let obj = json!({
+                "InstanceId": instance_id,
+                "State": {"Name": "pending"},
+            });
+            self.instance_obj = Some(endpoint::refresh(&self.provider, &obj)?);
+            self.calls.push("_refresh".into());
+        }
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(ip) = result.get("interface_ip").and_then(|v| v.as_str()) {
+            self.interface_ip = Some(ip.to_string());
+        }
+        if let Some(id) = result.get("aws_instance_id").and_then(|v| v.as_str()) {
+            self.instance_id = Some(id.to_string());
+        }
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("create_state".into(), self.to_dict());
+        if let Some(id) = &self.instance_id {
+            m.insert("aws_instance_id".into(), json!(id));
+        }
+        if let Some(id) = &self.host_id {
+            m.insert("aws_dedicated_host_id".into(), json!(id));
+        }
+        if let Some(name) = &self.launch_template_name {
+            m.insert("aws_launch_template_name".into(), json!(name));
+        }
+        if !self.node_properties.is_empty() {
+            m.insert(
+                "node_properties".into(),
+                Value::Object(self.node_properties.clone()),
+            );
+        }
+        if let Some(ip) = &self.interface_ip {
+            m.insert("interface_ip".into(), json!(ip));
+        }
+        if let Some(q) = &self.quota {
+            if let Some(quota) = q.get("quota") {
+                m.insert("quota".into(), quota.clone());
+            } else {
+                m.insert("quota".into(), q.clone());
+            }
+        }
+        // Fill address fields from the instance when complete.
+        if let Some(inst) = &self.instance_obj {
+            if let Some(v) = inst.get("PublicIpAddress") {
+                m.insert("public_ipv4".into(), v.clone());
+            }
+            if let Some(v) = inst.get("PrivateIpAddress") {
+                m.insert("private_ipv4".into(), v.clone());
+            }
+            if let Some(az) = inst
+                .get("Placement")
+                .and_then(|p| p.get("AvailabilityZone"))
+            {
+                m.insert("az".into(), az.clone());
+            }
+            m.insert("cloud".into(), json!("AWS"));
+        }
+        if let Some(Value::Object(patch)) = &self.patch_node {
+            for (k, v) in patch {
+                if k != "create_state" {
+                    m.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             self.calls.push("provider_label_template_names".into());
             if self.dedicated_host {
@@ -469,15 +701,303 @@ impl StateMachine for AwsCreate {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            self.node_properties
+                .insert("fleet".into(), json!(self.fleet));
+            self.node_properties
+                .insert("spot".into(), json!(self.spot));
+            self.calls.push("provider_label_template_names".into());
+            if self.dedicated_host {
+                self.note("start allocating host");
+            } else {
+                self.note("start creating instance");
+            }
+        }
+        if self.state == "start allocating host" {
+            if self.host_future_id.is_none() {
+                let result = endpoint::submit_allocate_host(
+                    &self.provider,
+                    json!({
+                        "label": self.label_name,
+                        "tags": self.tags,
+                        "hostname": self.hostname,
+                    }),
+                )?;
+                self.calls.push("_submitAllocateHost".into());
+                self.host_future = true;
+                self.host_future_id = result
+                    .get("future_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+            }
+            let future_id = self
+                .host_future_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing host future".into()))?;
+            self.calls.push("_completeAllocateHost".into());
+            let host = endpoint::complete_allocate_host(&self.provider, &future_id)?;
+            if host.is_none() {
+                self.export_updates();
+                return Ok(());
+            }
+            let host = host.unwrap();
+            self.host_id = host
+                .get("HostId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            self.host_obj = Some(host);
+            self.note("allocating host");
+        }
+        if self.state == "allocating host" {
+            let obj = self
+                .host_obj
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing host".into()))?;
+            self.calls.push("_refresh".into());
+            let host = endpoint::refresh(&self.provider, &obj)?;
+            self.host_obj = Some(host.clone());
+            let state = host
+                .get("State")
+                .and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.get("Name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                })
+                .unwrap_or_default()
+                .to_lowercase();
+            if state == "available" {
+                if let Some(id) = host.get("HostId").and_then(|v| v.as_str()) {
+                    self.host_id = Some(id.to_string());
+                    self.node_properties
+                        .insert("host_id".into(), json!(id));
+                }
+                self.note("start creating instance");
+            } else if matches!(
+                state.as_str(),
+                "permanent-failure" | "released" | "released-permanent-failure"
+            ) {
+                return Err(AdvanceError::Other(format!("Host in {state} state")));
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "start creating instance" {
+            if self.create_future_id.is_none() {
+                let mut payload = json!({
+                    "label": self.label_name,
+                    "tags": self.tags,
+                    "hostname": self.hostname,
+                    "node_uuid": self.node_uuid,
+                    "dedicated_host_id": self.host_id,
+                    "launch_template_name": self.launch_template_name,
+                });
+                if let Some(id) = &self.image_external_id {
+                    payload
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("image_external_id".into(), json!(id));
+                }
+                let result = endpoint::submit_create_instance(&self.provider, payload)?;
+                self.calls.push("_submitCreateInstance".into());
+                self.create_future = true;
+                self.create_future_id = result
+                    .get("future_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                if let Some(name) = result
+                    .get("launch_template_name")
+                    .and_then(|v| v.as_str())
+                {
+                    self.launch_template_name = Some(name.to_string());
+                }
+                if let Some(id) = result
+                    .get("image_external_id")
+                    .and_then(|v| v.as_str())
+                {
+                    self.image_external_id = Some(id.to_string());
+                }
+            }
+            let future_id = self
+                .create_future_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing create future".into()))?;
+            self.calls.push("_completeCreateInstance".into());
+            let instance = endpoint::complete_create_instance(&self.provider, &future_id)?;
+            if instance.is_none() {
+                self.export_updates();
+                return Ok(());
+            }
+            let instance = instance.unwrap();
+            self.instance_id = instance
+                .get("InstanceId")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if let Some(id) = &self.instance_id {
+                self.node_properties
+                    .insert("instance_id".into(), json!(id));
+            }
+            self.instance_obj = Some(instance);
+            self.note("creating instance");
+        }
+        if self.state == "creating instance" {
+            let obj = self
+                .instance_obj
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing instance".into()))?;
+            self.calls.push("_refresh".into());
+            let instance = endpoint::refresh(&self.provider, &obj)?;
+            self.instance_obj = Some(instance.clone());
+            let state = instance
+                .get("State")
+                .and_then(|v| v.get("Name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if state == "running" {
+                let instance_type = instance
+                    .get("InstanceType")
+                    .and_then(|v| v.as_str());
+                let quota = endpoint::quota_for_label(
+                    &self.provider,
+                    &self.label_name,
+                    instance_type,
+                )?;
+                self.calls.push("getQuotaForLabel".into());
+                self.quota = Some(quota);
+                self.apply_instance_fields(&instance);
+                self.note("complete");
+                self.complete = true;
+                self.export_updates();
+                return Ok(());
+            } else if state == "terminated" {
+                return Err(AdvanceError::Other(
+                    "Instance in terminated state".into(),
+                ));
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+
+    fn apply_instance_fields(&mut self, instance: &Value) {
+        let public_v4 = instance
+            .get("PublicIpAddress")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let private_v4 = instance
+            .get("PrivateIpAddress")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let public_v6 = instance
+            .get("NetworkInterfaces")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|iface| iface.get("Ipv6Addresses"))
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|a| a.get("Ipv6Address"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        self.interface_ip = public_v4
+            .clone()
+            .or(public_v6)
+            .or(private_v4);
+        if let (Some(mappings), Some(root)) = (
+            instance.get("BlockDeviceMappings").and_then(|v| v.as_array()),
+            instance.get("RootDeviceName").and_then(|v| v.as_str()),
+        ) {
+            for attachment in mappings {
+                if attachment.get("DeviceName").and_then(|v| v.as_str()) == Some(root) {
+                    if let Some(vol) = attachment
+                        .get("Ebs")
+                        .and_then(|e| e.get("VolumeId"))
+                        .and_then(|v| v.as_str())
+                    {
+                        self.node_properties
+                            .insert("ebs_volume_id".into(), json!(vol));
+                    }
+                    break;
+                }
+            }
+        }
+        // Allow a Python _updateNode patch to adjust the exported node.
+        let patched = endpoint::patched_advance(
+            "aws",
+            "update_node",
+            &self.state,
+            false,
+            json!({
+                "provider": self.provider,
+                "node_uuid": self.node_uuid,
+                "label": self.label_name,
+                "instance": instance,
+                "host": self.host_obj,
+                "aws_instance_id": self.instance_id,
+                "aws_dedicated_host_id": self.host_id,
+            }),
+        );
+        if let Ok(Some(result)) = patched {
+            if let Some(node) = result.get("node") {
+                if let Some(ip) = node.get("interface_ip").and_then(|v| v.as_str()) {
+                    self.interface_ip = Some(ip.to_string());
+                }
+                self.patch_node = Some(node.clone());
+            }
+        }
+    }
+}
+
+impl StateMachine for AwsCreate {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "aws",
+                "create",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                    "label": self.label_name,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
     fn external_id(&self) -> Option<String> { self.instance_id.clone() }
     fn interface_ip(&self) -> Option<String> {
+        if self.live {
+            return self.interface_ip.clone();
+        }
         if self.complete { Some("192.0.2.10".into()) } else { None }
     }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live {
+            self.updates.clone()
+        } else {
+            None
+        }
+    }
     fn to_dict(&self) -> Value {
         let mut m = Map::new();
         m.insert("state".into(), json!(self.state));
@@ -500,6 +1020,13 @@ pub struct AwsDelete {
     pub host_id: Option<String>,
     /// Stub: _refreshDelete reports the resource gone.
     pub gone: bool,
+    live: bool,
+    provider: String,
+    node_uuid: String,
+    instance_obj: Option<Value>,
+    host_obj: Option<Value>,
+    updates: Option<Value>,
+    setup_done: bool,
 }
 
 impl AwsDelete {
@@ -513,12 +1040,56 @@ impl AwsDelete {
             instance_id,
             host_id,
             gone: true,
+            live: false,
+            provider: String::new(),
+            node_uuid: String::new(),
+            instance_obj: None,
+            host_obj: None,
+            updates: None,
+            setup_done: true,
         };
         if machine.host_id.is_some() {
             machine.calls.push("_refreshDelete".into());
+            machine.host_obj = Some(json!({"HostId": machine.host_id}));
         }
         if machine.instance_id.is_some() {
             machine.calls.push("_refreshDelete".into());
+            machine.instance_obj = Some(json!({"InstanceId": machine.instance_id}));
+        }
+        machine
+    }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode) -> Self {
+        let instance_id = node
+            .fields
+            .get("aws_instance_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let host_id = node
+            .fields
+            .get("aws_dedicated_host_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let mut machine = Self::new(instance_id, host_id);
+        machine.provider = provider.canonical_name.clone();
+        machine.node_uuid = node.uuid();
+        if let Some(ds) = node.fields.get("delete_state") {
+            if let Some(state) = ds.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            if let Some(t) = ds.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
         }
         machine
     }
@@ -527,10 +1098,54 @@ impl AwsDelete {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for AwsDelete {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        if let Some(host_id) = self.host_id.clone() {
+            let obj = json!({ "HostId": host_id });
+            self.host_obj = endpoint::refresh_delete(&self.provider, &obj)?;
+            self.calls.push("_refreshDelete".into());
+        }
+        if let Some(instance_id) = self.instance_id.clone() {
+            let obj = json!({ "InstanceId": instance_id });
+            self.instance_obj = endpoint::refresh_delete(&self.provider, &obj)?;
+            self.calls.push("_refreshDelete".into());
+        }
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("delete_state".into(), self.to_dict());
+        if let Some(id) = &self.instance_id {
+            m.insert("aws_instance_id".into(), json!(id));
+        }
+        if let Some(id) = &self.host_id {
+            m.insert("aws_dedicated_host_id".into(), json!(id));
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             if self.instance_id.is_some() {
                 self.note("start deleting instance");
@@ -573,12 +1188,249 @@ impl StateMachine for AwsDelete {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            if self.instance_obj.is_some() {
+                self.note("start deleting instance");
+            } else if self.host_obj.is_some() {
+                self.note("start releasing host");
+            } else {
+                self.note("complete");
+            }
+        }
+        if self.state == "start deleting instance" {
+            let id = self
+                .instance_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing instance id".into()))?;
+            self.calls.push("_deleteInstance".into());
+            self.instance_obj = endpoint::delete_instance(&self.provider, &id)?;
+            self.note("deleting instance");
+        }
+        if self.state == "deleting instance" {
+            if let Some(obj) = self.instance_obj.clone() {
+                self.calls.push("_refreshDelete".into());
+                self.instance_obj = endpoint::refresh_delete(&self.provider, &obj)?;
+            }
+            if self.instance_obj.is_none() {
+                if self.host_obj.is_some() || self.host_id.is_some() {
+                    // Re-check host presence for the release path.
+                    if self.host_obj.is_none() {
+                        if let Some(host_id) = self.host_id.clone() {
+                            let obj = json!({ "HostId": host_id });
+                            self.host_obj = endpoint::refresh_delete(&self.provider, &obj)?;
+                            self.calls.push("_refreshDelete".into());
+                        }
+                    }
+                    if self.host_obj.is_some() {
+                        self.note("start releasing host");
+                    } else {
+                        self.note("complete");
+                    }
+                } else {
+                    self.note("complete");
+                }
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "start releasing host" {
+            let id = self
+                .host_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing host id".into()))?;
+            self.calls.push("_releaseHost".into());
+            self.host_obj = endpoint::release_host(&self.provider, &id)?;
+            self.note("releasing host");
+        }
+        if self.state == "releasing host" {
+            if let Some(obj) = self.host_obj.clone() {
+                self.calls.push("_refreshDelete".into());
+                self.host_obj = endpoint::refresh_delete(&self.provider, &obj)?;
+            }
+            if self.host_obj.is_none() {
+                self.note("complete");
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for AwsDelete {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "aws",
+                "delete",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live {
+            self.updates.clone()
+        } else {
+            None
+        }
+    }
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
+}
+
+/// AWS snapshot from zuul/driver/aws/awsendpoint.py.
+pub struct AwsSnapshot {
+    pub state: String,
+    pub start_time: f64,
+    pub complete: bool,
+    pub snapshot_id: Option<String>,
+    pub external_id: Option<String>,
+    pub volume_id: Option<String>,
+    pub tags: Value,
+    live: bool,
+    provider: String,
+    node_uuid: String,
+    snapshot_obj: Option<Value>,
+    account_id: Option<String>,
+    region: Option<String>,
+}
+
+impl AwsSnapshot {
+    pub fn new() -> Self {
+        Self {
+            state: "start".into(),
+            start_time: 0.0,
+            complete: false,
+            snapshot_id: None,
+            external_id: None,
+            volume_id: None,
+            tags: json!({}),
+            live: cloud::enabled(),
+            provider: String::new(),
+            node_uuid: String::new(),
+            snapshot_obj: None,
+            account_id: None,
+            region: None,
+        }
+    }
+}
+
+impl StateMachine for AwsSnapshot {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "aws",
+                "snapshot",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                    "snapshot_id": self.snapshot_id,
+                }),
+            )? {
+                if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+                    self.state = state.to_string();
+                }
+                self.complete = result
+                    .get("complete")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if let Some(ext) = result.get("external_id").and_then(|v| v.as_str()) {
+                    self.external_id = Some(ext.to_string());
+                }
+                return Ok(());
+            }
+            if self.state == "start" {
+                let volume_id = self
+                    .volume_id
+                    .clone()
+                    .ok_or_else(|| AdvanceError::Other("missing volume id".into()))?;
+                let snap = endpoint::create_snapshot(&self.provider, &volume_id, &self.tags)?;
+                self.snapshot_id = snap
+                    .get("SnapshotId")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                self.snapshot_obj = Some(snap);
+                self.state = "snapshot pending".into();
+            }
+            if self.state == "snapshot pending" {
+                let obj = self
+                    .snapshot_obj
+                    .clone()
+                    .ok_or_else(|| AdvanceError::Other("missing snapshot".into()))?;
+                let snap = endpoint::refresh_snapshot(&self.provider, &obj)?;
+                self.snapshot_obj = Some(snap.clone());
+                let state = snap
+                    .get("State")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if state == "completed" {
+                    self.state = "complete".into();
+                } else if state == "pending" {
+                    return Ok(());
+                } else {
+                    return Err(AdvanceError::Other(format!("Snapshot in {state} state")));
+                }
+            }
+            if self.state == "complete" {
+                if let (Some(region), Some(account), Some(snap_id)) =
+                    (&self.region, &self.account_id, &self.snapshot_id)
+                {
+                    self.external_id = Some(format!(
+                        "arn:aws:ec2:{region}:{account}:snapshot/{snap_id}"
+                    ));
+                }
+                self.complete = true;
+            }
+            return Ok(());
+        }
+        // Offline stub.
+        self.state = "complete".into();
+        self.complete = true;
+        self.external_id = Some("snap-stub".into());
+        Ok(())
+    }
+    fn complete(&self) -> bool { self.complete }
+    fn state_name(&self) -> String { self.state.clone() }
+    fn start_time(&self) -> f64 { self.start_time }
+    fn set_start_time(&mut self, t: f64) { self.start_time = t; }
+    fn external_id(&self) -> Option<String> { self.external_id.clone() }
+    fn to_dict(&self) -> Value {
+        let mut m = Map::new();
+        m.insert("state".into(), json!(self.state));
+        m.insert("start_time".into(), json!(self.start_time));
+        if let Some(id) = &self.snapshot_id {
+            m.insert("snapshot_id".into(), json!(id));
+        }
+        Value::Object(m)
+    }
 }
 
 /// Azure order from zuul/driver/azure/azureendpoint.py.
@@ -1157,106 +2009,6 @@ impl StateMachine for StaticDelete {
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
 
-/// One step of the Python provider state machine (AwsCreateStateMachine
-/// and the Azure, OpenStack, Kubernetes, and static machines). The PyO3
-/// handler owns the machine so boto3, azul, and the in-process fakes run.
-pub struct LiveMachine {
-    pub kind: String,
-    pub driver: String,
-    pub provider: String,
-    pub node_uuid: String,
-    pub label: String,
-    pub state: String,
-    pub start_time: f64,
-    pub complete: bool,
-    pub interface_ip: Option<String>,
-    pub updates: Option<Value>,
-}
-
-impl LiveMachine {
-    pub fn new(kind: &str, driver: &str, provider: &str, node: &ProviderNode, label: &Label) -> Self {
-        Self {
-            kind: kind.into(),
-            driver: driver.into(),
-            provider: provider.into(),
-            node_uuid: node.uuid(),
-            label: label.name.clone(),
-            state: "start".into(),
-            start_time: 0.0,
-            complete: false,
-            interface_ip: None,
-            updates: None,
-        }
-    }
-}
-
-impl StateMachine for LiveMachine {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
-        let result = cloud::invoke(
-            "step",
-            &json!({
-                "kind": self.kind,
-                "driver": self.driver,
-                "provider": self.provider,
-                "node_uuid": self.node_uuid,
-                "label": self.label,
-            }),
-        )?;
-        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
-            self.state = state.to_string();
-        }
-        self.complete = result.get("complete").and_then(|v| v.as_bool()).unwrap_or(false);
-        self.interface_ip = result
-            .get("interface_ip")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        self.updates = result.get("node").cloned();
-        Ok(())
-    }
-    fn fail(&mut self) {
-        let result = cloud::invoke(
-            "fail",
-            &json!({
-                "kind": self.kind,
-                "driver": self.driver,
-                "provider": self.provider,
-                "node_uuid": self.node_uuid,
-                "label": self.label,
-            }),
-        );
-        self.complete = true;
-        self.state = "complete".into();
-        if let Ok(value) = result {
-            if let Some(state) = value.get("state").and_then(|v| v.as_str()) {
-                self.state = state.to_string();
-            }
-            self.complete = value.get("complete").and_then(|v| v.as_bool()).unwrap_or(true);
-            self.updates = value.get("node").cloned();
-        }
-    }
-    fn complete(&self) -> bool {
-        self.complete
-    }
-    fn state_name(&self) -> String {
-        self.state.clone()
-    }
-    fn start_time(&self) -> f64 {
-        self.start_time
-    }
-    fn set_start_time(&mut self, t: f64) {
-        self.start_time = t;
-    }
-    fn interface_ip(&self) -> Option<String> {
-        self.interface_ip.clone()
-    }
-    fn node_updates(&self) -> Option<Value> {
-        self.updates.clone()
-    }
-    fn to_dict(&self) -> Value {
-        json!({"state": self.state, "start_time": self.start_time})
-    }
-}
-
 pub fn driver_create(driver: &str) -> Box<dyn StateMachine> {
     match driver {
         "aws" => Box::new(AwsCreate::new(false)),
@@ -1277,8 +2029,9 @@ pub fn driver_delete(driver: &str) -> Box<dyn StateMachine> {
     }
 }
 
-/// Cloud-backed provider. State machines are the Python ones; endpoint
-/// methods are invoked in that order. Live HTTP is performed by `cloud`.
+/// Cloud-backed provider. AWS create/delete state machines run in Rust
+/// and call fine-grained endpoint ops through `cloud`. Other drivers
+/// use the offline call-order stubs until they gain the same adapters.
 pub struct CloudProvider {
     pub name: String,
     pub canonical_name: String,
@@ -1321,47 +2074,14 @@ impl Provider for CloudProvider {
         }
     }
     fn create_machine(&self, node: &ProviderNode, label: &Label) -> Box<dyn StateMachine> {
-        if cloud::enabled() {
-            return Box::new(LiveMachine::new(
-                "create",
-                &self.driver_name,
-                &self.canonical_name,
-                node,
-                label,
-            ));
-        }
         if self.driver_name == "aws" {
-            let dedicated = label
-                .flavor
-                .as_ref()
-                .and_then(|name| self.flavors.get(name))
-                .and_then(|flavor| {
-                    flavor
-                        .raw
-                        .get("dedicated-host")
-                        .or_else(|| flavor.raw.get("dedicated_host"))
-                        .and_then(|v| v.as_bool())
-                })
-                .unwrap_or(false);
-            return Box::new(AwsCreate::new(dedicated));
+            return Box::new(AwsCreate::from_provider(self, node, label));
         }
         driver_create(&self.driver_name)
     }
     fn delete_machine(&self, node: &ProviderNode) -> Box<dyn StateMachine> {
-        if cloud::enabled() {
-            let label_name = node.label();
-            let label = self
-                .labels
-                .get(&label_name)
-                .cloned()
-                .unwrap_or_else(|| default_label(&label_name, false));
-            return Box::new(LiveMachine::new(
-                "delete",
-                &self.driver_name,
-                &self.canonical_name,
-                node,
-                &label,
-            ));
+        if self.driver_name == "aws" {
+            return Box::new(AwsDelete::from_provider(self, node));
         }
         driver_delete(&self.driver_name)
     }
