@@ -311,8 +311,12 @@ def _install_node_cache_hook(launcher):
     orig_object = cache.objectFromRaw
 
     def updateFromRaw(obj, key, data, stat):
+        # Attach after the ZK payload is applied so create_state is
+        # visible. Attaching first left create_state_machine unset and
+        # broke test_launcher_failover.
+        result = orig_update(obj, key, data, stat)
         _attach_state_machines(launcher, obj)
-        return orig_update(obj, key, data, stat)
+        return result
 
     def objectFromRaw(key, data, stat):
         obj = orig_object(key, data, stat)
