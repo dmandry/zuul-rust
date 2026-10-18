@@ -444,6 +444,20 @@ impl Launcher {
                     self.accept_pending = pending.clone();
                 }
             } else if req.state() == request_state::ACCEPTED {
+                // Match server.py _cachesReadyForRequest: do not check or
+                // retry until getProviderNode can see every assigned node.
+                // test_subnodes_crash_during_create hides nodes via that
+                // method; retrying from the Rust map alone burns through
+                // launch_attempts before the test unhides them.
+                if cloud::enabled()
+                    && !req
+                        .nodes()
+                        .iter()
+                        .all(|nid| self.python_node_present(nid))
+                {
+                    self.wake();
+                    continue;
+                }
                 self.process_nodeset_request(&req, &unassigned, &mut pending);
             } else if model::is_final_request_state(&req.state()) {
                 // The request is already final but the completion event
