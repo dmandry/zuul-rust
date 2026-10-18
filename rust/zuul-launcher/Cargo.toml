@@ -1,0 +1,59 @@
+# Copyright 2026 Acme Gating, LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[package]
+name = "zuul-launcher"
+version = "14.3.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Zuul launcher (14.3.0) implemented in Rust"
+publish = false
+
+[lib]
+name = "zuul_launcher"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zuul-launcher"
+path = "src/main.rs"
+
+[workspace]
+
+[dependencies]
+backtrace = "0.3"
+base64 = "0.22"
+flate2 = { version = "1.0", features = ["zlib"] }
+getrandom = "0.2"
+hex = "0.4"
+hmac = "0.12"
+hostname = "0.4"
+libc = "0.2"
+openssl = "=0.10.66"
+rand = "0.8"
+ryu = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+signal-hook = "0.3"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+# Keep transitive crates on the Rust 1.83 compiler in this image.
+indexmap = "=2.2.6"
+zeroize = "=1.6.0"
+zeroize_derive = "=1.4.2"
+# uuid >=1.12 bumps MSRV past the 1.83 compiler in this image.
+uuid = { version = "=1.11.0", features = ["v5"] }
+
+[dev-dependencies]
+base64 = "0.22"
+serde_json = "1.0"

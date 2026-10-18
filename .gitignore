@@ -26,3 +26,5 @@ zuul/web/static/*
 node_modules
 yarn-error.log
 tools/ca/
+rust/zuul-launcher/target/
+rust/zuul-launcher-py/target/
