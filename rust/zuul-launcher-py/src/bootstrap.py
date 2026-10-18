@@ -725,6 +725,8 @@ def cloud_call(launcher, op, payload):
             result = _upload_delete(launcher, data)
         elif op == "upload.reset_crashed":
             result = _upload_reset_crashed(launcher, data)
+        elif op == "upload.delete_artifact":
+            result = _upload_delete_artifact(launcher, data)
         elif op == "snapshot.advance":
             result = _snapshot_advance(launcher, data)
         elif op == "snapshot.sm_advance":
@@ -2395,6 +2397,27 @@ def _upload_reset_crashed(launcher, data):
             # Locked again (lock / cache update race)
             return {"ok": True, "skipped": True, "reason": "lock_race"}
     return {"ok": True, "skipped": True}
+
+
+def _upload_delete_artifact(launcher, data):
+    """Delete an ImageBuildArtifact with no uploads (checkOldImages)."""
+    from zuul.zk.exceptions import LockException
+
+    _bind_missing_methods(launcher)
+    artifact_uuid = data["artifact_uuid"]
+    iba = launcher.image_build_registry.getItem(artifact_uuid)
+    if iba is None:
+        return {"deleted": False, "missing": True}
+    with launcher.createZKContext(None, launcher.log) as ctx:
+        try:
+            with iba.locked(ctx, blocking=False):
+                launcher.log.info(
+                    "Deleting image build artifact with no uploads: %s", iba
+                )
+                iba.delete(ctx)
+                return {"deleted": True}
+        except LockException:
+            return {"deleted": False, "locked": True}
 
 
 def _upload_delete(launcher, data):

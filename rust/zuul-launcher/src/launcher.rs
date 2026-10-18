@@ -2397,6 +2397,40 @@ impl Launcher {
                 Self::run_upload_delete(&job, &delete_q);
             });
         }
+        // Delete ImageBuildArtifacts with no uploads left (server.py
+        // checkOldImages tail). qcow2/etc. never uploaded, or orphans
+        // after DeleteJob, must go so getArtifactsForImage settles.
+        let latest_upload_ts = self
+            .api
+            .uploads
+            .values()
+            .map(|u| u.timestamp())
+            .fold(0.0_f64, f64::max);
+        let mut uploads_by_artifact: HashMap<String, usize> = HashMap::new();
+        for u in self.api.uploads.values() {
+            *uploads_by_artifact
+                .entry(u.artifact_uuid())
+                .or_insert(0) += 1;
+        }
+        let orphan_artifacts: Vec<String> = self
+            .api
+            .artifacts
+            .values()
+            .filter(|a| {
+                let state = a.state().unwrap_or_default();
+                (state == "ready" || state == "deleting")
+                    && latest_upload_ts > 0.0
+                    && a.timestamp() <= latest_upload_ts
+                    && uploads_by_artifact.get(&a.uuid()).copied().unwrap_or(0) == 0
+            })
+            .map(|a| a.uuid())
+            .collect();
+        for uuid in orphan_artifacts {
+            let _ = cloud::invoke(
+                "upload.delete_artifact",
+                &json!({ "artifact_uuid": uuid }),
+            );
+        }
     }
 
     /// Pending uploads: one UploadJob per artifact on the 1-worker upload
