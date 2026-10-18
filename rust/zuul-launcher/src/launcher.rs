@@ -2095,19 +2095,26 @@ impl Launcher {
     }
 
     /// Stop workers (server.py stop: cancel election, join cleanup, shutdown pools).
+    ///
+    /// Callers that hold the Python GIL (PyO3 harness) must release it before
+    /// joining: worker ticks re-enter Python via cloud::invoke.
     pub fn stop_workers(&mut self) {
-        if let Some(worker) = self.stats_worker.take() {
-            worker.join();
-        }
-        if let Some(worker) = self.cleanup_worker.take() {
-            worker.join();
-        }
-        if let Some(pools) = self.upload_pools.take() {
-            pools.shutdown();
-        }
+        let stats = self.stats_worker.take();
+        let cleanup = self.cleanup_worker.take();
+        let pools = self.upload_pools.take();
         self.stats_snapshot = None;
         self.stats_worker_sink = None;
         self.cleanup_shared = None;
+        // Cancel/wake before join so election and interval waits unblock.
+        if let Some(worker) = stats {
+            worker.join();
+        }
+        if let Some(worker) = cleanup {
+            worker.join();
+        }
+        if let Some(pools) = pools {
+            pools.shutdown();
+        }
     }
 
     fn endpoint_refs(&self) -> Vec<EndpointRef> {

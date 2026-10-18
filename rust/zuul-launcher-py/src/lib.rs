@@ -86,12 +86,18 @@ impl PyLauncher {
     }
 
     /// Stop Rust cleanup / stats / upload pools (called from bootstrap.stop).
-    fn stop_rust_workers(slf: &Bound<'_, Self>) -> PyResult<()> {
+    ///
+    /// Must release the GIL while joining: cleanup/upload ticks call back
+    /// into Python via cloud::invoke. Holding the GIL here deadlocks those
+    /// worker threads (and can wedge the launcher run loop).
+    fn stop_rust_workers(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {
         let rust = slf.borrow().rust.clone();
-        let mut guard = rust.lock().unwrap();
-        if let Some(launcher) = guard.as_mut() {
-            launcher.stop_workers();
-        }
+        py.allow_threads(|| {
+            let mut guard = rust.lock().unwrap();
+            if let Some(launcher) = guard.as_mut() {
+                launcher.stop_workers();
+            }
+        });
         Ok(())
     }
 
