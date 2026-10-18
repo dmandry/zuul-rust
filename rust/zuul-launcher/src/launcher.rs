@@ -565,21 +565,20 @@ impl Launcher {
                 return;
             }
         }
-        let failed: Vec<usize> = ids
-            .iter()
-            .enumerate()
-            .filter(|(_, id)| {
-                self.api
-                    .nodes
-                    .get(*id)
-                    .map(|n| model::is_failed_node_state(&n.state()))
-                    .unwrap_or(false)
-            })
-            .map(|(i, _)| i)
-            .collect();
-        if !failed.is_empty() {
+        // server.py _checkRequest: if ANY node is in FAILED_STATES, re-select
+        // providers for every slot. Retry failed/HOLD nodes and also READY
+        // nodes whose provider no longer matches (locality shift).
+        let any_failed = ids.iter().any(|id| {
+            self.api
+                .nodes
+                .get(id)
+                .map(|n| model::is_failed_node_state(&n.state()))
+                .unwrap_or(false)
+        });
+        if any_failed {
             let mut req = request.clone();
-            let label_providers = match self.select_providers(&req, unassigned, &mut Vec::new()) {
+            let mut messages = Vec::new();
+            let label_providers = match self.select_providers(&req, unassigned, &mut messages) {
                 Ok(v) => v,
                 Err(err) => {
                     if err.contains("No provider") {
@@ -588,13 +587,19 @@ impl Launcher {
                     return;
                 }
             };
-            for i in failed {
+            for (i, node_id) in ids.iter().enumerate() {
                 let Some((label_name, provider_cname)) = label_providers.get(i) else {
                     continue;
                 };
-                let Some(old) = self.api.nodes.get(&ids[i]).cloned() else {
+                let Some(old) = self.api.nodes.get(node_id).cloned() else {
                     continue;
                 };
+                let provider_changed = old.provider() != *provider_cname;
+                let is_failed = model::is_failed_node_state(&old.state());
+                let is_hold = old.state() == node_state::HOLD;
+                if !(is_failed || is_hold || provider_changed) {
+                    continue;
+                }
                 let add_failed = if old.state() == node_state::FAILED {
                     Some(old.provider())
                 } else {
@@ -604,6 +609,7 @@ impl Launcher {
                     continue;
                 };
                 if provider.driver_name() == "static" {
+                    // Static: keep the same node reference (server.py).
                     continue;
                 }
                 let Some(label) = provider.labels().get(label_name).cloned() else {
@@ -619,7 +625,10 @@ impl Launcher {
                         Err(_) => continue,
                     }
                 };
-                self.api.delete_assignment(&ids[i]).ok();
+                if new_id == *node_id {
+                    continue;
+                }
+                self.api.delete_assignment(node_id).ok();
                 req.update_provider_node(
                     i,
                     &new_id,
@@ -627,6 +636,7 @@ impl Launcher {
                     add_failed.as_deref(),
                 );
             }
+            self.messages.append(&mut messages);
             let _ = self.api.write_request(&req);
             self.wake();
             return;
@@ -2400,7 +2410,10 @@ impl Launcher {
         let Some(pools) = self.upload_pools.as_ref() else {
             return;
         };
-        // Crashed uploads (UPLOADING, unlocked): reset to PENDING in ZK.
+        // Crashed uploads (UPLOADING, unlocked): reset via Python ZKObject
+        // lock/refresh/double-check (server.py checkMissingUploads). Never
+        // write_upload here — that bypasses the advisory lock and races the
+        // UploadJob that still holds it (BadVersion on finalize).
         let crashed: Vec<String> = self
             .api
             .uploads
@@ -2409,10 +2422,10 @@ impl Launcher {
             .map(|u| u.uuid())
             .collect();
         for uuid in crashed {
-            if let Some(mut u) = self.api.uploads.get(&uuid).cloned() {
-                u.set_state(upload_state::PENDING);
-                let _ = self.api.write_upload(&u);
-            }
+            let _ = cloud::invoke(
+                "upload.reset_crashed",
+                &json!({ "upload_uuid": uuid }),
+            );
         }
         let all: Vec<&model::ImageUpload> = self.api.uploads.values().collect();
         // Group PENDING uploads by artifact (one UploadJob each).

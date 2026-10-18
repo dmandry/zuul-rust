@@ -723,6 +723,8 @@ def cloud_call(launcher, op, payload):
             result = {"ok": True}
         elif op == "upload.delete":
             result = _upload_delete(launcher, data)
+        elif op == "upload.reset_crashed":
+            result = _upload_reset_crashed(launcher, data)
         elif op == "snapshot.advance":
             result = _snapshot_advance(launcher, data)
         elif op == "snapshot.sm_advance":
@@ -2362,6 +2364,37 @@ def _upload_download(launcher, iba):
                 os.unlink(orig)
         path = inflated
     return path
+
+
+def _upload_reset_crashed(launcher, data):
+    """Reset unlocked UPLOADING uploads to PENDING (checkMissingUploads).
+
+    Acquires the ImageUpload lock, refreshes, and double-checks state so we
+    never race an in-flight UploadJob the way a raw ZK set would.
+    """
+    from zuul.zk.exceptions import LockException
+
+    _bind_missing_methods(launcher)
+    upload_uuid = data["upload_uuid"]
+    upload = launcher.image_upload_registry.getItem(upload_uuid)
+    if upload is None:
+        return {"ok": False, "missing": True}
+    if upload.is_locked:
+        return {"ok": True, "skipped": True, "reason": "locked"}
+    if upload.state != upload.State.UPLOADING:
+        return {"ok": True, "skipped": True, "reason": "not_uploading"}
+    with launcher.createZKContext(None, launcher.log) as ctx:
+        try:
+            with upload.locked(ctx, blocking=False):
+                upload.refresh(ctx)
+                if upload.state == upload.State.UPLOADING:
+                    with upload.activeContext(ctx):
+                        upload.state = upload.State.PENDING
+                    return {"ok": True, "reset": True}
+        except LockException:
+            # Locked again (lock / cache update race)
+            return {"ok": True, "skipped": True, "reason": "lock_race"}
+    return {"ok": True, "skipped": True}
 
 
 def _upload_delete(launcher, data):
