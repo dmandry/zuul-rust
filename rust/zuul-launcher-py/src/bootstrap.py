@@ -1988,6 +1988,14 @@ def _upload_artifact_job(launcher, data):
                                 self.log, upload=dep.uuid
                             )
                             dep_log.debug("Scheduling copy for %s", dep)
+                            # Source is the upload that just finished;
+                            # its providers[0] is the copy source provider
+                            # (matches UploadPlanner + getImageCopyJob).
+                            src_provider = None
+                            if upload.providers:
+                                src_provider = upload.providers[0]
+                            elif spec.get("source_provider"):
+                                src_provider = spec.get("source_provider")
                             _endpoint_upload_execute(
                                 launcher,
                                 dep,
@@ -1995,9 +2003,7 @@ def _upload_artifact_job(launcher, data):
                                 "copy",
                                 {
                                     "source_external_id": external_id,
-                                    "source_provider": spec.get(
-                                        "source_provider"
-                                    ),
+                                    "source_provider": src_provider,
                                 },
                                 {"path": None},
                                 dep_log,
@@ -2844,6 +2850,24 @@ def emit_events(launcher, payload):
     for item in json.loads(payload):
         event = NodesProvisionedEvent(item["uuid"], item.get("buildset"))
         launcher.result_events[item["tenant"]][item["pipeline"]].put(event)
+        # accept_one holds the request lock through ACCEPTED until
+        # finish_request (FINAL + event). Release here to match
+        # server.py _processNodesetRequest after FINAL_STATES.
+        request = launcher.api.getNodesetRequest(item["uuid"])
+        if request is not None and request.hasLock():
+            try:
+                if hasattr(request, "_span") and request._span is not None:
+                    try:
+                        request._span.set_attributes(request.getSpanAttributes())
+                        request._span.end()
+                    except Exception:
+                        pass
+                with launcher.createZKContext(None, launcher.log) as ctx:
+                    request.releaseLock(ctx)
+            except Exception:
+                launcher.log.exception(
+                    "Unable to release request lock for %s", item["uuid"]
+                )
 
 
 def join(launcher):

@@ -2395,6 +2395,7 @@ impl Launcher {
                 kind: "delete".into(),
                 upload_uuid: uuid,
                 source_external_id: None,
+                source_provider: None,
                 dependents: Vec::new(),
             };
             let delete_q = self.upload_uuids_in_delete_queue.clone();
@@ -2519,13 +2520,38 @@ impl Launcher {
                 if let Some(provider) = self.provider_by_any_cname(&provider_name) {
                     driver = provider.driver_name().to_string();
                     region = provider.region().map(|s| s.to_string());
-                    if provider.import_job(&url) {
+                    // Match provider_image.upload_methods (schema default
+                    // ['copy','import','upload']; layouts may restrict).
+                    let image_cname = upload.canonical_name();
+                    let allowed = provider
+                        .images()
+                        .values()
+                        .find(|img| {
+                            img.canonical_name == image_cname || img.name == image_cname
+                        })
+                        .and_then(|img| {
+                            img.raw
+                                .get("upload-methods")
+                                .or_else(|| img.raw.get("upload_methods"))
+                                .and_then(|v| v.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                                        .collect::<Vec<_>>()
+                                })
+                        })
+                        .unwrap_or_else(|| {
+                            vec!["copy".into(), "import".into(), "upload".into()]
+                        });
+                    if allowed.iter().any(|m| m == "import") && provider.import_job(&url) {
                         methods.push("import".into());
                     }
-                    if matches!(driver.as_str(), "aws" | "openstack") {
+                    if allowed.iter().any(|m| m == "copy")
+                        && matches!(driver.as_str(), "aws" | "openstack")
+                    {
                         methods.push("copy".into());
                     }
-                    if provider.upload_job() {
+                    if allowed.iter().any(|m| m == "upload") && provider.upload_job() {
                         methods.push("upload".into());
                     }
                 } else {
@@ -2570,6 +2596,7 @@ impl Launcher {
                 kind: "artifact".into(),
                 upload_uuid: artifact_uuid,
                 source_external_id: None,
+                source_provider: None,
                 dependents: Vec::new(),
             };
             pools.submit_upload(placeholder, move |_job| {
@@ -2593,6 +2620,7 @@ impl Launcher {
             "kind": job.kind,
             "upload_uuid": job.upload_uuid,
             "source_external_id": job.source_external_id,
+            "source_provider": job.source_provider,
             "dependents": job.dependents,
         })
     }

@@ -29,6 +29,9 @@ pub struct PlannedJob {
     pub kind: String,
     pub upload_uuid: String,
     pub source_external_id: Option<String>,
+    /// Canonical name of the source upload's provider (copy jobs only).
+    /// Passed through to getImageCopyJob so region gating matches 14.3.0.
+    pub source_provider: Option<String>,
     pub dependents: Vec<String>,
 }
 
@@ -73,6 +76,7 @@ impl<'a> UploadPlanner<'a> {
                 kind: "import".into(),
                 upload_uuid: id.clone(),
                 source_external_id: None,
+                source_provider: None,
                 dependents: Vec::new(),
             };
             self.import_jobs.push(job.clone());
@@ -153,10 +157,12 @@ impl<'a> UploadPlanner<'a> {
                 if !pending_hash.iter().any(|u| u == &upload) {
                     continue;
                 }
+                let source_provider = self.args.get(source).map(|a| a.provider.clone());
                 let job = PlannedJob {
                     kind: "copy".into(),
                     upload_uuid: upload.clone(),
                     source_external_id: ext.clone(),
+                    source_provider,
                     dependents: Vec::new(),
                 };
                 self.copy_jobs.push(job.clone());
@@ -183,6 +189,7 @@ impl<'a> UploadPlanner<'a> {
                     kind: "upload".into(),
                     upload_uuid: source.clone(),
                     source_external_id: None,
+                    source_provider: None,
                     dependents: Vec::new(),
                 };
                 self.upload_jobs.push(job.clone());
@@ -196,10 +203,12 @@ impl<'a> UploadPlanner<'a> {
                     continue;
                 }
                 source_job.dependents.push(upload.clone());
+                let source_provider = self.args.get(&source).map(|a| a.provider.clone());
                 let job = PlannedJob {
                     kind: "copy-dependent".into(),
                     upload_uuid: upload.clone(),
                     source_external_id: None,
+                    source_provider,
                     dependents: Vec::new(),
                 };
                 self.jobs.insert(upload.clone(), job);
