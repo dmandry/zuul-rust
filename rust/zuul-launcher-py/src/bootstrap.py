@@ -397,6 +397,10 @@ def run(launcher):
         try:
             with launcher.statsd_timer("zuul.launcher.run_handler"):
                 with launcher._run_lock:
+                    # stop() sets _running and then takes this lock before
+                    # it shuts endpoint executors down.
+                    if not launcher._running:
+                        break
                     launcher._run()
         except Exception:
             launcher.log.exception("Error in main thread:")
@@ -430,12 +434,16 @@ def stop(launcher):
     launcher.stats_thread.join()
     launcher.cleanup_worker.stop()
     launcher.cleanup_worker.join()
-    launcher.upload_executor.shutdown()
-    launcher.endpoint_import_executor.shutdown()
-    launcher.endpoint_upload_executor.shutdown()
-    launcher.nodescan_worker.stop()
-    launcher.connections.stop()
-    launcher.monitoring_server.stop()
+    # The run loop polls instead of waiting on a ChildrenWatch, so it
+    # is often inside a state-machine step when stop() begins. Finish
+    # that step before the endpoint executors are shut down.
+    with launcher._run_lock:
+        launcher.upload_executor.shutdown()
+        launcher.endpoint_import_executor.shutdown()
+        launcher.endpoint_upload_executor.shutdown()
+        launcher.nodescan_worker.stop()
+        launcher.connections.stop()
+        launcher.monitoring_server.stop()
     launcher.log.debug("Stopped launcher")
 
 
@@ -568,8 +576,14 @@ def cloud_call(launcher, op, payload):
         result = _cloud_error(exc)
         # Quota and capacity are retried without a traceback. Other
         # failures are logged with the original stack so the unit
-        # tests' okay_tracebacks filters still match.
-        if result.get("error_kind") == "other":
+        # tests' okay_tracebacks filters still match. An endpoint
+        # executor already shut down by stop() is not a node error.
+        if (
+            isinstance(exc, RuntimeError)
+            and "cannot schedule new futures after shutdown" in str(exc)
+        ):
+            launcher.log.debug("cloud op %s ended after executor shutdown", op)
+        elif result.get("error_kind") == "other":
             launcher.log.exception("cloud op %s failed", op)
         else:
             launcher.log.info(

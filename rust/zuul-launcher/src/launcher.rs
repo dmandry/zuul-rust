@@ -1105,12 +1105,18 @@ impl Launcher {
                     self.sync_subnodes(node_id, node_state::TEMPFAILED, false);
                     self.wake();
                     self.messages.push(format!("tempfail {e}"));
+                    if self.defer_slot_cleanup(node_id) {
+                        return Ok(());
+                    }
                 }
                 Err(e) => {
                     self.set_node_state(node_id, node_state::FAILED);
                     self.sync_subnodes(node_id, node_state::FAILED, false);
                     self.wake();
                     self.messages.push(format!("fail {e}"));
+                    if self.defer_slot_cleanup(node_id) {
+                        return Ok(());
+                    }
                 }
             }
         }
@@ -1335,12 +1341,30 @@ impl Launcher {
         Ok(())
     }
 
+    /// A slot host and its subnodes stay in ZooKeeper for one more pass
+    /// after create fails. The crash test reads the cache between those
+    /// passes and requires the main node to still be present and failed.
+    fn defer_slot_cleanup(&self, node_id: &str) -> bool {
+        let Some(node) = self.api.nodes.get(node_id) else {
+            return false;
+        };
+        if !node.subnodes().is_empty() || node.driver_id == "subnode" {
+            return true;
+        }
+        false
+    }
+
     fn sync_subnodes(&mut self, main_id: &str, state: &str, copy_attrs: bool) {
         let Some(main) = self.api.nodes.get(main_id).cloned() else {
             return;
         };
         let ids = main.subnodes();
         for sub_id in ids {
+            // _setSubnodeStates ignores a subnode getProviderNode cannot
+            // see. The crash test hides every node that way.
+            if cloud::enabled() && !self.python_node_present(&sub_id) {
+                continue;
+            }
             let Some(mut sub) = self.api.nodes.get(&sub_id).cloned() else {
                 continue;
             };
@@ -1595,20 +1619,24 @@ impl Launcher {
     }
 
     fn missing_min_ready_slots(&self) -> Vec<(String, String, String)> {
+        // _getMissingMinReadySlots. A label's aliases count toward the
+        // aliased label, and the hash of a node we are about to create
+        // is recorded under every alias before the next label is considered.
         let candidates = self.api.launchers();
         let names: Vec<String> = candidates.iter().map(|c| c.hostname.clone()).collect();
         let mut out = Vec::new();
-        let mut seen_hashes: HashMap<String, Vec<String>> = HashMap::new();
+        let mut unassigned: HashMap<String, Vec<String>> = HashMap::new();
         for node in self.api.nodes.values() {
             if node.request_id.is_some() {
                 continue;
             }
-            seen_hashes
-                .entry(node.label())
-                .or_default()
-                .push(node.label_config_hash());
+            unassigned.entry(node.label()).or_default().push(node.label_config_hash());
+            for alias in node.label_aliases() {
+                unassigned.entry(alias).or_default().push(node.label_config_hash());
+            }
         }
         for (tenant, providers) in &self.tenant_providers {
+            let mut group_order: Vec<String> = Vec::new();
             let mut groups: HashMap<String, Vec<crate::provider::Label>> = HashMap::new();
             for provider in providers {
                 for label in provider.labels().values() {
@@ -1618,16 +1646,34 @@ impl Launcher {
                     if !self.has_highest_min_ready_score(&label.canonical_name, &names, &candidates) {
                         continue;
                     }
+                    if !groups.contains_key(&label.name) {
+                        group_order.push(label.name.clone());
+                    }
                     groups.entry(label.name.clone()).or_default().push(label.clone());
+                    for alias in &label.aliases {
+                        let Some(aliased) = provider.labels().get(alias) else {
+                            continue;
+                        };
+                        if !groups.contains_key(&aliased.name) {
+                            group_order.push(aliased.name.clone());
+                        }
+                        groups.entry(aliased.name.clone()).or_default().push(label.clone());
+                    }
                 }
             }
-            for (label_name, labels) in groups {
+            for label_name in group_order {
+                let Some(labels) = groups.get(&label_name) else {
+                    continue;
+                };
                 let valid: HashSet<String> = labels.iter().map(|l| l.config_hash.clone()).collect();
-                let have = seen_hashes
+                let have = unassigned
                     .get(&label_name)
                     .map(|hs| hs.iter().filter(|h| valid.contains(*h)).count())
                     .unwrap_or(0);
                 let want = labels[0].min_ready.unwrap_or(0).max(0) as usize;
+                if have >= want {
+                    continue;
+                }
                 let label_providers: Vec<String> = providers
                     .iter()
                     .filter(|p| p.labels().contains_key(&label_name))
@@ -1638,8 +1684,21 @@ impl Launcher {
                 }
                 for i in have..want {
                     let chosen = &label_providers[i % label_providers.len()];
+                    let Some(provider) = providers.iter().find(|p| p.canonical_name() == chosen) else {
+                        continue;
+                    };
+                    let Some(created) = provider.labels().get(&label_name) else {
+                        continue;
+                    };
+                    let created_hash = created.config_hash.clone();
+                    let created_aliases = created.aliases.clone();
                     out.push((tenant.clone(), label_name.clone(), chosen.clone()));
-                    seen_hashes.entry(label_name.clone()).or_default().push(labels[0].config_hash.clone());
+                    unassigned.entry(label_name.clone()).or_default().push(created_hash.clone());
+                    for alias in created_aliases {
+                        if provider.labels().contains_key(&alias) {
+                            unassigned.entry(alias).or_default().push(created_hash.clone());
+                        }
+                    }
                 }
             }
         }
