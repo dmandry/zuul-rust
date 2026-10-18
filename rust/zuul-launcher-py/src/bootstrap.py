@@ -600,6 +600,8 @@ def cloud_call(launcher, op, payload):
             result = _cloud_fail(launcher, data)
         elif op == "node_visible":
             result = _node_visible(launcher, data)
+        elif op == "node.cache_insert":
+            result = _node_cache_insert(launcher, data)
         elif op == "class_attr":
             result = _class_attr(data)
         elif op == "matching_requests":
@@ -2682,6 +2684,32 @@ def _node_visible(launcher, data):
     """
     node = launcher.api.getProviderNode(data["uuid"])
     return {"present": node is not None}
+
+
+def _node_cache_insert(launcher, data):
+    """Insert a Rust-written node into the Python nodes_cache.
+
+    Python _requestNode/_createSubNode call nodes_cache.insert so the
+    object appears before the ZK watch fires. Rust writes ZK directly;
+    this adapter mirrors that insert so tests that pause the cache
+    event queue (test_subnodes_cache_insert) still see the nodes.
+    """
+    from zuul import model
+    from zuul.launcher.subnodes import SubnodeProviderNode
+
+    uuid = data["uuid"]
+    ctx = launcher.createZKContext(None, launcher.log)
+    path = model.ProviderNode._getPath(uuid)
+    try:
+        if data.get("subnode"):
+            node = SubnodeProviderNode.fromZK(ctx, path=path)
+        else:
+            node = model.ProviderNode.fromZK(ctx, path=path)
+    except Exception:
+        launcher.log.exception("cache_insert: unable to load node %s", uuid)
+        return {"ok": False}
+    launcher.api.nodes_cache.insert(node)
+    return {"ok": True}
 
 
 def _class_attr(data):

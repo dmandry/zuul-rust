@@ -3965,8 +3965,15 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
                 if let Some(key) = item.get("key-name").or_else(|| item.get("key_name")).and_then(|v| v.as_str()) {
                     label.key_name = Some(key.to_string());
                 }
+                // Schema AsList(str) coerces a bare string to a one-element
+                // list; accept both forms from ZK provider configs.
                 if let Some(arr) = item.get("aliases").and_then(|v| v.as_array()) {
-                    label.aliases = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    label.aliases = arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                } else if let Some(s) = item.get("aliases").and_then(|v| v.as_str()) {
+                    label.aliases = vec![s.to_string()];
                 }
                 if let Some(tags) = item.get("tags").and_then(|v| v.as_object()) {
                     label.tags = tags

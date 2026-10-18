@@ -1026,7 +1026,6 @@ impl Launcher {
         label: &crate::provider::Label,
         include_usage: bool,
     ) -> bool {
-        let _ = tenant;
         // Prefer the seeded/refreshed provider_quota cache (includes
         // unmanaged usage). Nested quota_for_label cloud calls from
         // inside accept_one are unreliable; accept_one seeds the cache.
@@ -1052,7 +1051,35 @@ impl Launcher {
             .cloud_label_quota(provider, label)
             .unwrap_or_else(|| provider.quota_for_label(label));
         total.subtract(&label_quota);
+        // server.py doesProviderHaveQuotaForLabel: when include_usage,
+        // also enforce tenant label max_nodes.
+        if include_usage && !self.does_tenant_have_quota_for_label(tenant, label) {
+            return false;
+        }
         total.non_negative()
+    }
+
+    /// Match doesTenantHaveQuotaForLabel: nodes assigned to the tenant
+    /// plus unassigned nodes on that tenant's providers for this label.
+    fn does_tenant_have_quota_for_label(
+        &self,
+        tenant: &str,
+        label: &crate::provider::Label,
+    ) -> bool {
+        let Some(limit) = label.max_nodes else {
+            return true;
+        };
+        let providers: Vec<String> = self
+            .tenant_providers
+            .get(tenant)
+            .map(|list| {
+                list.iter()
+                    .map(|p| p.canonical_name().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let usage = self.api.node_count(tenant, &providers, &label.name);
+        usage < limit
     }
 
     fn cloud_endpoint_limits(&self, provider: &dyn Provider) -> Option<QuotaInformation> {
@@ -1261,6 +1288,7 @@ impl Launcher {
             let sub_ids: Vec<String> = (0..slot_count).map(|_| hex_id()).collect();
             node.fields.insert("subnodes".into(), json!(sub_ids));
             self.api.write_node(&node).map_err(|e| e.to_string())?;
+            self.python_cache_insert(&id, false);
             let mut returned = id.clone();
             for (slot, sub_id) in sub_ids.iter().enumerate() {
                 let mut sub = node.clone();
@@ -1281,6 +1309,7 @@ impl Launcher {
                     returned = sub_id.clone();
                 }
                 self.api.write_node(&sub).map_err(|e| e.to_string())?;
+                self.python_cache_insert(sub_id, true);
                 if slot == 0 {
                     if let Some(req) = request {
                         let assign = json!({
@@ -1299,6 +1328,7 @@ impl Launcher {
             node.request_id = Some(req.uuid());
         }
         self.api.write_node(&node).map_err(|e| e.to_string())?;
+        self.python_cache_insert(&id, false);
         if let Some(req) = request {
             let assign = json!({
                 "request_id": req.uuid(),
@@ -1308,6 +1338,19 @@ impl Launcher {
             let _ = self.api.write_assignment(&id, &assign);
         }
         Ok(id)
+    }
+
+    /// Mirror nodes_cache.insert after a Rust ZK write so tests that
+    /// pause the cache event queue still see newly created nodes
+    /// (test_subnodes_cache_insert).
+    fn python_cache_insert(&self, uuid: &str, is_subnode: bool) {
+        if !cloud::enabled() {
+            return;
+        }
+        let _ = cloud::invoke(
+            "node.cache_insert",
+            &json!({ "uuid": uuid, "subnode": is_subnode }),
+        );
     }
 
     pub fn process_nodes(&mut self) {
