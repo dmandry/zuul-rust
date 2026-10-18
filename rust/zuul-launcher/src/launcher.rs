@@ -497,6 +497,11 @@ impl Launcher {
         if req.state() != request_state::REQUESTED {
             return Ok(());
         }
+        // Refresh after the unittest `_acceptRequest` patch point so a
+        // mid-wait node release (test_launcher_request_order) is visible
+        // in both the ZK node quota index and provider_quota cache.
+        self.api.sync();
+        self.refresh_cloud_quotas();
         let unassigned = self.unassigned_nodes();
         let mut pending = self.accept_pending.clone();
         let result = self.accept_request(&req, &unassigned, &mut pending);
@@ -2243,6 +2248,20 @@ impl Launcher {
     fn wake(&self) {
         if let Ok(mut g) = self.wake.lock() {
             *g = true;
+        }
+    }
+
+    /// Consume the wake flag set by accept/check/node processing.
+    /// The PyO3 run loop maps this onto Python `wake_event` so we match
+    /// server.py (ChildrenWatch + explicit wakes) instead of polling every
+    /// pass — required for test_launcher_request_order's mid-loop patch.
+    pub fn take_wake(&self) -> bool {
+        if let Ok(mut g) = self.wake.lock() {
+            let v = *g;
+            *g = false;
+            v
+        } else {
+            false
         }
     }
 

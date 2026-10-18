@@ -2638,7 +2638,13 @@ def _image_attrs(launcher, data):
 
 
 def _provider_quota(launcher, data):
+    # Drop this provider's TTL entry so accept_request_by_uuid (after the
+    # `_acceptRequest` patch point) sees current unmanaged usage when a
+    # node is released mid-accept (test_launcher_request_order).
     provider = _find_provider(launcher, data["provider"])
+    cache = getattr(launcher, "_provider_quota_cache", None)
+    if cache is not None:
+        cache.pop(provider.canonical_name, None)
     return _quota_payload(call_launcher(launcher, "getProviderQuota", provider))
 
 
@@ -2769,8 +2775,17 @@ def _class_attr(data):
 
 def _matching_requests(launcher):
     # getMatchingRequests applies launcher_score, which unit tests patch.
-    # The Rust scorer cannot see that patch.
-    return {"ids": [request.uuid for request in launcher.api.getMatchingRequests()]}
+    # The Rust scorer cannot see that patch. Deduplicate: Python's
+    # hasLock short-circuit can yield the same request twice when
+    # hasLock is set but is_locked is still false.
+    seen = set()
+    ids = []
+    for request in launcher.api.getMatchingRequests():
+        if request.uuid in seen:
+            continue
+        seen.add(request.uuid)
+        ids.append(request.uuid)
+    return {"ids": ids}
 
 
 def _matching_nodes(launcher):
@@ -2849,31 +2864,13 @@ def _accept_one(launcher, data):
                         "NodesetRequestProcessing"
                     )
                 )
-        # Seed Rust provider_quota cache with fresh endpoint limits minus
-        # unmanaged. Bypass _provider_quota_cache: a concurrent refresh
-        # between the test's cache.clear() and CleanupWorker._run() can
-        # leave a stale empty-unmanaged entry for 300s.
-        import json as _json
-
-        payloads = {}
+        # Do not seed quota here: test_launcher_request_order patches
+        # `_acceptRequest` and releases a node while blocked inside that
+        # method. Seeding before the call would leave a stale "at quota"
+        # cache. accept_request_by_uuid refreshes after the patch point.
+        # Clear the Python TTL cache so that refresh sees live unmanaged.
         if getattr(launcher, "_provider_quota_cache", None) is not None:
             launcher._provider_quota_cache.clear()
-        for providers in launcher.tenant_providers.values():
-            for provider in providers:
-                try:
-                    q = call_launcher(launcher, "getProviderQuota", provider)
-                    payload = _quota_payload(q)
-                    # Index under every name Rust might use for lookup.
-                    payloads[provider.canonical_name] = payload
-                    payloads[provider.name] = payload
-                    ep = provider.getEndpoint()
-                    payloads[ep.canonical_name] = payload
-                except Exception:
-                    launcher.log.exception(
-                        "Unable to seed quota for %s", provider.canonical_name
-                    )
-        if payloads:
-            launcher.seed_quota_cache(_json.dumps(payloads))
         # unassigned/pending are unused by the Rust-backed method; pass
         # placeholders so patched wrappers that forward *args still work.
         unassigned = call_launcher(launcher, "_getUnassignedNodes")
