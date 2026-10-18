@@ -750,6 +750,13 @@ impl Launcher {
                 "tenant_name": request.tenant_name(),
             });
             if self.api.write_assignment(&id, &value).is_ok() {
+                // Refresh Python cache assignment (paused-watch tests).
+                self.python_cache_assign(
+                    &id,
+                    request.uuid().as_str(),
+                    request.tenant_name().as_str(),
+                    request.zk_version.unwrap_or(0) + 1,
+                );
                 return Some(id);
             }
         }
@@ -1313,12 +1320,21 @@ impl Launcher {
                 // (test_subnodes_cache_insert asserts one subnode assigned).
                 if slot == 0 {
                     if let Some(req) = request {
+                        let min_ver = req.zk_version.unwrap_or(0) + 1;
                         let assign = json!({
                             "request_id": req.uuid(),
-                            "min_request_version": req.zk_version.unwrap_or(0) + 1,
+                            "min_request_version": min_ver,
                             "tenant_name": req.tenant_name(),
                         });
                         let _ = self.api.write_assignment(sub_id, &assign);
+                        self.python_cache_insert(sub_id, true);
+                        self.python_cache_assign(
+                            sub_id,
+                            req.uuid().as_str(),
+                            req.tenant_name().as_str(),
+                            min_ver,
+                        );
+                        continue;
                     }
                 }
                 self.python_cache_insert(sub_id, true);
@@ -1331,14 +1347,23 @@ impl Launcher {
         }
         self.api.write_node(&node).map_err(|e| e.to_string())?;
         if let Some(req) = request {
+            let min_ver = req.zk_version.unwrap_or(0) + 1;
             let assign = json!({
                 "request_id": req.uuid(),
-                "min_request_version": req.zk_version.unwrap_or(0) + 1,
+                "min_request_version": min_ver,
                 "tenant_name": req.tenant_name(),
             });
             let _ = self.api.write_assignment(&id, &assign);
+            self.python_cache_insert(&id, false);
+            self.python_cache_assign(
+                &id,
+                req.uuid().as_str(),
+                req.tenant_name().as_str(),
+                min_ver,
+            );
+        } else {
+            self.python_cache_insert(&id, false);
         }
-        self.python_cache_insert(&id, false);
         Ok(id)
     }
 
@@ -1352,6 +1377,29 @@ impl Launcher {
         let _ = cloud::invoke(
             "node.cache_insert",
             &json!({ "uuid": uuid, "subnode": is_subnode }),
+        );
+    }
+
+    /// Refresh a cached node's assignment after Rust write_assignment
+    /// so live Python objects see the new request_id without a watch.
+    fn python_cache_assign(
+        &self,
+        uuid: &str,
+        request_id: &str,
+        tenant_name: &str,
+        min_request_version: i64,
+    ) {
+        if !cloud::enabled() {
+            return;
+        }
+        let _ = cloud::invoke(
+            "node.cache_assign",
+            &json!({
+                "uuid": uuid,
+                "request_id": request_id,
+                "tenant_name": tenant_name,
+                "min_request_version": min_request_version,
+            }),
         );
     }
 

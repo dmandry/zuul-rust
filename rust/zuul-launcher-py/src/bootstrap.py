@@ -602,6 +602,8 @@ def cloud_call(launcher, op, payload):
             result = _node_visible(launcher, data)
         elif op == "node.cache_insert":
             result = _node_cache_insert(launcher, data)
+        elif op == "node.cache_assign":
+            result = _node_cache_assign(launcher, data)
         elif op == "class_attr":
             result = _class_attr(data)
         elif op == "matching_requests":
@@ -2709,6 +2711,47 @@ def _node_cache_insert(launcher, data):
         launcher.log.exception("cache_insert: unable to load node %s", uuid)
         return {"ok": False}
     launcher.api.nodes_cache.insert(node)
+    return {"ok": True}
+
+
+def _node_cache_assign(launcher, data):
+    """Apply a Rust write_assignment onto the live Python cache object.
+
+    insert() uses setdefault and will not replace an existing object, so
+    a later assignment must refresh or assign on the cached instance.
+    """
+    from kazoo.exceptions import NodeExistsError
+
+    uuid = data["uuid"]
+    node = launcher.api.nodes_cache.getItem(uuid)
+    if node is None:
+        return _node_cache_insert(launcher, {**data, "subnode": True})
+    ctx = launcher.createZKContext(None, launcher.log)
+    try:
+        # Prefer refreshing the assignment child if it already exists.
+        node.assignment.refresh(ctx)
+        if node.request_id == data.get("request_id"):
+            return {"ok": True}
+    except Exception:
+        pass
+    try:
+        node.assign(
+            ctx,
+            request_id=data["request_id"],
+            tenant_name=data.get("tenant_name"),
+            min_request_version=data.get("min_request_version"),
+        )
+    except NodeExistsError:
+        try:
+            node.assignment.refresh(ctx)
+        except Exception:
+            launcher.log.exception(
+                "cache_assign: unable to refresh assignment for %s", uuid
+            )
+            return {"ok": False}
+    except Exception:
+        launcher.log.exception("cache_assign: unable to assign %s", uuid)
+        return {"ok": False}
     return {"ok": True}
 
 
