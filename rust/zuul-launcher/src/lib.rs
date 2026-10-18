@@ -5,6 +5,8 @@ pub mod codec;
 pub mod config;
 pub mod jsonutil;
 pub mod launcher;
+pub mod layout;
+pub mod tlszk;
 pub mod mmh3;
 pub mod model;
 pub mod nodescan;

@@ -11,9 +11,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 use std::sync::{Arc, Mutex};
 use zuul_launcher::launcher::Launcher as RustLauncher;
+use zuul_launcher::tlszk::TlsZk;
 use zuul_launcher::zk::ZkOps;
-
-mod tlszk;
 
 const BOOTSTRAP: &str = include_str!("bootstrap.py");
 
@@ -80,25 +79,55 @@ impl PyLauncher {
 
     /// One Rust launcher iteration. The test subclass holds `_test_lock`
     /// around this call; the GIL is released for the ZooKeeper work.
-    fn _run(&self, py: Python<'_>) -> PyResult<()> {
-        let rust = self.rust.clone();
+    /// Layout state is published before request processing so the
+    /// component is running, matching Launcher._run.
+    fn _run(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {
+        let rust = slf.borrow().rust.clone();
+        let reloaded = py.allow_threads(|| {
+            let mut guard = rust.lock().unwrap();
+            if let Some(launcher) = guard.as_mut() {
+                launcher.api.sync();
+                match launcher.reload_providers() {
+                    Ok(_) => Ok(launcher.layout_snapshot_json()),
+                    Err(err) => Err(err),
+                }
+            } else {
+                Ok(String::new())
+            }
+        });
+        match reloaded {
+            Ok(snapshot) if !snapshot.is_empty() => {
+                call_py(py, "publish_layout", (slf, snapshot))?;
+            }
+            Ok(_) => {}
+            Err(err) => {
+                let log = slf.getattr("log")?;
+                log.call_method1(
+                    "error",
+                    (format!("Error in layout reload: {err}"),),
+                )?;
+                return Ok(());
+            }
+        }
+        let rust = slf.borrow().rust.clone();
         py.allow_threads(|| {
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
                 launcher.api.sync();
-                launcher.run_once();
+                launcher.process_once();
             }
         });
         Ok(())
     }
 
-    #[pyo3(signature = (*_args, **_kwargs))]
-    fn _getProvider(
-        &self,
-        _args: &Bound<'_, PyTuple>,
-        _kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<()> {
-        not_ported("_getProvider")
+    fn _getProvider<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        tenant_name: String,
+        provider_name: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let result = call_py_value(py, "get_provider", (slf, tenant_name, provider_name))?;
+        Ok(result.into_bound(py))
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]
@@ -179,13 +208,14 @@ fn connect_rust(slf: &Bound<'_, PyLauncher>, py: Python<'_>) -> PyResult<()> {
     let timeout_ms: i32 = slf.getattr("_zk_timeout_ms")?.extract()?;
     let hostname: String = slf.getattr("hostname")?.extract()?;
     let filter: Option<Vec<String>> = slf.getattr("connection_filter")?.extract()?;
-    let zk = tlszk::TlsZk::connect(&hosts, &cert, &key, &ca, timeout_ms).map_err(|e| {
+    let zk = TlsZk::connect(&hosts, &cert, &key, &ca, timeout_ms).map_err(|e| {
         PyRuntimeError::new_err(format!("rust launcher zooKeeper: {e}"))
     })?;
     let session = zk.session_id();
     let ops: Arc<dyn ZkOps> = zk;
     let mut launcher = RustLauncher::new(&hostname, ops);
-    launcher.connection_filter = filter;
+    launcher.connection_filter = filter.clone();
+    launcher.api.connection_filter = filter;
     let log = slf.getattr("log")?;
     log.call_method1(
         "info",
@@ -199,6 +229,15 @@ fn connect_rust(slf: &Bound<'_, PyLauncher>, py: Python<'_>) -> PyResult<()> {
 }
 
 fn call_py(py: Python<'_>, name: &str, args: impl IntoPy<Py<PyTuple>>) -> PyResult<()> {
+    call_py_value(py, name, args)?;
+    Ok(())
+}
+
+fn call_py_value(
+    py: Python<'_>,
+    name: &str,
+    args: impl IntoPy<Py<PyTuple>>,
+) -> PyResult<PyObject> {
     let dict = PyDict::new_bound(py);
     // Same dict for globals and locals so imports are visible inside
     // the helper functions (Python binds a function's globals at def time).
@@ -206,8 +245,7 @@ fn call_py(py: Python<'_>, name: &str, args: impl IntoPy<Py<PyTuple>>) -> PyResu
     let func = dict
         .get_item(name)?
         .ok_or_else(|| PyRuntimeError::new_err(format!("missing helper {name}")))?;
-    func.call1(args)?;
-    Ok(())
+    Ok(func.call1(args)?.into())
 }
 
 #[pymodule]

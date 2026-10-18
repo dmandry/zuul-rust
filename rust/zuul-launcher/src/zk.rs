@@ -401,7 +401,12 @@ fn random_mix() -> u128 {
         .unwrap_or(1)
 }
 
-fn lock_is_winner(zk: &dyn ZkOps, lock_path: &str, child: &str, read: bool) -> Result<bool, ZkError> {
+pub(crate) fn lock_is_winner(
+    zk: &dyn ZkOps,
+    lock_path: &str,
+    child: &str,
+    read: bool,
+) -> Result<bool, ZkError> {
     let kids = zk.get_children(lock_path)?;
     let Some(mine) = sequence_of(child) else {
         return Ok(false);
@@ -573,7 +578,59 @@ impl LauncherApi {
                 }
             }
         }
+        self.load_components();
         self.ready = true;
+    }
+
+    /// /zuul/components/launcher/{hostname}{seq} holds uncompressed JSON.
+    /// An empty directory leaves any test-injected component list alone.
+    fn load_components(&mut self) {
+        let Ok(ids) = self.zk.get_children("/zuul/components/launcher") else {
+            return;
+        };
+        if ids.is_empty() {
+            return;
+        }
+        let mut loaded = Vec::new();
+        for id in ids {
+            let path = format!("/zuul/components/launcher/{id}");
+            let Ok((data, _)) = self.zk.get(&path) else {
+                continue;
+            };
+            let Ok(val) = decode_zkobject(&data) else {
+                continue;
+            };
+            let Some(hostname) = val.get("hostname").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let state = val
+                .get("state")
+                .and_then(|v| v.as_str())
+                .unwrap_or("stopped")
+                .to_string();
+            let connection_filter = match val.get("connection_filter") {
+                Some(Value::Array(items)) => {
+                    let names: Vec<String> = items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                        .collect();
+                    if names.is_empty() {
+                        None
+                    } else {
+                        Some(names)
+                    }
+                }
+                _ => None,
+            };
+            loaded.push(ComponentInfo {
+                hostname: hostname.to_string(),
+                state,
+                connection_filter,
+            });
+        }
+        if !loaded.is_empty() {
+            self.components = loaded;
+        }
     }
 
     fn load_request_side(&self, req: &mut NodesetRequest) {

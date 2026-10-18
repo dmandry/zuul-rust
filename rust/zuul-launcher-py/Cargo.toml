@@ -19,7 +19,6 @@ name = "zuul_launcher_py"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-openssl = "=0.10.66"
 # extension-module is enabled by maturin (see pyproject.toml), not here,
 # so `cargo test` can link against libpython.
 pyo3 = "=0.22.6"

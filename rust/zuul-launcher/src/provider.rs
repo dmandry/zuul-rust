@@ -1257,14 +1257,79 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
                 if let Some(img) = item.get("image").and_then(|v| v.as_str()) {
                     label.image = Some(img.to_string());
                 }
-                if let Some(h) = item.get("config_hash").or_else(|| item.get("config-hash")).and_then(|v| v.as_str()) {
-                    label.config_hash = h.to_string();
+                if let Some(v) = item.get("config_hash").or_else(|| item.get("config-hash")) {
+                    if let Some(h) = v.as_str() {
+                        label.config_hash = h.to_string();
+                    } else if v.is_null() {
+                        label.config_hash.clear();
+                    }
                 }
                 if let Some(pcn) = item.get("project_canonical_name").or_else(|| item.get("project-canonical-name")).and_then(|v| v.as_str()) {
                     label.canonical_name = format!("{}/{}", quote_plus(pcn), quote_plus(n));
                 }
-                if let Some(mr) = item.get("min-ready").or_else(|| item.get("min_ready")).and_then(|v| v.as_i64()) {
+                if let Some(flavor) = item.get("flavor").and_then(|v| v.as_str()) {
+                    label.flavor = Some(flavor.to_string());
+                }
+                if let Some(mr) = json_i64_field(item, &["min-ready", "min_ready"]) {
                     label.min_ready = Some(mr);
+                }
+                if let Some(n) = json_i64_field(item, &["boot-timeout", "boot_timeout"]) {
+                    label.boot_timeout = n;
+                }
+                if let Some(n) = json_i64_field(item, &["max-ready-age", "max_ready_age"]) {
+                    label.max_ready_age = n;
+                }
+                if let Some(n) = json_i64_field(item, &["max-age", "max_age"]) {
+                    label.max_age = n;
+                }
+                if let Some(n) = json_i64_field(item, &["min-retention-time", "min_retention_time"]) {
+                    label.min_retention_time = n;
+                }
+                if let Some(n) = json_i64_field(item, &["snapshot-timeout", "snapshot_timeout"]) {
+                    label.snapshot_timeout = n;
+                }
+                if let Some(n) = json_i64_field(item, &["snapshot-expiration", "snapshot_expiration"]) {
+                    label.snapshot_expiration = n;
+                }
+                if let Some(n) = json_i64_field(item, &["slots"]) {
+                    label.slots = n;
+                }
+                if let Some(n) = json_i64_field(item, &["connection-port", "connection_port"]) {
+                    label.connection_port = n;
+                }
+                if let Some(v) = item.get("max-nodes").or_else(|| item.get("max_nodes")) {
+                    if v.is_null() {
+                        label.max_nodes = None;
+                    } else if let Some(n) = v.as_i64() {
+                        label.max_nodes = Some(n);
+                    }
+                }
+                if let Some(zone) = item.get("executor-zone").or_else(|| item.get("executor_zone")).and_then(|v| v.as_str()) {
+                    label.executor_zone = Some(zone.to_string());
+                }
+                if let Some(user) = item.get("username").and_then(|v| v.as_str()) {
+                    label.username = Some(user.to_string());
+                }
+                if let Some(kind) = item.get("connection-type").or_else(|| item.get("connection_type")).and_then(|v| v.as_str()) {
+                    label.connection_type = Some(kind.to_string());
+                }
+                if let Some(path) = item.get("python-path").or_else(|| item.get("python_path")).and_then(|v| v.as_str()) {
+                    label.python_path = Some(path.to_string());
+                }
+                if let Some(shell) = item.get("shell-type").or_else(|| item.get("shell_type")).and_then(|v| v.as_str()) {
+                    label.shell_type = Some(shell.to_string());
+                }
+                if let Some(key) = item.get("key-name").or_else(|| item.get("key_name")).and_then(|v| v.as_str()) {
+                    label.key_name = Some(key.to_string());
+                }
+                if let Some(arr) = item.get("aliases").and_then(|v| v.as_array()) {
+                    label.aliases = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                }
+                if let Some(tags) = item.get("tags").and_then(|v| v.as_object()) {
+                    label.tags = tags
+                        .iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect();
                 }
                 if let Some(b) = item.get("reuse").and_then(|v| v.as_bool()) {
                     label.reuse = b;
@@ -1281,9 +1346,15 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
     if let Some(list) = obj.and_then(|m| m.get("images")).and_then(|v| v.as_array()) {
         for item in list {
             if let Some(n) = item.get("name").and_then(|v| v.as_str()) {
+                let canonical_name = item
+                    .get("project_canonical_name")
+                    .or_else(|| item.get("project-canonical-name"))
+                    .and_then(|v| v.as_str())
+                    .map(|pcn| format!("{}/{}", quote_plus(pcn), quote_plus(n)))
+                    .unwrap_or_else(|| n.to_string());
                 images.insert(n.to_string(), Image {
                     name: n.into(),
-                    canonical_name: n.into(),
+                    canonical_name,
                     image_type: item.get("type").and_then(|v| v.as_str()).unwrap_or("cloud").into(),
                     config_hash: item.get("config_hash").and_then(|v| v.as_str()).unwrap_or("").into(),
                     username: item.get("username").and_then(|v| v.as_str()).map(|s| s.to_string()),
@@ -1305,13 +1376,58 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         format!("{}/{}", quote_plus(connection), quote_plus(&endpoint_name))
     };
     let mut limits = QuotaInformation { default: f64::INFINITY, quota: BTreeMap::new() };
+    let mut resource_limits = BTreeMap::new();
     if let Some(rl) = obj.and_then(|m| m.get("resource-limits").or_else(|| m.get("resource_limits"))).and_then(|v| v.as_object()) {
         for (k, v) in rl {
             if let Some(n) = v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
                 limits.quota.insert(k.clone(), n);
+                resource_limits.insert(k.clone(), n);
             }
         }
     }
+    let mut flavors = BTreeMap::new();
+    if let Some(list) = obj.and_then(|m| m.get("flavors")).and_then(|v| v.as_array()) {
+        for item in list {
+            if let Some(n) = item.get("name").and_then(|v| v.as_str()) {
+                flavors.insert(n.to_string(), Flavor { name: n.into(), raw: item.clone() });
+            }
+        }
+    }
+    // _requestNode copies username and connection fields from the image.
+    // Label objects only inherit them when the label config omits the key.
+    for label in labels.values_mut() {
+        let Some(image_name) = label.image.clone() else { continue };
+        let Some(image) = images.get(&image_name) else { continue };
+        if label.raw.get("username").is_none() {
+            label.username = image.username.clone();
+        }
+        if label.raw.get("connection-type").is_none() && label.raw.get("connection_type").is_none() {
+            if let Some(kind) = &image.connection_type {
+                label.connection_type = Some(kind.clone());
+            }
+        }
+        if label.raw.get("connection-port").is_none() && label.raw.get("connection_port").is_none() {
+            if let Some(port) = image.connection_port {
+                label.connection_port = port;
+            }
+        }
+        if label.raw.get("python-path").is_none() && label.raw.get("python_path").is_none() {
+            if let Some(path) = &image.python_path {
+                label.python_path = Some(path.clone());
+            }
+        }
+        if label.raw.get("shell-type").is_none() && label.raw.get("shell_type").is_none() {
+            label.shell_type = image.shell_type.clone();
+        }
+    }
+    let launch_attempts = obj
+        .and_then(|m| m.get("launch-attempts").or_else(|| m.get("launch_attempts")))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(3);
+    let launch_timeout = obj
+        .and_then(|m| m.get("launch-timeout").or_else(|| m.get("launch_timeout")))
+        .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+        .or(Some(600.0));
     CloudProvider {
         name,
         canonical_name: canonical.into(),
@@ -1326,11 +1442,28 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         },
         labels,
         images,
-        flavors: BTreeMap::new(),
-        launch_attempts: 3,
-        launch_timeout: Some(600.0),
-        resource_limits: BTreeMap::new(),
+        flavors,
+        launch_attempts,
+        launch_timeout,
+        resource_limits,
         region,
         options: BTreeMap::new(),
     }
+}
+
+fn json_i64_field(item: &Value, keys: &[&str]) -> Option<i64> {
+    for key in keys {
+        if let Some(v) = item.get(*key) {
+            if let Some(n) = v.as_i64() {
+                return Some(n);
+            }
+            if let Some(n) = v.as_u64() {
+                return Some(n as i64);
+            }
+            if let Some(n) = v.as_f64() {
+                return Some(n as i64);
+            }
+        }
+    }
+    None
 }

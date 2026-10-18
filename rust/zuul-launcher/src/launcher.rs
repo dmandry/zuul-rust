@@ -4,6 +4,7 @@
 // Control flow from zuul/launcher/server.py. Timing constants are unchanged.
 
 use crate::jsonutil;
+use crate::layout::{self, LayoutState};
 use crate::mmh3;
 use crate::model::{self, node_state, request_state, NodesetRequest, ProviderNode, QuotaInformation};
 use crate::nodescan::{NodescanRequest, NodescanWorker};
@@ -47,6 +48,8 @@ pub struct Launcher {
     pub system_id: String,
     pub component_path: Option<String>,
     pub connection_filter: Option<Vec<String>>,
+    pub local_layout_state: HashMap<String, LayoutState>,
+    pub layout_generation: u64,
     create_sms: HashMap<String, Box<dyn StateMachine>>,
     delete_sms: HashMap<String, Box<dyn StateMachine>>,
     quota_cache: HashMap<String, (QuotaInformation, f64)>,
@@ -76,6 +79,8 @@ impl Launcher {
             system_id,
             component_path: None,
             connection_filter: None,
+            local_layout_state: HashMap::new(),
+            layout_generation: 0,
             create_sms: HashMap::new(),
             delete_sms: HashMap::new(),
             quota_cache: HashMap::new(),
@@ -97,25 +102,142 @@ impl Launcher {
 
     /// One iteration of Launcher._run, under the caller's lock.
     pub fn run_once(&mut self) {
-        if self.layout_dirty {
-            let updated = self.update_tenant_providers();
-            if updated {
-                if self.state != "running" {
-                    self.state = "running".into();
-                }
-                self.layout_dirty = false;
-                self.layout_updated = true;
-            }
+        if self.reload_providers().is_ok() {
+            self.process_once();
         }
+    }
+
+    /// Request, node, and min-ready processing. Split from the reload so
+    /// the PyO3 harness can publish layout state in between, matching
+    /// `_run` setting component state before `_processRequests`.
+    pub fn process_once(&mut self) {
         self.process_requests();
         self.process_nodes();
         self.process_min_ready();
     }
 
-    pub fn update_tenant_providers(&mut self) -> bool {
-        // Tests install providers directly. A real reload that finds any
-        // tenant counts as the first successful update.
-        !self.tenant_providers.is_empty() || self.layout_updated
+    /// Launcher.updateTenantProviders / _updateTenantProviders.
+    ///
+    /// A tenant is skipped when the local and remote layout uuids match.
+    /// Both missing is a match, so providers installed with `add_provider`
+    /// stay in place when ZooKeeper has no layout for that tenant.
+    /// `connection_filter` does not remove providers from the map. The
+    /// first successful reload moves state to running.
+    pub fn reload_providers(&mut self) -> Result<bool, String> {
+        self.api.connection_filter = self.connection_filter.clone();
+        let before = layout_fingerprint(&self.local_layout_state);
+        let updated = self.update_tenant_providers()?;
+        if layout_fingerprint(&self.local_layout_state) != before {
+            self.layout_generation = self.layout_generation.wrapping_add(1);
+        }
+        if updated {
+            self.layout_updated = true;
+            if self.state != "running" {
+                self.state = "running".into();
+                self.mark_self_running();
+                self.persist_running_component();
+            }
+        }
+        self.layout_dirty = false;
+        Ok(updated)
+    }
+
+    pub fn update_tenant_providers(&mut self) -> Result<bool, String> {
+        let remote = layout::read_layout_states(self.api.zk.as_ref())?;
+        let mut names: HashSet<String> = self.tenant_providers.keys().cloned().collect();
+        names.extend(remote.keys().cloned());
+        let mut updated = false;
+        for tenant in names {
+            let local = self.local_layout_state.get(&tenant);
+            let remote_state = remote.get(&tenant);
+            if layout_same(local, remote_state) {
+                continue;
+            }
+            let lock = layout::acquire_tenant_read_lock(
+                self.api.zk.as_ref(),
+                &tenant,
+                &self.hostname,
+            )?;
+            let refreshed = layout::read_tenant_layout(self.api.zk.as_ref(), &tenant);
+            let outcome = match refreshed {
+                Ok(Some(state)) => {
+                    match layout::read_tenant_providers(self.api.zk.as_ref(), &tenant) {
+                        Ok(providers) => {
+                            self.tenant_providers.insert(tenant.clone(), providers);
+                            self.local_layout_state.insert(tenant.clone(), state);
+                            Ok(true)
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                Ok(None) => {
+                    // The layout znode is gone. Python pops the tenant and
+                    // leaves `updated` false, so this does not by itself
+                    // move the component to running.
+                    self.tenant_providers.remove(&tenant);
+                    self.local_layout_state.remove(&tenant);
+                    Ok(false)
+                }
+                Err(e) => Err(e),
+            };
+            layout::release_lock(self.api.zk.as_ref(), &lock);
+            if outcome? {
+                updated = true;
+            }
+        }
+        Ok(updated)
+    }
+
+    pub fn layout_snapshot_json(&self) -> String {
+        let mut tenants = serde_json::Map::new();
+        for (name, state) in &self.local_layout_state {
+            tenants.insert(name.clone(), state.to_json());
+        }
+        jsonutil::dumps(&json!({
+            "generation": self.layout_generation,
+            "state": self.state,
+            "tenants": Value::Object(tenants),
+        }))
+    }
+
+    fn mark_self_running(&mut self) {
+        let mut found = false;
+        for component in &mut self.api.components {
+            if component.hostname == self.hostname {
+                component.state = "running".into();
+                found = true;
+            }
+        }
+        if !found && !self.api.components.is_empty() {
+            self.api.components.push(ComponentInfo {
+                hostname: self.hostname.clone(),
+                state: "running".into(),
+                connection_filter: self.connection_filter.clone(),
+            });
+        }
+    }
+
+    fn persist_running_component(&self) {
+        let Some(path) = &self.component_path else {
+            return;
+        };
+        let _ = zk::set_component(
+            self.api.zk.as_ref(),
+            path,
+            &self.hostname,
+            "running",
+            &self.connection_filter,
+        );
+    }
+
+    /// Providers this launcher is allowed to drive. The stored map keeps
+    /// every provider; `connection_filter` only skips endpoint work.
+    pub fn connection_allowed(&self, connection_name: &str) -> bool {
+        match &self.connection_filter {
+            None => true,
+            Some(filter) if filter.is_empty() => true,
+            Some(filter) => filter.iter().any(|name| name == connection_name),
+        }
     }
 
     pub fn sleep_after(&self, duration: Duration) -> Duration {
@@ -1000,6 +1122,28 @@ impl Launcher {
 
 pub fn normalize_statsd_name(name: &str) -> String {
     name.replace(['.', ':', ' '], "_")
+}
+
+fn layout_same(local: Option<&LayoutState>, remote: Option<&LayoutState>) -> bool {
+    match (local, remote) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.uuid == right.uuid,
+        _ => false,
+    }
+}
+
+fn layout_fingerprint(states: &HashMap<String, LayoutState>) -> String {
+    let mut items: Vec<String> = states
+        .iter()
+        .map(|(tenant, state)| {
+            format!(
+                "{tenant}={}",
+                state.uuid.as_deref().unwrap_or("")
+            )
+        })
+        .collect();
+    items.sort();
+    items.join("\n")
 }
 
 fn hex_id() -> String {

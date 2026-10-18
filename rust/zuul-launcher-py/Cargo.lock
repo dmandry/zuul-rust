@@ -802,6 +802,7 @@ dependencies = [
  "hostname",
  "indexmap",
  "libc",
+ "openssl",
  "rand",
  "ryu",
  "serde",
@@ -817,7 +818,6 @@ dependencies = [
 name = "zuul-launcher-py"
 version = "14.3.0"
 dependencies = [
- "openssl",
  "pyo3",
  "zuul-launcher",
 ]

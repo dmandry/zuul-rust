@@ -7,8 +7,12 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::time::Duration;
-use zuul_launcher::config::Config;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use zuul_launcher::config::{launcher_config, zookeeper_config, Config, LauncherConfig, ZookeeperConfig};
+use zuul_launcher::launcher::{loop_waits, Launcher};
+use zuul_launcher::tlszk::TlsZk;
+use zuul_launcher::zk::{self, ZkOps};
 use zuul_launcher::{MODEL_API, ZUUL_VERSION};
 
 fn main() {
@@ -57,19 +61,19 @@ fn run(args: &[String]) -> Result<(), String> {
         send_command(&socket, &cmd)?;
         return Ok(());
     }
-    let launcher_cfg = zuul_launcher::config::launcher_config(&cfg)?;
-    let zk_cfg = zuul_launcher::config::zookeeper_config(&cfg)?;
+    let launcher_cfg = launcher_config(&cfg)?;
+    let zk_cfg = zookeeper_config(&cfg)?;
     let _stats = zuul_launcher::config::statsd_config(&cfg)?;
     let _tracing = zuul_launcher::config::tracing_config(&cfg)?;
     let _connections = zuul_launcher::config::provider_connections(&cfg)?;
     if foreground {
         // SIGTERM is handled by stop+join on the main thread.
         install_signals();
-        run_foreground(&zk_cfg.hosts, &launcher_cfg.command_socket)?;
+        run_foreground(&zk_cfg, &launcher_cfg)?;
     } else {
         install_signals();
         daemonize(&launcher_cfg.pidfile)?;
-        run_foreground(&zk_cfg.hosts, &launcher_cfg.command_socket)?;
+        run_foreground(&zk_cfg, &launcher_cfg)?;
     }
     Ok(())
 }
@@ -114,25 +118,66 @@ extern "C" fn sigint(_: libc::c_int) {
     STOP.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
-fn run_foreground(hosts: &str, command_socket: &str) -> Result<(), String> {
+fn run_foreground(zk_cfg: &ZookeeperConfig, launcher_cfg: &LauncherConfig) -> Result<(), String> {
     // Launcher.__init__ connects before the command socket or the loop.
     // Python exits if that session cannot be opened.
-    open_zookeeper(hosts, command_socket)
-}
-
-fn open_zookeeper(hosts: &str, _command_socket: &str) -> Result<(), String> {
-    if hosts.is_empty() {
-        return Err("zookeeper hosts is required".into());
+    let timeout_ms = (zk_cfg.session_timeout * 1000.0) as i32;
+    let zk = TlsZk::connect(
+        &zk_cfg.hosts,
+        &zk_cfg.tls_cert,
+        &zk_cfg.tls_key,
+        &zk_cfg.tls_ca,
+        timeout_ms.max(1),
+    )
+    .map_err(|e| format!("unable to open ZooKeeper TLS session to {}: {e}", zk_cfg.hosts))?;
+    let ops: Arc<dyn ZkOps> = zk;
+    let hostname = launcher_hostname();
+    let mut launcher = Launcher::new(&hostname, ops.clone());
+    launcher.connection_filter = launcher_cfg.connection_filter.clone();
+    launcher.api.connection_filter = launcher_cfg.connection_filter.clone();
+    let path = zk::register_component(
+        ops.as_ref(),
+        &hostname,
+        "stopped",
+        &launcher.connection_filter,
+    )
+    .map_err(|e| format!("unable to register launcher component: {e}"))?;
+    launcher.component_path = Some(path);
+    let socket = launcher_cfg.command_socket.clone();
+    std::thread::spawn(move || command_server(&socket));
+    while !STOP.load(std::sync::atomic::Ordering::SeqCst) {
+        let started = Instant::now();
+        launcher.api.sync();
+        launcher.run_once();
+        let (sleep, _) = loop_waits(started);
+        let mut left = sleep;
+        let slice = Duration::from_millis(100);
+        while !STOP.load(std::sync::atomic::Ordering::SeqCst) && left > Duration::ZERO {
+            let step = slice.min(left);
+            std::thread::sleep(step);
+            left = left.saturating_sub(step);
+        }
     }
-    // The launcher loop, tree cache, and locks are implemented against an
-    // in-memory session and covered by tests. A live TLS ZooKeeper client
-    // is not linked: current rustls and zookeeper crates need Rust 1.85.
-    Err(format!(
-        "unable to open ZooKeeper TLS session to {hosts}: this binary has no ZooKeeper client"
-    ))
+    if let Some(path) = &launcher.component_path {
+        let _ = zk::set_component(
+            launcher.api.zk.as_ref(),
+            path,
+            &hostname,
+            "stopped",
+            &launcher.connection_filter,
+        );
+    }
+    Ok(())
 }
 
-#[allow(dead_code)]
+fn launcher_hostname() -> String {
+    hostname::get()
+        .ok()
+        .and_then(|name| name.into_string().ok())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "localhost".into())
+}
+
 fn command_server(path: &str) {
     let _ = std::fs::remove_file(path);
     if let Some(parent) = std::path::Path::new(path).parent() {
@@ -172,7 +217,6 @@ fn command_server(path: &str) {
     }
 }
 
-#[allow(dead_code)]
 fn bind_repl() -> std::io::Result<()> {
     let listener = std::net::TcpListener::bind(("127.0.0.1", 3000))?;
     // The port is held only while a client is accepted; norepl drops it.

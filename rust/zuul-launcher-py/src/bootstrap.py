@@ -148,6 +148,7 @@ def bootstrap(launcher, config, connections, hostname):
         launcher.zk_client, launcher.connections, launcher.system.system_id
     )
     launcher.local_layout_state = {}
+    launcher._layout_generation = 0
     launcher.image_build_registry = ImageBuildRegistry(
         launcher.zk_client, _image_updated
     )
@@ -287,6 +288,79 @@ def stop(launcher):
     launcher.connections.stop()
     launcher.monitoring_server.stop()
     launcher.log.debug("Stopped launcher")
+
+
+def publish_layout(launcher, payload):
+    """Project the Rust layout snapshot onto the Python launcher object.
+
+    Providers are loaded again through LayoutProvidersStore so tests see
+    real provider objects (images, labels, endpoints). The Rust loop
+    already read the same ZooKeeper paths under the tenant read lock.
+    """
+    import json
+
+    from zuul.zk.layout import LayoutState
+    from zuul.zk.zkobject import ZKContext
+
+    data = json.loads(payload)
+    generation = data.get("generation", 0)
+    if generation == getattr(launcher, "_layout_generation", 0):
+        _set_running(launcher, data)
+        return
+    tenants = data.get("tenants") or {}
+    states = {}
+    for name, item in tenants.items():
+        states[name] = LayoutState(
+            item["tenant_name"],
+            item["hostname"],
+            item["last_reconfigured"],
+            item.get("uuid"),
+            item.get("branch_cache_min_ltimes"),
+            item.get("last_reconfigure_event_ltime", -1),
+            item.get("ltime", -1),
+        )
+    launcher.local_layout_state = states
+    providers = {}
+    ctx = ZKContext(
+        launcher.zk_client, None, launcher.join_event, launcher.log
+    )
+    for name in tenants:
+        try:
+            providers[name] = list(
+                launcher.layout_providers_store.get(
+                    ctx, launcher.zk_client, name
+                )
+            )
+        except Exception:
+            launcher.log.exception("Unable to mirror providers for %s", name)
+            providers[name] = launcher.tenant_providers.get(name, [])
+    launcher.tenant_providers = providers
+    launcher._layout_generation = generation
+    _set_running(launcher, data)
+
+
+def _set_running(launcher, data):
+    if data.get("state") != "running":
+        return
+    if launcher.component_info.state != launcher.component_info.RUNNING:
+        launcher.component_info.state = launcher.component_info.RUNNING
+
+
+def get_provider(launcher, tenant_name, provider_name):
+    from zuul.launcher.server import ProviderNodeError
+
+    try:
+        providers = launcher.tenant_providers[tenant_name]
+    except KeyError:
+        raise ProviderNodeError(
+            f"Unable to find {provider_name} in tenant {tenant_name}"
+        )
+    for provider in providers:
+        if provider.name == provider_name:
+            return provider
+    raise ProviderNodeError(
+        f"Unable to find {provider_name} in tenant {tenant_name}"
+    )
 
 
 def join(launcher):

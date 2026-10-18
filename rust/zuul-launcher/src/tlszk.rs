@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // ZooKeeper TLS client that speaks the same length-prefixed Jute framing
-// Kazoo 2.11 uses. The shipped zuul-launcher binary does not depend on this
-// module; only the PyO3 test harness does.
+// Kazoo 2.11 uses. The shipped binary and the PyO3 test harness share it.
 
 use openssl::ssl::{SslConnector, SslFiletype, SslMethod};
 use std::io::{Read, Write};
@@ -12,7 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
-use zuul_launcher::zk::{CreateMode, ZkError, ZkOps, ZkStat};
+use crate::zk::{CreateMode, ZkError, ZkOps, ZkStat};
 
 const OP_CREATE: i32 = 1;
 const OP_DELETE: i32 = 2;
