@@ -101,6 +101,21 @@ impl Launcher {
         jsonutil::dumps(&json!(events))
     }
 
+    pub fn take_stats_json(&mut self) -> String {
+        let stats = std::mem::take(&mut self.stats);
+        let items: Vec<Value> = stats
+            .into_iter()
+            .map(|event| {
+                json!({
+                    "kind": event.kind,
+                    "name": event.name,
+                    "value": event.value,
+                })
+            })
+            .collect();
+        jsonutil::dumps(&json!(items))
+    }
+
     pub fn add_provider(&mut self, tenant: &str, provider: Arc<dyn Provider>) {
         self.tenant_providers
             .entry(tenant.to_string())
@@ -366,8 +381,15 @@ impl Launcher {
                 let Some(label) = provider.labels().get(label_name).cloned() else {
                     continue;
                 };
-                let Ok(new_id) = self.request_node(provider.as_ref(), &label, Some(&req)) else {
-                    continue;
+                let new_id = if let Some(existing) =
+                    self.assign_unassigned(&req, &label, provider.as_ref(), unassigned)
+                {
+                    existing
+                } else {
+                    match self.request_node(provider.as_ref(), &label, Some(&req)) {
+                        Ok(created) => created,
+                        Err(_) => continue,
+                    }
                 };
                 self.api.delete_assignment(&ids[i]).ok();
                 req.update_provider_node(
@@ -608,6 +630,16 @@ impl Launcher {
     }
 
     pub fn get_quota_percentage(&self, provider: &dyn Provider, messages: &mut Vec<String>) -> f64 {
+        if cloud::enabled() {
+            if let Ok(value) = cloud::invoke(
+                "quota_percentage",
+                &json!({"provider": provider.canonical_name()}),
+            ) {
+                if let Some(pct) = value.get("pct").and_then(|v| v.as_f64()) {
+                    return pct;
+                }
+            }
+        }
         let total = match self.provider_quota_available(provider, true) {
             Some(q) => q,
             None => return 1.0,
@@ -634,6 +666,14 @@ impl Launcher {
     }
 
     fn provider_quota(&self, provider: &dyn Provider) -> QuotaInformation {
+        if cloud::enabled() {
+            if let Ok(value) = cloud::invoke(
+                "provider_quota",
+                &json!({"provider": provider.canonical_name()}),
+            ) {
+                return cloud::quota_from_payload(&value);
+            }
+        }
         if let Some((q, ts)) = self.quota_cache.get(provider.canonical_name()) {
             if self.now - ts < MAX_QUOTA_AGE {
                 return q.copy();
@@ -675,11 +715,26 @@ impl Launcher {
 
     pub fn does_provider_have_quota_for_label(
         &self,
-        _tenant: &str,
+        tenant: &str,
         provider: &dyn Provider,
         label: &crate::provider::Label,
         include_usage: bool,
     ) -> bool {
+        if cloud::enabled() {
+            if let Ok(value) = cloud::invoke(
+                "quota_for_label",
+                &json!({
+                    "provider": provider.canonical_name(),
+                    "label": label.name,
+                    "tenant": tenant,
+                    "include_usage": include_usage,
+                }),
+            ) {
+                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
+                    return ok;
+                }
+            }
+        }
         let mut total = if include_usage {
             let Some(mut total) = self.provider_quota_available(provider, true) else {
                 return false;
@@ -730,6 +785,19 @@ impl Launcher {
     }
 
     pub fn does_provider_have_quota_for_node(&self, provider: &dyn Provider, node: &ProviderNode) -> bool {
+        if cloud::enabled() {
+            if let Ok(value) = cloud::invoke(
+                "quota_for_node",
+                &json!({
+                    "provider": provider.canonical_name(),
+                    "uuid": node.uuid(),
+                }),
+            ) {
+                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
+                    return ok;
+                }
+            }
+        }
         let Some(mut total) = self.provider_quota_available(provider, false) else {
             return false;
         };
@@ -798,12 +866,59 @@ impl Launcher {
         set(&mut fields, "snapshot_expiration", json!(label.snapshot_expiration));
         set(&mut fields, "executor_zone", label.executor_zone.clone().map(|s| json!(s)).unwrap_or(Value::Null));
         set(&mut fields, "cloud", Value::Null);
-        set(&mut fields, "connection_port", json!(label.connection_port));
-        set(&mut fields, "connection_type", label.connection_type.clone().map(|s| json!(s)).unwrap_or(Value::Null));
+        let image_attrs = if cloud::enabled() {
+            cloud::invoke(
+                "image_attrs",
+                &json!({
+                    "provider": provider.canonical_name(),
+                    "label": label.name,
+                }),
+            )
+            .unwrap_or_else(|_| json!({}))
+        } else {
+            json!({})
+        };
+        let attr = |key: &str| image_attrs.get(key).cloned();
+        set(
+            &mut fields,
+            "connection_port",
+            attr("connection_port").unwrap_or_else(|| json!(label.connection_port)),
+        );
+        set(
+            &mut fields,
+            "connection_type",
+            attr("connection_type").unwrap_or_else(|| {
+                label
+                    .connection_type
+                    .clone()
+                    .map(|s| json!(s))
+                    .unwrap_or(Value::Null)
+            }),
+        );
         set(&mut fields, "kubernetes_connection", json!({}));
-        set(&mut fields, "username", label.username.clone().map(|s| json!(s)).unwrap_or(Value::Null));
-        set(&mut fields, "python_path", label.python_path.clone().map(|s| json!(s)).unwrap_or(json!("auto")));
-        set(&mut fields, "shell_type", Value::Null);
+        set(
+            &mut fields,
+            "username",
+            attr("username").unwrap_or_else(|| {
+                label.username.clone().map(|s| json!(s)).unwrap_or(Value::Null)
+            }),
+        );
+        set(
+            &mut fields,
+            "python_path",
+            attr("python_path").unwrap_or_else(|| {
+                label
+                    .python_path
+                    .clone()
+                    .map(|s| json!(s))
+                    .unwrap_or(json!("auto"))
+            }),
+        );
+        set(
+            &mut fields,
+            "shell_type",
+            attr("shell_type").unwrap_or(Value::Null),
+        );
         set(&mut fields, "hold_expiration", Value::Null);
         set(&mut fields, "host_id", Value::Null);
         set(&mut fields, "host_key_checking", json!(label.host_key_checking));
@@ -892,6 +1007,17 @@ impl Launcher {
         let Some(node) = self.api.nodes.get(node_id).cloned() else {
             return Ok(());
         };
+        // A held node is left alone until hold_expiration, matching
+        // _isNodeActionable. Missing request_id must not delete it.
+        if node.state() == node_state::HOLD {
+            let expired = node
+                .hold_expiration()
+                .map(|exp| node.state_time() + exp < self.now)
+                .unwrap_or(false);
+            if !expired {
+                return Ok(());
+            }
+        }
         let request = node
             .request_id
             .as_ref()
@@ -1493,7 +1619,19 @@ impl Launcher {
 }
 
 pub fn normalize_statsd_name(name: &str) -> String {
-    name.replace(['.', ':', ' '], "_")
+    // zuul.lib.statsd.normalize_statsd_name, then the launcher rewrite
+    // of '/' (quote_plus leaves "%2F" in place; a raw slash becomes "_").
+    let mut out = String::with_capacity(name.len());
+    for ch in name.chars() {
+        if !ch.is_ascii() {
+            out.push('?');
+        } else if ch == '.' || ch == ':' || ch == '/' {
+            out.push('_');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 fn layout_same(local: Option<&LayoutState>, remote: Option<&LayoutState>) -> bool {

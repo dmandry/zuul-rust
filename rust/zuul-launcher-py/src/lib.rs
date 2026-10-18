@@ -110,19 +110,26 @@ impl PyLauncher {
             }
         }
         let rust = slf.borrow().rust.clone();
-        let events = py.allow_threads(|| {
+        let (events, stats) = py.allow_threads(|| {
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
                 launcher.api.sync();
                 launcher.process_once();
-                launcher.take_pending_events_json()
+                (
+                    launcher.take_pending_events_json(),
+                    launcher.take_stats_json(),
+                )
             } else {
-                "[]".to_string()
+                ("[]".to_string(), "[]".to_string())
             }
         });
         if events != "[]" {
             call_py(py, "emit_events", (slf, events))?;
         }
+        if stats != "[]" {
+            call_py(py, "emit_stats", (slf, stats))?;
+        }
+        call_py(py, "maintain_uploads", (slf,))?;
         // No ChildrenWatch in this loop, so poll again after MAX_SLEEP
         // instead of waiting out MIN_INTERVAL.
         if slf.getattr("_running")?.is_truthy()? {
@@ -143,29 +150,32 @@ impl PyLauncher {
 
     #[pyo3(signature = (*_args, **_kwargs))]
     fn checkMissingUploads(
-        &self,
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        not_ported("checkMissingUploads")
+        call_py(py, "call_launcher", (slf, "checkMissingUploads"))
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]
     fn checkOldImages(
-        &self,
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        not_ported("checkOldImages")
+        call_py(py, "call_launcher", (slf, "checkOldImages"))
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]
     fn _runStats(
-        &self,
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        not_ported("_runStats")
+        call_py(py, "call_launcher", (slf, "_runStats"))
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]
@@ -177,22 +187,32 @@ impl PyLauncher {
         not_ported("_acceptRequest")
     }
 
-    #[pyo3(signature = (*_args, **_kwargs))]
-    fn getImageExternalId(
-        &self,
-        _args: &Bound<'_, PyTuple>,
+    #[pyo3(signature = (*args, **_kwargs))]
+    fn getImageExternalId<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<()> {
-        not_ported("getImageExternalId")
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let node = args.get_item(0)?;
+        let provider = args.get_item(1)?;
+        let result = call_py_value(
+            py,
+            "call_launcher",
+            (slf, "getImageExternalId", node, provider),
+        )?;
+        Ok(result.into_bound(py))
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]
-    fn _getUnassignedNodes(
-        &self,
+    fn _getUnassignedNodes<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<()> {
-        not_ported("_getUnassignedNodes")
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let result = call_py_value(py, "call_launcher", (slf, "_getUnassignedNodes"))?;
+        Ok(result.into_bound(py))
     }
 
     #[pyo3(signature = (*_args, **_kwargs))]

@@ -180,15 +180,150 @@ def bootstrap(launcher, config, connections, hostname):
         thread_name_prefix="EndpointImportWorker",
     )
     launcher.cleanup_worker = CleanupWorker(launcher)
+    # Upload, snapshot, and cleanup call back into Launcher methods the
+    # PyO3 class does not define (_getProviders, _processNodeSnapshot).
+    _bind_missing_methods(launcher)
+    _install_node_cache_hook(launcher)
 
-    def _stats_wait():
-        # The stats election loop is not ported. This thread only keeps
-        # stop/join from hanging.
-        launcher.stop_event.wait()
+    # server.Launcher.__init__ creates this before the stats thread.
+    # runStatsElection logs a traceback every second if it is missing,
+    # and checkLogs fails the test on that traceback.
+    from zuul.launcher.server import LauncherStatsElection
+
+    launcher.stats_election = LauncherStatsElection(launcher.zk_client)
+
+    def _stats_loop():
+        from zuul.launcher.server import Launcher
+
+        _bind_missing_methods(launcher)
+        launcher.runStats = lambda: Launcher.runStats(launcher)
+        try:
+            Launcher.runStatsElection(launcher)
+        except Exception:
+            launcher.log.exception("Exception running election stats:")
 
     launcher.stats_thread = threading.Thread(
-        target=_stats_wait, name="LauncherStats", daemon=True
+        target=_stats_loop, name="LauncherStats", daemon=True
     )
+
+
+def _bind_missing_methods(launcher):
+    """Attach Launcher methods the Rust class does not implement.
+
+    Upload, snapshot, quota, and stats code in server.py calls back into
+    the launcher. Binding the unbound functions keeps those paths on the
+    14.3.0 implementation.
+    """
+    if getattr(launcher, "_methods_bound", False):
+        return
+    from zuul.launcher.server import Launcher
+
+    cls = type(launcher)
+    for name, func in vars(Launcher).items():
+        if not callable(func) or name.startswith("__"):
+            continue
+        if hasattr(cls, name):
+            continue
+        setattr(launcher, name, func.__get__(launcher, cls))
+    launcher._methods_bound = True
+
+
+def call_launcher(launcher, name, *args):
+    from zuul.launcher.server import Launcher
+
+    _bind_missing_methods(launcher)
+    return getattr(Launcher, name)(launcher, *args)
+
+
+def _attach_state_machines(launcher, node):
+    """Put the live Python state machine on the cached node.
+
+    test_launcher_failover reads create_state from ZooKeeper and
+    INSTANCE_CREATING from node.create_state_machine. The machine is
+    not serialized. Attaching it before the cache applies a new
+    create_state keeps that attribute from being None once create_state
+    is truthy.
+    """
+    if node is None:
+        return
+    machines = launcher.__dict__.get("_cloud_sms") or {}
+    uuid = getattr(node, "uuid", None)
+    if not uuid:
+        return
+    for kind, attr in (
+        ("create", "create_state_machine"),
+        ("delete", "delete_state_machine"),
+    ):
+        machine = machines.get((kind, uuid))
+        if machine is not None:
+            node._set(**{attr: machine})
+
+
+def _install_node_cache_hook(launcher):
+    cache = launcher.api.nodes_cache
+    if getattr(cache, "_rust_sm_hook", False):
+        return
+    orig_update = cache.updateFromRaw
+    orig_object = cache.objectFromRaw
+
+    def updateFromRaw(obj, key, data, stat):
+        _attach_state_machines(launcher, obj)
+        return orig_update(obj, key, data, stat)
+
+    def objectFromRaw(key, data, stat):
+        obj = orig_object(key, data, stat)
+        _attach_state_machines(launcher, obj)
+        return obj
+
+    cache.updateFromRaw = updateFromRaw
+    cache.objectFromRaw = objectFromRaw
+    cache._rust_sm_hook = True
+
+
+def emit_stats(launcher, payload):
+    """Send Rust launch counters to the same statsd client the tests record."""
+    import json
+
+    if not getattr(launcher, "statsd", None):
+        return
+    for item in json.loads(payload):
+        kind = item.get("kind")
+        name = item.get("name")
+        value = item.get("value", 0)
+        if kind == "c":
+            launcher.statsd.incr(name, int(value))
+        elif kind == "ms":
+            launcher.statsd.timing(name, value)
+        elif kind == "g":
+            launcher.statsd.gauge(name, value)
+
+
+def maintain_uploads(launcher):
+    """Image upload/delete and snapshot work from Launcher._run.
+
+    The three upload executors (1, 10, and 20 workers) and the cleanup
+    thread are the same objects server.py starts.
+    """
+    from zuul.launcher.server import Launcher
+
+    _bind_missing_methods(launcher)
+    changed = getattr(launcher, "_layout_just_updated", False)
+    launcher._layout_just_updated = False
+    try:
+        if changed or launcher.image_updated_event.is_set():
+            Launcher.checkOldImages(launcher)
+            Launcher.checkMissingUploads(launcher)
+        elif launcher.upload_deleted_event.is_set():
+            Launcher.checkOldImages(launcher)
+        for node in launcher.api.getMatchingProviderNodes():
+            if node.state != node.State.SNAPSHOT:
+                continue
+            try:
+                Launcher._processNodeSnapshot(launcher, node, launcher.log)
+            except Exception:
+                launcher.log.exception("Error processing node %s snapshot", node)
+    except Exception:
+        launcher.log.exception("Error in image maintenance:")
 
 
 def _clean_tempdir(launcher):
@@ -337,6 +472,7 @@ def publish_layout(launcher, payload):
     launcher.tenant_providers = providers
     launcher._layout_generation = generation
     _post_config(launcher)
+    launcher._layout_just_updated = True
     _set_running(launcher, data)
 
 
@@ -388,6 +524,16 @@ def cloud_call(launcher, op, payload):
             result = _label_quota(launcher, data)
         elif op == "node_tags":
             result = _node_tags(launcher, data)
+        elif op == "image_attrs":
+            result = _image_attrs(launcher, data)
+        elif op == "provider_quota":
+            result = _provider_quota(launcher, data)
+        elif op == "quota_for_node":
+            result = _quota_for_node(launcher, data)
+        elif op == "quota_for_label":
+            result = _quota_for_label(launcher, data)
+        elif op == "quota_percentage":
+            result = _quota_percentage(launcher, data)
         elif op == "fail":
             result = _cloud_fail(launcher, data)
         else:
@@ -597,6 +743,10 @@ def _cloud_step(launcher, data):
                 machines[key] = provider.getDeleteStateMachine(node, launcher.log)
             else:
                 image_external_id = data.get("image_external_id")
+                if not image_external_id:
+                    image_external_id = call_launcher(
+                        launcher, "getImageExternalId", node, provider
+                    )
                 machines[key] = provider.getCreateStateMachine(
                     node, image_external_id, launcher.log
                 )
@@ -604,14 +754,21 @@ def _cloud_step(launcher, data):
     with _mutable(machine.node):
         external = machine.advance()
     node = getattr(machine, "node", None)
+    exported = _export_node(node) if node is not None else {}
+    # Persist the machine state so a restarted launcher resumes it.
+    if hasattr(machine, "toDict"):
+        state_key = "delete_state" if kind == "delete" else "create_state"
+        exported[state_key] = _jsonable(machine.toDict())
     payload = {
         "state": getattr(machine, "state", None),
         "complete": bool(getattr(machine, "complete", False)),
         "interface_ip": getattr(node, "interface_ip", None) if node is not None else None,
-        "node": _export_node(node) if node is not None else {},
+        "node": exported,
     }
     if external:
         payload["external_id"] = _jsonable(external)
+    cached = launcher.api.getProviderNode(node_uuid)
+    _attach_state_machines(launcher, cached)
     if payload["complete"]:
         machines.pop(key, None)
     return payload
@@ -668,6 +825,64 @@ class _ScanNode:
         self.host_key_checking = bool(data.get("host_key_checking"))
         self.connection_type = data.get("connection_type") or "ssh"
         self.boot_timeout = data.get("boot_timeout") or 120
+
+
+def _image_attrs(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    label = provider.labels[data["label"]]
+    image = provider.images[label.image]
+    return {
+        "connection_port": image.connection_port,
+        "connection_type": image.connection_type,
+        "username": image.username,
+        "python_path": image.python_path,
+        "shell_type": image.shell_type,
+    }
+
+
+def _provider_quota(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    return _quota_payload(call_launcher(launcher, "getProviderQuota", provider))
+
+
+def _quota_for_node(launcher, data):
+    # doesProviderHaveQuotaForNode subtracts unmanaged usage recorded
+    # by the cleanup worker. The node is loaded from ZooKeeper so the
+    # quota is the one just written, not a stale cache copy.
+    from zuul.model import ProviderNode
+    from zuul.zk.zkobject import ZKContext
+
+    provider = _find_provider(launcher, data["provider"])
+    ctx = ZKContext(launcher.zk_client, None, launcher.join_event, launcher.log)
+    node = ProviderNode.fromZK(ctx, path=ProviderNode._getPath(data["uuid"]))
+    messages = []
+    ok = call_launcher(
+        launcher, "doesProviderHaveQuotaForNode", provider, node, messages
+    )
+    return {"ok": bool(ok)}
+
+
+def _quota_for_label(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    label = provider.labels[data["label"]]
+    messages = []
+    ok = call_launcher(
+        launcher,
+        "doesProviderHaveQuotaForLabel",
+        data.get("tenant") or provider.tenant_name,
+        provider,
+        label,
+        messages,
+        bool(data.get("include_usage", True)),
+    )
+    return {"ok": bool(ok)}
+
+
+def _quota_percentage(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    messages = []
+    pct = call_launcher(launcher, "getQuotaPercentage", provider, messages)
+    return {"pct": float(pct)}
 
 
 def _node_tags(launcher, data):
