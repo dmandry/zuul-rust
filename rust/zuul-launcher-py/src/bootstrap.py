@@ -2774,20 +2774,20 @@ def _class_attr(data):
 
 
 def _matching_requests(launcher):
-    # Mirror LauncherApi.getMatchingRequests but load any ZK children
-    # missing from the Python cache first. test_launcher_request_order
-    # creates two requests then wakes immediately; the cache watch can
-    # lag by one process_requests pass, which makes both _acceptRequest
-    # patch waits hit the same uuid. Do not _walkTree/waitForSync here
-    # (GIL + cache worker deadlock).
+    # getMatchingRequests applies launcher_score, which unit tests patch.
+    # The Rust scorer cannot see that patch.
+    #
+    # Preload ZooKeeper request children missing from the Python cache
+    # so two requests created just before wake (test_launcher_request_order)
+    # are both scored in one process_requests pass. Do not call
+    # _walkTree/waitForSync (GIL + cache worker deadlock).
     from zuul.model import NodesetRequest
-    from zuul.zk.launcher import launcher_score
     from zuul.zk.zkobject import ZKContext
 
-    ctx = ZKContext(
-        launcher.zk_client, None, launcher.stop_event, launcher.log
-    )
     try:
+        ctx = ZKContext(
+            launcher.zk_client, None, launcher.stop_event, launcher.log
+        )
         for uuid in launcher.zk_client.client.get_children(
             "/zuul/nodeset/requests"
         ):
@@ -2808,44 +2808,13 @@ def _matching_requests(launcher):
             "matching_requests: unable to list ZK requests", exc_info=True
         )
 
-    # Replicate getMatchingRequests so we still honor launcher_score
-    # patches and hasLock short-circuit, with dedup.
-    candidate_launchers = {
-        c.hostname: c
-        for c in launcher.api.component_registry.all("launcher")
-    }
-    candidate_names = set(candidate_launchers.keys())
     seen = set()
     ids = []
-    for request in sorted(launcher.api.requests_cache.getItems()):
+    for request in launcher.api.getMatchingRequests():
         if request.uuid in seen:
             continue
-        if request.hasLock():
-            seen.add(request.uuid)
-            ids.append(request.uuid)
-            continue
-        if request.is_locked:
-            continue
-        if request.state == request.State.TEST_HOLD:
-            continue
-        score_launchers = (
-            set(request._lscores.keys()) if request._lscores else set()
-        )
-        missing_scores = candidate_names - score_launchers
-        if missing_scores or request._lscores is None:
-            request._set(
-                _lscores={
-                    launcher_score(n, request): n for n in candidate_names
-                }
-            )
-        for _score, launcher_name in sorted(request._lscores.items()):
-            other = candidate_launchers.get(launcher_name)
-            if not other or other.state != other.RUNNING:
-                continue
-            if other.hostname == launcher.component_info.hostname:
-                seen.add(request.uuid)
-                ids.append(request.uuid)
-            break
+        seen.add(request.uuid)
+        ids.append(request.uuid)
     return {"ids": ids}
 
 
