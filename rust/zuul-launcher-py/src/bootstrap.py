@@ -891,6 +891,11 @@ class _mutable:
 
 
 def _jsonable(value):
+    import math
+
+    if isinstance(value, float) and not math.isfinite(value):
+        # serde_json rejects bare Infinity/NaN; null means unlimited.
+        return None
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
@@ -2353,18 +2358,25 @@ def _accept_one(launcher, data):
                         "NodesetRequestProcessing"
                     )
                 )
-        # Seed Rust provider_quota cache with getProviderQuota (endpoint
-        # limits minus unmanaged) before accept. Nested cloud::invoke of
-        # quota_for_label from inside accept_request cannot see the
-        # CleanupWorker update reliably; this avoids that nest.
+        # Seed Rust provider_quota cache with fresh endpoint limits minus
+        # unmanaged. Bypass _provider_quota_cache: a concurrent refresh
+        # between the test's cache.clear() and CleanupWorker._run() can
+        # leave a stale empty-unmanaged entry for 300s.
         import json as _json
 
         payloads = {}
+        if getattr(launcher, "_provider_quota_cache", None) is not None:
+            launcher._provider_quota_cache.clear()
         for providers in launcher.tenant_providers.values():
             for provider in providers:
                 try:
                     q = call_launcher(launcher, "getProviderQuota", provider)
-                    payloads[provider.canonical_name] = _quota_payload(q)
+                    payload = _quota_payload(q)
+                    # Index under every name Rust might use for lookup.
+                    payloads[provider.canonical_name] = payload
+                    payloads[provider.name] = payload
+                    ep = provider.getEndpoint()
+                    payloads[ep.canonical_name] = payload
                 except Exception:
                     launcher.log.exception(
                         "Unable to seed quota for %s", provider.canonical_name

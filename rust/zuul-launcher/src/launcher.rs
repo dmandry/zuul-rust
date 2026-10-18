@@ -449,7 +449,9 @@ impl Launcher {
     /// Replace the provider_quota cache from a JSON object of
     /// `{canonical_name: {"default": ..., "quota": {...}}}`. Used by
     /// accept_one to inject getProviderQuota (limits minus unmanaged)
-    /// without a nested cloud::invoke during accept.
+    /// without a nested cloud::invoke during accept. Also keys each
+    /// entry under every loaded Rust provider canonical_name so a
+    /// Python/Rust name spelling mismatch cannot miss the cache.
     pub fn seed_quota_cache_from_json(&mut self, payload: &str) {
         let Ok(value) = serde_json::from_str::<Value>(payload) else {
             return;
@@ -457,9 +459,21 @@ impl Launcher {
         let Some(obj) = value.as_object() else {
             return;
         };
+        let rust_names: Vec<String> = self
+            .tenant_providers
+            .values()
+            .flat_map(|list| list.iter().map(|p| p.canonical_name().to_string()))
+            .collect();
         for (name, entry) in obj {
             let q = cloud::quota_from_payload(entry);
-            self.quota_cache.insert(name.clone(), (q, self.now));
+            self.quota_cache.insert(name.clone(), (q.copy(), self.now));
+            // If this entry's key matches a Rust provider name or is the
+            // only provider, also store under the Rust canonical_name.
+            for rn in &rust_names {
+                if rn == name || rust_names.len() == 1 {
+                    self.quota_cache.insert(rn.clone(), (q.copy(), self.now));
+                }
+            }
         }
     }
 

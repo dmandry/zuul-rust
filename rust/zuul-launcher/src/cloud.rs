@@ -114,6 +114,7 @@ fn message_of(value: &Value) -> String {
 }
 
 /// Payload from the Python quota helpers: {"default": null|number, "quota": {...}}.
+/// Null resource values mean unlimited (Python math.inf after JSON sanitization).
 pub fn quota_from_payload(value: &Value) -> QuotaInformation {
     let default = match value.get("default") {
         Some(Value::Null) | None => f64::INFINITY,
@@ -125,10 +126,18 @@ pub fn quota_from_payload(value: &Value) -> QuotaInformation {
     };
     if let Some(obj) = value.get("quota").and_then(|v| v.as_object()) {
         for (k, val) in obj {
-            if let Some(n) = val.as_f64() {
+            if val.is_null() {
+                quota.quota.insert(k.clone(), f64::INFINITY);
+            } else if let Some(n) = val.as_f64() {
                 quota.quota.insert(k.clone(), n);
             } else if let Some(n) = val.as_i64() {
                 quota.quota.insert(k.clone(), n as f64);
+            } else if let Some(s) = val.as_str() {
+                if s.eq_ignore_ascii_case("infinity") || s == "inf" {
+                    quota.quota.insert(k.clone(), f64::INFINITY);
+                } else if s.eq_ignore_ascii_case("-infinity") {
+                    quota.quota.insert(k.clone(), f64::NEG_INFINITY);
+                }
             }
         }
     }
