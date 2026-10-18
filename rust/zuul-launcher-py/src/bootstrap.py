@@ -2774,41 +2774,78 @@ def _class_attr(data):
 
 
 def _matching_requests(launcher):
-    # getMatchingRequests applies launcher_score, which unit tests patch.
-    # The Rust scorer cannot see that patch.
-    #
-    # Preload any ZooKeeper request children missing from the Python
-    # cache so two requests created just before wake
-    # (test_launcher_request_order) are both scored in one
-    # process_requests pass. Do not call _walkTree/waitForSync here:
-    # matching_requests runs under Python::with_gil from the Rust
-    # thread, and those would deadlock the cache event worker.
+    # Mirror LauncherApi.getMatchingRequests but load any ZK children
+    # missing from the Python cache first. test_launcher_request_order
+    # creates two requests then wakes immediately; the cache watch can
+    # lag by one process_requests pass, which makes both _acceptRequest
+    # patch waits hit the same uuid. Do not _walkTree/waitForSync here
+    # (GIL + cache worker deadlock).
     from zuul.model import NodesetRequest
+    from zuul.zk.launcher import launcher_score
     from zuul.zk.zkobject import ZKContext
 
+    ctx = ZKContext(
+        launcher.zk_client, None, launcher.stop_event, launcher.log
+    )
     try:
-        client = launcher.zk_client.client
-        ctx = ZKContext(
-            launcher.zk_client, None, launcher.stop_event, launcher.log
-        )
-        for uuid in client.get_children("/zuul/nodeset/requests"):
+        for uuid in launcher.zk_client.client.get_children(
+            "/zuul/nodeset/requests"
+        ):
             if launcher.api.requests_cache.getItem(uuid) is not None:
                 continue
             try:
-                path = NodesetRequest._getPath(uuid)
-                req = NodesetRequest.fromZK(ctx, path=path)
+                req = NodesetRequest.fromZK(
+                    ctx, path=NodesetRequest._getPath(uuid)
+                )
                 launcher.api.requests_cache.setItem(uuid, req)
             except Exception:
-                pass
+                launcher.log.debug(
+                    "matching_requests: unable to preload %s", uuid,
+                    exc_info=True,
+                )
     except Exception:
-        pass
+        launcher.log.debug(
+            "matching_requests: unable to list ZK requests", exc_info=True
+        )
+
+    # Replicate getMatchingRequests so we still honor launcher_score
+    # patches and hasLock short-circuit, with dedup.
+    candidate_launchers = {
+        c.hostname: c
+        for c in launcher.api.component_registry.all("launcher")
+    }
+    candidate_names = set(candidate_launchers.keys())
     seen = set()
     ids = []
-    for request in launcher.api.getMatchingRequests():
+    for request in sorted(launcher.api.requests_cache.getItems()):
         if request.uuid in seen:
             continue
-        seen.add(request.uuid)
-        ids.append(request.uuid)
+        if request.hasLock():
+            seen.add(request.uuid)
+            ids.append(request.uuid)
+            continue
+        if request.is_locked:
+            continue
+        if request.state == request.State.TEST_HOLD:
+            continue
+        score_launchers = (
+            set(request._lscores.keys()) if request._lscores else set()
+        )
+        missing_scores = candidate_names - score_launchers
+        if missing_scores or request._lscores is None:
+            request._set(
+                _lscores={
+                    launcher_score(n, request): n for n in candidate_names
+                }
+            )
+        for _score, launcher_name in sorted(request._lscores.items()):
+            other = candidate_launchers.get(launcher_name)
+            if not other or other.state != other.RUNNING:
+                continue
+            if other.hostname == launcher.component_info.hostname:
+                seen.add(request.uuid)
+                ids.append(request.uuid)
+            break
     return {"ids": ids}
 
 
