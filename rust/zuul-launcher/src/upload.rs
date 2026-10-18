@@ -18,6 +18,10 @@ pub struct UploadArgs {
     pub url: String,
     pub image_format: String,
     pub methods: Vec<String>,
+    /// Driver name for getImageCopyJob region/driver gating.
+    pub driver: String,
+    /// Endpoint region (AWS/OpenStack copy eligibility).
+    pub region: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,8 +111,32 @@ impl<'a> UploadPlanner<'a> {
                 if source == upload {
                     continue;
                 }
-                let Some(args) = self.args.get(upload) else { continue };
-                if !args.methods.iter().any(|m| m == "copy") {
+                let Some(dest_args) = self.args.get(upload) else { continue };
+                if !dest_args.methods.iter().any(|m| m == "copy") {
+                    continue;
+                }
+                // Per-source eligibility (Aws: different region; OS: same).
+                let source_args = self.args.get(source);
+                let source_driver = source_args
+                    .map(|a| a.driver.as_str())
+                    .unwrap_or("");
+                let source_region = source_args.and_then(|a| a.region.as_deref());
+                let can_copy = match dest_args.driver.as_str() {
+                    "aws" => {
+                        source_driver == "aws"
+                            && dest_args.region.is_some()
+                            && source_region.is_some()
+                            && dest_args.region.as_deref() != source_region
+                    }
+                    "openstack" => {
+                        source_driver == "openstack"
+                            && dest_args.region.is_some()
+                            && source_region.is_some()
+                            && dest_args.region.as_deref() == source_region
+                    }
+                    _ => false,
+                };
+                if !can_copy {
                     continue;
                 }
                 targets.get_mut(source).unwrap().push(upload.clone());

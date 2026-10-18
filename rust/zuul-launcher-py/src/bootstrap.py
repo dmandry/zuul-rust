@@ -400,6 +400,8 @@ def start(launcher):
     # stats election). Tests may still call cleanup_worker.start()/_run().
     launcher.log.debug("Starting rust workers")
     launcher.start_rust_workers()
+    # Match MonitoringThreadPoolExecutor.__init__ emitting gauge 0.
+    _emit_upload_workers_gauge(launcher, 0)
 
 
 def _run_command(launcher):
@@ -713,10 +715,18 @@ def cloud_call(launcher, op, payload):
         # cleanup.tick     — Python CleanupWorker._run (leaked resources)
         elif op == "upload.job_run":
             result = _upload_job_run(launcher, data)
+        elif op == "upload.artifact_job":
+            result = _upload_artifact_job(launcher, data)
+        elif op == "upload.queue_add":
+            for uuid in data.get("upload_uuids") or []:
+                launcher.upload_uuids_in_queue.add(uuid)
+            result = {"ok": True}
         elif op == "upload.delete":
             result = _upload_delete(launcher, data)
         elif op == "snapshot.advance":
             result = _snapshot_advance(launcher, data)
+        elif op == "snapshot.sm_advance":
+            result = _snapshot_sm_advance(launcher, data)
         elif op == "cleanup.tick":
             result = _cleanup_tick(launcher, data)
         else:
@@ -732,6 +742,22 @@ def cloud_call(launcher, op, payload):
             and "cannot schedule new futures after shutdown" in str(exc)
         ):
             launcher.log.debug("cloud op %s ended after executor shutdown", op)
+        elif op in (
+            "upload.job_run",
+            "upload.artifact_job",
+            "cleanup.tick",
+            "snapshot.advance",
+        ):
+            # These adapters log their own exception() with the original
+            # stack (Error in endpoint upload job / cleanup worker / …)
+            # so okay_tracebacks can match. Avoid a second wrapper frame
+            # whose msg is "cloud op %s failed".
+            launcher.log.debug(
+                "cloud op %s %s: %s",
+                op,
+                result.get("error_kind"),
+                result.get("message"),
+            )
         elif result.get("error_kind") == "other":
             launcher.log.exception("cloud op %s failed", op)
         else:
@@ -1750,6 +1776,13 @@ def _sm_patched_advance(launcher, data):
         with _mutable(node):
             if data.get("aws_instance_id"):
                 node.aws_instance_id = data.get("aws_instance_id")
+                # Seed instance_id before _updateNode so the exported
+                # node_properties keep it when ebs_volume_id is added.
+                if not getattr(node, "node_properties", None):
+                    node.node_properties = {}
+                node.node_properties.setdefault(
+                    "instance_id", data["aws_instance_id"]
+                )
             if data.get("aws_dedicated_host_id"):
                 node.aws_dedicated_host_id = data.get("aws_dedicated_host_id")
             sm = SimpleNamespace(
@@ -1824,6 +1857,81 @@ def _cleanup_tick(launcher, data):
         return {"ran": False}
     worker._run()
     return {"ran": True}
+
+
+def _emit_upload_workers_gauge(launcher, value):
+    """Match MonitoringThreadPoolExecutor gauge for the 1-worker upload pool."""
+    if not getattr(launcher, "statsd", None):
+        return
+    try:
+        launcher.statsd.gauge(
+            "zuul.launcher.server.{hostname}.upload_workers",
+            int(value),
+        )
+    except Exception:
+        launcher.log.exception("Error emitting upload_workers gauge")
+
+
+def _upload_artifact_job(launcher, data):
+    """One UploadJob per artifact on the 1-worker upload pool.
+
+    Honors MonkeyPatch of zuul.launcher.server.UploadJob.run (tests count
+    and block on that entry). The body runs Rust-planned jobs through
+    _upload_job_run (SDK getImage*Job.run boundary).
+    """
+    import types
+
+    from zuul.launcher.server import UploadJob
+
+    _bind_missing_methods(launcher)
+    artifact_uuid = data.get("artifact_uuid")
+    upload_uuids = list(data.get("upload_uuids") or [])
+    planned = list(data.get("planned") or [])
+    iba = launcher.image_build_registry.getItem(artifact_uuid)
+    if iba is None:
+        return {"ok": False, "error": "missing artifact"}
+    uploads = []
+    for uuid in upload_uuids:
+        upload = launcher.image_upload_registry.getItem(uuid)
+        if upload is not None:
+            uploads.append(upload)
+    # Skip if Python queue already has these (duplicate enqueue guard).
+    if uploads and all(
+        u.uuid in launcher.upload_uuids_in_queue for u in uploads
+    ):
+        return {"ok": True, "skipped": True, "planned": 0}
+    all_uploads = [
+        u
+        for u in launcher.image_upload_registry.getItems()
+        if u.artifact_uuid == artifact_uuid
+    ]
+    job = UploadJob(launcher, iba, uploads, all_uploads)
+
+    def _rust_run(self):
+        for spec in planned:
+            kind = spec.get("kind") or "upload"
+            payload = {
+                "kind": "copy" if kind == "copy-dependent" else kind,
+                "upload_uuid": spec.get("upload_uuid"),
+                "dependents": spec.get("dependents") or [],
+            }
+            if spec.get("source_external_id"):
+                payload["source_external_id"] = spec["source_external_id"]
+            if spec.get("source_provider"):
+                payload["source_provider"] = spec["source_provider"]
+            _upload_job_run(launcher, payload)
+
+    job._run = types.MethodType(_rust_run, job)
+    # Sync Python queue so UploadJob.run's finally discard matches
+    # server.py and duplicate checkMissingUploads calls no-op.
+    for upload in uploads:
+        launcher.upload_uuids_in_queue.add(upload.uuid)
+    _emit_upload_workers_gauge(launcher, 1)
+    try:
+        job.run()
+    finally:
+        _emit_upload_workers_gauge(launcher, 0)
+    return {"ok": True, "planned": len(planned)}
 
 
 def _upload_job_run(launcher, data):
@@ -2135,6 +2243,30 @@ def _upload_delete(launcher, data):
     finally:
         launcher.upload_uuids_in_delete_queue.discard(upload_uuid)
     return {"deleted": True}
+
+
+def _snapshot_sm_advance(launcher, data):
+    """Run server.py _processNodeSnapshot (lock + _checkNodeSnapshot).
+
+    Uses the bound 14.3.0 method so MonkeyPatch of
+    AwsSnapshotStateMachine.advance applies and okay_tracebacks of
+    `_checkNodeSnapshot` still match timeout/error stacks.
+    """
+    from zuul.logs import get_annotated_logger
+
+    _bind_missing_methods(launcher)
+    node_uuid = data["node_uuid"]
+    node = launcher.api.getProviderNode(node_uuid)
+    if node is None:
+        return {"skip": True}
+    log = get_annotated_logger(launcher.log, node, request=node.request_id)
+    launcher._processNodeSnapshot(node, log)
+    snapshot = node.snapshot
+    return {
+        "skip": False,
+        "complete": bool(snapshot.complete),
+        "external_id": _jsonable(getattr(snapshot, "external_id", None)),
+    }
 
 
 def _snapshot_advance(launcher, data):

@@ -173,8 +173,14 @@ pub trait Provider: Send + Sync {
     fn import_job(&self, _url: &str) -> bool {
         false
     }
-    fn copy_job(&self, _source_driver: &str) -> bool {
+    /// Whether this provider can copy an image from a source with the
+    /// given driver and region (Aws: different region; OpenStack: same
+    /// region, different project — project check is runtime-only).
+    fn copy_job(&self, _source_driver: &str, _source_region: Option<&str>) -> bool {
         false
+    }
+    fn region(&self) -> Option<&str> {
+        None
     }
     fn upload_job(&self) -> bool {
         true
@@ -680,7 +686,21 @@ impl AwsCreate {
         }
         if let Some(Value::Object(patch)) = &self.patch_node {
             for (k, v) in patch {
-                if k != "create_state" {
+                if k == "create_state" {
+                    continue;
+                }
+                // Deep-merge node_properties so a Python _updateNode
+                // export (ebs_volume_id) does not drop instance_id set
+                // earlier on the Rust state machine.
+                if k == "node_properties" {
+                    let mut merged = self.node_properties.clone();
+                    if let Some(obj) = v.as_object() {
+                        for (pk, pv) in obj {
+                            merged.insert(pk.clone(), pv.clone());
+                        }
+                    }
+                    m.insert(k.clone(), Value::Object(merged));
+                } else {
                     m.insert(k.clone(), v.clone());
                 }
             }
@@ -3833,8 +3853,27 @@ impl Provider for CloudProvider {
             _ => false,
         }
     }
-    fn copy_job(&self, source_driver: &str) -> bool {
-        source_driver == self.driver_name && matches!(self.driver_name.as_str(), "aws" | "openstack")
+    fn copy_job(&self, source_driver: &str, source_region: Option<&str>) -> bool {
+        // Match AwsProviderEndpoint.getImageCopyJob / OpenStack equivalent.
+        match self.driver_name.as_str() {
+            "aws" => {
+                source_driver == "aws"
+                    && self.region.is_some()
+                    && source_region.is_some()
+                    && self.region.as_deref() != source_region
+            }
+            "openstack" => {
+                // Same region required; different project checked at job build.
+                source_driver == "openstack"
+                    && self.region.is_some()
+                    && source_region.is_some()
+                    && self.region.as_deref() == source_region
+            }
+            _ => false,
+        }
+    }
+    fn region(&self) -> Option<&str> {
+        self.region.as_deref()
     }
     fn upload_job(&self) -> bool {
         // AwsProvider.getImageUploadJob returns None without object_storage.

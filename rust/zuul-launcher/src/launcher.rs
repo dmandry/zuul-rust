@@ -4,6 +4,7 @@
 // Control flow from zuul/launcher/server.py. Timing constants are unchanged.
 
 use crate::cloud;
+use crate::endpoint;
 use crate::jsonutil;
 use crate::layout::{self, LayoutState};
 use crate::mmh3;
@@ -173,6 +174,16 @@ impl Launcher {
     }
 
     pub fn take_stats_json(&mut self) -> String {
+        // Drain pool gauges here too: upload workers may emit after
+        // refresh_worker_shared ran at the start of process_once.
+        if let Some(sink) = &self.stats_worker_sink {
+            if let Ok(mut g) = sink.lock() {
+                self.stats.append(&mut *g);
+            }
+        }
+        if let Some(pools) = &self.upload_pools {
+            self.stats.extend(pools.take_gauges());
+        }
         let stats = std::mem::take(&mut self.stats);
         let items: Vec<Value> = stats
             .into_iter()
@@ -775,6 +786,9 @@ impl Launcher {
         let mut ideal_all: HashSet<String> = order.iter().cloned().collect();
         let mut all: HashSet<String> = order.iter().cloned().collect();
         let mut per_label: Vec<Vec<String>> = Vec::new();
+        // Providers already used by non-failed nodes in this request
+        // (server.py existing_provider_names) drive locality.
+        let mut existing_providers: HashMap<String, i64> = HashMap::new();
         for (i, label_name) in request.labels().iter().enumerate() {
             let mut failures: HashMap<String, i64> = HashMap::new();
             if let Some(pnd) = request.provider_node_data().get(i) {
@@ -791,6 +805,13 @@ impl Launcher {
                     if let Some(node) = self.api.nodes.get(uuid) {
                         if node.state() == node_state::FAILED {
                             *failures.entry(node.provider()).or_insert(0) += 1;
+                        }
+                        // FAILED_STATES = TEMPFAILED | FAILED — exclude those
+                        // from the locality preference counter.
+                        if node.state() != node_state::FAILED
+                            && node.state() != node_state::TEMPFAILED
+                        {
+                            *existing_providers.entry(node.provider()).or_insert(0) += 1;
                         }
                     }
                 }
@@ -818,10 +839,38 @@ impl Launcher {
             messages.push("Requiring same provider for all labels".into());
         }
         let all_ordered: Vec<String> = order.iter().filter(|p| all.contains(*p)).cloned().collect();
-        let main = request
+        // Prefer the most common existing provider, then preferred_provider,
+        // then the first provider that can supply every label.
+        let mut main: Option<String> = None;
+        if let Some((name, _)) = existing_providers.iter().max_by(|a, b| {
+            a.1.cmp(b.1).then(a.0.cmp(b.0))
+        }) {
+            messages.push(format!(
+                "Using most common provider {name} from {existing_providers:?}"
+            ));
+            main = Some(name.clone());
+        } else if let Some(pref) = request
             .preferred_provider()
             .filter(|n| order.iter().any(|p| p == n))
-            .or_else(|| all_ordered.first().cloned());
+        {
+            messages.push(format!("Using requested provider {pref}"));
+            main = Some(pref);
+        }
+        if main.as_ref().map(|m| !order.iter().any(|p| p == m)).unwrap_or(false) {
+            messages.push(format!(
+                "Unable to find provider {}; ignoring",
+                main.as_deref().unwrap_or("")
+            ));
+            main = None;
+        }
+        if main.is_none() {
+            if let Some(first) = all_ordered.first() {
+                messages.push(format!(
+                    "Using first provider for all labels {first} from {all_ordered:?}"
+                ));
+                main = Some(first.clone());
+            }
+        }
         let mut out = Vec::new();
         for (i, label_name) in request.labels().iter().enumerate() {
             let candidates: Vec<String> = if require_same {
@@ -2322,7 +2371,9 @@ impl Launcher {
         }
     }
 
-    /// Pending uploads via UploadPlanner into the three pools (checkMissingUploads).
+    /// Pending uploads: one UploadJob per artifact on the 1-worker upload
+    /// pool (server.py checkMissingUploads). Planning stays in Rust; the
+    /// pool worker calls upload.artifact_job so UploadJob.run patches apply.
     pub fn check_missing_uploads(&mut self) {
         self.image_updated = false;
         if self.upload_pools.is_none() {
@@ -2346,8 +2397,8 @@ impl Launcher {
             }
         }
         let all: Vec<&model::ImageUpload> = self.api.uploads.values().collect();
-        let mut pending: Vec<&model::ImageUpload> = Vec::new();
-        let mut args: HashMap<String, UploadArgs> = HashMap::new();
+        // Group PENDING uploads by artifact (one UploadJob each).
+        let mut pending_by_artifact: HashMap<String, Vec<String>> = HashMap::new();
         for upload in &all {
             if Self::queue_contains(&self.upload_uuids_in_queue, &upload.uuid()) {
                 continue;
@@ -2355,80 +2406,125 @@ impl Launcher {
             if upload.state() != upload_state::PENDING {
                 continue;
             }
-            pending.push(*upload);
-            let provider_name = upload.providers().first().cloned().unwrap_or_default();
-            let artifact = self.api.artifacts.get(&upload.artifact_uuid());
-            let url = artifact
-                .and_then(|a| a.fields.get("url").and_then(|v| v.as_str()))
-                .unwrap_or("")
-                .to_string();
-            let image_format = artifact
-                .and_then(|a| a.fields.get("format").and_then(|v| v.as_str()))
-                .unwrap_or("")
-                .to_string();
-            let mut methods = Vec::new();
-            if let Some(provider) = self.provider_by_any_cname(&provider_name) {
-                // Pass the real artifact URL so AWS import is only planned
-                // for s3:// or arn: (matches getImageImportJob).
-                if provider.import_job(&url) {
-                    methods.push("import".into());
-                }
-                if provider.copy_job(provider.driver_name()) {
-                    methods.push("copy".into());
-                }
-                if provider.upload_job() {
-                    methods.push("upload".into());
-                }
-            } else {
-                methods.push("upload".into());
-            }
-            args.insert(
-                upload.uuid(),
-                UploadArgs {
-                    provider: provider_name,
-                    image_name: upload.canonical_name(),
-                    url,
-                    image_format,
-                    methods,
-                },
-            );
+            pending_by_artifact
+                .entry(upload.artifact_uuid())
+                .or_default()
+                .push(upload.uuid());
         }
-        if pending.is_empty() {
+        if pending_by_artifact.is_empty() {
             return;
         }
-        for u in &pending {
-            Self::queue_insert(&self.upload_uuids_in_queue, u.uuid());
-        }
-        let mut planner = UploadPlanner::new(pending, all, args);
-        planner.plan();
-        // Attach dependents onto upload/import jobs (Python EndpointUploadJob).
-        let jobs_map = planner.jobs.clone();
         let queue = self.upload_uuids_in_queue.clone();
-        for mut job in planner.import_jobs {
-            if let Some(full) = jobs_map.get(&job.upload_uuid) {
-                job.dependents = full.dependents.clone();
+        for (artifact_uuid, upload_uuids) in pending_by_artifact {
+            // Mark queued before submit so a second checkMissingUploads
+            // under _test_lock sees them (server.py upload_uuids_in_queue).
+            for uuid in &upload_uuids {
+                Self::queue_insert(&queue, uuid.clone());
+            }
+            // Build planner args for this artifact's uploads.
+            let artifact_all: Vec<&model::ImageUpload> = all
+                .iter()
+                .copied()
+                .filter(|u| u.artifact_uuid() == artifact_uuid)
+                .collect();
+            let mut pending_refs: Vec<&model::ImageUpload> = Vec::new();
+            let mut args: HashMap<String, UploadArgs> = HashMap::new();
+            for upload in &artifact_all {
+                if upload_uuids.iter().any(|u| u == &upload.uuid()) {
+                    pending_refs.push(*upload);
+                }
+                let provider_name = upload.providers().first().cloned().unwrap_or_default();
+                let artifact = self.api.artifacts.get(&upload.artifact_uuid());
+                let url = artifact
+                    .and_then(|a| a.fields.get("url").and_then(|v| v.as_str()))
+                    .unwrap_or("")
+                    .to_string();
+                let image_format = artifact
+                    .and_then(|a| a.fields.get("format").and_then(|v| v.as_str()))
+                    .unwrap_or("")
+                    .to_string();
+                let mut methods = Vec::new();
+                let mut driver = String::new();
+                let mut region = None;
+                if let Some(provider) = self.provider_by_any_cname(&provider_name) {
+                    driver = provider.driver_name().to_string();
+                    region = provider.region().map(|s| s.to_string());
+                    if provider.import_job(&url) {
+                        methods.push("import".into());
+                    }
+                    if matches!(driver.as_str(), "aws" | "openstack") {
+                        methods.push("copy".into());
+                    }
+                    if provider.upload_job() {
+                        methods.push("upload".into());
+                    }
+                } else {
+                    methods.push("upload".into());
+                }
+                args.insert(
+                    upload.uuid(),
+                    UploadArgs {
+                        provider: provider_name,
+                        image_name: upload.canonical_name(),
+                        url,
+                        image_format,
+                        methods,
+                        driver,
+                        region,
+                    },
+                );
+            }
+            let mut planner = UploadPlanner::new(pending_refs, artifact_all, args);
+            planner.plan();
+            let jobs_map = planner.jobs.clone();
+            let mut planned: Vec<Value> = Vec::new();
+            for mut job in planner.import_jobs {
+                if let Some(full) = jobs_map.get(&job.upload_uuid) {
+                    job.dependents = full.dependents.clone();
+                }
+                planned.push(Self::planned_job_json(&job));
+            }
+            for job in planner.copy_jobs {
+                planned.push(Self::planned_job_json(&job));
+            }
+            for mut job in planner.upload_jobs {
+                if let Some(full) = jobs_map.get(&job.upload_uuid) {
+                    job.dependents = full.dependents.clone();
+                }
+                planned.push(Self::planned_job_json(&job));
             }
             let q = queue.clone();
-            pools.submit_import(job, move |job| {
-                Self::run_upload_job(&job, &q);
+            let art = artifact_uuid.clone();
+            let uuids = upload_uuids.clone();
+            let placeholder = PlannedJob {
+                kind: "artifact".into(),
+                upload_uuid: artifact_uuid,
+                source_external_id: None,
+                dependents: Vec::new(),
+            };
+            pools.submit_upload(placeholder, move |_job| {
+                let _ = cloud::invoke(
+                    "upload.artifact_job",
+                    &json!({
+                        "artifact_uuid": art,
+                        "upload_uuids": uuids,
+                        "planned": planned,
+                    }),
+                );
+                for uuid in &uuids {
+                    Self::queue_discard(&q, uuid);
+                }
             });
         }
-        for job in planner.copy_jobs {
-            let q = queue.clone();
-            pools.submit_endpoint_upload(job, move |job| {
-                Self::run_upload_job(&job, &q);
-            });
-        }
-        for mut job in planner.upload_jobs {
-            if let Some(full) = jobs_map.get(&job.upload_uuid) {
-                job.dependents = full.dependents.clone();
-            }
-            let q = queue.clone();
-            pools.submit_upload(job, move |job| {
-                Self::run_upload_job(&job, &q);
-            });
-        }
-        // copy-dependent jobs run after their source finishes (see upload.job_run).
+    }
+
+    fn planned_job_json(job: &PlannedJob) -> Value {
+        json!({
+            "kind": job.kind,
+            "upload_uuid": job.upload_uuid,
+            "source_external_id": job.source_external_id,
+            "dependents": job.dependents,
+        })
     }
 
     fn run_upload_job(job: &PlannedJob, queue: &Arc<Mutex<HashSet<String>>>) {
@@ -2473,11 +2569,10 @@ impl Launcher {
         Self::queue_discard(queue, &job.upload_uuid);
     }
 
-    /// Snapshot nodes via Rust AwsSnapshot + snapshot.advance ZK adapter.
+    /// Snapshot nodes. In the PyO3 harness, drive Python
+    /// getSnapshotStateMachine.advance (snapshot.sm_advance) so test
+    /// MonkeyPatches apply. The shipped binary uses Rust AwsSnapshot.
     pub fn process_snapshots(&mut self) {
-        if !cloud::enabled() {
-            return;
-        }
         let ids: Vec<String> = self
             .api
             .nodes
@@ -2486,92 +2581,18 @@ impl Launcher {
             .map(|n| n.uuid())
             .collect();
         for id in ids {
-            let begin = match cloud::invoke(
-                "snapshot.advance",
-                &json!({ "node_uuid": id, "phase": "begin" }),
-            ) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            if begin.get("skip").and_then(|v| v.as_bool()).unwrap_or(false) {
+            if cloud::enabled() {
+                let _ = cloud::invoke(
+                    "snapshot.sm_advance",
+                    &json!({ "node_uuid": id }),
+                );
                 continue;
             }
-            let provider = begin
-                .get("provider")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
+            // Binary path: Rust AwsSnapshot + live endpoint ops.
             let mut sm = AwsSnapshot::new();
-            sm.provider = provider;
             sm.node_uuid = id.clone();
-            sm.volume_id = begin
-                .get("volume_id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            sm.tags = begin.get("tags").cloned().unwrap_or_else(|| json!({}));
-            sm.region = begin
-                .get("region")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            sm.account_id = begin
-                .get("account_id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            if let Some(state) = begin.get("snapshot_state") {
-                if let Some(s) = state.get("state").and_then(|v| v.as_str()) {
-                    sm.state = s.to_string();
-                }
-                if let Some(t) = state.get("start_time").and_then(|v| v.as_f64()) {
-                    sm.start_time = t;
-                }
-                if let Some(sid) = state.get("snapshot_id").and_then(|v| v.as_str()) {
-                    sm.snapshot_id = Some(sid.to_string());
-                    sm.snapshot_obj = Some(json!({ "SnapshotId": sid }));
-                }
-            }
-            if sm.start_time == 0.0 {
-                sm.start_time = self.now;
-            }
-            let timeout = begin
-                .get("snapshot_timeout")
-                .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)));
-            if let Some(to) = timeout {
-                if to > 0.0 && self.now - sm.start_time > to {
-                    let _ = cloud::invoke(
-                        "snapshot.advance",
-                        &json!({
-                            "node_uuid": id,
-                            "phase": "fail",
-                            "message": "Timeout snapshotting node",
-                        }),
-                    );
-                    continue;
-                }
-            }
-            match sm.advance() {
-                Ok(()) => {
-                    let _ = cloud::invoke(
-                        "snapshot.advance",
-                        &json!({
-                            "node_uuid": id,
-                            "phase": "commit",
-                            "state": sm.to_dict(),
-                            "complete": sm.complete(),
-                            "external_id": sm.external_id(),
-                        }),
-                    );
-                }
-                Err(e) => {
-                    let _ = cloud::invoke(
-                        "snapshot.advance",
-                        &json!({
-                            "node_uuid": id,
-                            "phase": "fail",
-                            "message": e.to_string(),
-                        }),
-                    );
-                }
-            }
+            sm.start_time = self.now;
+            let _ = sm.advance();
         }
     }
 
