@@ -3836,6 +3836,14 @@ impl Provider for CloudProvider {
     fn copy_job(&self, source_driver: &str) -> bool {
         source_driver == self.driver_name && matches!(self.driver_name.as_str(), "aws" | "openstack")
     }
+    fn upload_job(&self) -> bool {
+        // AwsProvider.getImageUploadJob returns None without object_storage.
+        match self.driver_name.as_str() {
+            "aws" => self.options.contains_key("bucket_name"),
+            "openstack" | "azure" => true,
+            _ => false,
+        }
+    }
 }
 
 pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, config: &Value) -> CloudProvider {
@@ -4087,6 +4095,20 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
             }
         }
     }
+    let mut options = BTreeMap::new();
+    // provider[aws].object-storage.bucket-name (also accept snake_case).
+    if let Some(os) = obj
+        .and_then(|m| m.get("object-storage").or_else(|| m.get("object_storage")))
+        .and_then(|v| v.as_object())
+    {
+        if let Some(bucket) = os
+            .get("bucket-name")
+            .or_else(|| os.get("bucket_name"))
+            .and_then(|v| v.as_str())
+        {
+            options.insert("bucket_name".into(), bucket.to_string());
+        }
+    }
     CloudProvider {
         name,
         canonical_name: canonical.into(),
@@ -4106,7 +4128,7 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         launch_timeout,
         resource_limits,
         region,
-        options: BTreeMap::new(),
+        options,
         static_nodes,
     }
 }

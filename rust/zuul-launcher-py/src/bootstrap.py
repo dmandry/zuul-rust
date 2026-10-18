@@ -1893,55 +1893,75 @@ def _upload_job_run(launcher, data):
                         md5=iba.md5sum,
                         sha256=iba.sha256,
                     )
-                    if kind == "import":
-                        job = provider.getImageImportJob(
-                            iba.url,
-                            args["provider_image"],
-                            args["image_name"],
-                            args["image_format"],
-                            args["metadata"],
-                            args["md5"],
-                            args["sha256"],
-                        )
-                        if job is None:
-                            raise Exception("no import job for %s" % upload_uuid)
-                        external_id = job.run()
-                    elif kind == "copy":
-                        if not source_external_id:
-                            raise Exception("copy requires source_external_id")
-                        # Prefer a source provider from the same hash if given.
-                        source_provider = provider
-                        if data.get("source_provider"):
-                            source_provider = launcher._getProviderByCanonicalName(
-                                data["source_provider"]
+                    try:
+                        if kind == "import":
+                            job = provider.getImageImportJob(
+                                iba.url,
+                                args["provider_image"],
+                                args["image_name"],
+                                args["image_format"],
+                                args["metadata"],
+                                args["md5"],
+                                args["sha256"],
                             )
-                        job = provider.getImageCopyJob(
-                            source_provider,
-                            args["provider_image"],
-                            args["image_name"],
-                            args["image_format"],
-                            args["metadata"],
-                            args["md5"],
-                            args["sha256"],
+                            if job is None:
+                                raise Exception(
+                                    "no import job for %s" % upload_uuid
+                                )
+                            external_id = job.run()
+                        elif kind == "copy":
+                            if not source_external_id:
+                                raise Exception(
+                                    "copy requires source_external_id"
+                                )
+                            source_provider = provider
+                            if data.get("source_provider"):
+                                source_provider = (
+                                    launcher._getProviderByCanonicalName(
+                                        data["source_provider"]
+                                    )
+                                )
+                            job = provider.getImageCopyJob(
+                                source_provider,
+                                args["provider_image"],
+                                args["image_name"],
+                                args["image_format"],
+                                args["metadata"],
+                                args["md5"],
+                                args["sha256"],
+                            )
+                            if job is None:
+                                raise Exception(
+                                    "no copy job for %s" % upload_uuid
+                                )
+                            external_id = job.run(source_external_id)
+                        else:
+                            # upload: download then AwsImageUploadJob.run
+                            path = _upload_download(launcher, iba)
+                            job = provider.getImageUploadJob(
+                                args["provider_image"],
+                                args["image_name"],
+                                args["image_format"],
+                                args["metadata"],
+                                args["md5"],
+                                args["sha256"],
+                            )
+                            if job is None:
+                                raise Exception(
+                                    "no upload job for %s" % upload_uuid
+                                )
+                            external_id = job.run(path)
+                        if external_id:
+                            upload.updateAttributes(
+                                ctx, external_id=external_id
+                            )
+                    except Exception:
+                        # Match EndpointUploadJob.run: log and finalize
+                        # without external_id (retry copy or FAILED).
+                        launcher.log.exception(
+                            "Error in endpoint upload job"
                         )
-                        if job is None:
-                            raise Exception("no copy job for %s" % upload_uuid)
-                        external_id = job.run(source_external_id)
-                    else:
-                        # upload: download artifact then AwsImageUploadJob.run
-                        path = _upload_download(launcher, iba)
-                        job = provider.getImageUploadJob(
-                            args["provider_image"],
-                            args["image_name"],
-                            args["image_format"],
-                            args["metadata"],
-                            args["md5"],
-                            args["sha256"],
-                        )
-                        if job is None:
-                            raise Exception("no upload job for %s" % upload_uuid)
-                        external_id = job.run(path)
-                    upload.updateAttributes(ctx, external_id=external_id)
+                    # Match UploadJob.finalizeUpload
                     with upload.activeContext(ctx):
                         if upload.external_id:
                             upload.state = upload.State.READY
