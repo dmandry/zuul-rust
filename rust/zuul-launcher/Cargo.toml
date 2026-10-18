@@ -51,6 +51,8 @@ x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 indexmap = "=2.2.6"
 zeroize = "=1.6.0"
 zeroize_derive = "=1.4.2"
+# uuid >=1.12 bumps MSRV past the 1.83 compiler in this image.
+uuid = { version = "=1.11.0", features = ["v5"] }
 
 [dev-dependencies]
 base64 = "0.22"

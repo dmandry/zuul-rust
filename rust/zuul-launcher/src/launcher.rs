@@ -12,7 +12,7 @@ use crate::model::{
     UPLOAD_STATES,
 };
 use crate::nodescan::{NodescanRequest, NodescanWorker};
-use crate::provider::{AdvanceError, Provider, StateMachine};
+use crate::provider::{AdvanceError, Provider, StateMachine, StaticNodeConfig};
 use crate::upload::{PlannedJob, UploadArgs, UploadPlanner};
 use crate::workers::{
     matching_endpoints, CleanupWorker, EndpointRef, StatsWorker, UploadPools,
@@ -216,6 +216,9 @@ impl Launcher {
                 self.mark_self_running();
                 self.persist_running_component();
             }
+            // Launcher.updateTenantProviders: register/deregister static
+            // hosts after providers are reloaded.
+            self.register_and_deregister_static_nodes();
         }
         self.layout_dirty = false;
         Ok(updated)
@@ -504,7 +507,7 @@ impl Launcher {
                 {
                     existing
                 } else {
-                    match self.request_node(provider.as_ref(), &label, Some(&req)) {
+                    match self.request_node(provider.as_ref(), &label, Some(&req), None) {
                         Ok(created) => created,
                         Err(_) => continue,
                     }
@@ -594,7 +597,7 @@ impl Launcher {
                     return Ok(());
                 }
             }
-            let node_id = self.request_node(provider.as_ref(), &label, Some(&req))?;
+            let node_id = self.request_node(provider.as_ref(), &label, Some(&req), None)?;
             req.add_provider_node(&node_id, label.executor_zone.as_deref());
         }
         if req.provider_node_data().len() == req.labels().len() && !req.labels().is_empty() {
@@ -930,8 +933,34 @@ impl Launcher {
         provider: &dyn Provider,
         label: &crate::provider::Label,
         request: Option<&NodesetRequest>,
+        static_node: Option<&StaticNodeConfig>,
     ) -> Result<String, String> {
-        let id = hex_id();
+        let id = match static_node {
+            Some(sn) => sn.uuid.clone(),
+            None => hex_id(),
+        };
+        let state = if static_node.is_some() {
+            node_state::REGISTERING
+        } else {
+            node_state::REQUESTED
+        };
+        let mut label_aliases = match static_node {
+            Some(sn) => sn.aliases.clone(),
+            None => Vec::new(),
+        };
+        for alias in &label.aliases {
+            if !label_aliases.iter().any(|a| a == alias) {
+                label_aliases.push(alias.clone());
+            }
+        }
+        let connection_port = match static_node {
+            Some(sn) => sn.connection_port,
+            None => label.connection_port,
+        };
+        let username = match static_node {
+            Some(sn) => sn.username.clone(),
+            None => label.username.clone(),
+        };
         let quota = self
             .cloud_label_quota(provider, label)
             .unwrap_or_else(|| provider.quota_for_label(label));
@@ -941,12 +970,12 @@ impl Launcher {
             m.insert(k.into(), v);
         };
         set(&mut fields, "uuid", json!(id));
-        set(&mut fields, "state", json!(node_state::REQUESTED));
+        set(&mut fields, "state", json!(state));
         set(&mut fields, "state_time", json!(now));
         set(&mut fields, "request_time", json!(now));
         set(&mut fields, "label", json!(label.name));
         set(&mut fields, "label_config_hash", json!(label.config_hash));
-        set(&mut fields, "label_aliases", json!(label.aliases));
+        set(&mut fields, "label_aliases", json!(label_aliases));
         let tags = if cloud::enabled() {
             cloud::invoke(
                 "node_tags",
@@ -1000,7 +1029,11 @@ impl Launcher {
         set(
             &mut fields,
             "connection_port",
-            attr("connection_port").unwrap_or_else(|| json!(label.connection_port)),
+            if static_node.is_some() {
+                json!(connection_port)
+            } else {
+                attr("connection_port").unwrap_or_else(|| json!(connection_port))
+            },
         );
         set(
             &mut fields,
@@ -1017,9 +1050,13 @@ impl Launcher {
         set(
             &mut fields,
             "username",
-            attr("username").unwrap_or_else(|| {
-                label.username.clone().map(|s| json!(s)).unwrap_or(Value::Null)
-            }),
+            if static_node.is_some() {
+                username.map(|s| json!(s)).unwrap_or(Value::Null)
+            } else {
+                attr("username").unwrap_or_else(|| {
+                    username.map(|s| json!(s)).unwrap_or(Value::Null)
+                })
+            },
         );
         set(
             &mut fields,
@@ -1682,7 +1719,7 @@ impl Launcher {
         for (tenant, label_name, provider_cname) in slots {
             let Some(provider) = self.provider_by_cname(&tenant, &provider_cname) else { continue };
             let Some(label) = provider.labels().get(&label_name).cloned() else { continue };
-            let _ = self.request_node(provider.as_ref(), &label, None);
+            let _ = self.request_node(provider.as_ref(), &label, None, None);
         }
     }
 
@@ -1815,6 +1852,58 @@ impl Launcher {
         let stored = self.api.nodes.get(node_id).cloned();
         if let Some(n) = stored {
             let _ = self.api.write_node(&n);
+        }
+    }
+
+    /// `_registerStaticNodes` / `_deRegisterStaticNodes` after a layout reload.
+    fn register_and_deregister_static_nodes(&mut self) {
+        let providers: Vec<Arc<dyn Provider>> = self
+            .tenant_providers
+            .values()
+            .flat_map(|list| list.iter().cloned())
+            .filter(|p| p.driver_name() == "static")
+            .filter(|p| self.connection_allowed(p.connection_name()))
+            .collect();
+        for provider in providers {
+            self.register_static_nodes(provider.as_ref());
+            self.deregister_static_nodes(provider.as_ref());
+        }
+    }
+
+    fn register_static_nodes(&mut self, provider: &dyn Provider) {
+        let nodes: Vec<StaticNodeConfig> = provider.static_nodes().values().cloned().collect();
+        for static_node in nodes {
+            if self.api.nodes.contains_key(&static_node.uuid) {
+                continue;
+            }
+            let Some(label) = provider.labels().get(&static_node.label).cloned() else {
+                continue;
+            };
+            // NodeExistsError is ignored in Python; a concurrent create is fine.
+            let _ = self.request_node(provider, &label, None, Some(&static_node));
+        }
+    }
+
+    fn deregister_static_nodes(&mut self, provider: &dyn Provider) {
+        let known: HashSet<String> = provider.static_nodes().keys().cloned().collect();
+        let cname = provider.canonical_name().to_string();
+        let stale: Vec<String> = self
+            .api
+            .nodes
+            .values()
+            .filter(|n| n.provider() == cname)
+            .filter(|n| !known.contains(&n.uuid()))
+            .filter(|n| {
+                n.main_node_id()
+                    .map(|main| !known.contains(&main))
+                    .unwrap_or(true)
+            })
+            .map(|n| n.uuid())
+            .collect();
+        for id in stale {
+            self.messages
+                .push(format!("Deregistering static node {id}"));
+            self.set_node_state(&id, node_state::DEREGISTER);
         }
     }
 

@@ -11,6 +11,36 @@ use crate::endpoint;
 use crate::model::{ProviderNode, QuotaInformation};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
+use uuid::Uuid;
+
+/// Namespace for static node UUIDs from zuul/driver/static/staticprovider.py.
+pub const STATIC_NODE_NAMESPACE: Uuid =
+    Uuid::from_u128(0x913b8645_cc07_4e1c_88e6_7ba14fdd286f);
+
+/// Deterministic uuid5 hex matching Python `uuid.uuid5(NODE_NAMESPACE, key).hex`.
+pub fn static_node_uuid(
+    canonical_name: &str,
+    host: &str,
+    connection_port: i64,
+    username: Option<&str>,
+) -> String {
+    let username = username.unwrap_or("None");
+    let key = format!("{canonical_name} {host} {connection_port} {username}");
+    Uuid::new_v5(&STATIC_NODE_NAMESPACE, key.as_bytes())
+        .as_simple()
+        .to_string()
+}
+
+/// A configured static host from the provider `nodes` list.
+#[derive(Clone, Debug)]
+pub struct StaticNodeConfig {
+    pub uuid: String,
+    pub label: String,
+    pub host: String,
+    pub connection_port: i64,
+    pub username: Option<String>,
+    pub aliases: Vec<String>,
+}
 
 #[derive(Clone, Debug)]
 pub struct Label {
@@ -168,6 +198,12 @@ pub trait Provider: Send + Sync {
         Ok(self.endpoint().unmanaged.copy())
     }
     fn notify_nodescan_failure(&self, _node: &ProviderNode) {}
+    /// Static provider hosts keyed by uuid5 node id. Empty for other drivers.
+    fn static_nodes(&self) -> &BTreeMap<String, StaticNodeConfig> {
+        static EMPTY: std::sync::OnceLock<BTreeMap<String, StaticNodeConfig>> =
+            std::sync::OnceLock::new();
+        EMPTY.get_or_init(BTreeMap::new)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -2142,6 +2178,7 @@ pub struct CloudProvider {
     pub resource_limits: BTreeMap<String, f64>,
     pub region: Option<String>,
     pub options: BTreeMap<String, String>,
+    pub static_nodes: BTreeMap<String, StaticNodeConfig>,
 }
 
 impl Provider for CloudProvider {
@@ -2162,18 +2199,28 @@ impl Provider for CloudProvider {
         q
     }
     fn can_reuse(&self, node: &ProviderNode) -> bool {
-        // Static defaults reuse True; the others default False.
+        // StaticProvider.canReuseNode: only nodes still in provider.nodes.
         if self.driver_name == "static" {
-            node.reuse_flag()
-        } else {
-            node.reuse_flag()
+            let uuid = node.main_node_id().unwrap_or_else(|| node.uuid());
+            return self.static_nodes.contains_key(&uuid);
         }
+        node.reuse_flag()
+    }
+    fn static_nodes(&self) -> &BTreeMap<String, StaticNodeConfig> {
+        &self.static_nodes
     }
     fn create_machine(&self, node: &ProviderNode, label: &Label) -> Box<dyn StateMachine> {
+        if self.driver_name == "static" {
+            let mut sm = StaticCreate::new();
+            if let Some(sn) = self.static_nodes.get(&node.uuid()) {
+                sm.ip = Some(sn.host.clone());
+            }
+            return Box::new(sm);
+        }
         if self.driver_name == "aws" {
             return Box::new(AwsCreate::from_provider(self, node, label));
         }
-        if cloud::enabled() && self.driver_name != "static" {
+        if cloud::enabled() {
             return Box::new(RemoteMachine::new(
                 "create",
                 &self.driver_name,
@@ -2402,6 +2449,69 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         .and_then(|m| m.get("launch-timeout").or_else(|| m.get("launch_timeout")))
         .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
         .or(Some(600.0));
+    // StaticProvider.parseConfig: uuid5 from canonical + host + port + user.
+    let mut static_nodes = BTreeMap::new();
+    if driver == "static" {
+        if let Some(list) = obj.and_then(|m| m.get("nodes")).and_then(|v| v.as_array()) {
+            for item in list {
+                let Some(host) = item.get("name").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let Some(label_name) = item.get("label").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let label = labels.get(label_name);
+                let image = label
+                    .and_then(|l| l.image.as_ref())
+                    .and_then(|name| images.get(name));
+                let mut connection_port =
+                    json_i64_field(item, &["connection-port", "connection_port"]);
+                let mut username = item
+                    .get("username")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                // StaticNodeConfig.inheritFrom(image, flavor): fill nulls.
+                if connection_port.is_none() {
+                    connection_port = label
+                        .map(|l| l.connection_port)
+                        .or_else(|| image.and_then(|i| i.connection_port));
+                }
+                if username.is_none() {
+                    username = label
+                        .and_then(|l| l.username.clone())
+                        .or_else(|| image.and_then(|i| i.username.clone()));
+                }
+                // StaticProviderImage defaults connection_port to 22.
+                let connection_port = connection_port.unwrap_or(22);
+                let aliases = item
+                    .get("aliases")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let uuid = static_node_uuid(
+                    canonical,
+                    host,
+                    connection_port,
+                    username.as_deref(),
+                );
+                static_nodes.insert(
+                    uuid.clone(),
+                    StaticNodeConfig {
+                        uuid,
+                        label: label_name.to_string(),
+                        host: host.to_string(),
+                        connection_port,
+                        username,
+                        aliases,
+                    },
+                );
+            }
+        }
+    }
     CloudProvider {
         name,
         canonical_name: canonical.into(),
@@ -2422,6 +2532,7 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         resource_limits,
         region,
         options: BTreeMap::new(),
+        static_nodes,
     }
 }
 
@@ -2440,4 +2551,78 @@ fn json_i64_field(item: &Value, keys: &[&str]) -> Option<i64> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_node_uuid5_matches_python() {
+        // Python: uuid.uuid5(NODE_NAMESPACE, key).hex
+        assert_eq!(
+            static_node_uuid("tenant/static-provider", "host.example.com", 22, Some("zuul")),
+            "0d6392cb7c6f53b2bbda6aaa8b5904fe"
+        );
+        assert_eq!(
+            static_node_uuid("tenant-a/static", "host1", 22, Some("zuul")),
+            "072a1749be0c5ae2a7223de6f946dbce"
+        );
+        // str(None) in Python when username is missing.
+        assert_eq!(
+            static_node_uuid("org/p/static", "n1", 22, None),
+            Uuid::new_v5(
+                &STATIC_NODE_NAMESPACE,
+                b"org/p/static n1 22 None"
+            )
+            .as_simple()
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn parse_static_provider_nodes() {
+        let config = json!({
+            "name": "static-main",
+            "images": [{
+                "name": "debian",
+                "type": "cloud",
+                "username": "debian",
+                "connection-port": 22
+            }],
+            "labels": [{
+                "name": "debian-normal",
+                "image": "debian",
+                "config_hash": "abc",
+                "reuse": true
+            }],
+            "nodes": [{
+                "name": "host.example.com",
+                "label": "debian-normal",
+                "aliases": ["special"]
+            }]
+        });
+        let provider = parse_provider_config(
+            "static",
+            "static-conn",
+            "org/project/static-main",
+            &config,
+        );
+        assert_eq!(provider.static_nodes.len(), 1);
+        let node = provider.static_nodes.values().next().unwrap();
+        assert_eq!(node.host, "host.example.com");
+        assert_eq!(node.label, "debian-normal");
+        assert_eq!(node.connection_port, 22);
+        assert_eq!(node.username.as_deref(), Some("debian"));
+        assert_eq!(node.aliases, vec!["special".to_string()]);
+        assert_eq!(
+            node.uuid,
+            static_node_uuid(
+                "org/project/static-main",
+                "host.example.com",
+                22,
+                Some("debian")
+            )
+        );
+    }
 }
