@@ -747,6 +747,7 @@ def cloud_call(launcher, op, payload):
             "upload.artifact_job",
             "cleanup.tick",
             "snapshot.advance",
+            "snapshot.sm_advance",
         ):
             # These adapters log their own exception() with the original
             # stack (Error in endpoint upload job / cleanup worker / …)
@@ -2069,21 +2070,27 @@ def _upload_job_run(launcher, data):
                         launcher.log.exception(
                             "Error in endpoint upload job"
                         )
-                    # Match UploadJob.finalizeUpload
-                    with upload.activeContext(ctx):
-                        if upload.external_id:
-                            upload.state = upload.State.READY
-                        elif upload.attempt < 2:
-                            upload.copy(ctx)
-                            upload.state = upload.State.DELETING
-                            launcher.upload_deleted_event.set()
-                        else:
-                            upload.state = upload.State.FAILED
-                    if (
-                        not upload.validated
-                        and upload.state == upload.State.READY
-                    ):
-                        launcher.addImageValidateEvent(upload)
+                    # Match UploadJob.finalizeUpload (catch BadVersion etc.).
+                    try:
+                        upload.refresh(ctx)
+                        with upload.activeContext(ctx):
+                            if upload.external_id:
+                                upload.state = upload.State.READY
+                            elif upload.attempt < 2:
+                                upload.copy(ctx)
+                                upload.state = upload.State.DELETING
+                                launcher.upload_deleted_event.set()
+                            else:
+                                upload.state = upload.State.FAILED
+                        if (
+                            not upload.validated
+                            and upload.state == upload.State.READY
+                        ):
+                            launcher.addImageValidateEvent(upload)
+                    except Exception:
+                        launcher.log.exception(
+                            "Unable to update state for %s", upload
+                        )
             except LockException:
                 launcher.image_updated_event.set()
                 return {"locked": False, "external_id": None}
