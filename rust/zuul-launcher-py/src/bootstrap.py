@@ -2775,9 +2775,33 @@ def _class_attr(data):
 
 def _matching_requests(launcher):
     # getMatchingRequests applies launcher_score, which unit tests patch.
-    # The Rust scorer cannot see that patch. Deduplicate: Python's
-    # hasLock short-circuit can yield the same request twice when
-    # hasLock is set but is_locked is still false.
+    # The Rust scorer cannot see that patch.
+    #
+    # Preload any ZooKeeper request children missing from the Python
+    # cache so two requests created just before wake
+    # (test_launcher_request_order) are both scored in one
+    # process_requests pass. Do not call _walkTree/waitForSync here:
+    # matching_requests runs under Python::with_gil from the Rust
+    # thread, and those would deadlock the cache event worker.
+    from zuul.model import NodesetRequest
+    from zuul.zk.zkobject import ZKContext
+
+    try:
+        client = launcher.zk_client.client
+        ctx = ZKContext(
+            launcher.zk_client, None, launcher.stop_event, launcher.log
+        )
+        for uuid in client.get_children("/zuul/nodeset/requests"):
+            if launcher.api.requests_cache.getItem(uuid) is not None:
+                continue
+            try:
+                path = NodesetRequest._getPath(uuid)
+                req = NodesetRequest.fromZK(ctx, path=path)
+                launcher.api.requests_cache.setItem(uuid, req)
+            except Exception:
+                pass
+    except Exception:
+        pass
     seen = set()
     ids = []
     for request in launcher.api.getMatchingRequests():

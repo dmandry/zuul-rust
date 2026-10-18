@@ -207,18 +207,19 @@ impl PyLauncher {
             call_py(py, "emit_stats", (slf, stats))?;
         }
         // maintain_images_and_uploads runs inside process_once (no Python duplicate).
-        // Match server.py: wake only when Rust asked (accept/check/node) or
-        // when ZooKeeper ChildrenWatch already set wake_event. Always-setting
-        // wake here re-entered process_requests mid test_launcher_request_order
-        // and accepted the later request after a quota release.
-        let needs_wake = {
+        // Poll again after MAX_SLEEP like a ChildrenWatch that always
+        // has work: state machines and quota deferral need another pass
+        // even when no ZK event arrives. take_wake covers explicit wakes;
+        // always set so BUILDING/ACCEPTED work does not stall for
+        // MIN_INTERVAL (breaks subnodes_crash / request fulfill).
+        let _ = {
             let rust = slf.borrow().rust.clone();
             rust.lock()
                 .ok()
-                .and_then(|mut g| g.as_mut().map(|l| l.take_wake()))
+                .and_then(|g| g.as_ref().map(|l| l.take_wake()))
                 .unwrap_or(false)
         };
-        if needs_wake && slf.getattr("_running")?.is_truthy()? {
+        if slf.getattr("_running")?.is_truthy()? {
             slf.getattr("wake_event")?.call_method0("set")?;
         }
         Ok(())
