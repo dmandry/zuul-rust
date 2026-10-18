@@ -845,6 +845,29 @@ impl Launcher {
             let mut usable = Vec::new();
             for p in &providers {
                 let Some(label) = p.labels().get(label_name) else { continue };
+                // Image-validate requests pin a specific ImageUpload; only
+                // providers that host that upload may supply the label
+                // (server.py _selectProviders).
+                if let Some(upload_uuid) = request.image_upload_uuid() {
+                    let image_name = label.image.as_deref().unwrap_or("");
+                    let names = request.image_names();
+                    if !names.is_empty() && names.iter().any(|n| n == image_name) {
+                        let Some(image) = p.images().get(image_name) else {
+                            continue;
+                        };
+                        let image_cname = &image.canonical_name;
+                        let ok = self.api.uploads.values().any(|u| {
+                            u.uuid() == upload_uuid
+                                && u.canonical_name() == *image_cname
+                                && u.providers()
+                                    .iter()
+                                    .any(|pn| pn == p.canonical_name())
+                        });
+                        if !ok {
+                            continue;
+                        }
+                    }
+                }
                 if !self.does_provider_have_quota_for_label(&request.tenant_name(), p.as_ref(), label, false) {
                     continue;
                 }
