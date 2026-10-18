@@ -1309,7 +1309,8 @@ impl Launcher {
                     returned = sub_id.clone();
                 }
                 self.api.write_node(&sub).map_err(|e| e.to_string())?;
-                self.python_cache_insert(sub_id, true);
+                // Assignment before cache_insert so fromZK sees request_id
+                // (test_subnodes_cache_insert asserts one subnode assigned).
                 if slot == 0 {
                     if let Some(req) = request {
                         let assign = json!({
@@ -1320,6 +1321,7 @@ impl Launcher {
                         let _ = self.api.write_assignment(sub_id, &assign);
                     }
                 }
+                self.python_cache_insert(sub_id, true);
             }
             return Ok(returned);
         }
@@ -1328,7 +1330,6 @@ impl Launcher {
             node.request_id = Some(req.uuid());
         }
         self.api.write_node(&node).map_err(|e| e.to_string())?;
-        self.python_cache_insert(&id, false);
         if let Some(req) = request {
             let assign = json!({
                 "request_id": req.uuid(),
@@ -1337,6 +1338,7 @@ impl Launcher {
             });
             let _ = self.api.write_assignment(&id, &assign);
         }
+        self.python_cache_insert(&id, false);
         Ok(id)
     }
 
