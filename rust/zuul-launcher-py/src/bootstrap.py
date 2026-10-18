@@ -1986,7 +1986,9 @@ def _upload_job_run(launcher, data):
                 os.unlink(path)
             except Exception:
                 launcher.log.exception("Unable to delete %s", path)
-    # Dependent copies (same config hash) only after a successful source.
+    # Dependent copies after a successful source. If the source failed,
+    # finalize leftovers like UploadJob's unused-lock loop so skipped
+    # copy targets become DELETING/FAILED instead of stuck PENDING.
     if external_id:
         for dep_uuid in dependents:
             try:
@@ -2000,12 +2002,48 @@ def _upload_job_run(launcher, data):
                 )
             except Exception:
                 launcher.log.exception("Dependent copy %s failed", dep_uuid)
+    else:
+        for dep_uuid in dependents:
+            try:
+                _finalize_failed_upload(launcher, dep_uuid)
+            except Exception:
+                launcher.log.exception(
+                    "Unable to finalize dependent upload %s", dep_uuid
+                )
     launcher.wake_event.set()
     return {
         "external_id": external_id,
         "state": getattr(upload, "state", None),
         "locked": True,
     }
+
+
+def _finalize_failed_upload(launcher, upload_uuid):
+    """finalizeUpload for an upload with no external_id (retry or FAILED)."""
+    from zuul.zk.exceptions import LockException
+
+    upload = launcher.image_upload_registry.getItem(upload_uuid)
+    if upload is None:
+        return
+    with launcher.createZKContext(None, launcher.log) as ctx:
+        try:
+            with upload.locked(ctx, blocking=False):
+                upload.refresh(ctx)
+                if upload.external_id or upload.state in (
+                    upload.State.READY,
+                    upload.State.FAILED,
+                    upload.State.DELETING,
+                ):
+                    return
+                with upload.activeContext(ctx):
+                    if upload.attempt < 2:
+                        upload.copy(ctx)
+                        upload.state = upload.State.DELETING
+                        launcher.upload_deleted_event.set()
+                    else:
+                        upload.state = upload.State.FAILED
+        except LockException:
+            launcher.image_updated_event.set()
 
 
 def _upload_download(launcher, iba):
