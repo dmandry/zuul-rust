@@ -2357,20 +2357,6 @@ impl Launcher {
             }
             pending.push(*upload);
             let provider_name = upload.providers().first().cloned().unwrap_or_default();
-            let mut methods = Vec::new();
-            if let Some(provider) = self.provider_by_any_cname(&provider_name) {
-                if provider.import_job("") {
-                    methods.push("import".into());
-                }
-                if provider.copy_job("") {
-                    methods.push("copy".into());
-                }
-                if provider.upload_job() {
-                    methods.push("upload".into());
-                }
-            } else {
-                methods.push("upload".into());
-            }
             let artifact = self.api.artifacts.get(&upload.artifact_uuid());
             let url = artifact
                 .and_then(|a| a.fields.get("url").and_then(|v| v.as_str()))
@@ -2380,6 +2366,22 @@ impl Launcher {
                 .and_then(|a| a.fields.get("format").and_then(|v| v.as_str()))
                 .unwrap_or("")
                 .to_string();
+            let mut methods = Vec::new();
+            if let Some(provider) = self.provider_by_any_cname(&provider_name) {
+                // Pass the real artifact URL so AWS import is only planned
+                // for s3:// or arn: (matches getImageImportJob).
+                if provider.import_job(&url) {
+                    methods.push("import".into());
+                }
+                if provider.copy_job(provider.driver_name()) {
+                    methods.push("copy".into());
+                }
+                if provider.upload_job() {
+                    methods.push("upload".into());
+                }
+            } else {
+                methods.push("upload".into());
+            }
             args.insert(
                 upload.uuid(),
                 UploadArgs {

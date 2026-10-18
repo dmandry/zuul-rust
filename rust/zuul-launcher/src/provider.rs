@@ -3825,8 +3825,13 @@ impl Provider for CloudProvider {
             _ => driver_delete(&self.driver_name),
         }
     }
-    fn import_job(&self, _url: &str) -> bool {
-        matches!(self.driver_name.as_str(), "aws" | "openstack")
+    fn import_job(&self, url: &str) -> bool {
+        // Match AwsProviderEndpoint.getImageImportJob: only s3:// or arn:
+        // URLs can import. OpenStack has no import job implementation.
+        match self.driver_name.as_str() {
+            "aws" => url.starts_with("s3://") || url.starts_with("arn:"),
+            _ => false,
+        }
     }
     fn copy_job(&self, source_driver: &str) -> bool {
         source_driver == self.driver_name && matches!(self.driver_name.as_str(), "aws" | "openstack")
