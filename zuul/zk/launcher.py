@@ -442,7 +442,6 @@ class LauncherApi:
             if request.hasLock():
                 # We are holding a lock, so short-circuit here.
                 yield request
-                continue
             if request.is_locked:
                 # Request is locked by someone else
                 continue

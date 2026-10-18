@@ -491,12 +491,8 @@ impl Launcher {
     /// Accept one REQUESTED nodeset by uuid. Used by the PyO3
     /// `_acceptRequest` hook so patches wrap Rust accept logic.
     pub fn accept_request_by_uuid(&mut self, uuid: &str) -> Result<(), String> {
-        // Reload nodes from ZK after the unittest `_acceptRequest` patch
-        // point so a mid-wait node release (test_launcher_request_order)
-        // is visible to get_quota. Endpoint limits stay cached.
-        if cloud::enabled() {
-            self.api.sync();
-        }
+        // Caller (PyO3 _acceptRequest) syncs after the unittest patch
+        // point so a mid-wait node release is visible to get_quota.
         let Some(req) = self.api.requests.get(uuid).cloned() else {
             return Err(format!("missing request {uuid}"));
         };
