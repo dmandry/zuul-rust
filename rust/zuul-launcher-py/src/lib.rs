@@ -69,6 +69,22 @@ impl PyLauncher {
         Ok(())
     }
 
+    /// Inject getProviderQuota payloads into the Rust cache (accept_one).
+    fn seed_quota_cache(slf: &Bound<'_, Self>, payload: String) -> PyResult<()> {
+        let rust = slf.borrow().rust.clone();
+        if let Some(ptr) = zuul_launcher::cloud::active_launcher() {
+            let launcher =
+                unsafe { &mut *(ptr as *mut zuul_launcher::launcher::Launcher) };
+            launcher.seed_quota_cache_from_json(&payload);
+            return Ok(());
+        }
+        let mut guard = rust.lock().unwrap();
+        if let Some(launcher) = guard.as_mut() {
+            launcher.seed_quota_cache_from_json(&payload);
+        }
+        Ok(())
+    }
+
     /// Stop Rust cleanup / stats / upload pools (called from bootstrap.stop).
     fn stop_rust_workers(slf: &Bound<'_, Self>) -> PyResult<()> {
         let rust = slf.borrow().rust.clone();

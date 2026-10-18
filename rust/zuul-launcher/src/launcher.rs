@@ -446,6 +446,23 @@ impl Launcher {
         self.accept_pending = pending;
     }
 
+    /// Replace the provider_quota cache from a JSON object of
+    /// `{canonical_name: {"default": ..., "quota": {...}}}`. Used by
+    /// accept_one to inject getProviderQuota (limits minus unmanaged)
+    /// without a nested cloud::invoke during accept.
+    pub fn seed_quota_cache_from_json(&mut self, payload: &str) {
+        let Ok(value) = serde_json::from_str::<Value>(payload) else {
+            return;
+        };
+        let Some(obj) = value.as_object() else {
+            return;
+        };
+        for (name, entry) in obj {
+            let q = cloud::quota_from_payload(entry);
+            self.quota_cache.insert(name.clone(), (q, self.now));
+        }
+    }
+
     /// Accept one REQUESTED nodeset by uuid. Used by the PyO3
     /// `_acceptRequest` hook so patches wrap Rust accept logic.
     pub fn accept_request_by_uuid(&mut self, uuid: &str) -> Result<(), String> {
@@ -918,24 +935,10 @@ impl Launcher {
         label: &crate::provider::Label,
         include_usage: bool,
     ) -> bool {
-        // Unmanaged usage lives on the Python endpoint quota_cache until
-        // Rust CleanupWorker records it. Ask Python for the boolean while
-        // that remains true; the decision still follows 14.3.0 order.
-        if cloud::enabled() {
-            if let Ok(value) = cloud::invoke(
-                "quota_for_label",
-                &json!({
-                    "provider": provider.canonical_name(),
-                    "label": label.name,
-                    "tenant": tenant,
-                    "include_usage": include_usage,
-                }),
-            ) {
-                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
-                    return ok;
-                }
-            }
-        }
+        let _ = tenant;
+        // Prefer the seeded/refreshed provider_quota cache (includes
+        // unmanaged usage). Nested quota_for_label cloud calls from
+        // inside accept_one are unreliable; accept_one seeds the cache.
         let mut total = if include_usage {
             let Some(mut total) = self.provider_quota_available(provider, true) else {
                 return false;
@@ -986,19 +989,6 @@ impl Launcher {
     }
 
     pub fn does_provider_have_quota_for_node(&self, provider: &dyn Provider, node: &ProviderNode) -> bool {
-        if cloud::enabled() {
-            if let Ok(value) = cloud::invoke(
-                "quota_for_node",
-                &json!({
-                    "provider": provider.canonical_name(),
-                    "uuid": node.uuid(),
-                }),
-            ) {
-                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
-                    return ok;
-                }
-            }
-        }
         let Some(mut total) = self.provider_quota_available(provider, false) else {
             return false;
         };

@@ -2353,6 +2353,24 @@ def _accept_one(launcher, data):
                         "NodesetRequestProcessing"
                     )
                 )
+        # Seed Rust provider_quota cache with getProviderQuota (endpoint
+        # limits minus unmanaged) before accept. Nested cloud::invoke of
+        # quota_for_label from inside accept_request cannot see the
+        # CleanupWorker update reliably; this avoids that nest.
+        import json as _json
+
+        payloads = {}
+        for providers in launcher.tenant_providers.values():
+            for provider in providers:
+                try:
+                    q = call_launcher(launcher, "getProviderQuota", provider)
+                    payloads[provider.canonical_name] = _quota_payload(q)
+                except Exception:
+                    launcher.log.exception(
+                        "Unable to seed quota for %s", provider.canonical_name
+                    )
+        if payloads:
+            launcher.seed_quota_cache(_json.dumps(payloads))
         # unassigned/pending are unused by the Rust-backed method; pass
         # placeholders so patched wrappers that forward *args still work.
         unassigned = call_launcher(launcher, "_getUnassignedNodes")
