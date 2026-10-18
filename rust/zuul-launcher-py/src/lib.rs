@@ -60,11 +60,12 @@ impl PyLauncher {
     }
 
     /// Start Rust cleanup / stats / upload pools (called from bootstrap.start).
-    fn start_rust_workers(slf: &Bound<'_, Self>) -> PyResult<()> {
+    #[pyo3(signature = (start_cleanup = true))]
+    fn start_rust_workers(slf: &Bound<'_, Self>, start_cleanup: bool) -> PyResult<()> {
         let rust = slf.borrow().rust.clone();
         let mut guard = rust.lock().unwrap();
         if let Some(launcher) = guard.as_mut() {
-            launcher.start_workers();
+            launcher.start_workers(start_cleanup);
         }
         Ok(())
     }

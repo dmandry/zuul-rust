@@ -78,7 +78,11 @@ except Exception:
 def bootstrap(launcher, config, connections, hostname):
     _record_original_sms()
     launcher._running = True
-    launcher._start_cleanup = True
+    # Default matches server.Launcher; tests.base createLauncher sets
+    # False so unit tests do not run leaked-resource cleanup (moto has
+    # no describe_import_snapshot_tasks).
+    if not hasattr(launcher, "_start_cleanup"):
+        launcher._start_cleanup = True
     launcher.config = config
     launcher.connections = connections
     filter_string = get_default(config, "launcher", "connection_filter")
@@ -397,9 +401,11 @@ def start(launcher):
     launcher.launcher_thread.start()
     # Cleanup, stats election, and the 1/10/20 upload pools run in Rust.
     # Do not start Python cleanup_worker / stats_thread (avoids double
-    # stats election). Tests may still call cleanup_worker.start()/_run().
+    # stats election). Honor _start_cleanup like server.py start().
     launcher.log.debug("Starting rust workers")
-    launcher.start_rust_workers()
+    launcher.start_rust_workers(start_cleanup=bool(
+        getattr(launcher, "_start_cleanup", True)
+    ))
     # Match MonitoringThreadPoolExecutor.__init__ emitting gauge 0.
     _emit_upload_workers_gauge(launcher, 0)
 

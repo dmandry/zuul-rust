@@ -2131,26 +2131,31 @@ impl Launcher {
         self.stats.push(StatEvent { kind: "g".into(), name: "zuul.nodes.unmanaged".into(), value: unmanaged as f64 });
     }
 
-    /// Start cleanup, stats election, and upload pools (server.py start).
-    pub fn start_workers(&mut self) {
-        if self.cleanup_worker.is_some() {
+    /// Start cleanup (optional), stats election, and upload pools (server.py start).
+    ///
+    /// `start_cleanup` matches Launcher._start_cleanup: unit tests set it
+    /// False so leaked-resource cleanup does not run under moto.
+    pub fn start_workers(&mut self, start_cleanup: bool) {
+        if self.stats_worker.is_some() {
             return;
         }
-        let cleanup_shared = Arc::new(Mutex::new(CleanupShared {
-            hostname: self.hostname.clone(),
-            components: self.api.components.clone(),
-            endpoints: self.endpoint_refs(),
-        }));
-        self.cleanup_shared = Some(cleanup_shared.clone());
-        self.cleanup_worker = Some(CleanupWorker::start(move || {
-            let shared = cleanup_shared.lock().unwrap().clone();
-            let matched =
-                matching_endpoints(&shared.hostname, &shared.components, &shared.endpoints);
-            let _ = matched;
-            if cloud::enabled() {
-                let _ = cloud::invoke("cleanup.tick", &json!({}));
-            }
-        }));
+        if start_cleanup && self.cleanup_worker.is_none() {
+            let cleanup_shared = Arc::new(Mutex::new(CleanupShared {
+                hostname: self.hostname.clone(),
+                components: self.api.components.clone(),
+                endpoints: self.endpoint_refs(),
+            }));
+            self.cleanup_shared = Some(cleanup_shared.clone());
+            self.cleanup_worker = Some(CleanupWorker::start(move || {
+                let shared = cleanup_shared.lock().unwrap().clone();
+                let matched =
+                    matching_endpoints(&shared.hostname, &shared.components, &shared.endpoints);
+                let _ = matched;
+                if cloud::enabled() {
+                    let _ = cloud::invoke("cleanup.tick", &json!({}));
+                }
+            }));
+        }
 
         let snapshot = Arc::new(Mutex::new(StatsSnapshot::default()));
         self.stats_snapshot = Some(snapshot.clone());
