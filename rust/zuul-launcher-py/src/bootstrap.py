@@ -2638,13 +2638,7 @@ def _image_attrs(launcher, data):
 
 
 def _provider_quota(launcher, data):
-    # Drop this provider's TTL entry so accept_request_by_uuid (after the
-    # `_acceptRequest` patch point) sees current unmanaged usage when a
-    # node is released mid-accept (test_launcher_request_order).
     provider = _find_provider(launcher, data["provider"])
-    cache = getattr(launcher, "_provider_quota_cache", None)
-    if cache is not None:
-        cache.pop(provider.canonical_name, None)
     return _quota_payload(call_launcher(launcher, "getProviderQuota", provider))
 
 
@@ -2776,46 +2770,7 @@ def _class_attr(data):
 def _matching_requests(launcher):
     # getMatchingRequests applies launcher_score, which unit tests patch.
     # The Rust scorer cannot see that patch.
-    #
-    # Preload ZooKeeper request children missing from the Python cache
-    # so two requests created just before wake (test_launcher_request_order)
-    # are both scored in one process_requests pass. Do not call
-    # _walkTree/waitForSync (GIL + cache worker deadlock).
-    from zuul.model import NodesetRequest
-    from zuul.zk.zkobject import ZKContext
-
-    try:
-        ctx = ZKContext(
-            launcher.zk_client, None, launcher.stop_event, launcher.log
-        )
-        for uuid in launcher.zk_client.client.get_children(
-            "/zuul/nodeset/requests"
-        ):
-            if launcher.api.requests_cache.getItem(uuid) is not None:
-                continue
-            try:
-                req = NodesetRequest.fromZK(
-                    ctx, path=NodesetRequest._getPath(uuid)
-                )
-                launcher.api.requests_cache.setItem(uuid, req)
-            except Exception:
-                launcher.log.debug(
-                    "matching_requests: unable to preload %s", uuid,
-                    exc_info=True,
-                )
-    except Exception:
-        launcher.log.debug(
-            "matching_requests: unable to list ZK requests", exc_info=True
-        )
-
-    seen = set()
-    ids = []
-    for request in launcher.api.getMatchingRequests():
-        if request.uuid in seen:
-            continue
-        seen.add(request.uuid)
-        ids.append(request.uuid)
-    return {"ids": ids}
+    return {"ids": [request.uuid for request in launcher.api.getMatchingRequests()]}
 
 
 def _matching_nodes(launcher):
@@ -2894,13 +2849,31 @@ def _accept_one(launcher, data):
                         "NodesetRequestProcessing"
                     )
                 )
-        # Do not seed quota here: test_launcher_request_order patches
-        # `_acceptRequest` and releases a node while blocked inside that
-        # method. Seeding before the call would leave a stale "at quota"
-        # cache. accept_request_by_uuid refreshes after the patch point.
-        # Clear the Python TTL cache so that refresh sees live unmanaged.
+        # Seed Rust provider_quota cache with fresh endpoint limits minus
+        # unmanaged. Bypass _provider_quota_cache: a concurrent refresh
+        # between the test's cache.clear() and CleanupWorker._run() can
+        # leave a stale empty-unmanaged entry for 300s.
+        import json as _json
+
+        payloads = {}
         if getattr(launcher, "_provider_quota_cache", None) is not None:
             launcher._provider_quota_cache.clear()
+        for providers in launcher.tenant_providers.values():
+            for provider in providers:
+                try:
+                    q = call_launcher(launcher, "getProviderQuota", provider)
+                    payload = _quota_payload(q)
+                    # Index under every name Rust might use for lookup.
+                    payloads[provider.canonical_name] = payload
+                    payloads[provider.name] = payload
+                    ep = provider.getEndpoint()
+                    payloads[ep.canonical_name] = payload
+                except Exception:
+                    launcher.log.exception(
+                        "Unable to seed quota for %s", provider.canonical_name
+                    )
+        if payloads:
+            launcher.seed_quota_cache(_json.dumps(payloads))
         # unassigned/pending are unused by the Rust-backed method; pass
         # placeholders so patched wrappers that forward *args still work.
         unassigned = call_launcher(launcher, "_getUnassignedNodes")

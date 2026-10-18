@@ -207,18 +207,8 @@ impl PyLauncher {
             call_py(py, "emit_stats", (slf, stats))?;
         }
         // maintain_images_and_uploads runs inside process_once (no Python duplicate).
-        // Poll again after MAX_SLEEP like a ChildrenWatch that always
-        // has work: state machines and quota deferral need another pass
-        // even when no ZK event arrives. take_wake covers explicit wakes;
-        // always set so BUILDING/ACCEPTED work does not stall for
-        // MIN_INTERVAL (breaks subnodes_crash / request fulfill).
-        let _ = {
-            let rust = slf.borrow().rust.clone();
-            rust.lock()
-                .ok()
-                .and_then(|g| g.as_ref().map(|l| l.take_wake()))
-                .unwrap_or(false)
-        };
+        // No ChildrenWatch in this loop, so poll again after MAX_SLEEP
+        // instead of waiting out MIN_INTERVAL.
         if slf.getattr("_running")?.is_truthy()? {
             slf.getattr("wake_event")?.call_method0("set")?;
         }
