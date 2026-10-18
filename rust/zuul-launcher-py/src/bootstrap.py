@@ -2252,14 +2252,16 @@ def _snapshot_sm_advance(launcher, data):
     AwsSnapshotStateMachine.advance applies and okay_tracebacks of
     `_checkNodeSnapshot` still match timeout/error stacks.
     """
-    from zuul.logs import get_annotated_logger
+    from zuul.lib.logutil import get_annotated_logger
 
     _bind_missing_methods(launcher)
     node_uuid = data["node_uuid"]
     node = launcher.api.getProviderNode(node_uuid)
     if node is None:
         return {"skip": True}
-    log = get_annotated_logger(launcher.log, node, request=node.request_id)
+    log = get_annotated_logger(
+        launcher.log, node, request=getattr(node, "request_id", None)
+    )
     launcher._processNodeSnapshot(node, log)
     snapshot = node.snapshot
     return {
