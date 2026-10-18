@@ -5,6 +5,7 @@
 // and zuul/provider/statemachine.py. Driver advance() methods follow the
 // Python call order in each driver's statemachine module.
 
+use crate::cloud;
 use crate::config::quote_plus;
 use crate::model::{ProviderNode, QuotaInformation};
 use serde_json::{json, Map, Value};
@@ -99,6 +100,12 @@ pub trait StateMachine: Send + Sync {
     }
     /// Launcher clock, used by the static delete recycle wait.
     fn set_now(&mut self, _t: f64) {}
+    /// Node fields copied back from a live cloud call.
+    fn node_updates(&self) -> Option<Value> {
+        None
+    }
+    /// Mark the machine complete after an error or a delete timeout.
+    fn fail(&mut self) {}
 }
 
 pub struct EndpointInfo {
@@ -1150,6 +1157,106 @@ impl StateMachine for StaticDelete {
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
 
+/// One step of the Python provider state machine (AwsCreateStateMachine
+/// and the Azure, OpenStack, Kubernetes, and static machines). The PyO3
+/// handler owns the machine so boto3, azul, and the in-process fakes run.
+pub struct LiveMachine {
+    pub kind: String,
+    pub driver: String,
+    pub provider: String,
+    pub node_uuid: String,
+    pub label: String,
+    pub state: String,
+    pub start_time: f64,
+    pub complete: bool,
+    pub interface_ip: Option<String>,
+    pub updates: Option<Value>,
+}
+
+impl LiveMachine {
+    pub fn new(kind: &str, driver: &str, provider: &str, node: &ProviderNode, label: &Label) -> Self {
+        Self {
+            kind: kind.into(),
+            driver: driver.into(),
+            provider: provider.into(),
+            node_uuid: node.uuid(),
+            label: label.name.clone(),
+            state: "start".into(),
+            start_time: 0.0,
+            complete: false,
+            interface_ip: None,
+            updates: None,
+        }
+    }
+}
+
+impl StateMachine for LiveMachine {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        let result = cloud::invoke(
+            "step",
+            &json!({
+                "kind": self.kind,
+                "driver": self.driver,
+                "provider": self.provider,
+                "node_uuid": self.node_uuid,
+                "label": self.label,
+            }),
+        )?;
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result.get("complete").and_then(|v| v.as_bool()).unwrap_or(false);
+        self.interface_ip = result
+            .get("interface_ip")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        self.updates = result.get("node").cloned();
+        Ok(())
+    }
+    fn fail(&mut self) {
+        let result = cloud::invoke(
+            "fail",
+            &json!({
+                "kind": self.kind,
+                "driver": self.driver,
+                "provider": self.provider,
+                "node_uuid": self.node_uuid,
+                "label": self.label,
+            }),
+        );
+        self.complete = true;
+        self.state = "complete".into();
+        if let Ok(value) = result {
+            if let Some(state) = value.get("state").and_then(|v| v.as_str()) {
+                self.state = state.to_string();
+            }
+            self.complete = value.get("complete").and_then(|v| v.as_bool()).unwrap_or(true);
+            self.updates = value.get("node").cloned();
+        }
+    }
+    fn complete(&self) -> bool {
+        self.complete
+    }
+    fn state_name(&self) -> String {
+        self.state.clone()
+    }
+    fn start_time(&self) -> f64 {
+        self.start_time
+    }
+    fn set_start_time(&mut self, t: f64) {
+        self.start_time = t;
+    }
+    fn interface_ip(&self) -> Option<String> {
+        self.interface_ip.clone()
+    }
+    fn node_updates(&self) -> Option<Value> {
+        self.updates.clone()
+    }
+    fn to_dict(&self) -> Value {
+        json!({"state": self.state, "start_time": self.start_time})
+    }
+}
+
 pub fn driver_create(driver: &str) -> Box<dyn StateMachine> {
     match driver {
         "aws" => Box::new(AwsCreate::new(false)),
@@ -1213,7 +1320,16 @@ impl Provider for CloudProvider {
             node.reuse_flag()
         }
     }
-    fn create_machine(&self, _node: &ProviderNode, label: &Label) -> Box<dyn StateMachine> {
+    fn create_machine(&self, node: &ProviderNode, label: &Label) -> Box<dyn StateMachine> {
+        if cloud::enabled() {
+            return Box::new(LiveMachine::new(
+                "create",
+                &self.driver_name,
+                &self.canonical_name,
+                node,
+                label,
+            ));
+        }
         if self.driver_name == "aws" {
             let dedicated = label
                 .flavor
@@ -1231,7 +1347,22 @@ impl Provider for CloudProvider {
         }
         driver_create(&self.driver_name)
     }
-    fn delete_machine(&self, _node: &ProviderNode) -> Box<dyn StateMachine> {
+    fn delete_machine(&self, node: &ProviderNode) -> Box<dyn StateMachine> {
+        if cloud::enabled() {
+            let label_name = node.label();
+            let label = self
+                .labels
+                .get(&label_name)
+                .cloned()
+                .unwrap_or_else(|| default_label(&label_name, false));
+            return Box::new(LiveMachine::new(
+                "delete",
+                &self.driver_name,
+                &self.canonical_name,
+                node,
+                &label,
+            ));
+        }
         driver_delete(&self.driver_name)
     }
     fn import_job(&self, _url: &str) -> bool {

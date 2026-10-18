@@ -1,6 +1,7 @@
 // Copyright 2026 Acme Gating, LLC
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod cloud;
 pub mod codec;
 pub mod config;
 pub mod jsonutil;

@@ -681,6 +681,18 @@ impl ProviderNode {
             .unwrap_or_default()
     }
 
+    pub fn merge_fields(&mut self, updates: &Value) {
+        let Some(obj) = updates.as_object() else {
+            return;
+        };
+        for (k, v) in obj {
+            if k == "uuid" || k == "slot" {
+                continue;
+            }
+            self.fields.insert(k.clone(), v.clone());
+        }
+    }
+
     pub fn set_host_keys(&mut self, keys: &[String]) {
         self.fields.insert(
             "host_keys".into(),

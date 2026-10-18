@@ -3,6 +3,7 @@
 //
 // Control flow from zuul/launcher/server.py. Timing constants are unchanged.
 
+use crate::cloud;
 use crate::jsonutil;
 use crate::layout::{self, LayoutState};
 use crate::mmh3;
@@ -53,6 +54,7 @@ pub struct Launcher {
     create_sms: HashMap<String, Box<dyn StateMachine>>,
     delete_sms: HashMap<String, Box<dyn StateMachine>>,
     quota_cache: HashMap<String, (QuotaInformation, f64)>,
+    pub pending_events: Vec<Value>,
     pub wake: Arc<Mutex<bool>>,
     pub now: f64,
 }
@@ -84,9 +86,19 @@ impl Launcher {
             create_sms: HashMap::new(),
             delete_sms: HashMap::new(),
             quota_cache: HashMap::new(),
+            pending_events: Vec::new(),
             wake: Arc::new(Mutex::new(false)),
             now: model::now_secs(),
         }
+    }
+
+    pub fn take_pending_events(&mut self) -> Vec<Value> {
+        std::mem::take(&mut self.pending_events)
+    }
+
+    pub fn take_pending_events_json(&mut self) -> String {
+        let events = std::mem::take(&mut self.pending_events);
+        jsonutil::dumps(&json!(events))
     }
 
     pub fn add_provider(&mut self, tenant: &str, provider: Arc<dyn Provider>) {
@@ -255,6 +267,9 @@ impl Launcher {
         let ids = self.api.get_matching_requests();
         for id in ids {
             let Some(req) = self.api.requests.get(&id).cloned() else { continue };
+            if model::is_final_request_state(&req.state()) && req.event_state() == model::event_state::COMPLETE {
+                continue;
+            }
             if req.state() == request_state::REQUESTED || req.state() == request_state::ACCEPTED {
                 self.process_nodeset_request(&req, &unassigned, &mut pending);
             }
@@ -268,7 +283,126 @@ impl Launcher {
         pending: &mut HashSet<(String, String)>,
     ) {
         if request.state() == request_state::REQUESTED {
-            let _ = self.accept_request(request, unassigned, pending);
+            if let Err(err) = self.accept_request(request, unassigned, pending) {
+                if err.contains("No provider") {
+                    let mut req = self
+                        .api
+                        .requests
+                        .get(&request.uuid())
+                        .cloned()
+                        .unwrap_or_else(|| request.clone());
+                    self.finish_request(&mut req, request_state::FAILED);
+                }
+            }
+        } else if request.state() == request_state::ACCEPTED {
+            self.check_request(request, unassigned);
+        }
+    }
+
+    fn finish_request(&mut self, request: &mut NodesetRequest, state: &str) {
+        request.set_state(state);
+        request.set_event_state(model::event_state::COMPLETE);
+        let _ = self.api.write_request(request);
+        self.pending_events.push(json!({
+            "tenant": request.tenant_name(),
+            "pipeline": request.pipeline_name(),
+            "uuid": request.uuid(),
+            "buildset": request.buildset_uuid(),
+        }));
+        self.wake();
+    }
+
+    fn check_request(&mut self, request: &NodesetRequest, unassigned: &HashMap<String, Vec<String>>) {
+        let ids = request.nodes();
+        if ids.is_empty() {
+            return;
+        }
+        for id in &ids {
+            if !self.api.nodes.contains_key(id) {
+                return;
+            }
+        }
+        let failed: Vec<usize> = ids
+            .iter()
+            .enumerate()
+            .filter(|(_, id)| {
+                self.api
+                    .nodes
+                    .get(*id)
+                    .map(|n| model::is_failed_node_state(&n.state()))
+                    .unwrap_or(false)
+            })
+            .map(|(i, _)| i)
+            .collect();
+        if !failed.is_empty() {
+            let mut req = request.clone();
+            let label_providers = match self.select_providers(&req, unassigned, &mut Vec::new()) {
+                Ok(v) => v,
+                Err(err) => {
+                    if err.contains("No provider") {
+                        self.finish_request(&mut req, request_state::FAILED);
+                    }
+                    return;
+                }
+            };
+            for i in failed {
+                let Some((label_name, provider_cname)) = label_providers.get(i) else {
+                    continue;
+                };
+                let Some(old) = self.api.nodes.get(&ids[i]).cloned() else {
+                    continue;
+                };
+                let add_failed = if old.state() == node_state::FAILED {
+                    Some(old.provider())
+                } else {
+                    None
+                };
+                let Some(provider) = self.provider_by_cname(&req.tenant_name(), provider_cname) else {
+                    continue;
+                };
+                if provider.driver_name() == "static" {
+                    continue;
+                }
+                let Some(label) = provider.labels().get(label_name).cloned() else {
+                    continue;
+                };
+                let Ok(new_id) = self.request_node(provider.as_ref(), &label, Some(&req)) else {
+                    continue;
+                };
+                self.api.delete_assignment(&ids[i]).ok();
+                req.update_provider_node(
+                    i,
+                    &new_id,
+                    label.executor_zone.as_deref(),
+                    add_failed.as_deref(),
+                );
+            }
+            let _ = self.api.write_request(&req);
+            self.wake();
+            return;
+        }
+        let mut all_final = true;
+        let mut all_ready = true;
+        for id in &ids {
+            let state = self.api.nodes.get(id).map(|n| n.state()).unwrap_or_default();
+            if !model::is_final_node_state(&state) {
+                all_final = false;
+            }
+            if state != node_state::READY && state != node_state::SLOT_HOST {
+                all_ready = false;
+            }
+        }
+        if !all_final {
+            return;
+        }
+        let mut req = request.clone();
+        if !all_ready {
+            for id in &ids {
+                self.api.delete_assignment(id).ok();
+            }
+            self.finish_request(&mut req, request_state::FAILED);
+        } else {
+            self.finish_request(&mut req, request_state::FULFILLED);
         }
     }
 
@@ -412,6 +546,15 @@ impl Launcher {
                         }
                     }
                 }
+                // A node that just failed counts even before it is recorded
+                // on the request, matching _selectProviders.
+                if let Some(uuid) = pnd.get("uuid").and_then(|v| v.as_str()) {
+                    if let Some(node) = self.api.nodes.get(uuid) {
+                        if node.state() == node_state::FAILED {
+                            *failures.entry(node.provider()).or_insert(0) += 1;
+                        }
+                    }
+                }
             }
             let mut ideal = Vec::new();
             let mut usable = Vec::new();
@@ -545,7 +688,9 @@ impl Launcher {
             total.subtract(&used);
             total
         } else {
-            let mut total = provider.endpoint().limits.copy();
+            let mut total = self
+                .cloud_endpoint_limits(provider)
+                .unwrap_or_else(|| provider.endpoint().limits.copy());
             if !provider.resource_limits().is_empty() {
                 let limits = QuotaInformation { default: f64::INFINITY, quota: provider.resource_limits().clone() };
                 total.min_with(&limits);
@@ -553,9 +698,35 @@ impl Launcher {
             }
             total
         };
-        let label_quota = provider.quota_for_label(label);
+        let label_quota = self
+            .cloud_label_quota(provider, label)
+            .unwrap_or_else(|| provider.quota_for_label(label));
         total.subtract(&label_quota);
         total.non_negative()
+    }
+
+    fn cloud_endpoint_limits(&self, provider: &dyn Provider) -> Option<QuotaInformation> {
+        if !cloud::enabled() {
+            return None;
+        }
+        cloud::invoke(
+            "endpoint_limits",
+            &json!({"provider": provider.canonical_name()}),
+        )
+        .ok()
+        .map(|v| cloud::quota_from_payload(&v))
+    }
+
+    fn cloud_label_quota(&self, provider: &dyn Provider, label: &crate::provider::Label) -> Option<QuotaInformation> {
+        if !cloud::enabled() {
+            return None;
+        }
+        cloud::invoke(
+            "label_quota",
+            &json!({"provider": provider.canonical_name(), "label": label.name}),
+        )
+        .ok()
+        .map(|v| cloud::quota_from_payload(&v))
     }
 
     pub fn does_provider_have_quota_for_node(&self, provider: &dyn Provider, node: &ProviderNode) -> bool {
@@ -575,7 +746,9 @@ impl Launcher {
         request: Option<&NodesetRequest>,
     ) -> Result<String, String> {
         let id = hex_id();
-        let quota = provider.quota_for_label(label);
+        let quota = self
+            .cloud_label_quota(provider, label)
+            .unwrap_or_else(|| provider.quota_for_label(label));
         let mut fields = Map::new();
         let now = self.now;
         let set = |m: &mut Map<String, Value>, k: &str, v: Value| {
@@ -588,7 +761,22 @@ impl Launcher {
         set(&mut fields, "label", json!(label.name));
         set(&mut fields, "label_config_hash", json!(label.config_hash));
         set(&mut fields, "label_aliases", json!(label.aliases));
-        set(&mut fields, "tags", json!({}));
+        let tags = if cloud::enabled() {
+            cloud::invoke(
+                "node_tags",
+                &json!({
+                    "provider": provider.canonical_name(),
+                    "label": label.name,
+                    "uuid": id,
+                    "request": request.map(|r| r.uuid()),
+                    "tenant": request.map(|r| r.tenant_name()),
+                }),
+            )
+            .unwrap_or_else(|_| json!({}))
+        } else {
+            json!({})
+        };
+        set(&mut fields, "tags", tags);
         set(&mut fields, "connection_name", json!(provider.connection_name()));
         set(&mut fields, "endpoint_name", json!(provider.endpoint().name));
         set(&mut fields, "comment", Value::Null);
@@ -637,6 +825,44 @@ impl Launcher {
             set(&mut fields, "aws_launch_template_name", Value::Null);
         }
         let mut node = ProviderNode::from_parts(provider.driver_name().into(), Value::Object(fields));
+        let slot_count = label.slots;
+        if slot_count > 1 {
+            let sub_ids: Vec<String> = (0..slot_count).map(|_| hex_id()).collect();
+            node.fields.insert("subnodes".into(), json!(sub_ids));
+            self.api.write_node(&node).map_err(|e| e.to_string())?;
+            let mut returned = id.clone();
+            for (slot, sub_id) in sub_ids.iter().enumerate() {
+                let mut sub = node.clone();
+                sub.driver_id = "subnode".into();
+                sub.fields.insert("uuid".into(), json!(sub_id));
+                sub.fields.insert("slot".into(), json!(slot));
+                sub.fields.insert("main_node_id".into(), json!(id));
+                sub.fields.insert("subnodes".into(), json!([]));
+                sub.fields.insert("quota".into(), json!({}));
+                sub.fields.insert("tags".into(), json!({}));
+                sub.request_id = None;
+                sub.tenant_name = None;
+                if slot == 0 {
+                    if let Some(req) = request {
+                        sub.tenant_name = Some(req.tenant_name());
+                        sub.request_id = Some(req.uuid());
+                    }
+                    returned = sub_id.clone();
+                }
+                self.api.write_node(&sub).map_err(|e| e.to_string())?;
+                if slot == 0 {
+                    if let Some(req) = request {
+                        let assign = json!({
+                            "request_id": req.uuid(),
+                            "min_request_version": req.zk_version.unwrap_or(0) + 1,
+                            "tenant_name": req.tenant_name(),
+                        });
+                        let _ = self.api.write_assignment(sub_id, &assign);
+                    }
+                }
+            }
+            return Ok(returned);
+        }
         if let Some(req) = request {
             node.tenant_name = Some(req.tenant_name());
             node.request_id = Some(req.uuid());
@@ -675,11 +901,13 @@ impl Launcher {
                 Ok(()) => {}
                 Err(AdvanceError::Quota(e)) => {
                     self.set_node_state(node_id, node_state::TEMPFAILED);
+                    self.sync_subnodes(node_id, node_state::TEMPFAILED, false);
                     self.wake();
                     self.messages.push(format!("tempfail {e}"));
                 }
                 Err(e) => {
                     self.set_node_state(node_id, node_state::FAILED);
+                    self.sync_subnodes(node_id, node_state::FAILED, false);
                     self.wake();
                     self.messages.push(format!("fail {e}"));
                 }
@@ -798,11 +1026,21 @@ impl Launcher {
         let sm_state = self.create_sms.get(node_id).unwrap().state_name();
         let complete = self.create_sms.get(node_id).unwrap().complete();
         let ip = self.create_sms.get(node_id).unwrap().interface_ip();
+        let updates = self.create_sms.get(node_id).unwrap().node_updates();
         let start_time = self.create_sms.get(node_id).unwrap().start_time();
+        if let Some(updates) = updates {
+            if let Some(n) = self.api.nodes.get_mut(node_id) {
+                n.merge_fields(&updates);
+            }
+            if let Some(n) = self.api.nodes.get(node_id).cloned() {
+                let _ = self.api.write_node(&n);
+            }
+        }
         if sm_state != "start" {
             if let Some(n) = self.api.nodes.get(node_id) {
                 if n.state() == node_state::REQUESTED {
                     self.set_node_state(node_id, node_state::BUILDING);
+                    self.sync_subnodes(node_id, node_state::BUILDING, false);
                 }
             }
         }
@@ -826,6 +1064,9 @@ impl Launcher {
         }
         let has_sub = self.api.nodes.get(node_id).map(|n| !n.subnodes().is_empty()).unwrap_or(false);
         let state = if has_sub { node_state::SLOT_HOST } else { node_state::READY };
+        if has_sub {
+            self.sync_subnodes(node_id, node_state::READY, true);
+        }
         self.set_node_state(node_id, state);
         self.nodescan.remove(node_id);
         self.report_launch_stats(node_id);
@@ -833,8 +1074,74 @@ impl Launcher {
         Ok(())
     }
 
+    fn sync_subnodes(&mut self, main_id: &str, state: &str, copy_attrs: bool) {
+        let Some(main) = self.api.nodes.get(main_id).cloned() else {
+            return;
+        };
+        let ids = main.subnodes();
+        for sub_id in ids {
+            let Some(mut sub) = self.api.nodes.get(&sub_id).cloned() else {
+                continue;
+            };
+            if copy_attrs {
+                let slot = sub.fields.get("slot").cloned();
+                let main_node_id = sub.fields.get("main_node_id").cloned();
+                let snapshot = Value::Object(main.fields.clone());
+                sub.merge_fields(&snapshot);
+                sub.fields.insert("uuid".into(), json!(sub_id));
+                sub.fields.insert("subnodes".into(), json!([]));
+                if let Some(slot) = slot {
+                    sub.fields.insert("slot".into(), slot);
+                }
+                if let Some(main_node_id) = main_node_id {
+                    sub.fields.insert("main_node_id".into(), main_node_id);
+                }
+            }
+            sub.set_state_at(state, self.now);
+            let _ = self.api.write_node(&sub);
+        }
+    }
+
     fn check_nodescan(&mut self, node_id: &str) -> Result<bool, AdvanceError> {
         let node = self.api.nodes.get(node_id).cloned().unwrap();
+        // Always drive the Python NodescanRequest when the test handler
+        // is installed. host-key-checking false still calls advance(),
+        // which unit tests patch.
+        if cloud::enabled() {
+            let result = cloud::invoke(
+                "nodescan",
+                &json!({
+                    "uuid": node_id,
+                    "interface_ip": node.interface_ip(),
+                    "connection_port": node.connection_port(),
+                    "host_key_checking": node.host_key_checking(),
+                    "connection_type": node.connection_type(),
+                    "boot_timeout": node.boot_timeout(),
+                }),
+            )?;
+            if !result.get("complete").and_then(|v| v.as_bool()).unwrap_or(false) {
+                return Ok(false);
+            }
+            if let Some(err) = result.get("error").and_then(|v| v.as_str()) {
+                if !err.is_empty() {
+                    return Err(AdvanceError::Other(err.to_string()));
+                }
+            }
+            let keys: Vec<String> = result
+                .get("keys")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            if let Some(n) = self.api.nodes.get_mut(node_id) {
+                if !keys.is_empty() {
+                    n.set_host_keys(&keys);
+                }
+            }
+            if let Some(n) = self.api.nodes.get(node_id).cloned() {
+                let _ = self.api.write_node(&n);
+            }
+            return Ok(true);
+        }
         if self.nodescan.get(node_id).is_none() {
             let req = NodescanRequest::new(
                 node_id,
@@ -903,6 +1210,33 @@ impl Launcher {
             None => return Ok(()),
         };
         self.nodescan.remove(node_id);
+        // A main node stays until every subnode is gone or still being
+        // created. _cleanupNode applies this before any delete.
+        let subs = node.subnodes();
+        if subs.iter().any(|id| {
+            self.api
+                .nodes
+                .get(id)
+                .map(|n| !model::is_create_state(&n.state()))
+                .unwrap_or(false)
+        }) {
+            return Ok(());
+        }
+        // Subnodes have no cloud resources. Python uses a no-op
+        // SubnodeStateMachine unless the provider is static.
+        if node.driver_id == "subnode" {
+            let static_driver = self
+                .provider_for_node(&node)
+                .map(|p| p.driver_name() == "static")
+                .unwrap_or(false);
+            if !static_driver {
+                if !self.request_released_node(&node) {
+                    return Ok(());
+                }
+                self.api.delete_node(node_id).ok();
+                return Ok(());
+            }
+        }
         let provider = match self.provider_for_node(&node) {
             Some(p) => p,
             None => {
@@ -918,15 +1252,28 @@ impl Launcher {
         }
         let start = self.delete_sms.get(node_id).map(|s| s.start_time()).unwrap_or(self.now);
         if self.now - start > DELETE_TIMEOUT {
-            self.delete_sms.get_mut(node_id).map(|s| {
-                // fail() in Python marks complete.
-                let _ = s.advance();
-            });
+            if let Some(sm) = self.delete_sms.get_mut(node_id) {
+                if !sm.complete() {
+                    sm.fail();
+                }
+            }
         }
         if let Some(sm) = self.delete_sms.get_mut(node_id) {
             if !sm.complete() {
                 sm.set_now(self.now);
-                let _ = sm.advance();
+                // An exception in advance marks the machine failed, matching
+                // _cleanupNode. The Python shim logs the original stack.
+                if sm.advance().is_err() {
+                    sm.fail();
+                }
+            }
+        }
+        if let Some(updates) = self.delete_sms.get(node_id).and_then(|s| s.node_updates()) {
+            if let Some(n) = self.api.nodes.get_mut(node_id) {
+                n.merge_fields(&updates);
+            }
+            if let Some(n) = self.api.nodes.get(node_id).cloned() {
+                let _ = self.api.write_node(&n);
             }
         }
         let complete = self.delete_sms.get(node_id).map(|s| s.complete()).unwrap_or(true);
@@ -939,9 +1286,34 @@ impl Launcher {
             self.delete_sms.remove(node_id);
             return Ok(());
         }
+        // Leave the node in place while a request still references it
+        // so the next request pass can retry or record the failure.
+        let node = match self.api.nodes.get(node_id).cloned() {
+            Some(n) => n,
+            None => return Ok(()),
+        };
+        if !self.request_released_node(&node) {
+            return Ok(());
+        }
         self.api.delete_node(node_id).ok();
         self.delete_sms.remove(node_id);
         Ok(())
+    }
+
+    /// Launcher._cleanupNode's delete condition: the request is gone,
+    /// or our copy of it is new enough and no longer lists this node.
+    fn request_released_node(&self, node: &ProviderNode) -> bool {
+        let Some(req_id) = node.request_id.as_deref() else {
+            return true;
+        };
+        let Some(request) = self.api.requests.get(req_id) else {
+            return true;
+        };
+        let up_to_date = match node.min_request_version {
+            None => true,
+            Some(min) => request.zk_version.map(|version| version >= min).unwrap_or(false),
+        };
+        up_to_date && !request.nodes().iter().any(|id| id == &node.uuid())
     }
 
     pub fn process_min_ready(&mut self) {

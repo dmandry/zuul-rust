@@ -110,13 +110,24 @@ impl PyLauncher {
             }
         }
         let rust = slf.borrow().rust.clone();
-        py.allow_threads(|| {
+        let events = py.allow_threads(|| {
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
                 launcher.api.sync();
                 launcher.process_once();
+                launcher.take_pending_events_json()
+            } else {
+                "[]".to_string()
             }
         });
+        if events != "[]" {
+            call_py(py, "emit_events", (slf, events))?;
+        }
+        // No ChildrenWatch in this loop, so poll again after MAX_SLEEP
+        // instead of waiting out MIN_INTERVAL.
+        if slf.getattr("_running")?.is_truthy()? {
+            slf.getattr("wake_event")?.call_method0("set")?;
+        }
         Ok(())
     }
 
@@ -224,8 +235,26 @@ fn connect_rust(slf: &Bound<'_, PyLauncher>, py: Python<'_>) -> PyResult<()> {
         ),),
     )?;
     *slf.borrow().rust.lock().unwrap() = Some(launcher);
+    install_cloud(slf);
     let _ = py;
     Ok(())
+}
+
+fn install_cloud(slf: &Bound<'_, PyLauncher>) {
+    // In-process fakes (moto, responses, OpenStack/Kubernetes clients, and
+    // patches of endpoint or state-machine methods) are only visible to
+    // Python. The shared launcher calls this handler for each cloud step.
+    let handle = slf.clone().unbind();
+    zuul_launcher::cloud::set_handler(Arc::new(move |op, args| {
+        Python::with_gil(|py| {
+            let slf = handle.bind(py);
+            let payload = zuul_launcher::jsonutil::dumps(args);
+            let result = call_py_value(py, "cloud_call", (slf, op, payload))
+                .map_err(|err| err.to_string())?;
+            let text: String = result.extract(py).map_err(|err| err.to_string())?;
+            zuul_launcher::jsonutil::loads(&text).map_err(|err| err.to_string())
+        })
+    }));
 }
 
 fn call_py(py: Python<'_>, name: &str, args: impl IntoPy<Py<PyTuple>>) -> PyResult<()> {

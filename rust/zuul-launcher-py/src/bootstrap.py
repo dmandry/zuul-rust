@@ -336,6 +336,7 @@ def publish_layout(launcher, payload):
             providers[name] = launcher.tenant_providers.get(name, [])
     launcher.tenant_providers = providers
     launcher._layout_generation = generation
+    _post_config(launcher)
     _set_running(launcher, data)
 
 
@@ -361,6 +362,345 @@ def get_provider(launcher, tenant_name, provider_name):
     raise ProviderNodeError(
         f"Unable to find {provider_name} in tenant {tenant_name}"
     )
+
+
+def cloud_call(launcher, op, payload):
+    """Bridge used by the Rust driver state machines.
+
+    Moto, the responses fixture, the OpenStack and Kubernetes fakes, and
+    the tests' patches of AwsCreateStateMachine / endpoint methods are all
+    in-process. This shim drives the real Python provider state machine
+    (the 14.3.0 boto3 / azul / SDK call sequence) and copies the node
+    fields back. It is test-crate only; the shared launcher decides when
+    to create, delete, pack slots, scan, and fulfill.
+    """
+    import json
+
+    data = json.loads(payload) if payload else {}
+    try:
+        if op == "step":
+            result = _cloud_step(launcher, data)
+        elif op == "nodescan":
+            result = _nodescan_step(launcher, data)
+        elif op == "endpoint_limits":
+            result = _endpoint_limits(launcher, data)
+        elif op == "label_quota":
+            result = _label_quota(launcher, data)
+        elif op == "node_tags":
+            result = _node_tags(launcher, data)
+        elif op == "fail":
+            result = _cloud_fail(launcher, data)
+        else:
+            result = {"error_kind": "other", "message": "unknown cloud op %s" % op}
+    except Exception as exc:
+        result = _cloud_error(exc)
+        # Quota and capacity are retried without a traceback. Other
+        # failures are logged with the original stack so the unit
+        # tests' okay_tracebacks filters still match.
+        if result.get("error_kind") == "other":
+            launcher.log.exception("cloud op %s failed", op)
+        else:
+            launcher.log.info(
+                "cloud op %s %s: %s",
+                op,
+                result.get("error_kind"),
+                result.get("message"),
+            )
+    return json.dumps(result, default=str)
+
+
+def _cloud_error(exc):
+    from zuul import exceptions
+
+    message = "%s: %s" % (type(exc).__name__, exc)
+    if isinstance(exc, getattr(exceptions, "QuotaException", ())):
+        return {"error_kind": "quota", "message": message}
+    if isinstance(exc, getattr(exceptions, "CapacityException", ())):
+        return {"error_kind": "capacity", "message": message}
+    return {"error_kind": "other", "message": message}
+
+
+def _find_provider(launcher, canonical):
+    for providers in launcher.tenant_providers.values():
+        for provider in providers:
+            if provider.canonical_name == canonical or provider.name == canonical:
+                return provider
+    raise Exception("Unable to find provider %s" % canonical)
+
+
+def _choose_launcher_for_endpoint(launcher, endpoint):
+    # Launcher._chooseLauncherForEndpoint. Include ourselves if the
+    # component registry watch has not delivered our own znode yet.
+    import mmh3
+
+    from zuul.zk.components import COMPONENT_REGISTRY
+
+    all_launchers = {
+        c.hostname: c for c in COMPONENT_REGISTRY.registry.all("launcher")
+    }
+    hostname = launcher.component_info.hostname
+    if hostname not in all_launchers:
+        all_launchers[hostname] = launcher.component_info
+    candidates = {
+        name: component
+        for name, component in all_launchers.items()
+        if not component.connection_filter
+        or endpoint.connection.connection_name in component.connection_filter
+    }
+    scores = {mmh3.hash(name, signed=False): name for name in candidates}
+    return scores[sorted(scores)[0]]
+
+
+def _post_config(launcher):
+    # The provider half of Launcher.updateTenantProviders: start each
+    # endpoint, refresh quota, and fill the per-label quota cache.
+    # provider.postConfig only refreshes labels when update is true,
+    # which is the designated-launcher / quota-updated flag.
+    seen_endpoint_names = set()
+    seen_provider_names = set()
+    endpoints = {}
+    for providers in launcher.tenant_providers.values():
+        for provider in providers:
+            if (
+                launcher.connection_filter
+                and provider.connection_name not in launcher.connection_filter
+            ):
+                continue
+            endpoint = provider.getEndpoint()
+            endpoints[endpoint.canonical_name] = endpoint
+            designated = _choose_launcher_for_endpoint(launcher, endpoint)
+            force = bool(designated == launcher.component_info.hostname)
+            endpoint.start()
+            try:
+                endpoint.postConfig(provider)
+                if endpoint.canonical_name not in seen_endpoint_names:
+                    quota_updated = endpoint.refreshQuotaLimits(force)
+                    # 14.3.0 records the provider name in this set.
+                    seen_endpoint_names.add(provider.canonical_name)
+                    force = quota_updated or force
+                if provider.canonical_name not in seen_provider_names:
+                    provider.postConfig(force)
+                    seen_provider_names.add(provider.canonical_name)
+            except Exception:
+                launcher.log.exception("Error in postconfig for %s:", provider)
+    launcher.endpoints = endpoints
+
+
+def _ensure_endpoint(launcher, provider):
+    # Endpoint startup and quota refresh happen in _post_config. This
+    # only covers a provider that was not part of that pass.
+    endpoint = provider.getEndpoint()
+    started = launcher.__dict__.setdefault("_endpoints_started", set())
+    if provider.canonical_name in started:
+        return endpoint
+    endpoint.start()
+    started.add(provider.canonical_name)
+    return endpoint
+
+
+def _export_node(node):
+    keys = (
+        "state",
+        "state_time",
+        "interface_ip",
+        "public_ipv4",
+        "private_ipv4",
+        "public_ipv6",
+        "private_ipv6",
+        "host_id",
+        "cloud",
+        "region",
+        "az",
+        "username",
+        "python_path",
+        "shell_type",
+        "connection_port",
+        "connection_type",
+        "host_keys",
+        "host_key_checking",
+        "attributes",
+        "aws_instance_id",
+        "aws_dedicated_host_id",
+        "aws_launch_template_name",
+        "azure_vm_id",
+        "openstack_server_id",
+        "openstack_floating_ip_id",
+        "kubernetes_namespace_id",
+        "node_properties",
+        "resources",
+    )
+    out = {}
+    for key in keys:
+        if hasattr(node, key):
+            out[key] = _jsonable(getattr(node, key))
+    quota = getattr(node, "quota", None)
+    if quota is not None and hasattr(quota, "getResources"):
+        out["quota"] = _jsonable(quota.getResources())
+    return out
+
+
+class _mutable:
+    """Allow ZKObject attribute writes without saving the object."""
+
+    def __init__(self, node):
+        self.node = node
+
+    def __enter__(self):
+        self.node._set(_active_context=True)
+        return self.node
+
+    def __exit__(self, *_exc):
+        self.node._set(_active_context=None)
+        return False
+
+
+def _jsonable(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(v) for v in value]
+    return str(value)
+
+
+def _quota_payload(quota):
+    import math
+
+    default = getattr(quota, "default", math.inf)
+    if default == math.inf:
+        default = None
+    resources = quota.getResources() if hasattr(quota, "getResources") else {}
+    return {"default": default, "quota": _jsonable(resources)}
+
+
+def _cloud_step(launcher, data):
+    from zuul.zk.zkobject import ZKContext
+    from zuul.model import ProviderNode
+
+    kind = data.get("kind") or "create"
+    node_uuid = data["node_uuid"]
+    key = (kind, node_uuid)
+    machines = launcher.__dict__.setdefault("_cloud_sms", {})
+    if key not in machines:
+        provider = _find_provider(launcher, data["provider"])
+        _ensure_endpoint(launcher, provider)
+        ctx = ZKContext(
+            launcher.zk_client, None, launcher.join_event, launcher.log
+        )
+        node = ProviderNode.fromZK(ctx, path=ProviderNode._getPath(node_uuid))
+        # The state machine assigns node attributes. ZKObject rejects
+        # that unless an active context is set. Rust writes the node
+        # back from the exported fields, so this does not save here.
+        with _mutable(node):
+            if kind == "delete":
+                machines[key] = provider.getDeleteStateMachine(node, launcher.log)
+            else:
+                image_external_id = data.get("image_external_id")
+                machines[key] = provider.getCreateStateMachine(
+                    node, image_external_id, launcher.log
+                )
+    machine = machines[key]
+    with _mutable(machine.node):
+        external = machine.advance()
+    node = getattr(machine, "node", None)
+    payload = {
+        "state": getattr(machine, "state", None),
+        "complete": bool(getattr(machine, "complete", False)),
+        "interface_ip": getattr(node, "interface_ip", None) if node is not None else None,
+        "node": _export_node(node) if node is not None else {},
+    }
+    if external:
+        payload["external_id"] = _jsonable(external)
+    if payload["complete"]:
+        machines.pop(key, None)
+    return payload
+
+
+def _cloud_fail(launcher, data):
+    kind = data.get("kind") or "delete"
+    key = (kind, data["node_uuid"])
+    machines = launcher.__dict__.setdefault("_cloud_sms", {})
+    machine = machines.get(key)
+    if machine is None:
+        return {"state": "complete", "complete": True, "node": {}}
+    with _mutable(machine.node):
+        machine.fail()
+    payload = {
+        "state": getattr(machine, "state", None),
+        "complete": bool(getattr(machine, "complete", False)),
+        "node": _export_node(machine.node),
+    }
+    if payload["complete"]:
+        machines.pop(key, None)
+    return payload
+
+
+def _nodescan_step(launcher, data):
+    from zuul.launcher.server import NodescanRequest
+
+    node_uuid = data["uuid"]
+    scans = launcher.__dict__.setdefault("_nodescan_requests", {})
+    if node_uuid not in scans:
+        node = _ScanNode(data)
+        request = NodescanRequest(node, launcher.log)
+        launcher.nodescan_worker.addRequest(request)
+        scans[node_uuid] = request
+    request = scans[node_uuid]
+    if not request.complete:
+        return {"complete": False, "keys": [], "error": ""}
+    error = ""
+    keys = []
+    if request.exception is not None:
+        error = str(request.exception)
+    else:
+        keys = list(request.keys)
+    scans.pop(node_uuid, None)
+    launcher.nodescan_worker.removeRequest(request)
+    return {"complete": True, "keys": keys, "error": error}
+
+
+class _ScanNode:
+    def __init__(self, data):
+        self.uuid = data.get("uuid")
+        self.interface_ip = data.get("interface_ip")
+        self.connection_port = data.get("connection_port") or 22
+        self.host_key_checking = bool(data.get("host_key_checking"))
+        self.connection_type = data.get("connection_type") or "ssh"
+        self.boot_timeout = data.get("boot_timeout") or 120
+
+
+def _node_tags(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    label = provider.labels[data["label"]]
+    request = None
+    if data.get("request"):
+        request = launcher.api.getNodesetRequest(data["request"])
+    return provider.getNodeTags(
+        launcher.system.system_id, label, data["uuid"], request
+    )
+
+
+def _endpoint_limits(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    _ensure_endpoint(launcher, provider)
+    return _quota_payload(provider.getEndpointLimits())
+
+
+def _label_quota(launcher, data):
+    provider = _find_provider(launcher, data["provider"])
+    label = provider.labels[data["label"]]
+    return _quota_payload(provider.getQuotaForLabel(label))
+
+
+def emit_events(launcher, payload):
+    import json
+
+    from zuul.model import NodesProvisionedEvent
+
+    for item in json.loads(payload):
+        event = NodesProvisionedEvent(item["uuid"], item.get("buildset"))
+        launcher.result_events[item["tenant"]][item["pipeline"]].put(event)
 
 
 def join(launcher):
