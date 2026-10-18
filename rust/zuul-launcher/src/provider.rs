@@ -1482,11 +1482,32 @@ pub struct AzureCreate {
     pub state: String,
     pub start_time: f64,
     pub complete: bool,
+    pub attempts: i64,
+    pub image_external_id: Option<String>,
     pub calls: Vec<String>,
     pub visited: Vec<String>,
     create_future: bool,
     pub vm_ready: bool,
     pub nic_ready: bool,
+    live: bool,
+    provider: String,
+    label_name: String,
+    node_uuid: String,
+    hostname: String,
+    tags: Value,
+    create_future_id: Option<String>,
+    image_reference: Option<Value>,
+    subnet_id: Option<String>,
+    vm_obj: Option<Value>,
+    nic_obj: Option<Value>,
+    public_ipv4: Option<Value>,
+    public_ipv6: Option<Value>,
+    vm_id: Option<String>,
+    interface_ip: Option<String>,
+    quota: Option<Value>,
+    updates: Option<Value>,
+    patch_node: Option<Value>,
+    setup_done: bool,
 }
 
 impl AzureCreate {
@@ -1495,23 +1516,164 @@ impl AzureCreate {
             state: "start".into(),
             start_time: 0.0,
             complete: false,
+            attempts: 0,
+            image_external_id: None,
             calls: Vec::new(),
             visited: vec!["start".into()],
             create_future: false,
             vm_ready: true,
             nic_ready: true,
+            live: false,
+            provider: String::new(),
+            label_name: String::new(),
+            node_uuid: String::new(),
+            hostname: String::new(),
+            tags: json!({}),
+            create_future_id: None,
+            image_reference: None,
+            subnet_id: None,
+            vm_obj: None,
+            nic_obj: None,
+            public_ipv4: None,
+            public_ipv6: None,
+            vm_id: None,
+            interface_ip: None,
+            quota: None,
+            updates: None,
+            patch_node: None,
+            setup_done: true,
         };
         machine.calls.push("getQuotaForLabel".into());
         machine
     }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode, label: &Label) -> Self {
+        let mut machine = Self::new();
+        machine.provider = provider.canonical_name.clone();
+        machine.label_name = label.name.clone();
+        machine.node_uuid = node.uuid();
+        let uuid = node.uuid();
+        let host_len = uuid.len().min(13);
+        machine.hostname = format!("np{}", &uuid[..host_len]);
+        machine.tags = node.fields.get("tags").cloned().unwrap_or_else(|| json!({}));
+        machine.vm_id = node
+            .fields
+            .get("azure_vm_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        if let Some(cs) = node.fields.get("create_state") {
+            if let Some(state) = cs.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            machine.attempts = cs
+                .get("attempts")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            if let Some(id) = cs.get("image_external_id").and_then(|v| v.as_str()) {
+                machine.image_external_id = Some(id.to_string());
+            }
+            if let Some(t) = cs.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        if machine.image_external_id.is_some() {
+            machine.image_reference = Some(json!({
+                "id": machine.image_external_id.clone().unwrap()
+            }));
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
+            machine.visited = vec![machine.state.clone()];
+        }
+        machine
+    }
+
     fn note(&mut self, state: &str) {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for AzureCreate {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        let quota = endpoint::quota_for_label(&self.provider, &self.label_name, None)?;
+        self.calls.push("getQuotaForLabel".into());
+        self.quota = Some(quota);
+        if self.state == "submit creating vm" {
+            if let Some(id) = endpoint::azure_list_instance_id(&self.provider, &self.node_uuid)? {
+                self.vm_id = Some(id);
+                self.state = "creating vm".into();
+                self.visited = vec![self.state.clone()];
+            }
+        }
+        if let Some(vm_id) = self.vm_id.clone() {
+            let obj = json!({
+                "type": "Microsoft.Compute/virtualMachines",
+                "id": vm_id,
+            });
+            self.vm_obj = Some(endpoint::refresh(&self.provider, &obj)?);
+            self.calls.push("_refresh".into());
+        }
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("create_state".into(), self.to_dict());
+        if let Some(id) = &self.vm_id {
+            m.insert("azure_vm_id".into(), json!(id));
+        }
+        if let Some(ip) = &self.interface_ip {
+            m.insert("interface_ip".into(), json!(ip));
+        }
+        if let Some(q) = &self.quota {
+            if let Some(quota) = q.get("quota") {
+                m.insert("quota".into(), quota.clone());
+            } else {
+                m.insert("quota".into(), q.clone());
+            }
+        }
+        if let Some(Value::Object(patch)) = &self.patch_node {
+            for (k, v) in patch {
+                if k != "create_state" {
+                    m.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(ip) = result.get("interface_ip").and_then(|v| v.as_str()) {
+            self.interface_ip = Some(ip.to_string());
+        }
+        if let Some(id) = result.get("azure_vm_id").and_then(|v| v.as_str()) {
+            self.vm_id = Some(id.to_string());
+        }
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             self.calls.push("_getImageReferenceForImage".into());
             self.calls.push("_getSubnetIdForLabel".into());
@@ -1544,7 +1706,6 @@ impl StateMachine for AzureCreate {
             }
         }
         if self.state == "querying pip" {
-            // No public IP on the stub NIC, so the query is already satisfied.
             self.note("complete");
         }
         if self.state == "complete" {
@@ -1552,12 +1713,251 @@ impl StateMachine for AzureCreate {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            if self.image_reference.is_none() {
+                let image_ref = endpoint::azure_get_image_reference(
+                    &self.provider,
+                    &self.label_name,
+                    self.image_external_id.as_deref(),
+                )?;
+                self.calls.push("_getImageReferenceForImage".into());
+                self.image_reference = Some(image_ref);
+            }
+            if self.subnet_id.is_none() {
+                let subnet = endpoint::azure_get_subnet_id(&self.provider, &self.label_name)?;
+                self.calls.push("_getSubnetIdForLabel".into());
+                self.subnet_id = Some(subnet);
+            }
+            self.note("submit creating vm");
+        }
+        if self.state == "submit creating vm" {
+            if self.create_future_id.is_none() {
+                let mut payload = json!({
+                    "label": self.label_name,
+                    "tags": self.tags,
+                    "hostname": self.hostname,
+                    "node_uuid": self.node_uuid,
+                    "subnet_id": self.subnet_id,
+                    "image_reference": self.image_reference,
+                });
+                if let Some(id) = &self.image_external_id {
+                    payload
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("image_external_id".into(), json!(id));
+                }
+                let result = endpoint::azure_submit_create_vm(&self.provider, payload)?;
+                self.calls.push("_submitApi(_createVirtualMachine)".into());
+                self.create_future = true;
+                self.create_future_id = result
+                    .get("future_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+            }
+            let future_id = self
+                .create_future_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing azure create future".into()))?;
+            self.calls.push("_completeApi".into());
+            let vm = endpoint::azure_complete_create_vm(&self.provider, &future_id)?;
+            if vm.is_none() {
+                self.export_updates();
+                return Ok(());
+            }
+            let vm = vm.unwrap();
+            self.vm_id = vm
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            self.vm_obj = Some(vm);
+            self.note("creating vm");
+        }
+        if self.state == "creating vm" {
+            let obj = self
+                .vm_obj
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing azure vm".into()))?;
+            self.calls.push("_refresh".into());
+            let vm = endpoint::refresh(&self.provider, &obj)?;
+            self.vm_obj = Some(vm.clone());
+            if endpoint::azure_succeeded(&vm) {
+                self.calls.push("_succeeded".into());
+                let mut nic = vm
+                    .pointer("/properties/networkProfile/networkInterfaces/0")
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                if let Some(obj) = nic.as_object_mut() {
+                    obj.insert(
+                        "type".into(),
+                        json!("Microsoft.Network/networkInterfaces"),
+                    );
+                }
+                self.nic_obj = Some(nic);
+                self.note("querying nic");
+            } else if endpoint::azure_failed(&vm) {
+                return Err(AdvanceError::Other("VM in failed state".into()));
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "querying nic" {
+            let nic = self
+                .nic_obj
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing azure nic".into()))?;
+            self.calls.push("_refresh".into());
+            let nic = endpoint::refresh_force(&self.provider, &nic, true)?;
+            self.nic_obj = Some(nic.clone());
+            if endpoint::azure_failed(&nic) {
+                return Err(AdvanceError::Other("NIC in failed state".into()));
+            } else if !endpoint::azure_succeeded(&nic) {
+                self.export_updates();
+                return Ok(());
+            }
+            self.calls.push("_succeeded".into());
+            let mut all_found = true;
+            if let Some(configs) = nic
+                .pointer("/properties/ipConfigurations")
+                .and_then(|v| v.as_array())
+            {
+                for ip_config in configs {
+                    if ip_config
+                        .pointer("/properties/privateIPAddress")
+                        .is_none()
+                    {
+                        all_found = false;
+                    }
+                }
+                if all_found {
+                    for ip_config in configs {
+                        let props = ip_config.get("properties");
+                        let version = props
+                            .and_then(|p| p.get("privateIPAddressVersion"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        if let Some(public_ip) = props.and_then(|p| p.get("publicIPAddress")) {
+                            let mut public_ip = public_ip.clone();
+                            if let Some(obj) = public_ip.as_object_mut() {
+                                obj.insert(
+                                    "type".into(),
+                                    json!("Microsoft.Network/publicIPAddresses"),
+                                );
+                            }
+                            if version == "IPv4" {
+                                self.public_ipv4 = Some(public_ip);
+                            } else if version == "IPv6" {
+                                self.public_ipv6 = Some(public_ip);
+                            }
+                        }
+                    }
+                    self.note("querying pip");
+                } else {
+                    self.export_updates();
+                    return Ok(());
+                }
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "querying pip" {
+            let mut all_found = true;
+            if let Some(pip) = self.public_ipv4.clone() {
+                let pip = endpoint::refresh_force(&self.provider, &pip, true)?;
+                self.public_ipv4 = Some(pip.clone());
+                if pip.pointer("/properties/ipAddress").is_none() {
+                    all_found = false;
+                }
+            }
+            if let Some(pip) = self.public_ipv6.clone() {
+                let pip = endpoint::refresh_force(&self.provider, &pip, true)?;
+                self.public_ipv6 = Some(pip.clone());
+                if pip.pointer("/properties/ipAddress").is_none() {
+                    all_found = false;
+                }
+            }
+            if !all_found {
+                self.export_updates();
+                return Ok(());
+            }
+            let result = endpoint::azure_update_node(
+                &self.provider,
+                json!({
+                    "node_uuid": self.node_uuid,
+                    "label": self.label_name,
+                    "vm": self.vm_obj,
+                    "nic": self.nic_obj,
+                    "public_ipv4": self.public_ipv4,
+                    "public_ipv6": self.public_ipv6,
+                    "azure_vm_id": self.vm_id,
+                    "quota": self.quota,
+                }),
+            )?;
+            if let Some(node) = result.get("node") {
+                if let Some(ip) = node.get("interface_ip").and_then(|v| v.as_str()) {
+                    self.interface_ip = Some(ip.to_string());
+                }
+                self.patch_node = Some(node.clone());
+            }
+            self.note("complete");
+            self.complete = true;
+            self.export_updates();
+            return Ok(());
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for AzureCreate {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "azure",
+                "create",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                    "label": self.label_name,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
+    fn external_id(&self) -> Option<String> { self.vm_id.clone() }
+    fn interface_ip(&self) -> Option<String> { self.interface_ip.clone() }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
-    fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live { self.updates.clone() } else { None }
+    }
+    fn to_dict(&self) -> Value {
+        let mut m = Map::new();
+        m.insert("state".into(), json!(self.state));
+        m.insert("start_time".into(), json!(self.start_time));
+        m.insert("attempts".into(), json!(self.attempts));
+        if let Some(id) = &self.image_external_id {
+            m.insert("image_external_id".into(), json!(id));
+        }
+        Value::Object(m)
+    }
 }
 
 pub struct AzureDelete {
@@ -1568,6 +1968,12 @@ pub struct AzureDelete {
     pub visited: Vec<String>,
     pub vm_id: Option<String>,
     pub gone: bool,
+    live: bool,
+    provider: String,
+    node_uuid: String,
+    vm_obj: Option<Value>,
+    updates: Option<Value>,
+    setup_done: bool,
 }
 
 impl AzureDelete {
@@ -1580,16 +1986,83 @@ impl AzureDelete {
             visited: vec!["start".into()],
             vm_id,
             gone: true,
+            live: false,
+            provider: String::new(),
+            node_uuid: String::new(),
+            vm_obj: None,
+            updates: None,
+            setup_done: true,
         }
     }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode) -> Self {
+        let vm_id = node
+            .fields
+            .get("azure_vm_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let mut machine = Self::new(vm_id);
+        machine.provider = provider.canonical_name.clone();
+        machine.node_uuid = node.uuid();
+        if let Some(ds) = node.fields.get("delete_state") {
+            if let Some(state) = ds.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            if let Some(t) = ds.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
+        }
+        machine
+    }
+
     fn note(&mut self, state: &str) {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for AzureDelete {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("delete_state".into(), self.to_dict());
+        if let Some(id) = &self.vm_id {
+            m.insert("azure_vm_id".into(), json!(id));
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             self.calls.push("_deleteVirtualMachine".into());
             self.note("deleting vm");
@@ -1607,19 +2080,83 @@ impl StateMachine for AzureDelete {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            if let Some(vm_id) = self.vm_id.clone() {
+                self.calls.push("_deleteVirtualMachine".into());
+                self.vm_obj = endpoint::azure_delete_vm(&self.provider, &vm_id)?;
+                self.note("deleting vm");
+            } else {
+                self.note("complete");
+            }
+        }
+        if self.state == "deleting vm" {
+            if let Some(obj) = self.vm_obj.clone() {
+                self.calls.push("_refreshDelete".into());
+                self.vm_obj = endpoint::refresh_delete(&self.provider, &obj)?;
+            }
+            if self.vm_obj.is_none() {
+                self.note("complete");
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for AzureDelete {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "azure",
+                "delete",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
+    fn fail(&mut self) {
+        self.state = "complete".into();
+        self.complete = true;
+        self.export_updates();
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live { self.updates.clone() } else { None }
+    }
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
+
 
 /// OpenStack order from zuul/driver/openstack/openstackendpoint.py.
 pub struct OpenstackCreate {
     pub state: String,
     pub start_time: f64,
     pub complete: bool,
+    pub attempts: i64,
+    pub image_external_id: Option<String>,
     pub calls: Vec<String>,
     pub visited: Vec<String>,
     create_future: bool,
@@ -1628,6 +2165,22 @@ pub struct OpenstackCreate {
     pub needs_floating_ip: bool,
     pub fip_active: bool,
     pub fip_attached: bool,
+    live: bool,
+    provider: String,
+    label_name: String,
+    node_uuid: String,
+    hostname: String,
+    tags: Value,
+    create_future_id: Option<String>,
+    server_id: Option<String>,
+    floating_ip_id: Option<String>,
+    server_obj: Option<Value>,
+    floating_ip: Option<Value>,
+    interface_ip: Option<String>,
+    quota: Option<Value>,
+    updates: Option<Value>,
+    patch_node: Option<Value>,
+    setup_done: bool,
 }
 
 impl OpenstackCreate {
@@ -1636,6 +2189,8 @@ impl OpenstackCreate {
             state: "start".into(),
             start_time: 0.0,
             complete: false,
+            attempts: 0,
+            image_external_id: None,
             calls: Vec::new(),
             visited: vec!["start".into()],
             create_future: false,
@@ -1644,18 +2199,195 @@ impl OpenstackCreate {
             needs_floating_ip: false,
             fip_active: true,
             fip_attached: true,
+            live: false,
+            provider: String::new(),
+            label_name: String::new(),
+            node_uuid: String::new(),
+            hostname: String::new(),
+            tags: json!({}),
+            create_future_id: None,
+            server_id: None,
+            floating_ip_id: None,
+            server_obj: None,
+            floating_ip: None,
+            interface_ip: None,
+            quota: None,
+            updates: None,
+            patch_node: None,
+            setup_done: true,
         };
         machine.calls.push("_findFlavor".into());
         machine
     }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode, label: &Label) -> Self {
+        let mut machine = Self::new();
+        machine.provider = provider.canonical_name.clone();
+        machine.label_name = label.name.clone();
+        machine.node_uuid = node.uuid();
+        let uuid = node.uuid();
+        let host_len = uuid.len().min(13);
+        machine.hostname = format!("np{}", &uuid[..host_len]);
+        machine.tags = node.fields.get("tags").cloned().unwrap_or_else(|| json!({}));
+        machine.server_id = node
+            .fields
+            .get("openstack_server_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        machine.floating_ip_id = node
+            .fields
+            .get("openstack_floating_ip_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        machine.auto_floating_ip = label
+            .raw
+            .get("auto-floating-ip")
+            .or_else(|| label.raw.get("auto_floating_ip"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(cs) = node.fields.get("create_state") {
+            if let Some(state) = cs.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            machine.attempts = cs
+                .get("attempts")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            if let Some(id) = cs.get("image_external_id").and_then(|v| v.as_str()) {
+                machine.image_external_id = Some(id.to_string());
+            }
+            if let Some(t) = cs.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
+            machine.visited = vec![machine.state.clone()];
+        }
+        machine
+    }
+
     fn note(&mut self, state: &str) {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for OpenstackCreate {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        let flavor = endpoint::os_find_flavor(&self.provider, &self.label_name)?;
+        self.calls.push("_findFlavor".into());
+        if let Some(quota) = flavor.get("quota") {
+            self.quota = Some(quota.clone());
+        }
+        if let Some(auto) = flavor.get("auto_floating_ip").and_then(|v| v.as_bool()) {
+            self.auto_floating_ip = auto;
+        }
+        if self.state == "submit creating server" {
+            if let Some(id) = endpoint::os_list_instance_id(&self.provider, &self.node_uuid)? {
+                self.server_id = Some(id);
+                self.state = "creating server".into();
+                self.visited = vec![self.state.clone()];
+            }
+        }
+        if let Some(server_id) = self.server_id.clone() {
+            let obj = json!({ "id": server_id, "status": "_unknown" });
+            self.server_obj = Some(endpoint::os_refresh_server(&self.provider, &obj)?);
+        }
+        if let Some(fip_id) = self.floating_ip_id.clone() {
+            let obj = json!({ "id": fip_id });
+            self.floating_ip = Some(endpoint::os_refresh_floating_ip(&self.provider, &obj)?);
+        }
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("create_state".into(), self.to_dict());
+        if let Some(id) = &self.server_id {
+            m.insert("openstack_server_id".into(), json!(id));
+        }
+        if let Some(id) = &self.floating_ip_id {
+            m.insert("openstack_floating_ip_id".into(), json!(id));
+        }
+        if let Some(ip) = &self.interface_ip {
+            m.insert("interface_ip".into(), json!(ip));
+        }
+        if let Some(q) = &self.quota {
+            if let Some(quota) = q.get("quota") {
+                m.insert("quota".into(), quota.clone());
+            } else {
+                m.insert("quota".into(), q.clone());
+            }
+        }
+        if let Some(Value::Object(patch)) = &self.patch_node {
+            for (k, v) in patch {
+                if k != "create_state" {
+                    m.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(ip) = result.get("interface_ip").and_then(|v| v.as_str()) {
+            self.interface_ip = Some(ip.to_string());
+        }
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn finish_with_instance(&mut self) -> Result<(), AdvanceError> {
+        let server = self
+            .server_obj
+            .clone()
+            .ok_or_else(|| AdvanceError::Other("missing openstack server".into()))?;
+        let result = endpoint::os_get_instance(
+            &self.provider,
+            json!({
+                "node_uuid": self.node_uuid,
+                "label": self.label_name,
+                "server": server,
+                "quota": self.quota,
+                "openstack_server_id": self.server_id,
+                "openstack_floating_ip_id": self.floating_ip_id,
+            }),
+        )?;
+        self.calls.push("_getInstance".into());
+        if let Some(node) = result.get("node") {
+            if let Some(ip) = node.get("interface_ip").and_then(|v| v.as_str()) {
+                self.interface_ip = Some(ip.to_string());
+            }
+            self.patch_node = Some(node.clone());
+        }
+        self.note("complete");
+        self.complete = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             self.note("submit creating server");
         }
@@ -1704,12 +2436,215 @@ impl StateMachine for OpenstackCreate {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            self.note("submit creating server");
+        }
+        if self.state == "submit creating server" {
+            if self.create_future_id.is_none() {
+                let mut payload = json!({
+                    "label": self.label_name,
+                    "hostname": self.hostname,
+                    "tags": self.tags,
+                    "node_uuid": self.node_uuid,
+                });
+                if let Some(id) = &self.image_external_id {
+                    payload
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("image_external_id".into(), json!(id));
+                }
+                let result = endpoint::os_submit_create_server(&self.provider, payload)?;
+                self.calls.push("_submitApi(_createServer)".into());
+                self.create_future = true;
+                self.create_future_id = result
+                    .get("future_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+            }
+            let future_id = self
+                .create_future_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing os create future".into()))?;
+            self.calls.push("_completeApi".into());
+            let result = endpoint::os_complete_create_server(&self.provider, &future_id)?;
+            if let Some(id) = result.get("resource_id").and_then(|v| v.as_str()) {
+                self.server_id = Some(id.to_string());
+                self.export_updates();
+                if result.get("quota_fault").and_then(|v| v.as_bool()) == Some(true) {
+                    return Err(AdvanceError::Quota("Quota exceeded".into()));
+                }
+                let msg = result
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("OpenStack create failed");
+                return Err(AdvanceError::Other(msg.to_string()));
+            }
+            match result.get("server") {
+                None | Some(Value::Null) => {
+                    self.export_updates();
+                    return Ok(());
+                }
+                Some(server) => {
+                    self.server_id = server
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    self.server_obj = Some(server.clone());
+                    self.note("creating server");
+                }
+            }
+        }
+        if self.state == "creating server" {
+            let obj = self
+                .server_obj
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing openstack server".into()))?;
+            self.calls.push("_refreshServer".into());
+            let server = endpoint::os_refresh_server(&self.provider, &obj)?;
+            self.server_obj = Some(server.clone());
+            let status = server
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_uppercase();
+            if status == "ACTIVE" {
+                let needs = if self.auto_floating_ip {
+                    endpoint::os_needs_floating_ip(&self.provider, &server)?
+                } else {
+                    false
+                };
+                if self.auto_floating_ip && needs {
+                    let fip = endpoint::os_create_floating_ip(&self.provider, &server)?;
+                    self.calls.push("_createFloatingIp".into());
+                    self.floating_ip_id = fip
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    self.floating_ip = Some(fip);
+                    self.note("creating floating ip");
+                } else {
+                    return self.finish_with_instance();
+                }
+            } else if status == "ERROR" {
+                let fault = server
+                    .pointer("/fault/message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Server in error state");
+                if let Some(server_id) = &self.server_id {
+                    if endpoint::os_handle_server_fault(&self.provider, server_id)? {
+                        return Err(AdvanceError::Quota("Quota exceeded".into()));
+                    }
+                }
+                return Err(AdvanceError::Other(fault.to_string()));
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "creating floating ip" {
+            let fip = self
+                .floating_ip
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing floating ip".into()))?;
+            self.calls.push("_refreshFloatingIp".into());
+            let fip = endpoint::os_refresh_floating_ip(&self.provider, &fip)?;
+            self.floating_ip = Some(fip.clone());
+            if fip.get("port_id").and_then(|v| if v.is_null() { None } else { Some(v) }).is_some() {
+                let status = fip
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_uppercase();
+                if status == "ACTIVE" {
+                    self.note("attaching floating ip");
+                } else {
+                    self.export_updates();
+                    return Ok(());
+                }
+            } else {
+                let server = self
+                    .server_obj
+                    .clone()
+                    .ok_or_else(|| AdvanceError::Other("missing openstack server".into()))?;
+                endpoint::os_attach_ip(&self.provider, &server, &fip)?;
+                self.calls.push("_attachIpToServer".into());
+                self.note("attaching floating ip");
+            }
+        }
+        if self.state == "attaching floating ip" {
+            let obj = self
+                .server_obj
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing openstack server".into()))?;
+            self.calls.push("_refreshServer".into());
+            let server = endpoint::os_refresh_server(&self.provider, &obj)?;
+            self.server_obj = Some(server.clone());
+            let ext_ip = endpoint::os_server_floating_ip(&self.provider, &server)?;
+            let expected = self
+                .floating_ip
+                .as_ref()
+                .and_then(|f| f.get("floating_ip_address"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if ext_ip == expected {
+                return self.finish_with_instance();
+            }
+            self.export_updates();
+            return Ok(());
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for OpenstackCreate {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "openstack",
+                "create",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                    "label": self.label_name,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
+    fn external_id(&self) -> Option<String> { self.server_id.clone() }
+    fn interface_ip(&self) -> Option<String> { self.interface_ip.clone() }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
-    fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live { self.updates.clone() } else { None }
+    }
+    fn to_dict(&self) -> Value {
+        let mut m = Map::new();
+        m.insert("state".into(), json!(self.state));
+        m.insert("start_time".into(), json!(self.start_time));
+        m.insert("attempts".into(), json!(self.attempts));
+        if let Some(id) = &self.image_external_id {
+            m.insert("image_external_id".into(), json!(id));
+        }
+        Value::Object(m)
+    }
 }
 
 pub struct OpenstackDelete {
@@ -1723,6 +2658,14 @@ pub struct OpenstackDelete {
     pub fips_down: bool,
     pub server_gone: bool,
     delete_future: bool,
+    live: bool,
+    provider: String,
+    node_uuid: String,
+    server_obj: Option<Value>,
+    floating_ip_objs: Vec<Value>,
+    delete_future_id: Option<String>,
+    updates: Option<Value>,
+    setup_done: bool,
 }
 
 impl OpenstackDelete {
@@ -1738,20 +2681,102 @@ impl OpenstackDelete {
             fips_down: true,
             server_gone: true,
             delete_future: false,
+            live: false,
+            provider: String::new(),
+            node_uuid: String::new(),
+            server_obj: None,
+            floating_ip_objs: Vec::new(),
+            delete_future_id: None,
+            updates: None,
+            setup_done: true,
         };
         if machine.server_id.is_some() {
             machine.calls.push("_getServer".into());
         }
         machine
     }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode) -> Self {
+        let server_id = node
+            .fields
+            .get("openstack_server_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let mut machine = Self::new(server_id, false);
+        machine.provider = provider.canonical_name.clone();
+        machine.node_uuid = node.uuid();
+        if let Some(ds) = node.fields.get("delete_state") {
+            if let Some(state) = ds.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            if let Some(t) = ds.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
+        }
+        machine
+    }
+
     fn note(&mut self, state: &str) {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for OpenstackDelete {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        if let Some(server_id) = self.server_id.clone() {
+            self.calls.push("_getServer".into());
+            self.server_obj = endpoint::os_get_server(&self.provider, &server_id)?;
+            if let Some(server) = self.server_obj.clone() {
+                if endpoint::os_has_floating_ips(&self.provider)?
+                    && server.get("addresses").is_some()
+                {
+                    self.floating_ip_objs =
+                        endpoint::os_get_floating_ips(&self.provider, &server)?;
+                    self.floating_ips = !self.floating_ip_objs.is_empty();
+                }
+            }
+        }
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("delete_state".into(), self.to_dict());
+        if let Some(id) = &self.server_id {
+            m.insert("openstack_server_id".into(), json!(id));
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             if self.server_id.is_some() {
                 if self.floating_ips {
@@ -1793,13 +2818,128 @@ impl StateMachine for OpenstackDelete {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            if self.server_id.is_some() {
+                if !self.floating_ip_objs.is_empty() {
+                    for fip in self.floating_ip_objs.clone() {
+                        endpoint::os_delete_floating_ip(&self.provider, &fip)?;
+                        self.calls.push("_deleteFloatingIp".into());
+                    }
+                    self.note("deleting floating ip");
+                } else {
+                    self.note("delete server");
+                }
+            } else {
+                self.note("complete");
+            }
+        }
+        if self.state == "deleting floating ip" {
+            let mut remaining = Vec::new();
+            for fip in self.floating_ip_objs.clone() {
+                self.calls.push("_refreshFloatingIpDelete".into());
+                if let Some(fip) = endpoint::os_refresh_floating_ip_delete(&self.provider, &fip)? {
+                    let status = fip
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    if status != "DOWN" {
+                        remaining.push(fip);
+                    }
+                }
+            }
+            self.floating_ip_objs = remaining;
+            if !self.floating_ip_objs.is_empty() {
+                self.export_updates();
+                return Ok(());
+            }
+            self.note("delete server");
+        }
+        if self.state == "delete server" {
+            if self.delete_future_id.is_none() {
+                let server_id = self
+                    .server_id
+                    .clone()
+                    .ok_or_else(|| AdvanceError::Other("missing openstack server id".into()))?;
+                let result = endpoint::os_submit_delete_server(&self.provider, &server_id)?;
+                self.calls.push("_submitApi(_deleteServer)".into());
+                self.delete_future = true;
+                self.delete_future_id = result
+                    .get("future_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+            }
+            let future_id = self
+                .delete_future_id
+                .clone()
+                .ok_or_else(|| AdvanceError::Other("missing os delete future".into()))?;
+            self.calls.push("_completeApi".into());
+            if endpoint::os_complete_delete_server(&self.provider, &future_id)? {
+                self.note("deleting server");
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "deleting server" {
+            if let Some(server) = self.server_obj.clone() {
+                self.calls.push("_refreshServerDelete".into());
+                self.server_obj = endpoint::os_refresh_server_delete(&self.provider, &server)?;
+            }
+            if self.server_obj.is_none() {
+                self.note("complete");
+            } else {
+                self.export_updates();
+                return Ok(());
+            }
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for OpenstackDelete {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "openstack",
+                "delete",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
+    fn fail(&mut self) {
+        self.state = "complete".into();
+        self.complete = true;
+        self.export_updates();
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live { self.updates.clone() } else { None }
+    }
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
+
 
 /// Kubernetes order from zuul/driver/kubernetes/kubernetesendpoint.py.
 pub struct K8sCreate {
@@ -1814,6 +2954,22 @@ pub struct K8sCreate {
     pub access_allowed: bool,
     pub token_ready: bool,
     pub pod_ready: bool,
+    live: bool,
+    provider: String,
+    label_name: String,
+    node_uuid: String,
+    hostname: String,
+    tags: Value,
+    namespace: String,
+    user: String,
+    restricted_access: bool,
+    containers: Option<Value>,
+    namespace_id: Option<String>,
+    kubernetes_connection: Map<String, Value>,
+    quota: Option<Value>,
+    updates: Option<Value>,
+    patch_node: Option<Value>,
+    setup_done: bool,
 }
 
 impl K8sCreate {
@@ -1829,16 +2985,191 @@ impl K8sCreate {
             access_allowed: true,
             token_ready: true,
             pod_ready: true,
+            live: false,
+            provider: String::new(),
+            label_name: String::new(),
+            node_uuid: String::new(),
+            hostname: String::new(),
+            tags: json!({}),
+            namespace: String::new(),
+            user: "zuul-worker".into(),
+            restricted_access: true,
+            containers: None,
+            namespace_id: None,
+            kubernetes_connection: Map::new(),
+            quota: None,
+            updates: None,
+            patch_node: None,
+            setup_done: true,
         }
     }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode, label: &Label) -> Self {
+        let mut machine = Self::new();
+        machine.provider = provider.canonical_name.clone();
+        machine.label_name = label.name.clone();
+        machine.node_uuid = node.uuid();
+        let uuid = node.uuid();
+        let host_len = uuid.len().min(13);
+        machine.hostname = format!("np{}", &uuid[..host_len]);
+        machine.namespace = machine.hostname.clone();
+        machine.tags = node.fields.get("tags").cloned().unwrap_or_else(|| json!({}));
+        machine.kind = label
+            .raw
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("pod")
+            .to_string();
+        machine.restricted_access = machine.kind == "pod";
+        if let Some(cs) = node.fields.get("create_state") {
+            if let Some(state) = cs.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            if let Some(t) = cs.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        machine.namespace_id = node
+            .fields
+            .get("kubernetes_namespace_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        if let Some(conn) = node
+            .fields
+            .get("kubernetes_connection")
+            .and_then(|v| v.as_object())
+        {
+            machine.kubernetes_connection = conn.clone();
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
+            machine.visited = vec![machine.state.clone()];
+        }
+        machine
+    }
+
     fn note(&mut self, state: &str) {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for K8sCreate {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        let setup = endpoint::k8s_setup(&self.provider, &self.label_name)?;
+        self.use_openshift_projects = setup
+            .get("use_openshift_projects")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(kind) = setup.get("kind").and_then(|v| v.as_str()) {
+            self.kind = kind.to_string();
+            self.restricted_access = self.kind == "pod";
+        }
+        if let Some(quota) = setup.get("quota") {
+            self.quota = Some(quota.clone());
+        }
+        self.containers = setup.get("containers").cloned();
+        self.kubernetes_connection
+            .insert("user".into(), json!(self.user));
+        if let Some(host) = setup.get("host") {
+            self.kubernetes_connection.insert("host".into(), host.clone());
+        }
+        if let Some(skiptls) = setup.get("skiptls") {
+            self.kubernetes_connection
+                .insert("skiptls".into(), skiptls.clone());
+        }
+        self.kubernetes_connection
+            .insert("namespace".into(), json!(self.namespace));
+        if self.kind == "pod" {
+            self.kubernetes_connection
+                .insert("pod".into(), json!(self.namespace));
+        } else {
+            self.kubernetes_connection
+                .insert("pod".into(), Value::Null);
+        }
+        self.kubernetes_connection.insert(
+            "containers".into(),
+            self.containers.clone().unwrap_or(Value::Null),
+        );
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("create_state".into(), self.to_dict());
+        if let Some(id) = &self.namespace_id {
+            m.insert("kubernetes_namespace_id".into(), json!(id));
+        }
+        m.insert(
+            "kubernetes_connection".into(),
+            Value::Object(self.kubernetes_connection.clone()),
+        );
+        if let Some(q) = &self.quota {
+            if let Some(quota) = q.get("quota") {
+                m.insert("quota".into(), quota.clone());
+            } else {
+                m.insert("quota".into(), q.clone());
+            }
+        }
+        if let Some(Value::Object(patch)) = &self.patch_node {
+            for (k, v) in patch {
+                if k != "create_state" {
+                    m.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn finish_with_instance(&mut self) -> Result<(), AdvanceError> {
+        let result = endpoint::k8s_update_node(
+            &self.provider,
+            json!({
+                "node_uuid": self.node_uuid,
+                "label": self.label_name,
+                "hostname": self.hostname,
+                "kind": self.kind,
+                "tags": self.tags,
+                "quota": self.quota,
+                "kubernetes_namespace_id": self.namespace_id,
+                "kubernetes_connection": self.kubernetes_connection,
+            }),
+        )?;
+        self.calls.push("updateFromInstance".into());
+        if let Some(node) = result.get("node") {
+            self.patch_node = Some(node.clone());
+        }
+        self.note("complete");
+        self.complete = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             if self.use_openshift_projects {
                 self.calls.push("_createProject".into());
@@ -1887,11 +3218,141 @@ impl StateMachine for K8sCreate {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            if self.use_openshift_projects {
+                endpoint::k8s_create_project(&self.provider, &self.hostname, &self.tags)?;
+                self.calls.push("_createProject".into());
+            } else {
+                endpoint::k8s_create_namespace(&self.provider, &self.hostname, &self.tags)?;
+                self.calls.push("_createNamespace".into());
+            }
+            self.note("creating namespace");
+        }
+        if self.state == "creating namespace" {
+            self.calls.push("_getSubjectAccessReview".into());
+            match endpoint::k8s_get_subject_access_review(&self.provider, &self.namespace)? {
+                None => {
+                    self.export_updates();
+                    return Ok(());
+                }
+                Some(false) => {
+                    self.export_updates();
+                    return Ok(());
+                }
+                Some(true) => {}
+            }
+            endpoint::k8s_create_image_pull_secrets(
+                &self.provider,
+                &self.namespace,
+                &self.label_name,
+            )?;
+            self.calls.push("_createImagePullSecrets".into());
+            endpoint::k8s_create_service_account(
+                &self.provider,
+                &self.namespace,
+                &self.user,
+            )?;
+            self.calls.push("_createServiceAccount".into());
+            self.namespace_id = Some(self.namespace.clone());
+            self.note("creating service account");
+        }
+        if self.state == "creating service account" {
+            self.calls.push("_getToken".into());
+            match endpoint::k8s_get_token(&self.provider, &self.namespace, &self.user)? {
+                None => {
+                    self.export_updates();
+                    return Ok(());
+                }
+                Some((token, ca_crt)) => {
+                    self.kubernetes_connection
+                        .insert("token".into(), json!(token));
+                    let skiptls = self
+                        .kubernetes_connection
+                        .get("skiptls")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    if !skiptls {
+                        if let Some(ca) = ca_crt {
+                            self.kubernetes_connection
+                                .insert("ca_crt".into(), json!(ca));
+                        }
+                    }
+                }
+            }
+            endpoint::k8s_create_role(
+                &self.provider,
+                &self.namespace,
+                &self.user,
+                self.restricted_access,
+            )?;
+            self.calls.push("_createRole".into());
+            self.note("creating rbac");
+        }
+        if self.state == "creating rbac" {
+            if self.kind == "pod" {
+                endpoint::k8s_create_pod(
+                    &self.provider,
+                    &self.namespace,
+                    &self.hostname,
+                    &self.label_name,
+                    &self.tags,
+                )?;
+                self.calls.push("_createPod".into());
+                self.note("creating pod");
+            } else {
+                return self.finish_with_instance();
+            }
+        }
+        if self.state == "creating pod" {
+            self.calls.push("_getPod".into());
+            if !endpoint::k8s_get_pod(&self.provider, &self.namespace, &self.hostname)? {
+                self.export_updates();
+                return Ok(());
+            }
+            return self.finish_with_instance();
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for K8sCreate {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "kubernetes",
+                "create",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                    "label": self.label_name,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
+    fn external_id(&self) -> Option<String> { self.namespace_id.clone() }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live { self.updates.clone() } else { None }
+    }
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
 
@@ -1903,6 +3364,11 @@ pub struct K8sDelete {
     pub visited: Vec<String>,
     pub namespace_id: Option<String>,
     pub use_openshift_projects: bool,
+    live: bool,
+    provider: String,
+    node_uuid: String,
+    updates: Option<Value>,
+    setup_done: bool,
 }
 
 impl K8sDelete {
@@ -1915,16 +3381,83 @@ impl K8sDelete {
             visited: vec!["start".into()],
             namespace_id,
             use_openshift_projects: false,
+            live: false,
+            provider: String::new(),
+            node_uuid: String::new(),
+            updates: None,
+            setup_done: true,
         }
     }
+
+    pub fn from_provider(provider: &CloudProvider, node: &ProviderNode) -> Self {
+        let namespace_id = node
+            .fields
+            .get("kubernetes_namespace_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let mut machine = Self::new(namespace_id);
+        machine.provider = provider.canonical_name.clone();
+        machine.node_uuid = node.uuid();
+        if let Some(ds) = node.fields.get("delete_state") {
+            if let Some(state) = ds.get("state").and_then(|v| v.as_str()) {
+                if state != "start" {
+                    machine.state = state.to_string();
+                    machine.visited = vec![state.to_string()];
+                }
+            }
+            if let Some(t) = ds.get("start_time").and_then(|v| v.as_f64()) {
+                machine.start_time = t;
+            }
+        }
+        machine.live = cloud::enabled();
+        machine.setup_done = !machine.live;
+        if machine.live {
+            machine.calls.clear();
+        }
+        machine
+    }
+
     fn note(&mut self, state: &str) {
         self.state = state.into();
         self.visited.push(state.into());
     }
-}
 
-impl StateMachine for K8sDelete {
-    fn advance(&mut self) -> Result<(), AdvanceError> {
+    fn live_setup(&mut self) -> Result<(), AdvanceError> {
+        if self.setup_done {
+            return Ok(());
+        }
+        self.use_openshift_projects = endpoint::k8s_use_openshift(&self.provider)?;
+        self.setup_done = true;
+        self.export_updates();
+        Ok(())
+    }
+
+    fn export_updates(&mut self) {
+        let mut m = Map::new();
+        m.insert("delete_state".into(), self.to_dict());
+        if let Some(id) = &self.namespace_id {
+            m.insert("kubernetes_namespace_id".into(), json!(id));
+        }
+        self.updates = Some(Value::Object(m));
+    }
+
+    fn apply_patched(&mut self, result: &Value) {
+        if let Some(state) = result.get("state").and_then(|v| v.as_str()) {
+            self.state = state.to_string();
+        }
+        self.complete = result
+            .get("complete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if let Some(node) = result.get("node") {
+            self.updates = Some(node.clone());
+        } else {
+            self.export_updates();
+        }
+    }
+
+    fn advance_offline(&mut self) -> Result<(), AdvanceError> {
         if self.state == "start" {
             if self.namespace_id.is_some() {
                 if self.use_openshift_projects {
@@ -1937,7 +3470,6 @@ impl StateMachine for K8sDelete {
                 self.note("complete");
             }
         }
-        // Python does not wait for the namespace to disappear.
         if self.state == "deleting namespace" {
             self.note("complete");
         }
@@ -1946,13 +3478,71 @@ impl StateMachine for K8sDelete {
         }
         Ok(())
     }
+
+    fn advance_live(&mut self) -> Result<(), AdvanceError> {
+        self.live_setup()?;
+        if self.state == "start" {
+            if let Some(namespace_id) = self.namespace_id.clone() {
+                if self.use_openshift_projects {
+                    endpoint::k8s_delete_project(&self.provider, &namespace_id)?;
+                    self.calls.push("_deleteProject".into());
+                } else {
+                    endpoint::k8s_delete_namespace(&self.provider, &namespace_id)?;
+                    self.calls.push("_deleteNamespace".into());
+                }
+                self.note("deleting namespace");
+            } else {
+                self.note("complete");
+            }
+        }
+        if self.state == "deleting namespace" {
+            self.note("complete");
+        }
+        if self.state == "complete" {
+            self.complete = true;
+        }
+        self.export_updates();
+        Ok(())
+    }
+}
+
+impl StateMachine for K8sDelete {
+    fn advance(&mut self) -> Result<(), AdvanceError> {
+        if self.live || cloud::enabled() {
+            self.live = true;
+            if let Some(result) = endpoint::patched_advance(
+                "kubernetes",
+                "delete",
+                &self.state,
+                self.complete,
+                json!({
+                    "provider": self.provider,
+                    "node_uuid": self.node_uuid,
+                }),
+            )? {
+                self.apply_patched(&result);
+                return Ok(());
+            }
+            return self.advance_live();
+        }
+        self.advance_offline()
+    }
+    fn fail(&mut self) {
+        self.state = "complete".into();
+        self.complete = true;
+        self.export_updates();
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
     fn set_start_time(&mut self, t: f64) { self.start_time = t; }
     fn calls(&self) -> Vec<String> { self.calls.clone() }
+    fn node_updates(&self) -> Option<Value> {
+        if self.live { self.updates.clone() } else { None }
+    }
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
+
 
 /// Static order from zuul/driver/static/staticendpoint.py.
 /// Create finishes in the constructor via updateFromInstance.
@@ -2073,10 +3663,9 @@ pub fn driver_delete(driver: &str) -> Box<dyn StateMachine> {
     }
 }
 
-/// Temporary adapter for Azure / OpenStack / Kubernetes while those
-/// drivers still lack Rust endpoint-op state machines. One `step` /
-/// `fail` call runs the Python SM so azul and the SDK fakes stay
-/// reachable. AWS does not use this.
+/// Legacy full-SM adapter. Unused now that Azure / OpenStack /
+/// Kubernetes drive fine-grained ep.* ops like AWS. Kept so leftover
+/// step/fail bootstrap handlers remain reachable if needed.
 pub struct RemoteMachine {
     pub kind: String,
     pub driver: String,
@@ -2160,10 +3749,9 @@ impl StateMachine for RemoteMachine {
     fn to_dict(&self) -> Value { json!({"state": self.state, "start_time": self.start_time}) }
 }
 
-/// Cloud-backed provider. AWS create/delete state machines run in Rust
-/// and call fine-grained endpoint ops through `cloud`. Other non-static
-/// drivers keep a temporary RemoteMachine adapter until they gain the
-/// same endpoint-op path. Static stays fully Rust.
+/// Cloud-backed provider. AWS / Azure / OpenStack / Kubernetes create and
+/// delete state machines run in Rust and call fine-grained endpoint ops
+/// through `cloud`. Static stays fully Rust.
 pub struct CloudProvider {
     pub name: String,
     pub canonical_name: String,
@@ -2217,43 +3805,25 @@ impl Provider for CloudProvider {
             }
             return Box::new(sm);
         }
-        if self.driver_name == "aws" {
-            return Box::new(AwsCreate::from_provider(self, node, label));
+        match self.driver_name.as_str() {
+            "aws" => Box::new(AwsCreate::from_provider(self, node, label)),
+            "azure" => Box::new(AzureCreate::from_provider(self, node, label)),
+            "openstack" => Box::new(OpenstackCreate::from_provider(self, node, label)),
+            "kubernetes" => Box::new(K8sCreate::from_provider(self, node, label)),
+            _ => driver_create(&self.driver_name),
         }
-        if cloud::enabled() {
-            return Box::new(RemoteMachine::new(
-                "create",
-                &self.driver_name,
-                &self.canonical_name,
-                node,
-                label,
-            ));
-        }
-        driver_create(&self.driver_name)
     }
     fn delete_machine(&self, node: &ProviderNode) -> Box<dyn StateMachine> {
-        if self.driver_name == "aws" {
-            return Box::new(AwsDelete::from_provider(self, node));
-        }
-        if cloud::enabled() && self.driver_name != "static" {
-            let label_name = node.label();
-            let label = self
-                .labels
-                .get(&label_name)
-                .cloned()
-                .unwrap_or_else(|| default_label(&label_name, false));
-            return Box::new(RemoteMachine::new(
-                "delete",
-                &self.driver_name,
-                &self.canonical_name,
-                node,
-                &label,
-            ));
-        }
         if self.driver_name == "static" {
             return Box::new(StaticDelete::new(node.reuse_flag()));
         }
-        driver_delete(&self.driver_name)
+        match self.driver_name.as_str() {
+            "aws" => Box::new(AwsDelete::from_provider(self, node)),
+            "azure" => Box::new(AzureDelete::from_provider(self, node)),
+            "openstack" => Box::new(OpenstackDelete::from_provider(self, node)),
+            "kubernetes" => Box::new(K8sDelete::from_provider(self, node)),
+            _ => driver_delete(&self.driver_name),
+        }
     }
     fn import_job(&self, _url: &str) -> bool {
         matches!(self.driver_name.as_str(), "aws" | "openstack")

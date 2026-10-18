@@ -43,12 +43,28 @@ def _record_original_sms():
     if _ORIG_SM:
         return
     from zuul.driver.aws import awsendpoint
+    from zuul.driver.azure import azureendpoint
+    from zuul.driver.openstack import openstackendpoint
+    from zuul.driver.kubernetes import kubernetesendpoint
 
     _ORIG_SM.update({
         ("aws", "create"): awsendpoint.AwsCreateStateMachine.advance,
         ("aws", "delete"): awsendpoint.AwsDeleteStateMachine.advance,
         ("aws", "snapshot"): awsendpoint.AwsSnapshotStateMachine.advance,
         ("aws", "update_node"): awsendpoint.AwsCreateStateMachine._updateNode,
+        ("azure", "create"): azureendpoint.AzureCreateStateMachine.advance,
+        ("azure", "delete"): azureendpoint.AzureDeleteStateMachine.advance,
+        ("azure", "update_node"): azureendpoint.AzureCreateStateMachine._updateNode,
+        ("openstack", "create"): openstackendpoint.OpenstackCreateStateMachine.advance,
+        ("openstack", "delete"): openstackendpoint.OpenstackDeleteStateMachine.advance,
+        ("openstack", "update_node"):
+            openstackendpoint.OpenstackCreateStateMachine._updateNode,
+        ("kubernetes", "create"):
+            kubernetesendpoint.KubernetesCreateStateMachine.advance,
+        ("kubernetes", "delete"):
+            kubernetesendpoint.KubernetesDeleteStateMachine.advance,
+        ("kubernetes", "update_node"):
+            kubernetesendpoint.KubernetesCreateStateMachine._updateNode,
     })
 
 
@@ -562,11 +578,12 @@ def get_provider(launcher, tenant_name, provider_name):
 def cloud_call(launcher, op, payload):
     """Bridge used by the Rust driver state machines.
 
-    Moto, the responses fixture, and unittest patches of endpoint methods
-    (and StateMachine.advance) live in-process. AWS create/delete run in
-    Rust and call fine-grained ep.* ops here; sm.patched_advance covers
-    tests that replace advance with a Mock. Legacy step/fail remain for
-    any leftover callers.
+    Moto, azul, OpenStack/K8s fakes, and unittest patches of endpoint
+    methods (and StateMachine.advance) live in-process. AWS / Azure /
+    OpenStack / Kubernetes create and delete run in Rust and call
+    fine-grained ep.* ops here; sm.patched_advance covers tests that
+    replace advance with a Mock. Legacy step/fail remain for leftover
+    callers.
     """
     import json
 
@@ -586,14 +603,8 @@ def cloud_call(launcher, op, payload):
             result = _image_attrs(launcher, data)
         elif op == "provider_quota":
             result = _provider_quota(launcher, data)
-        elif op == "quota_for_node":
-            result = _quota_for_node(launcher, data)
-        elif op == "quota_for_label":
-            result = _quota_for_label(launcher, data)
-        elif op == "quota_percentage":
-            result = _quota_percentage(launcher, data)
-        elif op == "accept_requested":
-            result = _accept_requested(launcher, data)
+        elif op == "accept_one":
+            result = _accept_one(launcher, data)
         elif op == "fail":
             result = _cloud_fail(launcher, data)
         elif op == "node_visible":
@@ -628,6 +639,88 @@ def cloud_call(launcher, op, payload):
             result = _ep_create_snapshot(launcher, data)
         elif op == "ep.refresh_snapshot":
             result = _ep_refresh(launcher, data)
+        elif op == "ep.azure_list_instance_id":
+            result = _ep_azure_list_instance_id(launcher, data)
+        elif op == "ep.azure_get_image_reference":
+            result = _ep_azure_get_image_reference(launcher, data)
+        elif op == "ep.azure_get_subnet_id":
+            result = _ep_azure_get_subnet_id(launcher, data)
+        elif op == "ep.azure_submit_create_vm":
+            result = _ep_azure_submit_create_vm(launcher, data)
+        elif op == "ep.azure_complete_create_vm":
+            result = _ep_azure_complete_create_vm(launcher, data)
+        elif op == "ep.azure_delete_vm":
+            result = _ep_azure_delete_vm(launcher, data)
+        elif op == "ep.azure_update_node":
+            result = _ep_azure_update_node(launcher, data)
+        elif op == "ep.os_find_flavor":
+            result = _ep_os_find_flavor(launcher, data)
+        elif op == "ep.os_list_instance_id":
+            result = _ep_os_list_instance_id(launcher, data)
+        elif op == "ep.os_submit_create_server":
+            result = _ep_os_submit_create_server(launcher, data)
+        elif op == "ep.os_complete_create_server":
+            result = _ep_os_complete_create_server(launcher, data)
+        elif op == "ep.os_refresh_server":
+            result = _ep_os_refresh_server(launcher, data)
+        elif op == "ep.os_get_server":
+            result = _ep_os_get_server(launcher, data)
+        elif op == "ep.os_needs_floating_ip":
+            result = _ep_os_needs_floating_ip(launcher, data)
+        elif op == "ep.os_create_floating_ip":
+            result = _ep_os_create_floating_ip(launcher, data)
+        elif op == "ep.os_refresh_floating_ip":
+            result = _ep_os_refresh_floating_ip(launcher, data)
+        elif op == "ep.os_attach_ip":
+            result = _ep_os_attach_ip(launcher, data)
+        elif op == "ep.os_server_floating_ip":
+            result = _ep_os_server_floating_ip(launcher, data)
+        elif op == "ep.os_get_instance":
+            result = _ep_os_get_instance(launcher, data)
+        elif op == "ep.os_has_floating_ips":
+            result = _ep_os_has_floating_ips(launcher, data)
+        elif op == "ep.os_get_floating_ips":
+            result = _ep_os_get_floating_ips(launcher, data)
+        elif op == "ep.os_delete_floating_ip":
+            result = _ep_os_delete_floating_ip(launcher, data)
+        elif op == "ep.os_refresh_floating_ip_delete":
+            result = _ep_os_refresh_floating_ip_delete(launcher, data)
+        elif op == "ep.os_submit_delete_server":
+            result = _ep_os_submit_delete_server(launcher, data)
+        elif op == "ep.os_complete_delete_server":
+            result = _ep_os_complete_delete_server(launcher, data)
+        elif op == "ep.os_refresh_server_delete":
+            result = _ep_os_refresh_server_delete(launcher, data)
+        elif op == "ep.os_handle_server_fault":
+            result = _ep_os_handle_server_fault(launcher, data)
+        elif op == "ep.k8s_setup":
+            result = _ep_k8s_setup(launcher, data)
+        elif op == "ep.k8s_use_openshift":
+            result = _ep_k8s_use_openshift(launcher, data)
+        elif op == "ep.k8s_create_namespace":
+            result = _ep_k8s_create_namespace(launcher, data)
+        elif op == "ep.k8s_create_project":
+            result = _ep_k8s_create_project(launcher, data)
+        elif op == "ep.k8s_get_subject_access_review":
+            result = _ep_k8s_get_subject_access_review(launcher, data)
+        elif op == "ep.k8s_create_image_pull_secrets":
+            result = _ep_k8s_create_image_pull_secrets(launcher, data)
+        elif op == "ep.k8s_create_service_account":
+            result = _ep_k8s_create_service_account(launcher, data)
+        elif op == "ep.k8s_get_token":
+            result = _ep_k8s_get_token(launcher, data)
+        elif op == "ep.k8s_create_role":
+            result = _ep_k8s_create_role(launcher, data)
+        elif op == "ep.k8s_create_pod":
+            result = _ep_k8s_create_pod(launcher, data)
+        elif op == "ep.k8s_get_pod":
+            result = _ep_k8s_get_pod(launcher, data)
+        elif op == "ep.k8s_delete_namespace":
+            result = _ep_k8s_delete_namespace(launcher, data)
+        elif op == "ep.k8s_delete_project":
+            result = _ep_k8s_delete_project(launcher, data)
+        elif op == "ep.k8s_update_node":
+            result = _ep_k8s_update_node(launcher, data)
         elif op == "sm.patched_advance":
             result = _sm_patched_advance(launcher, data)
         else:
@@ -772,6 +865,7 @@ def _export_node(node):
         "openstack_server_id",
         "openstack_floating_ip_id",
         "kubernetes_namespace_id",
+        "kubernetes_connection",
         "node_properties",
         "resources",
     )
@@ -896,22 +990,52 @@ def _cloud_fail(launcher, data):
 
 
 def _sm_class(driver, kind):
-    if driver != "aws":
-        return None
-    from zuul.driver.aws import awsendpoint
+    if driver == "aws":
+        from zuul.driver.aws import awsendpoint
 
-    return {
-        "create": awsendpoint.AwsCreateStateMachine,
-        "delete": awsendpoint.AwsDeleteStateMachine,
-        "snapshot": awsendpoint.AwsSnapshotStateMachine,
-        "update_node": awsendpoint.AwsCreateStateMachine,
-    }.get(kind)
+        return {
+            "create": awsendpoint.AwsCreateStateMachine,
+            "delete": awsendpoint.AwsDeleteStateMachine,
+            "snapshot": awsendpoint.AwsSnapshotStateMachine,
+            "update_node": awsendpoint.AwsCreateStateMachine,
+        }.get(kind)
+    if driver == "azure":
+        from zuul.driver.azure import azureendpoint
+
+        return {
+            "create": azureendpoint.AzureCreateStateMachine,
+            "delete": azureendpoint.AzureDeleteStateMachine,
+            "update_node": azureendpoint.AzureCreateStateMachine,
+        }.get(kind)
+    if driver == "openstack":
+        from zuul.driver.openstack import openstackendpoint
+
+        return {
+            "create": openstackendpoint.OpenstackCreateStateMachine,
+            "delete": openstackendpoint.OpenstackDeleteStateMachine,
+            "update_node": openstackendpoint.OpenstackCreateStateMachine,
+        }.get(kind)
+    if driver == "kubernetes":
+        from zuul.driver.kubernetes import kubernetesendpoint
+
+        return {
+            "create": kubernetesendpoint.KubernetesCreateStateMachine,
+            "delete": kubernetesendpoint.KubernetesDeleteStateMachine,
+            "update_node": kubernetesendpoint.KubernetesCreateStateMachine,
+        }.get(kind)
+    return None
 
 
 def _sm_class_for_node(node, kind):
     name = type(node).__name__
     if "Aws" in name or hasattr(node, "aws_instance_id"):
         return _sm_class("aws", kind)
+    if "Azure" in name or hasattr(node, "azure_vm_id"):
+        return _sm_class("azure", kind)
+    if "Openstack" in name or hasattr(node, "openstack_server_id"):
+        return _sm_class("openstack", kind)
+    if "Kubernetes" in name or hasattr(node, "kubernetes_namespace_id"):
+        return _sm_class("kubernetes", kind)
     return None
 
 
@@ -978,7 +1102,13 @@ def _load_node(launcher, node_uuid):
 
 def _ep_refresh(launcher, data):
     _provider, endpoint = _provider_endpoint(launcher, data)
-    obj = endpoint._refresh(data.get("obj") or {})
+    force = bool(data.get("force"))
+    # Azure _refresh accepts force=; AWS ignores unknown kwargs via its
+    # own signature (obj only). Call with force only when requested.
+    if force:
+        obj = endpoint._refresh(data.get("obj") or {}, force=True)
+    else:
+        obj = endpoint._refresh(data.get("obj") or {})
     return {"obj": _jsonable(obj)}
 
 
@@ -1077,10 +1207,17 @@ def _ep_release_host(launcher, data):
 def _ep_quota_for_label(launcher, data):
     provider, endpoint = _provider_endpoint(launcher, data)
     label = provider.labels[data["label"]]
-    flavor = provider.flavors[label.flavor]
-    quota = endpoint.getQuotaForLabel(
-        label, flavor, data.get("instance_type")
-    )
+    module = type(endpoint).__module__
+    if "kubernetes" in module:
+        quota = endpoint.getQuotaForLabel(label)
+    else:
+        flavor = provider.flavors[label.flavor]
+        if "aws" in module and data.get("instance_type") is not None:
+            quota = endpoint.getQuotaForLabel(
+                label, flavor, data.get("instance_type")
+            )
+        else:
+            quota = endpoint.getQuotaForLabel(label, flavor)
     return _quota_payload(quota)
 
 
@@ -1090,6 +1227,488 @@ def _ep_create_snapshot(launcher, data):
         data.get("volume_id"), data.get("tags") or {}
     )
     return {"snapshot": _jsonable(snapshot)}
+
+
+def _ep_azure_list_instance_id(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    node_uuid = data.get("node_uuid")
+    for instance in endpoint.listInstances():
+        if instance.metadata.get("zuul_node_uuid") == node_uuid:
+            return {"azure_vm_id": instance.azure_vm_id}
+    return {"azure_vm_id": None}
+
+
+def _ep_azure_get_image_reference(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    image = provider.images[label.image]
+    if data.get("image_external_id"):
+        return {"image_reference": {"id": data["image_external_id"]}}
+    return {
+        "image_reference": _jsonable(
+            endpoint._getImageReferenceForImage(image)
+        )
+    }
+
+
+def _ep_azure_get_subnet_id(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    subnet_id = endpoint._getSubnetIdForLabel(
+        provider.resource_group, label
+    )
+    return {"subnet_id": subnet_id}
+
+
+def _ep_azure_submit_create_vm(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    image = provider.images[label.image]
+    image_reference = data.get("image_reference")
+    if not image_reference and data.get("image_external_id"):
+        image_reference = {"id": data["image_external_id"]}
+    if not image_reference:
+        image_reference = endpoint._getImageReferenceForImage(image)
+    subnet_id = data.get("subnet_id")
+    if not subnet_id:
+        subnet_id = endpoint._getSubnetIdForLabel(
+            provider.resource_group, label
+        )
+    future = endpoint._submitApi(
+        endpoint._createVirtualMachine,
+        provider.resource_group,
+        label,
+        flavor,
+        image,
+        image_reference,
+        subnet_id,
+        data.get("tags") or {},
+        data.get("hostname") or "",
+        launcher.log,
+    )
+    return {"future_id": _store_future(launcher, future)}
+
+
+def _ep_azure_complete_create_vm(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    future = _future_store(launcher).get(data.get("future_id"))
+    if future is None:
+        return {"vm": None}
+    vm = endpoint._completeApi(future)
+    if vm is not None:
+        _future_store(launcher).pop(data.get("future_id"), None)
+    return {"vm": _jsonable(vm)}
+
+
+def _ep_azure_delete_vm(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    vm = endpoint._deleteVirtualMachine(data.get("vm_id"))
+    return {"vm": _jsonable(vm)}
+
+
+def _ep_azure_update_node(launcher, data):
+    from zuul.driver.azure.azuremodel import AzureInstance
+
+    provider, endpoint = _provider_endpoint(launcher, data)
+    node = _load_node(launcher, data["node_uuid"])
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    quota = endpoint.getQuotaForLabel(label, flavor)
+    with _mutable(node):
+        if data.get("azure_vm_id"):
+            node.azure_vm_id = data.get("azure_vm_id")
+        node.quota = quota
+        instance = AzureInstance(
+            endpoint.region,
+            data.get("vm"),
+            quota,
+            data.get("nic"),
+            data.get("public_ipv4"),
+            data.get("public_ipv6"),
+        )
+        node.updateFromInstance(instance)
+    return {"node": _export_node(node)}
+
+
+def _ep_os_find_flavor(launcher, data):
+    from zuul.driver.openstack.openstackendpoint import quota_from_flavor
+
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    os_flavor = endpoint._findFlavor(flavor_name=flavor.flavor_name)
+    quota = quota_from_flavor(os_flavor, label=label)
+    return {
+        "flavor": _jsonable(os_flavor),
+        "quota": _quota_payload(quota),
+        "auto_floating_ip": bool(getattr(label, "auto_floating_ip", False)),
+    }
+
+
+def _ep_os_list_instance_id(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    node_uuid = data.get("node_uuid")
+    for instance in endpoint.listInstances():
+        if instance.metadata.get("zuul_node_uuid") == node_uuid:
+            return {"openstack_server_id": instance.openstack_server_id}
+    return {"openstack_server_id": None}
+
+
+def _ep_os_submit_create_server(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    image = provider.images[label.image]
+    image_external_id = data.get("image_external_id")
+    if not image_external_id and data.get("node_uuid"):
+        node = _load_node(launcher, data["node_uuid"])
+        image_external_id = call_launcher(
+            launcher, "getImageExternalId", node, provider
+        )
+    if image_external_id:
+        image_external = image_external_id
+    elif getattr(image, "image_id", None):
+        image_external = dict(id=image.image_id)
+    else:
+        image_external = image.external_name
+    os_flavor = endpoint._findFlavor(flavor_name=flavor.flavor_name)
+    future = endpoint._submitApi(
+        endpoint._createServer,
+        data.get("hostname") or "",
+        image=image_external,
+        flavor=os_flavor,
+        key_name=label.key_name,
+        az=label.az,
+        config_drive=image.config_drive,
+        networks=label.networks,
+        security_groups=label.security_groups,
+        boot_from_volume=label.boot_from_volume,
+        volume_size=label.volume_size,
+        instance_properties=data.get("tags") or {},
+        userdata=label.userdata,
+    )
+    return {"future_id": _store_future(launcher, future)}
+
+
+def _ep_os_complete_create_server(launcher, data):
+    from zuul.driver.openstack.openstackendpoint import is_message_about_quota
+    import openstack.cloud.exc
+
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    future = _future_store(launcher).get(data.get("future_id"))
+    if future is None:
+        return {"server": None}
+    try:
+        try:
+            server = endpoint._completeApi(future)
+            if server is not None:
+                _future_store(launcher).pop(data.get("future_id"), None)
+            return {"server": _jsonable(server)}
+        except openstack.cloud.exc.OpenStackCloudCreateException as exc:
+            payload = {
+                "server": None,
+                "resource_id": getattr(exc, "resource_id", None),
+                "message": "%s: %s" % (type(exc).__name__, exc),
+                "quota_fault": False,
+            }
+            if payload["resource_id"]:
+                payload["quota_fault"] = bool(
+                    _os_server_fault_is_quota(
+                        endpoint, payload["resource_id"], launcher.log
+                    )
+                )
+            return payload
+    except Exception as exc:
+        if is_message_about_quota(str(exc)):
+            return {
+                "error_kind": "quota",
+                "message": "%s: %s" % (type(exc).__name__, exc),
+            }
+        raise
+
+
+def _os_server_fault_is_quota(endpoint, server_id, log):
+    from zuul.driver.openstack.openstackendpoint import is_message_about_quota
+
+    if not server_id:
+        return False
+    try:
+        server = endpoint._getServerByIdNow(server_id)
+        if not server:
+            return False
+        fault = server.get("fault", {}).get("message")
+        if fault:
+            log.error("Detailed node error: %s", fault)
+            if is_message_about_quota(fault):
+                return True
+    except Exception:
+        log.exception("Failed to retrieve node error information:")
+    return False
+
+
+def _ep_os_refresh_server(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    server = endpoint._refreshServer(data.get("server") or {})
+    return {"server": _jsonable(server)}
+
+
+def _ep_os_get_server(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    server = endpoint._getServer(data.get("server_id"))
+    return {"server": _jsonable(server)}
+
+
+def _ep_os_needs_floating_ip(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    return {
+        "needs": bool(endpoint._needsFloatingIp(data.get("server") or {}))
+    }
+
+
+def _ep_os_create_floating_ip(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    fip = endpoint._createFloatingIp(data.get("server") or {})
+    return {"floating_ip": _jsonable(fip)}
+
+
+def _ep_os_refresh_floating_ip(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    fip = endpoint._refreshFloatingIp(data.get("floating_ip") or {})
+    return {"floating_ip": _jsonable(fip)}
+
+
+def _ep_os_attach_ip(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._attachIpToServer(
+        data.get("server") or {}, data.get("floating_ip") or {}
+    )
+    return {}
+
+
+def _ep_os_server_floating_ip(launcher, data):
+    import openstack.cloud.meta
+
+    server = data.get("server") or {}
+    ip = openstack.cloud.meta.get_server_ip(
+        server, ext_tag="floating", public=True
+    )
+    return {"ip": ip}
+
+
+def _ep_os_get_instance(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    node = _load_node(launcher, data["node_uuid"])
+    label = provider.labels[data["label"]]
+    flavor = provider.flavors[label.flavor]
+    from zuul.driver.openstack.openstackendpoint import quota_from_flavor
+
+    os_flavor = endpoint._findFlavor(flavor_name=flavor.flavor_name)
+    quota = quota_from_flavor(os_flavor, label=label)
+    with _mutable(node):
+        if data.get("openstack_server_id"):
+            node.openstack_server_id = data.get("openstack_server_id")
+        if data.get("openstack_floating_ip_id"):
+            node.openstack_floating_ip_id = data.get(
+                "openstack_floating_ip_id"
+            )
+        node.quota = quota
+        instance = endpoint._getInstance(data.get("server") or {}, quota)
+        node.updateFromInstance(instance)
+    return {"node": _export_node(node)}
+
+
+def _ep_os_has_floating_ips(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    return {"has": bool(endpoint._hasFloatingIps())}
+
+
+def _ep_os_get_floating_ips(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    fips = endpoint._getFloatingIps(data.get("server") or {})
+    return {"floating_ips": _jsonable(fips)}
+
+
+def _ep_os_delete_floating_ip(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._deleteFloatingIp(data.get("floating_ip") or {})
+    return {}
+
+
+def _ep_os_refresh_floating_ip_delete(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    fip = endpoint._refreshFloatingIpDelete(data.get("floating_ip"))
+    return {"floating_ip": _jsonable(fip)}
+
+
+def _ep_os_submit_delete_server(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    future = endpoint._submitApi(
+        endpoint._deleteServer, data.get("server_id")
+    )
+    return {"future_id": _store_future(launcher, future)}
+
+
+def _ep_os_complete_delete_server(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    future = _future_store(launcher).get(data.get("future_id"))
+    if future is None:
+        return {"done": False}
+    done = endpoint._completeApi(future)
+    if done:
+        _future_store(launcher).pop(data.get("future_id"), None)
+    return {"done": bool(done)}
+
+
+def _ep_os_refresh_server_delete(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    server = endpoint._refreshServerDelete(data.get("server"))
+    return {"server": _jsonable(server)}
+
+
+def _ep_os_handle_server_fault(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    return {
+        "quota": _os_server_fault_is_quota(
+            endpoint, data.get("server_id"), launcher.log
+        )
+    }
+
+
+def _ep_k8s_setup(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    if label.kind == "pod":
+        containers = [c["name"] for c in label.spec["containers"]]
+    else:
+        containers = None
+    cfg = endpoint.core_client.api_client.configuration
+    return {
+        "use_openshift_projects": bool(
+            endpoint.connection.use_openshift_projects
+        ),
+        "kind": label.kind,
+        "host": cfg.host,
+        "skiptls": not cfg.verify_ssl,
+        "containers": containers,
+        "quota": _quota_payload(endpoint.getQuotaForLabel(label)),
+    }
+
+
+def _ep_k8s_use_openshift(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    return {
+        "use_openshift_projects": bool(
+            endpoint.connection.use_openshift_projects
+        )
+    }
+
+
+def _ep_k8s_create_namespace(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._createNamespace(data.get("hostname"), data.get("tags") or {})
+    return {}
+
+
+def _ep_k8s_create_project(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._createProject(data.get("hostname"), data.get("tags") or {})
+    return {}
+
+
+def _ep_k8s_get_subject_access_review(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    review = endpoint._getSubjectAccessReview(data.get("namespace"))
+    if review is None:
+        return {"allowed": None}
+    return {"allowed": bool(review.status.allowed)}
+
+
+def _ep_k8s_create_image_pull_secrets(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    endpoint._createImagePullSecrets(data.get("namespace"), label)
+    return {}
+
+
+def _ep_k8s_create_service_account(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._createServiceAccount(data.get("namespace"), data.get("user"))
+    return {}
+
+
+def _ep_k8s_get_token(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    token = endpoint._getToken(data.get("namespace"), data.get("user"))
+    if token is None:
+        return {"token": None, "ca_crt": None}
+    token_value, ca_crt = token
+    return {"token": token_value, "ca_crt": ca_crt}
+
+
+def _ep_k8s_create_role(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._createRole(
+        data.get("namespace"),
+        data.get("user"),
+        bool(data.get("restricted_access")),
+    )
+    return {}
+
+
+def _ep_k8s_create_pod(launcher, data):
+    provider, endpoint = _provider_endpoint(launcher, data)
+    label = provider.labels[data["label"]]
+    endpoint._createPod(
+        data.get("namespace"),
+        data.get("hostname"),
+        label,
+        data.get("tags") or {},
+    )
+    return {}
+
+
+def _ep_k8s_get_pod(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    ready = endpoint._getPod(data.get("namespace"), data.get("hostname"))
+    return {"ready": bool(ready)}
+
+
+def _ep_k8s_delete_namespace(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._deleteNamespace(data.get("namespace_id"))
+    return {}
+
+
+def _ep_k8s_delete_project(launcher, data):
+    _provider, endpoint = _provider_endpoint(launcher, data)
+    endpoint._deleteProject(data.get("namespace_id"))
+    return {}
+
+
+def _ep_k8s_update_node(launcher, data):
+    from zuul.driver.kubernetes.kubernetesmodel import KubernetesInstance
+
+    provider, endpoint = _provider_endpoint(launcher, data)
+    node = _load_node(launcher, data["node_uuid"])
+    label = provider.labels[data["label"]]
+    quota = endpoint.getQuotaForLabel(label)
+    with _mutable(node):
+        if data.get("kubernetes_namespace_id"):
+            node.kubernetes_namespace_id = data.get(
+                "kubernetes_namespace_id"
+            )
+        if data.get("kubernetes_connection"):
+            node.kubernetes_connection = data.get("kubernetes_connection")
+        node.quota = quota
+        instance = KubernetesInstance(
+            data.get("kind") or label.kind,
+            data.get("hostname"),
+            data.get("tags") or {},
+            quota,
+        )
+        node.updateFromInstance(instance)
+    return {"node": _export_node(node)}
 
 
 def _callable_is_patched(current, original):
@@ -1345,101 +1964,59 @@ def _request_cache_ready(launcher, data):
     return {"wait": False, "request_visible": request is not None}
 
 
-def _accept_requested(launcher, _data):
-    """Launcher._processRequests for REQUESTED and ACCEPTED requests.
+def _accept_one(launcher, data):
+    """Acquire the request lock and call launcher._acceptRequest.
 
-    Acceptance goes through launcher._acceptRequest so a test patch of
-    that method runs. Accepted requests go through _checkRequest, which
-    keeps both nodes of a request on one provider after a retry.
+    Rust process_requests drives acceptance. This adapter only covers
+    ZooKeeper lock acquisition on the Python request object (so the
+    Python node/request caches agree with the holder) and routes through
+    `_acceptRequest` so unittest patches of that method still run. The
+    PyO3 `_acceptRequest` implementation calls Rust accept_request_by_uuid;
+    it does not run server.Launcher._acceptRequest.
     """
     from kazoo.exceptions import NoNodeError
     from opentelemetry import trace
-    from zuul.launcher.server import NodesetRequestError
     from zuul.lib import tracing as zuul_tracing
-    from zuul.model import NodesProvisionedEvent
     from zuul.zk.zkobject import ZKContext
 
+    request = launcher.api.getNodesetRequest(data["uuid"])
+    if request is None:
+        return {"ok": False, "missing": True}
     log = launcher.log
-    pending = set()
-    unassigned = call_launcher(launcher, "_getUnassignedNodes")
-    for request in list(launcher.api.getMatchingRequests()):
-        try:
-            if not request.hasLock():
-                if (
-                    request.state in request.FINAL_STATES
-                    and request.event_state == request.EventState.COMPLETE
-                ):
-                    continue
-                ctx = ZKContext(
-                    launcher.zk_client, None, launcher.stop_event, log
-                )
-                if not request.acquireLock(ctx, blocking=False):
-                    continue
-                request.refresh(ctx)
-                request_span = zuul_tracing.restoreSpan(
-                    getattr(request, "span_info", None)
-                )
-                with trace.use_span(request_span):
-                    request._set(
-                        _span=trace.get_tracer("zuul").start_span(
-                            "NodesetRequestProcessing"
-                        )
-                    )
-            if not call_launcher(launcher, "_cachesReadyForRequest", request):
-                continue
+    try:
+        if not request.hasLock():
+            if (
+                request.state in request.FINAL_STATES
+                and request.event_state == request.EventState.COMPLETE
+            ):
+                return {"ok": True, "skipped": True}
+            ctx = ZKContext(launcher.zk_client, None, launcher.stop_event, log)
+            if not request.acquireLock(ctx, blocking=False):
+                return {"ok": False, "locked": False}
             try:
-                if request.state == request.State.REQUESTED:
-                    launcher._acceptRequest(request, log, unassigned, pending)
-                elif request.state == request.State.ACCEPTED:
-                    launcher._checkRequest(request, log, unassigned)
-            except NodesetRequestError as err:
-                launcher.log.error(
-                    "Marking request %s as %s: %s",
-                    request,
-                    request.State.FAILED,
-                    err,
-                )
-                ctx = ZKContext(
-                    launcher.zk_client,
-                    request._lock,
-                    launcher.stop_event,
-                    log,
-                )
-                request.updateAttributes(ctx, state=request.State.FAILED)
-            except Exception:
-                launcher.log.exception("Error processing request %s", request)
-            if request.state in request.FINAL_STATES:
-                if getattr(request, "_span", None) is not None:
-                    request._span.set_attributes(request.getSpanAttributes())
-                    request._span.end()
-                event = NodesProvisionedEvent(
-                    request.uuid, request.buildset_uuid
-                )
-                launcher.result_events[request.tenant_name][
-                    request.pipeline_name
-                ].put(event)
-                ctx = ZKContext(
-                    launcher.zk_client, None, launcher.stop_event, log
-                )
-                request.updateAttributes(
-                    ctx, event_state=request.EventState.COMPLETE
-                )
-                request.releaseLock(ctx)
-        except NoNodeError:
-            # The test deleted the request between the cache read and
-            # refresh. Python sleeps long enough to miss this; our poll
-            # hits it. A missing request is not a launcher error.
-            continue
-        finally:
-            if request.hasLock():
-                try:
-                    ctx = ZKContext(
-                        launcher.zk_client, None, launcher.stop_event, log
+                request.refresh(ctx)
+            except NoNodeError:
+                return {"ok": False, "missing": True}
+            request_span = zuul_tracing.restoreSpan(
+                getattr(request, "span_info", None)
+            )
+            with trace.use_span(request_span):
+                request._set(
+                    _span=trace.get_tracer("zuul").start_span(
+                        "NodesetRequestProcessing"
                     )
-                    request.releaseLock(ctx)
-                except NoNodeError:
-                    pass
-    return {"ok": True}
+                )
+        # unassigned/pending are unused by the Rust-backed method; pass
+        # placeholders so patched wrappers that forward *args still work.
+        unassigned = call_launcher(launcher, "_getUnassignedNodes")
+        pending = set()
+        launcher._acceptRequest(request, log, unassigned, pending)
+        return {"ok": True}
+    except NoNodeError:
+        return {"ok": False, "missing": True}
+    except Exception:
+        launcher.log.exception("Error accepting request %s", data.get("uuid"))
+        return {"ok": False, "error": True}
 
 
 def _node_tags(launcher, data):

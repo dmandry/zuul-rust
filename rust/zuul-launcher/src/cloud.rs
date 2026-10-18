@@ -27,6 +27,10 @@ fn handlers() -> &'static Mutex<HashMap<String, Handler>> {
 
 thread_local! {
     static CURRENT: RefCell<Option<String>> = RefCell::new(None);
+    /// When process_once holds the PyO3 mutex, `_acceptRequest` re-enters
+    /// on the same thread. Point at the active Launcher so accept can
+    /// run without trying to lock the mutex again.
+    static ACTIVE_LAUNCHER: RefCell<Option<*mut ()>> = RefCell::new(None);
 }
 
 /// Binds cloud calls on this thread to one launcher. Two launchers in
@@ -43,6 +47,24 @@ impl Drop for CurrentGuard {
 pub fn enter(id: &str) -> CurrentGuard {
     CURRENT.with(|c| *c.borrow_mut() = Some(id.to_string()));
     CurrentGuard
+}
+
+/// Bind `launcher` as the re-entrant target for accept_one → `_acceptRequest`.
+pub struct ActiveLauncherGuard;
+
+impl Drop for ActiveLauncherGuard {
+    fn drop(&mut self) {
+        ACTIVE_LAUNCHER.with(|c| *c.borrow_mut() = None);
+    }
+}
+
+pub fn enter_launcher(ptr: *mut ()) -> ActiveLauncherGuard {
+    ACTIVE_LAUNCHER.with(|c| *c.borrow_mut() = Some(ptr));
+    ActiveLauncherGuard
+}
+
+pub fn active_launcher() -> Option<*mut ()> {
+    ACTIVE_LAUNCHER.with(|c| *c.borrow())
 }
 
 pub fn register_handler(id: &str, handler: Handler) {

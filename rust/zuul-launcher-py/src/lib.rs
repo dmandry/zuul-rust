@@ -118,6 +118,9 @@ impl PyLauncher {
             let _cloud = zuul_launcher::cloud::enter(&hostname);
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
+                let _active = zuul_launcher::cloud::enter_launcher(
+                    launcher as *mut _ as *mut (),
+                );
                 launcher.api.sync();
                 launcher.process_once();
                 (
@@ -191,8 +194,32 @@ impl PyLauncher {
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         // Tests patch this method and then call the saved original.
-        // That original is this method, which runs server.Launcher._acceptRequest.
-        call_py(py, "call_launcher_args", (slf, "_acceptRequest", args))
+        // The original is this method: accept runs in Rust. When called
+        // from accept_one during process_once, the mutex is already held
+        // — use the thread-local active launcher pointer instead.
+        let request = args.get_item(0)?;
+        let uuid: String = request.getattr("uuid")?.extract()?;
+        let hostname: String = slf.getattr("hostname")?.extract()?;
+        let rust = slf.borrow().rust.clone();
+        py.allow_threads(|| {
+            let _cloud = zuul_launcher::cloud::enter(&hostname);
+            if let Some(ptr) = zuul_launcher::cloud::active_launcher() {
+                let launcher =
+                    unsafe { &mut *(ptr as *mut zuul_launcher::launcher::Launcher) };
+                launcher.api.sync();
+                return launcher
+                    .accept_request_by_uuid(&uuid)
+                    .map_err(PyRuntimeError::new_err);
+            }
+            let mut guard = rust.lock().unwrap();
+            if let Some(launcher) = guard.as_mut() {
+                launcher.api.sync();
+                launcher
+                    .accept_request_by_uuid(&uuid)
+                    .map_err(PyRuntimeError::new_err)?;
+            }
+            Ok(())
+        })
     }
 
     #[pyo3(signature = (*args, **_kwargs))]

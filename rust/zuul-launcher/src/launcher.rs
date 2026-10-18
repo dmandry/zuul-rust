@@ -69,6 +69,10 @@ pub struct Launcher {
     pub upload_pools: Option<UploadPools>,
     pub upload_uuids_in_queue: HashSet<String>,
     pub upload_uuids_in_delete_queue: HashSet<String>,
+    /// Pending (provider, label) keys for quota deferral within one
+    /// process_requests pass. Shared with the accept_one PyO3 hook so
+    /// patched `_acceptRequest` still sees the same deferral set.
+    accept_pending: HashSet<(String, String)>,
     stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
     stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
     cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
@@ -133,6 +137,7 @@ impl Launcher {
             upload_pools: None,
             upload_uuids_in_queue: HashSet::new(),
             upload_uuids_in_delete_queue: HashSet::new(),
+            accept_pending: HashSet::new(),
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
@@ -381,16 +386,13 @@ impl Launcher {
     }
 
     pub fn process_requests(&mut self) {
-        // Unit tests patch Launcher._acceptRequest and launcher_score.
-        // Drive Python acceptance and _checkRequest so retries keep
-        // every label in a request on the same provider.
-        let python_accept = cloud::enabled()
-            && cloud::invoke("accept_requested", &json!({})).is_ok();
-        if python_accept {
-            return;
-        }
+        // Launcher decisions run in Rust. When the PyO3 harness is
+        // active, REQUESTED accepts go through launcher._acceptRequest
+        // (accept_one) so unittest patches of that method still fire;
+        // the method itself drives Rust accept_request_by_uuid.
+        self.accept_pending.clear();
         let unassigned = self.unassigned_nodes();
-        let mut pending: HashSet<(String, String)> = HashSet::new();
+        let mut pending = self.accept_pending.clone();
         let ids = self.matching_ids("matching_requests");
         for id in ids {
             let Some(req) = self.api.requests.get(&id).cloned() else { continue };
@@ -398,7 +400,16 @@ impl Launcher {
                 continue;
             }
             if req.state() == request_state::REQUESTED {
-                self.process_nodeset_request(&req, &unassigned, &mut pending);
+                if cloud::enabled() {
+                    // Lock + patch hook on the Python request object;
+                    // real accept is Rust via PyO3 _acceptRequest.
+                    let _ = cloud::invoke("accept_one", &json!({ "uuid": id }));
+                    self.api.sync();
+                    pending = self.accept_pending.clone();
+                } else {
+                    self.process_nodeset_request(&req, &unassigned, &mut pending);
+                    self.accept_pending = pending.clone();
+                }
             } else if req.state() == request_state::ACCEPTED {
                 self.process_nodeset_request(&req, &unassigned, &mut pending);
             } else if model::is_final_request_state(&req.state()) {
@@ -410,6 +421,23 @@ impl Launcher {
                 self.finish_request(&mut req, &state);
             }
         }
+        self.accept_pending = pending;
+    }
+
+    /// Accept one REQUESTED nodeset by uuid. Used by the PyO3
+    /// `_acceptRequest` hook so patches wrap Rust accept logic.
+    pub fn accept_request_by_uuid(&mut self, uuid: &str) -> Result<(), String> {
+        let Some(req) = self.api.requests.get(uuid).cloned() else {
+            return Err(format!("missing request {uuid}"));
+        };
+        if req.state() != request_state::REQUESTED {
+            return Ok(());
+        }
+        let unassigned = self.unassigned_nodes();
+        let mut pending = self.accept_pending.clone();
+        let result = self.accept_request(&req, &unassigned, &mut pending);
+        self.accept_pending = pending;
+        result
     }
 
     fn process_nodeset_request(
@@ -751,16 +779,6 @@ impl Launcher {
     }
 
     pub fn get_quota_percentage(&self, provider: &dyn Provider, messages: &mut Vec<String>) -> f64 {
-        if cloud::enabled() {
-            if let Ok(value) = cloud::invoke(
-                "quota_percentage",
-                &json!({"provider": provider.canonical_name()}),
-            ) {
-                if let Some(pct) = value.get("pct").and_then(|v| v.as_f64()) {
-                    return pct;
-                }
-            }
-        }
         let total = match self.provider_quota_available(provider, true) {
             Some(q) => q,
             None => return 1.0,
@@ -841,21 +859,7 @@ impl Launcher {
         label: &crate::provider::Label,
         include_usage: bool,
     ) -> bool {
-        if cloud::enabled() {
-            if let Ok(value) = cloud::invoke(
-                "quota_for_label",
-                &json!({
-                    "provider": provider.canonical_name(),
-                    "label": label.name,
-                    "tenant": tenant,
-                    "include_usage": include_usage,
-                }),
-            ) {
-                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
-                    return ok;
-                }
-            }
-        }
+        let _ = tenant;
         let mut total = if include_usage {
             let Some(mut total) = self.provider_quota_available(provider, true) else {
                 return false;
@@ -906,19 +910,6 @@ impl Launcher {
     }
 
     pub fn does_provider_have_quota_for_node(&self, provider: &dyn Provider, node: &ProviderNode) -> bool {
-        if cloud::enabled() {
-            if let Ok(value) = cloud::invoke(
-                "quota_for_node",
-                &json!({
-                    "provider": provider.canonical_name(),
-                    "uuid": node.uuid(),
-                }),
-            ) {
-                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
-                    return ok;
-                }
-            }
-        }
         let Some(mut total) = self.provider_quota_available(provider, false) else {
             return false;
         };
