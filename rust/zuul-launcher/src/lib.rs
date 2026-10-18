@@ -14,6 +14,7 @@ pub mod model;
 pub mod nodescan;
 pub mod provider;
 pub mod upload;
+pub mod workers;
 pub mod zk;
 
 pub use model::{MODEL_API, ZUUL_VERSION};

@@ -7,9 +7,16 @@ use crate::cloud;
 use crate::jsonutil;
 use crate::layout::{self, LayoutState};
 use crate::mmh3;
-use crate::model::{self, node_state, request_state, NodesetRequest, ProviderNode, QuotaInformation};
+use crate::model::{
+    self, node_state, request_state, upload_state, NodesetRequest, ProviderNode, QuotaInformation,
+    UPLOAD_STATES,
+};
 use crate::nodescan::{NodescanRequest, NodescanWorker};
 use crate::provider::{AdvanceError, Provider, StateMachine};
+use crate::upload::{PlannedJob, UploadArgs, UploadPlanner};
+use crate::workers::{
+    matching_endpoints, CleanupWorker, EndpointRef, StatsWorker, UploadPools,
+};
 use crate::zk::{self, ComponentInfo, LauncherApi, ZkOps};
 use rand::seq::SliceRandom;
 use serde_json::{json, Map, Value};
@@ -57,6 +64,38 @@ pub struct Launcher {
     pub pending_events: Vec<Value>,
     pub wake: Arc<Mutex<bool>>,
     pub now: f64,
+    pub cleanup_worker: Option<CleanupWorker>,
+    pub stats_worker: Option<StatsWorker>,
+    pub upload_pools: Option<UploadPools>,
+    pub upload_uuids_in_queue: HashSet<String>,
+    pub upload_uuids_in_delete_queue: HashSet<String>,
+    stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
+    stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
+    cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
+}
+
+/// Data the stats election thread reads to emit `_runStats` gauges.
+#[derive(Clone, Default)]
+struct StatsSnapshot {
+    nodes: Vec<(String, String, String)>,
+    requests: Vec<String>,
+    uploads: Vec<(String, String, String)>,
+    providers: Vec<ProviderStatsRow>,
+}
+
+#[derive(Clone, Default)]
+struct ProviderStatsRow {
+    canonical_name: String,
+    limits: BTreeMap<String, f64>,
+    usage: BTreeMap<String, f64>,
+    labels: Vec<(String, String, Option<i64>)>,
+}
+
+#[derive(Clone, Default)]
+struct CleanupShared {
+    hostname: String,
+    components: Vec<ComponentInfo>,
+    endpoints: Vec<EndpointRef>,
 }
 
 impl Launcher {
@@ -89,6 +128,14 @@ impl Launcher {
             pending_events: Vec::new(),
             wake: Arc::new(Mutex::new(false)),
             now: model::now_secs(),
+            cleanup_worker: None,
+            stats_worker: None,
+            upload_pools: None,
+            upload_uuids_in_queue: HashSet::new(),
+            upload_uuids_in_delete_queue: HashSet::new(),
+            stats_snapshot: None,
+            stats_worker_sink: None,
+            cleanup_shared: None,
         }
     }
 
@@ -141,6 +188,8 @@ impl Launcher {
         // Python reads time.time() on each pass. Logic tests that call
         // process_provider_node directly keep an injected clock.
         self.now = model::now_secs();
+        self.refresh_worker_shared();
+        self.maintain_images_and_uploads();
         self.process_requests();
         self.process_nodes();
         self.process_min_ready();
@@ -1831,6 +1880,368 @@ impl Launcher {
         self.stats.push(StatEvent { kind: "g".into(), name: "zuul.nodes.leaked".into(), value: leaked as f64 });
         self.stats.push(StatEvent { kind: "g".into(), name: "zuul.nodes.unmanaged".into(), value: unmanaged as f64 });
     }
+
+    /// Start cleanup, stats election, and upload pools (server.py start).
+    pub fn start_workers(&mut self) {
+        if self.cleanup_worker.is_some() {
+            return;
+        }
+        let cleanup_shared = Arc::new(Mutex::new(CleanupShared {
+            hostname: self.hostname.clone(),
+            components: self.api.components.clone(),
+            endpoints: self.endpoint_refs(),
+        }));
+        self.cleanup_shared = Some(cleanup_shared.clone());
+        self.cleanup_worker = Some(CleanupWorker::start(move || {
+            let shared = cleanup_shared.lock().unwrap().clone();
+            let matched =
+                matching_endpoints(&shared.hostname, &shared.components, &shared.endpoints);
+            for endpoint in matched {
+                // Cloud list_resources / delete_resource when providers are live.
+                let _ = endpoint;
+            }
+        }));
+
+        let snapshot = Arc::new(Mutex::new(StatsSnapshot::default()));
+        self.stats_snapshot = Some(snapshot.clone());
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        self.stats_worker_sink = Some(sink.clone());
+        let zk = self.api.zk.clone();
+        self.stats_worker = Some(StatsWorker::start(zk, &self.hostname, move || {
+            let snap = snapshot.lock().unwrap().clone();
+            let events = emit_run_stats(&snap);
+            if let Ok(mut g) = sink.lock() {
+                g.extend(events);
+            }
+        }));
+
+        self.upload_pools = Some(UploadPools::new(&self.hostname));
+        self.refresh_worker_shared();
+    }
+
+    /// Stop workers (server.py stop: cancel election, join cleanup, shutdown pools).
+    pub fn stop_workers(&mut self) {
+        if let Some(worker) = self.stats_worker.take() {
+            worker.join();
+        }
+        if let Some(worker) = self.cleanup_worker.take() {
+            worker.join();
+        }
+        if let Some(pools) = self.upload_pools.take() {
+            pools.shutdown();
+        }
+        self.stats_snapshot = None;
+        self.stats_worker_sink = None;
+        self.cleanup_shared = None;
+    }
+
+    fn endpoint_refs(&self) -> Vec<EndpointRef> {
+        let mut by_cname: HashMap<String, EndpointRef> = HashMap::new();
+        for list in self.tenant_providers.values() {
+            for provider in list {
+                let ep = provider.endpoint();
+                by_cname
+                    .entry(ep.canonical_name.clone())
+                    .or_insert_with(|| EndpointRef {
+                        name: ep.name.clone(),
+                        canonical_name: ep.canonical_name.clone(),
+                        connection_name: ep.connection_name.clone(),
+                    });
+            }
+        }
+        by_cname.into_values().collect()
+    }
+
+    fn refresh_worker_shared(&mut self) {
+        if let Some(shared) = &self.cleanup_shared {
+            if let Ok(mut g) = shared.lock() {
+                g.hostname = self.hostname.clone();
+                g.components = self.api.components.clone();
+                g.endpoints = self.endpoint_refs();
+            }
+        }
+        if let Some(snap) = &self.stats_snapshot {
+            if let Ok(mut g) = snap.lock() {
+                *g = self.build_stats_snapshot();
+            }
+        }
+        if let Some(sink) = &self.stats_worker_sink {
+            if let Ok(mut g) = sink.lock() {
+                self.stats.append(&mut *g);
+            }
+        }
+        if let Some(pools) = &self.upload_pools {
+            self.stats.extend(pools.take_gauges());
+        }
+    }
+
+    fn build_stats_snapshot(&self) -> StatsSnapshot {
+        let nodes: Vec<(String, String, String)> = self
+            .api
+            .nodes
+            .values()
+            .map(|n| (n.state(), n.provider(), n.label()))
+            .collect();
+        let requests: Vec<String> = self.api.requests.values().map(|r| r.state()).collect();
+        let uploads: Vec<(String, String, String)> = self
+            .api
+            .uploads
+            .values()
+            .map(|u| (u.canonical_name(), u.endpoint_name(), u.state()))
+            .collect();
+        let mut seen = HashSet::new();
+        let mut providers = Vec::new();
+        for list in self.tenant_providers.values() {
+            for provider in list {
+                if !seen.insert(provider.canonical_name().to_string()) {
+                    continue;
+                }
+                let mut limits = self
+                    .cloud_endpoint_limits(provider.as_ref())
+                    .unwrap_or_else(|| provider.endpoint().limits.copy());
+                if !provider.resource_limits().is_empty() {
+                    let pl = QuotaInformation {
+                        default: f64::INFINITY,
+                        quota: provider.resource_limits().clone(),
+                    };
+                    limits.min_with(&pl);
+                }
+                let usage = self.api.get_quota(provider.canonical_name(), true);
+                let labels: Vec<(String, String, Option<i64>)> = provider
+                    .labels()
+                    .values()
+                    .map(|l| (l.name.clone(), l.canonical_name.clone(), l.max_nodes))
+                    .collect();
+                providers.push(ProviderStatsRow {
+                    canonical_name: provider.canonical_name().to_string(),
+                    limits: limits.quota,
+                    usage: usage.quota,
+                    labels,
+                });
+            }
+        }
+        StatsSnapshot {
+            nodes,
+            requests,
+            uploads,
+            providers,
+        }
+    }
+
+    /// Image retention / delete queue (checkOldImages). Job bodies are no-ops
+    /// until cloud delete is wired.
+    pub fn check_old_images(&mut self) {
+        self.upload_deleted = false;
+        let Some(pools) = self.upload_pools.as_ref() else {
+            return;
+        };
+        let known_providers: HashSet<String> = self
+            .tenant_providers
+            .values()
+            .flat_map(|list| list.iter().map(|p| p.canonical_name().to_string()))
+            .collect();
+        let mut keep: HashSet<String> = HashSet::new();
+        for list in self.tenant_providers.values() {
+            for provider in list {
+                for image in provider.images().values() {
+                    if image.image_type != "zuul" {
+                        continue;
+                    }
+                    let uploads: Vec<&model::ImageUpload> = self
+                        .api
+                        .uploads
+                        .values()
+                        .filter(|u| u.canonical_name() == image.canonical_name)
+                        .collect();
+                    let mut valid: Vec<&model::ImageUpload> = uploads
+                        .iter()
+                        .copied()
+                        .filter(|u| {
+                            u.state() == upload_state::READY
+                                && u.validated()
+                                && u.external_id().is_some()
+                                && u.providers().iter().any(|p| p == provider.canonical_name())
+                        })
+                        .collect();
+                    valid.sort_by(|a, b| {
+                        a.timestamp()
+                            .partial_cmp(&b.timestamp())
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    let retain = image.retain_count.max(0) as usize;
+                    let newest: Vec<&model::ImageUpload> =
+                        valid.iter().rev().take(retain).copied().rev().collect();
+                    for u in &newest {
+                        keep.insert(u.uuid());
+                    }
+                    let oldest_ts = newest.first().map(|u| u.timestamp()).unwrap_or(0.0);
+                    let mut unvalidated: Vec<&model::ImageUpload> = uploads
+                        .iter()
+                        .copied()
+                        .filter(|u| {
+                            u.timestamp() > oldest_ts
+                                && u.state() == upload_state::READY
+                                && !u.validated()
+                                && u.external_id().is_some()
+                                && u.providers().iter().any(|p| p == provider.canonical_name())
+                        })
+                        .collect();
+                    unvalidated.sort_by(|a, b| {
+                        a.timestamp()
+                            .partial_cmp(&b.timestamp())
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    for u in unvalidated.iter().rev().take(retain) {
+                        keep.insert(u.uuid());
+                    }
+                    for u in &uploads {
+                        if u.timestamp() > oldest_ts
+                            && (u.state() != upload_state::READY || u.external_id().is_none())
+                            && u.providers().iter().any(|p| p == provider.canonical_name())
+                        {
+                            keep.insert(u.uuid());
+                        }
+                    }
+                }
+            }
+        }
+        let to_delete: Vec<String> = self
+            .api
+            .uploads
+            .values()
+            .filter(|u| {
+                if keep.contains(&u.uuid()) {
+                    return false;
+                }
+                if set_disjoint(&u.providers(), &known_providers) {
+                    return false;
+                }
+                true
+            })
+            .map(|u| u.uuid())
+            .collect();
+        for uuid in to_delete {
+            if self.upload_uuids_in_delete_queue.contains(&uuid) {
+                continue;
+            }
+            self.upload_uuids_in_delete_queue.insert(uuid.clone());
+            let job = PlannedJob {
+                kind: "delete".into(),
+                upload_uuid: uuid,
+                source_external_id: None,
+                dependents: Vec::new(),
+            };
+            pools.submit_upload(job, |_job| {});
+        }
+    }
+
+    /// Pending uploads via UploadPlanner into the three pools (checkMissingUploads).
+    pub fn check_missing_uploads(&mut self) {
+        self.image_updated = false;
+        let Some(pools) = self.upload_pools.as_ref() else {
+            return;
+        };
+        let all: Vec<&model::ImageUpload> = self.api.uploads.values().collect();
+        let mut pending: Vec<&model::ImageUpload> = Vec::new();
+        let mut args: HashMap<String, UploadArgs> = HashMap::new();
+        for upload in &all {
+            if upload.state() == upload_state::UPLOADING && !upload.is_locked {
+                // Crashed upload: reset to pending when cloud lock is available.
+            }
+            if self.upload_uuids_in_queue.contains(&upload.uuid()) {
+                continue;
+            }
+            if upload.state() != upload_state::PENDING {
+                continue;
+            }
+            pending.push(*upload);
+            let provider_name = upload.providers().first().cloned().unwrap_or_default();
+            let mut methods = Vec::new();
+            if let Some(provider) = self.provider_by_any_cname(&provider_name) {
+                if provider.import_job("") {
+                    methods.push("import".into());
+                }
+                if provider.copy_job("") {
+                    methods.push("copy".into());
+                }
+                if provider.upload_job() {
+                    methods.push("upload".into());
+                }
+            } else {
+                methods.push("upload".into());
+            }
+            args.insert(
+                upload.uuid(),
+                UploadArgs {
+                    provider: provider_name,
+                    image_name: upload.canonical_name(),
+                    url: String::new(),
+                    image_format: String::new(),
+                    methods,
+                },
+            );
+        }
+        if pending.is_empty() {
+            return;
+        }
+        for u in &pending {
+            self.upload_uuids_in_queue.insert(u.uuid());
+        }
+        let mut planner = UploadPlanner::new(pending, all, args);
+        planner.plan();
+        for job in planner.import_jobs {
+            pools.submit_import(job, |_job| {});
+        }
+        for job in planner.copy_jobs {
+            pools.submit_endpoint_upload(job, |_job| {});
+        }
+        for job in planner.upload_jobs {
+            pools.submit_upload(job, |_job| {});
+        }
+        for job in planner.jobs.values() {
+            if job.kind == "copy-dependent" {
+                pools.submit_endpoint_upload(job.clone(), |_job| {});
+            }
+        }
+    }
+
+    /// Snapshot nodes (processNodeSnapshot). Cloud snapshot SM is stubbed.
+    pub fn process_snapshots(&mut self) {
+        let ids: Vec<String> = self
+            .api
+            .nodes
+            .values()
+            .filter(|n| n.state() == node_state::SNAPSHOT)
+            .map(|n| n.uuid())
+            .collect();
+        for _id in ids {
+            // Provider getSnapshotStateMachine when cloud ops are available.
+        }
+    }
+
+    fn provider_by_any_cname(&self, cname: &str) -> Option<Arc<dyn Provider>> {
+        for list in self.tenant_providers.values() {
+            for p in list {
+                if p.canonical_name() == cname {
+                    return Some(p.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Layout / image maintenance path from `_run`.
+    fn maintain_images_and_uploads(&mut self) {
+        if self.layout_updated || self.image_updated {
+            self.check_old_images();
+            self.check_missing_uploads();
+            self.layout_updated = false;
+            self.image_updated = false;
+        } else if self.upload_deleted {
+            self.check_old_images();
+        }
+        self.process_snapshots();
+    }
 }
 
 pub fn normalize_statsd_name(name: &str) -> String {
@@ -1847,6 +2258,172 @@ pub fn normalize_statsd_name(name: &str) -> String {
         }
     }
     out
+}
+
+const NODE_STATES_FOR_STATS: &[&str] = &[
+    node_state::REQUESTED,
+    node_state::BUILDING,
+    node_state::REBUILDING,
+    node_state::READY,
+    node_state::FAILED,
+    node_state::TEMPFAILED,
+    node_state::IN_USE,
+    node_state::USED,
+    node_state::OUTDATED,
+    node_state::REGISTERING,
+    node_state::DEREGISTER,
+    node_state::HOLD,
+    node_state::SNAPSHOT,
+    node_state::SLOT_HOST,
+];
+
+const REQUEST_STATES_FOR_STATS: &[&str] = &[
+    request_state::REQUESTED,
+    request_state::ACCEPTED,
+    request_state::FULFILLED,
+    request_state::FAILED,
+    request_state::TEST_HOLD,
+];
+
+/// server.py Launcher._runStats gauge names.
+fn emit_run_stats(snap: &StatsSnapshot) -> Vec<StatEvent> {
+    let mut events = Vec::new();
+    let mut gauge = |name: String, value: f64| {
+        events.push(StatEvent {
+            kind: "g".into(),
+            name,
+            value,
+        });
+    };
+
+    let mut nodes: HashMap<&str, i64> = NODE_STATES_FOR_STATS.iter().map(|s| (*s, 0)).collect();
+    let mut provider_nodes: HashMap<String, HashMap<&str, i64>> = HashMap::new();
+    let mut provider_label_nodes: HashMap<String, HashMap<String, HashMap<&str, i64>>> =
+        HashMap::new();
+    for (state, provider, label) in &snap.nodes {
+        *nodes.entry(state.as_str()).or_insert(0) += 1;
+        let pn = provider_nodes.entry(provider.clone()).or_insert_with(|| {
+            NODE_STATES_FOR_STATS.iter().map(|s| (*s, 0)).collect()
+        });
+        *pn.entry(state.as_str()).or_insert(0) += 1;
+        let pln = provider_label_nodes
+            .entry(provider.clone())
+            .or_default()
+            .entry(label.clone())
+            .or_insert_with(|| NODE_STATES_FOR_STATS.iter().map(|s| (*s, 0)).collect());
+        *pln.entry(state.as_str()).or_insert(0) += 1;
+    }
+
+    let mut requests: HashMap<&str, i64> =
+        REQUEST_STATES_FOR_STATS.iter().map(|s| (*s, 0)).collect();
+    for state in &snap.requests {
+        if state != request_state::TEST_HOLD {
+            *requests.entry(state.as_str()).or_insert(0) += 1;
+        }
+    }
+
+    let mut max_nodes_by_label: HashMap<String, i64> = HashMap::new();
+    for provider in &snap.providers {
+        let safe_pname = normalize_statsd_name(&provider.canonical_name);
+        for (res, value) in &provider.limits {
+            let safe_res = normalize_statsd_name(res);
+            gauge(
+                format!("zuul.provider.{safe_pname}.limit.{safe_res}"),
+                *value,
+            );
+        }
+        for (res, value) in &provider.usage {
+            let safe_res = normalize_statsd_name(res);
+            gauge(
+                format!("zuul.provider.{safe_pname}.usage.{safe_res}"),
+                *value,
+            );
+        }
+        let empty_states: HashMap<&str, i64> =
+            NODE_STATES_FOR_STATS.iter().map(|s| (*s, 0)).collect();
+        let pnodes = provider_nodes
+            .get(&provider.canonical_name)
+            .unwrap_or(&empty_states);
+        for state in NODE_STATES_FOR_STATS {
+            let value = pnodes.get(state).copied().unwrap_or(0);
+            gauge(
+                format!("zuul.provider.{safe_pname}.nodes.state.{state}"),
+                value as f64,
+            );
+        }
+        for (label_name, label_cname, max_nodes) in &provider.labels {
+            let label_nodes = provider_label_nodes
+                .get(&provider.canonical_name)
+                .and_then(|m| m.get(label_name));
+            let safe_label = normalize_statsd_name(label_name);
+            for state in NODE_STATES_FOR_STATS {
+                let value = label_nodes
+                    .and_then(|m| m.get(state).copied())
+                    .unwrap_or(0);
+                gauge(
+                    format!(
+                        "zuul.provider.{safe_pname}.label.{safe_label}.nodes.state.{state}"
+                    ),
+                    value as f64,
+                );
+            }
+            if let Some(max) = max_nodes {
+                let safe_label_cname = normalize_statsd_name(label_cname);
+                max_nodes_by_label.insert(safe_label_cname, *max);
+            }
+        }
+    }
+    for (safe_label, value) in &max_nodes_by_label {
+        gauge(format!("zuul.label.{safe_label}.max_nodes"), *value as f64);
+    }
+    for state in NODE_STATES_FOR_STATS {
+        let value = nodes.get(state).copied().unwrap_or(0);
+        gauge(format!("zuul.nodes.state.{state}"), value as f64);
+    }
+    for state in REQUEST_STATES_FOR_STATS {
+        let value = requests.get(state).copied().unwrap_or(0);
+        gauge(format!("zuul.nodeset_requests.state.{state}"), value as f64);
+    }
+
+    let mut uploads_by_image: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for (image_cname, endpoint, state) in &snap.uploads {
+        uploads_by_image
+            .entry(normalize_statsd_name(image_cname))
+            .or_default()
+            .push((endpoint.clone(), state.clone()));
+    }
+    let mut upload_states: HashMap<String, i64> = HashMap::new();
+    for (image_cname, uploads) in &uploads_by_image {
+        let mut by_endpoint: HashMap<String, HashMap<String, i64>> = HashMap::new();
+        for (endpoint, state) in uploads {
+            *by_endpoint
+                .entry(endpoint.clone())
+                .or_default()
+                .entry(state.clone())
+                .or_insert(0) += 1;
+        }
+        for (endpoint_name, state_counter) in by_endpoint {
+            let safe_ename = normalize_statsd_name(&endpoint_name);
+            for (state, count) in &state_counter {
+                *upload_states.entry(state.clone()).or_insert(0) += count;
+            }
+            for state in UPLOAD_STATES {
+                let count = state_counter.get(*state).copied().unwrap_or(0);
+                gauge(
+                    format!("zuul.image.{image_cname}.upload.{safe_ename}.state.{state}"),
+                    count as f64,
+                );
+            }
+        }
+    }
+    for (state, count) in &upload_states {
+        gauge(format!("zuul.uploads.state.{state}"), *count as f64);
+    }
+    events
+}
+
+fn set_disjoint(providers: &[String], known: &HashSet<String>) -> bool {
+    !providers.iter().any(|p| known.contains(p))
 }
 
 fn layout_same(local: Option<&LayoutState>, remote: Option<&LayoutState>) -> bool {

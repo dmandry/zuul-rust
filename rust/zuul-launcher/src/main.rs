@@ -143,6 +143,7 @@ fn run_foreground(zk_cfg: &ZookeeperConfig, launcher_cfg: &LauncherConfig) -> Re
     )
     .map_err(|e| format!("unable to register launcher component: {e}"))?;
     launcher.component_path = Some(path);
+    launcher.start_workers();
     let socket = launcher_cfg.command_socket.clone();
     std::thread::spawn(move || command_server(&socket));
     while !STOP.load(std::sync::atomic::Ordering::SeqCst) {
@@ -158,6 +159,7 @@ fn run_foreground(zk_cfg: &ZookeeperConfig, launcher_cfg: &LauncherConfig) -> Re
             left = left.saturating_sub(step);
         }
     }
+    launcher.stop_workers();
     if let Some(path) = &launcher.component_path {
         let _ = zk::set_component(
             launcher.api.zk.as_ref(),
