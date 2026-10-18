@@ -918,7 +918,24 @@ impl Launcher {
         label: &crate::provider::Label,
         include_usage: bool,
     ) -> bool {
-        let _ = tenant;
+        // Unmanaged usage lives on the Python endpoint quota_cache until
+        // Rust CleanupWorker records it. Ask Python for the boolean while
+        // that remains true; the decision still follows 14.3.0 order.
+        if cloud::enabled() {
+            if let Ok(value) = cloud::invoke(
+                "quota_for_label",
+                &json!({
+                    "provider": provider.canonical_name(),
+                    "label": label.name,
+                    "tenant": tenant,
+                    "include_usage": include_usage,
+                }),
+            ) {
+                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
+                    return ok;
+                }
+            }
+        }
         let mut total = if include_usage {
             let Some(mut total) = self.provider_quota_available(provider, true) else {
                 return false;
@@ -969,6 +986,19 @@ impl Launcher {
     }
 
     pub fn does_provider_have_quota_for_node(&self, provider: &dyn Provider, node: &ProviderNode) -> bool {
+        if cloud::enabled() {
+            if let Ok(value) = cloud::invoke(
+                "quota_for_node",
+                &json!({
+                    "provider": provider.canonical_name(),
+                    "uuid": node.uuid(),
+                }),
+            ) {
+                if let Some(ok) = value.get("ok").and_then(|v| v.as_bool()) {
+                    return ok;
+                }
+            }
+        }
         let Some(mut total) = self.provider_quota_available(provider, false) else {
             return false;
         };

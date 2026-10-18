@@ -580,6 +580,12 @@ def cloud_call(launcher, op, payload):
             result = _image_attrs(launcher, data)
         elif op == "provider_quota":
             result = _provider_quota(launcher, data)
+        elif op == "quota_for_node":
+            # Unmanaged usage is still recorded by the Python CleanupWorker;
+            # Rust asks for the boolean until that worker is fully ported.
+            result = _quota_for_node(launcher, data)
+        elif op == "quota_for_label":
+            result = _quota_for_label(launcher, data)
         elif op == "accept_one":
             result = _accept_one(launcher, data)
         elif op == "fail":
