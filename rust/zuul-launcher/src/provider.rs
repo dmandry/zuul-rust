@@ -1287,6 +1287,14 @@ impl StateMachine for AwsDelete {
         }
         self.advance_offline()
     }
+    fn fail(&mut self) {
+        // StateMachine.fail marks the machine complete so cleanup can
+        // drop the node. DELETE_TIMEOUT and advance exceptions both
+        // call this (server.py _cleanupNode).
+        self.state = "complete".into();
+        self.complete = true;
+        self.export_updates();
+    }
     fn complete(&self) -> bool { self.complete }
     fn state_name(&self) -> String { self.state.clone() }
     fn start_time(&self) -> f64 { self.start_time }
