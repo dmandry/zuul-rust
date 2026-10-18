@@ -1483,6 +1483,7 @@ impl Launcher {
             match self.check_node_create(node_id) {
                 Ok(()) => {}
                 Err(AdvanceError::Quota(e)) => {
+                    self.create_sms.remove(node_id);
                     self.set_node_state(node_id, node_state::TEMPFAILED);
                     self.sync_subnodes(node_id, node_state::TEMPFAILED, false);
                     self.wake();
@@ -1492,6 +1493,7 @@ impl Launcher {
                     }
                 }
                 Err(e) => {
+                    self.create_sms.remove(node_id);
                     self.set_node_state(node_id, node_state::FAILED);
                     self.sync_subnodes(node_id, node_state::FAILED, false);
                     self.wake();
