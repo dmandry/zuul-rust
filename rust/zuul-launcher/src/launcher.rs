@@ -138,6 +138,9 @@ impl Launcher {
     /// the PyO3 harness can publish layout state in between, matching
     /// `_run` setting component state before `_processRequests`.
     pub fn process_once(&mut self) {
+        // Python reads time.time() on each pass. Logic tests that call
+        // process_provider_node directly keep an injected clock.
+        self.now = model::now_secs();
         self.process_requests();
         self.process_nodes();
         self.process_min_ready();
@@ -276,17 +279,83 @@ impl Launcher {
         }
     }
 
+    /// True when the Python request cache is behind the node's assignment
+    /// and this pass must not treat the request as missing.
+    fn await_request_cache(&mut self, node_id: &str) -> bool {
+        if !cloud::enabled() {
+            return false;
+        }
+        let Some(node) = self.api.nodes.get(node_id) else {
+            return false;
+        };
+        if node.request_id.is_none() {
+            return false;
+        }
+        // Do not trust the Rust request map here. The test locks the
+        // Python cache queue, so only that cache's max_zxid reports
+        // whether the assignment is safe to act on.
+        match cloud::invoke("request_cache_ready", &json!({ "uuid": node_id })) {
+            Ok(v) => {
+                if v.get("wait").and_then(|w| w.as_bool()).unwrap_or(false) {
+                    self.wake();
+                    return true;
+                }
+                if v.get("request_visible").and_then(|w| w.as_bool()).unwrap_or(false) {
+                    self.api.sync();
+                }
+                false
+            }
+            Err(_) => false,
+        }
+    }
+
+    fn matching_ids(&mut self, op: &str) -> Vec<String> {
+        if cloud::enabled() {
+            self.api.sync();
+            if let Ok(v) = cloud::invoke(op, &json!({})) {
+                if let Some(ids) = v.get("ids").and_then(|a| a.as_array()) {
+                    return ids
+                        .iter()
+                        .filter_map(|id| id.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+            }
+        }
+        if op == "matching_nodes" {
+            self.api.get_matching_nodes()
+        } else {
+            self.api.get_matching_requests()
+        }
+    }
+
     pub fn process_requests(&mut self) {
+        // Unit tests patch Launcher._acceptRequest and launcher_score.
+        // Drive Python acceptance and _checkRequest so retries keep
+        // every label in a request on the same provider.
+        let python_accept = cloud::enabled()
+            && cloud::invoke("accept_requested", &json!({})).is_ok();
+        if python_accept {
+            return;
+        }
         let unassigned = self.unassigned_nodes();
         let mut pending: HashSet<(String, String)> = HashSet::new();
-        let ids = self.api.get_matching_requests();
+        let ids = self.matching_ids("matching_requests");
         for id in ids {
             let Some(req) = self.api.requests.get(&id).cloned() else { continue };
             if model::is_final_request_state(&req.state()) && req.event_state() == model::event_state::COMPLETE {
                 continue;
             }
-            if req.state() == request_state::REQUESTED || req.state() == request_state::ACCEPTED {
+            if req.state() == request_state::REQUESTED {
                 self.process_nodeset_request(&req, &unassigned, &mut pending);
+            } else if req.state() == request_state::ACCEPTED {
+                self.process_nodeset_request(&req, &unassigned, &mut pending);
+            } else if model::is_final_request_state(&req.state()) {
+                // The request is already final but the completion event
+                // was not recorded. Emit it again, matching
+                // _processNodesetRequest.
+                let mut req = req;
+                let state = req.state();
+                self.finish_request(&mut req, &state);
             }
         }
     }
@@ -995,7 +1064,7 @@ impl Launcher {
     }
 
     pub fn process_nodes(&mut self) {
-        let ids = self.api.get_matching_nodes();
+        let ids = self.matching_ids("matching_nodes");
         for id in ids {
             if let Err(e) = self.process_provider_node(&id) {
                 self.messages.push(format!("node {id}: {e}"));
@@ -1007,6 +1076,12 @@ impl Launcher {
         let Some(node) = self.api.nodes.get(node_id).cloned() else {
             return Ok(());
         };
+        // Snapshot nodes are still returned while another actor holds
+        // the lock so image snapshot work can run. The rest of node
+        // processing, including cleanup, waits until that lock is gone.
+        if node.is_locked && !node.has_lock {
+            return Ok(());
+        }
         // A held node is left alone until hold_expiration, matching
         // _isNodeActionable. Missing request_id must not delete it.
         if node.state() == node_state::HOLD {
@@ -1038,6 +1113,11 @@ impl Launcher {
                     self.messages.push(format!("fail {e}"));
                 }
             }
+        }
+        // A request assigned while this launcher's cache was paused is
+        // not missing. Tests hook RequestCache.max_zxid to prove we wait.
+        if self.await_request_cache(node_id) {
+            return Ok(());
         }
         let Some(mut node) = self.api.nodes.get(node_id).cloned() else {
             return Ok(());
@@ -1123,9 +1203,44 @@ impl Launcher {
         Ok(())
     }
 
+    /// server.Launcher class constants. Unit tests monkeypatch the Python
+    /// class; the binary keeps the Rust default.
+    fn class_constant(&self, name: &str, default: f64) -> f64 {
+        if !cloud::enabled() {
+            return default;
+        }
+        match cloud::invoke("class_attr", &json!({ "name": name })) {
+            Ok(v) => v.get("value").and_then(|n| n.as_f64()).unwrap_or(default),
+            Err(_) => default,
+        }
+    }
+
+    /// LauncherApi.getProviderNode, so an in-process patch that hides
+    /// nodes is visible to the subnode sync timeout.
+    fn python_node_present(&self, uuid: &str) -> bool {
+        if !cloud::enabled() {
+            return true;
+        }
+        match cloud::invoke("node_visible", &json!({ "uuid": uuid })) {
+            Ok(v) => v.get("present").and_then(|p| p.as_bool()).unwrap_or(true),
+            Err(_) => true,
+        }
+    }
+
     fn check_node_create(&mut self, node_id: &str) -> Result<(), AdvanceError> {
         let node = self.api.nodes.get(node_id).cloned().ok_or_else(|| AdvanceError::Other("missing".into()))?;
         if node.driver_id == "subnode" {
+            // _checkNodeCreate fails a subnode whose main node never
+            // appears. The lookup is the patched getProviderNode.
+            if let Some(main_id) = node.main_node_id() {
+                if !self.python_node_present(&main_id) {
+                    let window = self.class_constant("SUBNODE_SYNC_TIME", SUBNODE_SYNC_TIME);
+                    if self.now - node.request_time() > window {
+                        return Err(AdvanceError::Other("Main node not present".into()));
+                    }
+                    self.wake();
+                }
+            }
             return Ok(());
         }
         let provider = self
@@ -1189,6 +1304,26 @@ impl Launcher {
             return Ok(());
         }
         let has_sub = self.api.nodes.get(node_id).map(|n| !n.subnodes().is_empty()).unwrap_or(false);
+        if has_sub {
+            let subs = self.api.nodes.get(node_id).map(|n| n.subnodes()).unwrap_or_default();
+            let missing = subs.iter().any(|id| !self.python_node_present(id));
+            if missing {
+                let request_time = self
+                    .api
+                    .nodes
+                    .get(node_id)
+                    .map(|n| n.request_time())
+                    .unwrap_or(0.0);
+                let window = self.class_constant("SUBNODE_SYNC_TIME", SUBNODE_SYNC_TIME);
+                if self.now - request_time > window {
+                    return Err(AdvanceError::Other(
+                        "Subnodes not present at creation".into(),
+                    ));
+                }
+                self.wake();
+                return Ok(());
+            }
+        }
         let state = if has_sub { node_state::SLOT_HOST } else { node_state::READY };
         if has_sub {
             self.sync_subnodes(node_id, node_state::READY, true);
@@ -1377,7 +1512,9 @@ impl Launcher {
             }
         }
         let start = self.delete_sms.get(node_id).map(|s| s.start_time()).unwrap_or(self.now);
-        if self.now - start > DELETE_TIMEOUT {
+        // test_failed_node3 patches Launcher.DELETE_TIMEOUT. The Rust
+        // constant stays 600 when no test handler is installed.
+        if self.now - start > self.class_constant("DELETE_TIMEOUT", DELETE_TIMEOUT) {
             if let Some(sm) = self.delete_sms.get_mut(node_id) {
                 if !sm.complete() {
                     sm.fail();

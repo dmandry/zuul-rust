@@ -14,32 +14,64 @@
 use crate::model::QuotaInformation;
 use crate::provider::AdvanceError;
 use serde_json::Value;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 pub type Handler = Arc<dyn Fn(&str, &Value) -> Result<Value, String> + Send + Sync>;
 
-fn slot() -> &'static Mutex<Option<Handler>> {
-    static HANDLER: OnceLock<Mutex<Option<Handler>>> = OnceLock::new();
-    HANDLER.get_or_init(|| Mutex::new(None))
+fn handlers() -> &'static Mutex<HashMap<String, Handler>> {
+    static HANDLERS: OnceLock<Mutex<HashMap<String, Handler>>> = OnceLock::new();
+    HANDLERS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn set_handler(handler: Handler) {
-    *slot().lock().unwrap() = Some(handler);
+thread_local! {
+    static CURRENT: RefCell<Option<String>> = RefCell::new(None);
 }
 
-pub fn clear_handler() {
-    *slot().lock().unwrap() = None;
+/// Binds cloud calls on this thread to one launcher. Two launchers in
+/// one process (test_launcher_request_order) each install a handler;
+/// a single global would run both threads against the last one.
+pub struct CurrentGuard;
+
+impl Drop for CurrentGuard {
+    fn drop(&mut self) {
+        CURRENT.with(|c| *c.borrow_mut() = None);
+    }
+}
+
+pub fn enter(id: &str) -> CurrentGuard {
+    CURRENT.with(|c| *c.borrow_mut() = Some(id.to_string()));
+    CurrentGuard
+}
+
+pub fn register_handler(id: &str, handler: Handler) {
+    handlers().lock().unwrap().insert(id.to_string(), handler);
+}
+
+pub fn unregister_handler(id: &str) {
+    handlers().lock().unwrap().remove(id);
 }
 
 pub fn enabled() -> bool {
-    slot().lock().unwrap().is_some()
+    !handlers().lock().unwrap().is_empty()
+}
+
+fn current_handler() -> Option<Handler> {
+    let guard = handlers().lock().unwrap();
+    let current = CURRENT.with(|c| c.borrow().clone());
+    if let Some(id) = current {
+        return guard.get(&id).cloned();
+    }
+    if guard.len() == 1 {
+        return guard.values().next().cloned();
+    }
+    None
 }
 
 pub fn invoke(op: &str, args: &Value) -> Result<Value, AdvanceError> {
-    let handler = {
-        let guard = slot().lock().unwrap();
-        guard.clone().ok_or_else(|| AdvanceError::Other("no cloud handler".into()))?
-    };
+    let handler = current_handler()
+        .ok_or_else(|| AdvanceError::Other("no cloud handler".into()))?;
     match handler(op, args) {
         Ok(value) => match value.get("error_kind").and_then(|v| v.as_str()) {
             Some("quota") => Err(AdvanceError::Quota(message_of(&value))),

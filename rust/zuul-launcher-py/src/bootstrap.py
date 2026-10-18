@@ -53,6 +53,13 @@ def bootstrap(launcher, config, connections, hostname):
     launcher.endpoints = {}
     launcher.hostname = hostname or socket.getfqdn()
     launcher.log = logging.getLogger("zuul.Launcher")
+    # server.Launcher.tracer is a class attribute. _requestNode calls
+    # self.tracer.start_span, and this object is not an instance of
+    # that class. __getattr__ also forwards it; set it here so accept
+    # does not depend on that fallback.
+    from opentelemetry import trace
+
+    launcher.tracer = trace.get_tracer("zuul")
 
     statsd_extra_keys = {"hostname": launcher.hostname}
     launcher.statsd = get_statsd(config, statsd_extra_keys)
@@ -235,6 +242,10 @@ def call_launcher(launcher, name, *args):
     return getattr(Launcher, name)(launcher, *args)
 
 
+def call_launcher_args(launcher, name, args):
+    return call_launcher(launcher, name, *args)
+
+
 def _attach_state_machines(launcher, node):
     """Put the live Python state machine on the cached node.
 
@@ -413,6 +424,9 @@ def stop(launcher):
     if getattr(launcher, "command_thread", None) is not None:
         launcher.command_thread.join()
     launcher.log.debug("Stopping stats thread")
+    # Kazoo Election.run blocks until this launcher wins or cancel()
+    # is called. stop_event only wakes the winner's runStats loop.
+    launcher.stats_election.cancel()
     launcher.stats_thread.join()
     launcher.cleanup_worker.stop()
     launcher.cleanup_worker.join()
@@ -534,8 +548,20 @@ def cloud_call(launcher, op, payload):
             result = _quota_for_label(launcher, data)
         elif op == "quota_percentage":
             result = _quota_percentage(launcher, data)
+        elif op == "accept_requested":
+            result = _accept_requested(launcher, data)
         elif op == "fail":
             result = _cloud_fail(launcher, data)
+        elif op == "node_visible":
+            result = _node_visible(launcher, data)
+        elif op == "class_attr":
+            result = _class_attr(data)
+        elif op == "matching_requests":
+            result = _matching_requests(launcher)
+        elif op == "matching_nodes":
+            result = _matching_nodes(launcher)
+        elif op == "request_cache_ready":
+            result = _request_cache_ready(launcher, data)
         else:
             result = {"error_kind": "other", "message": "unknown cloud op %s" % op}
     except Exception as exc:
@@ -883,6 +909,152 @@ def _quota_percentage(launcher, data):
     messages = []
     pct = call_launcher(launcher, "getQuotaPercentage", provider, messages)
     return {"pct": float(pct)}
+
+
+def _node_visible(launcher, data):
+    """Whether LauncherApi.getProviderNode can see this uuid.
+
+    test_subnodes_crash_during_create patches that method to return
+    None. The Rust node map still has the record, so the presence
+    check has to go through the patched Python method.
+    """
+    node = launcher.api.getProviderNode(data["uuid"])
+    return {"present": node is not None}
+
+
+def _class_attr(data):
+    """A server.Launcher class constant, including test monkeypatches."""
+    from zuul.launcher.server import Launcher
+
+    return {"value": float(getattr(Launcher, data["name"]))}
+
+
+def _matching_requests(launcher):
+    # getMatchingRequests applies launcher_score, which unit tests patch.
+    # The Rust scorer cannot see that patch.
+    return {"ids": [request.uuid for request in launcher.api.getMatchingRequests()]}
+
+
+def _matching_nodes(launcher):
+    return {
+        "ids": [node.uuid for node in launcher.api.getMatchingProviderNodes()]
+    }
+
+
+def _request_cache_ready(launcher, data):
+    """The max_zxid / waitForSync gate in _processProviderNode.
+
+    test_multi_launcher_assignment patches RequestCache.max_zxid and
+    waits until that property is read. The Rust cache does not go
+    through that object, so the check has to happen here.
+    """
+    node = launcher.api.getProviderNode(data["uuid"])
+    if node is None or not node.request_id:
+        return {"wait": False, "request_visible": False}
+    request = launcher.api.getNodesetRequest(node.request_id)
+    if request is not None or not node.min_request_zxid:
+        return {"wait": False, "request_visible": request is not None}
+    if launcher.zk_client.cap_watched_event_zxid:
+        if launcher.api.requests_cache.max_zxid < node.min_request_zxid:
+            return {"wait": True, "request_visible": False}
+        return {"wait": False, "request_visible": False}
+    if node.state in node.ASSIGNABLE_STATES:
+        launcher.log.debug(
+            "Waiting for request cache to sync for request %s and node %s",
+            request,
+            node,
+        )
+        launcher.api.requests_cache.waitForSync()
+        request = launcher.api.getNodesetRequest(node.request_id)
+    return {"wait": False, "request_visible": request is not None}
+
+
+def _accept_requested(launcher, _data):
+    """Launcher._processRequests for REQUESTED and ACCEPTED requests.
+
+    Acceptance goes through launcher._acceptRequest so a test patch of
+    that method runs. Accepted requests go through _checkRequest, which
+    keeps both nodes of a request on one provider after a retry.
+    """
+    from opentelemetry import trace
+    from zuul.launcher.server import NodesetRequestError
+    from zuul.lib import tracing as zuul_tracing
+    from zuul.model import NodesProvisionedEvent
+    from zuul.zk.zkobject import ZKContext
+
+    log = launcher.log
+    pending = set()
+    unassigned = call_launcher(launcher, "_getUnassignedNodes")
+    for request in list(launcher.api.getMatchingRequests()):
+        try:
+            if not request.hasLock():
+                if (
+                    request.state in request.FINAL_STATES
+                    and request.event_state == request.EventState.COMPLETE
+                ):
+                    continue
+                ctx = ZKContext(
+                    launcher.zk_client, None, launcher.stop_event, log
+                )
+                if not request.acquireLock(ctx, blocking=False):
+                    continue
+                request.refresh(ctx)
+                request_span = zuul_tracing.restoreSpan(
+                    getattr(request, "span_info", None)
+                )
+                with trace.use_span(request_span):
+                    request._set(
+                        _span=trace.get_tracer("zuul").start_span(
+                            "NodesetRequestProcessing"
+                        )
+                    )
+            if not call_launcher(launcher, "_cachesReadyForRequest", request):
+                continue
+            try:
+                if request.state == request.State.REQUESTED:
+                    launcher._acceptRequest(request, log, unassigned, pending)
+                elif request.state == request.State.ACCEPTED:
+                    launcher._checkRequest(request, log, unassigned)
+            except NodesetRequestError as err:
+                launcher.log.error(
+                    "Marking request %s as %s: %s",
+                    request,
+                    request.State.FAILED,
+                    err,
+                )
+                ctx = ZKContext(
+                    launcher.zk_client,
+                    request._lock,
+                    launcher.stop_event,
+                    log,
+                )
+                request.updateAttributes(ctx, state=request.State.FAILED)
+            except Exception:
+                launcher.log.exception("Error processing request %s", request)
+            if request.state in request.FINAL_STATES:
+                if getattr(request, "_span", None) is not None:
+                    request._span.set_attributes(request.getSpanAttributes())
+                    request._span.end()
+                event = NodesProvisionedEvent(
+                    request.uuid, request.buildset_uuid
+                )
+                launcher.result_events[request.tenant_name][
+                    request.pipeline_name
+                ].put(event)
+                ctx = ZKContext(
+                    launcher.zk_client, None, launcher.stop_event, log
+                )
+                request.updateAttributes(
+                    ctx, event_state=request.EventState.COMPLETE
+                )
+                request.releaseLock(ctx)
+        finally:
+            if request.hasLock():
+                ctx = ZKContext(
+                    launcher.zk_client, None, launcher.stop_event, log
+                )
+                request.releaseLock(ctx)
+    return {"ok": True}
 
 
 def _node_tags(launcher, data):

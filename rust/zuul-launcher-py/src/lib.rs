@@ -6,7 +6,7 @@
 // server module is not modified. Each _run calls the Rust launcher against
 // a real TLS ZooKeeper session.
 
-use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError};
+use pyo3::exceptions::{PyAttributeError, PyNotImplementedError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 use std::sync::{Arc, Mutex};
@@ -71,8 +71,11 @@ impl PyLauncher {
         call_py(py, "run", (slf,))
     }
 
-    fn _close_rust_session(&self) {
-        if let Ok(mut guard) = self.rust.lock() {
+    fn _close_rust_session(slf: &Bound<'_, Self>) {
+        if let Ok(hostname) = slf.getattr("hostname").and_then(|h| h.extract::<String>()) {
+            zuul_launcher::cloud::unregister_handler(&hostname);
+        }
+        if let Ok(mut guard) = slf.borrow().rust.lock() {
             *guard = None;
         }
     }
@@ -109,8 +112,10 @@ impl PyLauncher {
                 return Ok(());
             }
         }
+        let hostname: String = slf.getattr("hostname")?.extract()?;
         let rust = slf.borrow().rust.clone();
         let (events, stats) = py.allow_threads(|| {
+            let _cloud = zuul_launcher::cloud::enter(&hostname);
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
                 launcher.api.sync();
@@ -178,13 +183,16 @@ impl PyLauncher {
         call_py(py, "call_launcher", (slf, "_runStats"))
     }
 
-    #[pyo3(signature = (*_args, **_kwargs))]
+    #[pyo3(signature = (*args, **_kwargs))]
     fn _acceptRequest(
-        &self,
-        _args: &Bound<'_, PyTuple>,
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        not_ported("_acceptRequest")
+        // Tests patch this method and then call the saved original.
+        // That original is this method, which runs server.Launcher._acceptRequest.
+        call_py(py, "call_launcher_args", (slf, "_acceptRequest", args))
     }
 
     #[pyo3(signature = (*args, **_kwargs))]
@@ -222,6 +230,26 @@ impl PyLauncher {
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         not_ported("updateTenantProviders")
+    }
+
+    /// Class attributes tests patch on `zuul.launcher.server.Launcher`
+    /// (`tracer`, `DELETE_TIMEOUT`, `SUBNODE_SYNC_TIME`) live on that
+    /// class. The PyO3 subclass does not inherit them. Forward data
+    /// attributes so `self.tracer` and those patches resolve. Methods
+    /// stay on the instance via `_bind_missing_methods`.
+    fn __getattr__(&self, py: Python<'_>, name: PyObject) -> PyResult<PyObject> {
+        let name_str: String = name.extract(py)?;
+        if name_str.starts_with("__") {
+            return Err(PyAttributeError::new_err(name_str));
+        }
+        let cls = py.import_bound("zuul.launcher.server")?.getattr("Launcher")?;
+        let attr = cls.getattr(name_str.as_str()).map_err(|_| {
+            PyAttributeError::new_err(name_str.clone())
+        })?;
+        if attr.is_callable() {
+            return Err(PyAttributeError::new_err(name_str));
+        }
+        Ok(attr.into())
     }
 }
 
@@ -263,9 +291,14 @@ fn connect_rust(slf: &Bound<'_, PyLauncher>, py: Python<'_>) -> PyResult<()> {
 fn install_cloud(slf: &Bound<'_, PyLauncher>) {
     // In-process fakes (moto, responses, OpenStack/Kubernetes clients, and
     // patches of endpoint or state-machine methods) are only visible to
-    // Python. The shared launcher calls this handler for each cloud step.
+    // Python. Each launcher registers its own handler. _run selects the
+    // one for this thread so a second launcher does not steal the first.
+    let hostname: String = match slf.getattr("hostname").and_then(|h| h.extract()) {
+        Ok(name) => name,
+        Err(_) => return,
+    };
     let handle = slf.clone().unbind();
-    zuul_launcher::cloud::set_handler(Arc::new(move |op, args| {
+    zuul_launcher::cloud::register_handler(&hostname, Arc::new(move |op, args| {
         Python::with_gil(|py| {
             let slf = handle.bind(py);
             let payload = zuul_launcher::jsonutil::dumps(args);
