@@ -505,8 +505,16 @@ impl Launcher {
                     if locked_out {
                         self.pass_request_ids.remove(&id);
                     }
+                    // The Python request cache has not yielded this
+                    // request. Creating a node anyway formats label tags
+                    // with request=None (KeyError on {buildset_uuid}) and
+                    // launches a VM while test_multi_launcher_assignment_old_zk
+                    // has the cache queue paused. Leave it REQUESTED; it
+                    // stays in pass_request_ids so a later same-label
+                    // request still waits for it.
                     if missing {
-                        let _ = self.accept_request_by_uuid(&id);
+                        self.wake();
+                        continue;
                     }
                     self.api.sync();
                     pending = self.accept_pending.clone();
