@@ -432,14 +432,23 @@ impl Launcher {
     fn matching_ids(&mut self, op: &str) -> Vec<String> {
         if cloud::enabled() {
             self.api.sync();
-            if let Ok(v) = cloud::invoke(op, &json!({})) {
-                if let Some(ids) = v.get("ids").and_then(|a| a.as_array()) {
-                    return ids
-                        .iter()
+            // Python getMatching* applies launcher_score patches. A miss
+            // must not fall through to mmh3: that assigns the node to a
+            // different launcher than the one the test (and the other
+            // process) selected, and the second state machine fails it.
+            let Ok(v) = cloud::invoke(op, &json!({})) else {
+                self.wake();
+                return Vec::new();
+            };
+            return v
+                .get("ids")
+                .and_then(|a| a.as_array())
+                .map(|ids| {
+                    ids.iter()
                         .filter_map(|id| id.as_str().map(|s| s.to_string()))
-                        .collect();
-                }
-            }
+                        .collect()
+                })
+                .unwrap_or_default();
         }
         if op == "matching_nodes" {
             self.api.get_matching_nodes()

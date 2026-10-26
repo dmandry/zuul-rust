@@ -36,31 +36,43 @@ thread_local! {
 /// Binds cloud calls on this thread to one launcher. Two launchers in
 /// one process (test_launcher_request_order) each install a handler;
 /// a single global would run both threads against the last one.
-pub struct CurrentGuard;
+///
+/// Nested `enter` (accept_one calls `_acceptRequest` while `_run`
+/// already holds a guard) must restore the outer id. Clearing the
+/// thread-local on the inner drop made the rest of that pass resolve
+/// matching with no handler, so node ownership fell back to mmh3 and
+/// ignored the test's launcher_score patch.
+pub struct CurrentGuard {
+    prev: Option<String>,
+}
 
 impl Drop for CurrentGuard {
     fn drop(&mut self) {
-        CURRENT.with(|c| *c.borrow_mut() = None);
+        let prev = self.prev.take();
+        CURRENT.with(|c| *c.borrow_mut() = prev);
     }
 }
 
 pub fn enter(id: &str) -> CurrentGuard {
-    CURRENT.with(|c| *c.borrow_mut() = Some(id.to_string()));
-    CurrentGuard
+    let prev = CURRENT.with(|c| c.borrow_mut().replace(id.to_string()));
+    CurrentGuard { prev }
 }
 
 /// Bind `launcher` as the re-entrant target for accept_one → `_acceptRequest`.
-pub struct ActiveLauncherGuard;
+pub struct ActiveLauncherGuard {
+    prev: Option<*mut ()>,
+}
 
 impl Drop for ActiveLauncherGuard {
     fn drop(&mut self) {
-        ACTIVE_LAUNCHER.with(|c| *c.borrow_mut() = None);
+        let prev = self.prev.take();
+        ACTIVE_LAUNCHER.with(|c| *c.borrow_mut() = prev);
     }
 }
 
 pub fn enter_launcher(ptr: *mut ()) -> ActiveLauncherGuard {
-    ACTIVE_LAUNCHER.with(|c| *c.borrow_mut() = Some(ptr));
-    ActiveLauncherGuard
+    let prev = ACTIVE_LAUNCHER.with(|c| c.borrow_mut().replace(ptr));
+    ActiveLauncherGuard { prev }
 }
 
 pub fn active_launcher() -> Option<*mut ()> {
