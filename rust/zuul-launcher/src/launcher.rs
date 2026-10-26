@@ -88,10 +88,9 @@ pub struct Launcher {
     /// created the node — before the next request's quota check.
     used_node_quota: HashMap<String, QuotaInformation>,
     /// REQUESTED uuids this launcher should handle (launcher_score).
-    /// Refreshed once per process_requests, before accept_one.
+    /// Refreshed once per process_requests, before accept_one. A later
+    /// request waits while an earlier id here is still REQUESTED.
     owned_request_ids: Vec<String>,
-    /// Uuids considered in the current process_requests pass.
-    pass_request_ids: HashSet<String>,
     stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
     stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
     cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
@@ -163,7 +162,6 @@ impl Launcher {
             remembered_node_quota: HashMap::new(),
             used_node_quota: HashMap::new(),
             owned_request_ids: Vec::new(),
-            pass_request_ids: HashSet::new(),
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
@@ -473,7 +471,6 @@ impl Launcher {
         // request_time. A later request must not be offered the slot
         // that frees while an earlier one is still REQUESTED.
         let ids = self.sort_request_ids(ids);
-        self.pass_request_ids = ids.iter().cloned().collect();
         for id in ids {
             let Some(req) = self.api.requests.get(&id).cloned() else { continue };
             if model::is_final_request_state(&req.state()) && req.event_state() == model::event_state::COMPLETE {
@@ -503,14 +500,17 @@ impl Launcher {
                         .and_then(|m| m.as_bool())
                         == Some(false);
                     if locked_out {
-                        self.pass_request_ids.remove(&id);
+                        // Another launcher holds it. Do not keep deferring
+                        // later requests for this label behind a lock we
+                        // will not acquire.
+                        self.owned_request_ids.retain(|owned| owned != &id);
                     }
                     // The Python request cache has not yielded this
                     // request. Creating a node anyway formats label tags
                     // with request=None (KeyError on {buildset_uuid}) and
                     // launches a VM while test_multi_launcher_assignment_old_zk
-                    // has the cache queue paused. Leave it REQUESTED; it
-                    // stays in pass_request_ids so a later same-label
+                    // has the cache queue paused. Leave it REQUESTED. It
+                    // stays in owned_request_ids so a later same-label
                     // request still waits for it.
                     if missing {
                         self.wake();
@@ -655,11 +655,14 @@ impl Launcher {
     }
 
     /// True when an earlier REQUESTED request for this label is one this
-    /// launcher should handle and is part of the current pass. Matches
-    /// pending_labels: the earlier request gets the next free slot.
+    /// launcher should handle. Matches pending_labels across passes: the
+    /// test can release quota while only one request is inside
+    /// _acceptRequest, and a later request must not take that slot while
+    /// the earlier one is still REQUESTED. Ids another launcher holds are
+    /// removed from owned_request_ids so they do not block the pass.
     fn earlier_owned_requested(&self, request: &NodesetRequest, label: &str) -> bool {
         for id in &self.owned_request_ids {
-            if id == &request.uuid() || !self.pass_request_ids.contains(id) {
+            if id == &request.uuid() {
                 continue;
             }
             let Some(other) = self.api.requests.get(id) else {

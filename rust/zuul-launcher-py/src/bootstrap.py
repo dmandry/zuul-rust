@@ -3468,7 +3468,16 @@ def _node_cache_insert(launcher, data):
     except Exception:
         launcher.log.exception("cache_insert: unable to load node %s", uuid)
         return {"ok": False}
-    launcher.api.nodes_cache.insert(node)
+    cached = launcher.api.nodes_cache.insert(node)
+    # getQuota is updated by the ZK watch's postCacheHook, not by
+    # insert(). Rust writes the node on its own session, so the Python
+    # watch has not run yet when the next accept in this thread calls
+    # getQuota. Apply the hook now; a later watch sees the same quota
+    # and does not add it twice.
+    try:
+        launcher.api.nodes_cache.postCacheHook(None, None, None, (uuid,), cached)
+    except Exception:
+        launcher.log.exception("cache_insert: quota hook failed for %s", uuid)
     return {"ok": True}
 
 
