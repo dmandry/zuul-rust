@@ -1795,17 +1795,20 @@ impl Launcher {
 
     fn check_nodescan(&mut self, node_id: &str) -> Result<bool, AdvanceError> {
         let node = self.api.nodes.get(node_id).cloned().unwrap();
-        // Always drive the Python NodescanRequest when the test handler
-        // is installed. host-key-checking false still calls advance(),
-        // which unit tests patch.
-        let use_python = if cloud::enabled() {
-            cloud::invoke("nodescan.mode", &json!({}))
-                .ok()
-                .and_then(|v| v.get("use_python").and_then(|b| b.as_bool()))
-                .unwrap_or(true)
+        // NodescanRequest.advance is replaced wholesale by several unit
+        // tests (they raise, or call the saved original). That patch only
+        // runs if the Python worker drives the request. Socket, poll, and
+        // paramiko patches are a lower hook: the Rust machine calls
+        // nodescan.io for those steps.
+        let mode = if cloud::enabled() {
+            cloud::invoke("nodescan.mode", &json!({})).ok()
         } else {
-            false
+            None
         };
+        let use_python = mode
+            .as_ref()
+            .and_then(|v| v.get("use_python").and_then(|b| b.as_bool()))
+            .unwrap_or(cloud::enabled());
         if use_python {
             let result = cloud::invoke(
                 "nodescan",
@@ -1841,8 +1844,12 @@ impl Launcher {
             }
             return Ok(true);
         }
+        let io_hook = mode
+            .as_ref()
+            .and_then(|v| v.get("io_hook").and_then(|b| b.as_bool()))
+            .unwrap_or(false);
         if self.nodescan.get(node_id).is_none() {
-            let req = NodescanRequest::new(
+            let mut req = NodescanRequest::new(
                 node_id,
                 node.interface_ip().as_deref().unwrap_or("0.0.0.0"),
                 node.connection_port(),
@@ -1850,14 +1857,21 @@ impl Launcher {
                 node.connection_type().as_deref(),
                 node.boot_timeout(),
             );
+            req.use_io_hook = io_hook;
             if !self.nodescan.add(req) {
                 self.wake();
                 return Ok(false);
             }
         }
-        // Drive once so an immediate (host-key-checking off) scan can finish
-        // inside this call, matching a worker that is already polling.
-        self.nodescan.poll();
+        if io_hook {
+            if let Some(scan) = self.nodescan.get_mut(node_id) {
+                scan.advance_hooked();
+            }
+        } else {
+            // Drive once so an immediate (host-key-checking off) scan can
+            // finish inside this call, matching a worker that is already polling.
+            self.nodescan.poll();
+        }
         let Some(scan) = self.nodescan.get(node_id) else {
             return Ok(false);
         };
@@ -2768,38 +2782,6 @@ impl Launcher {
             "source_provider": job.source_provider,
             "dependents": job.dependents,
         })
-    }
-
-    fn run_upload_job(job: &PlannedJob, queue: &Arc<Mutex<HashSet<String>>>) {
-        if !cloud::enabled() {
-            Self::queue_discard(queue, &job.upload_uuid);
-            return;
-        }
-        let kind = if job.kind == "copy-dependent" {
-            "copy"
-        } else {
-            job.kind.as_str()
-        };
-        let mut payload = json!({
-            "kind": kind,
-            "upload_uuid": job.upload_uuid,
-            "dependents": job.dependents,
-        });
-        if let Some(src) = &job.source_external_id {
-            payload
-                .as_object_mut()
-                .unwrap()
-                .insert("source_external_id".into(), json!(src));
-        }
-        match cloud::invoke("upload.job_run", &payload) {
-            Ok(_) => {}
-            Err(e) => {
-                // Queue discard happens in the adapter finally; still clear
-                // the Rust set so a failed invoke cannot stick forever.
-                let _ = e;
-            }
-        }
-        Self::queue_discard(queue, &job.upload_uuid);
     }
 
     fn run_upload_delete(job: &PlannedJob, queue: &Arc<Mutex<HashSet<String>>>) {

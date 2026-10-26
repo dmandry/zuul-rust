@@ -6,11 +6,14 @@
 // The worker accepts at most 100 requests and polls with a 1s timeout.
 
 use base64::Engine;
+use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 use x25519_dalek::{PublicKey, StaticSecret};
+
+use crate::cloud;
 
 pub const MAX_REQUESTS: usize = 100;
 pub const POLL_TIMEOUT: Duration = Duration::from_secs(1);
@@ -60,6 +63,10 @@ pub struct NodescanRequest {
     key_index: i32,
     key_type: Option<String>,
     conn: Option<SshConn>,
+    /// Patched `_socket_class` / `_poll_class` / paramiko. The state
+    /// machine stays here; each connect, poll, and ssh step is
+    /// `nodescan.io`.
+    pub use_io_hook: bool,
 }
 
 impl NodescanRequest {
@@ -85,7 +92,280 @@ impl NodescanRequest {
             key_index: -1,
             key_type: None,
             conn: None,
+            use_io_hook: false,
         }
+    }
+
+    /// NodescanRequest.advance when unit tests replaced the socket, the
+    /// poll object, or paramiko. `socket_ready` is sampled once, before
+    /// any `_connect`, matching NodescanWorker.run.
+    pub fn advance_hooked(&mut self) {
+        if self.complete {
+            return;
+        }
+        let socket_ready = self.io_poll_ready();
+        if self.state == START {
+            if !self.host_key_checking {
+                self.state = COMPLETE.into();
+            } else {
+                self.init_connection_attempts += 1;
+                if let Err(e) = self.io_connect() {
+                    self.fail_hook(e);
+                    return;
+                }
+                self.state = CONNECTING_INIT.into();
+            }
+        }
+        if self.state == CONNECTING_INIT {
+            if !socket_ready {
+                if let Err(e) = self.hook_timeout() {
+                    self.fail_hook(e);
+                    return;
+                }
+                if self.connect_expired() {
+                    self.io_close();
+                    self.state = START.into();
+                }
+                return;
+            }
+            let eno = self.io_so_error();
+            if eno != 0 {
+                self.io_close();
+                self.state = START.into();
+                if let Err(e) = self.hook_timeout() {
+                    self.fail_hook(e);
+                }
+                return;
+            }
+            if self.gather_hostkeys {
+                if let Err(e) = self.io_start_ssh(None) {
+                    self.fail_hook(e);
+                    return;
+                }
+                self.state = NEGOTIATING_INIT.into();
+            } else {
+                self.state = COMPLETE.into();
+            }
+        }
+        if self.state == NEGOTIATING_INIT {
+            if !self.io_event_set() {
+                if let Err(e) = self.hook_timeout() {
+                    self.fail_hook(e);
+                }
+                return;
+            }
+            if let Err(msg) = self.io_check_transport() {
+                let _ = msg;
+                self.key_negotiation_failures += 1;
+                self.io_close();
+                self.state = START.into();
+                if let Err(e) = self.hook_timeout() {
+                    self.fail_hook(e);
+                }
+                return;
+            }
+            match self.io_key_types() {
+                Ok(types) => self.key_types = types,
+                Err(e) => {
+                    self.fail_hook(e);
+                    return;
+                }
+            }
+            self.key_index = -1;
+            self.next_key_hook();
+        }
+        if self.state == CONNECTING_KEY {
+            if !socket_ready {
+                if let Err(e) = self.hook_timeout() {
+                    self.fail_hook(e);
+                    return;
+                }
+                if self.connect_expired() {
+                    self.key_connection_failures += 1;
+                    self.io_close();
+                    if let Err(e) = self.io_connect() {
+                        self.fail_hook(e);
+                        return;
+                    }
+                    self.state = CONNECTING_KEY.into();
+                }
+                return;
+            }
+            let eno = self.io_so_error();
+            if eno != 0 {
+                self.key_connection_failures += 1;
+                self.io_close();
+                if let Err(e) = self.io_connect() {
+                    self.fail_hook(e);
+                    return;
+                }
+                self.state = CONNECTING_KEY.into();
+                return;
+            }
+            if let Err(e) = self.io_start_ssh(self.key_type.as_deref()) {
+                self.fail_hook(e);
+                return;
+            }
+            self.state = NEGOTIATING_KEY.into();
+        }
+        if self.state == NEGOTIATING_KEY {
+            if !self.io_event_set() {
+                if let Err(e) = self.hook_timeout() {
+                    self.fail_hook(e);
+                }
+                return;
+            }
+            if let Err(msg) = self.io_check_transport() {
+                if !msg.contains("no acceptable host key") {
+                    self.key_negotiation_failures += 1;
+                }
+                self.next_key_hook();
+            }
+        }
+        if self.state == NEGOTIATING_KEY {
+            if let Ok(key) = self.io_remote_key() {
+                if !key.is_empty() {
+                    self.keys.push(key);
+                }
+            }
+            self.next_key_hook();
+        }
+        if self.state == COMPLETE && !self.complete {
+            self.io_discard();
+            self.complete = true;
+        }
+    }
+
+    fn next_key_hook(&mut self) {
+        self.io_close();
+        self.key_index += 1;
+        if self.key_index as usize >= self.key_types.len() {
+            self.state = COMPLETE.into();
+            return;
+        }
+        let kt = self.key_types[self.key_index as usize].clone();
+        self.key_type = Some(kt);
+        if let Err(e) = self.io_connect() {
+            self.fail_hook(e);
+            return;
+        }
+        self.state = CONNECTING_KEY.into();
+    }
+
+    fn hook_timeout(&self) -> Result<(), String> {
+        if self.timed_out() {
+            Err(format!(
+                "Timeout connecting to {} on port {}",
+                self.ip, self.port
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn io_args(&self) -> Value {
+        json!({
+            "uuid": self.uuid,
+            "ip": self.ip,
+            "port": self.port,
+            "timeout": self.timeout.as_secs_f64(),
+        })
+    }
+
+    fn io_call(&self, action: &str, mut extra: Value) -> Result<Value, String> {
+        let obj = extra.as_object_mut().unwrap();
+        let base = self.io_args();
+        for (k, v) in base.as_object().unwrap() {
+            obj.entry(k.clone()).or_insert(v.clone());
+        }
+        obj.insert("action".into(), json!(action));
+        match cloud::invoke("nodescan.io", &extra) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    fn io_connect(&mut self) -> Result<(), String> {
+        let v = self.io_call("connect", json!({}))?;
+        if v.get("ok").and_then(|b| b.as_bool()) == Some(false) {
+            return Err(v.get("message").and_then(|m| m.as_str()).unwrap_or("connect").into());
+        }
+        self.connect_start = Some(Instant::now());
+        Ok(())
+    }
+
+    fn io_close(&self) {
+        let _ = self.io_call("close", json!({}));
+    }
+
+    fn io_discard(&self) {
+        let _ = self.io_call("discard", json!({}));
+    }
+
+    fn io_poll_ready(&self) -> bool {
+        self.io_call("poll", json!({}))
+            .ok()
+            .and_then(|v| v.get("ready").and_then(|b| b.as_bool()))
+            .unwrap_or(false)
+    }
+
+    fn io_so_error(&self) -> i32 {
+        self.io_call("so_error", json!({}))
+            .ok()
+            .and_then(|v| v.get("eno").and_then(|n| n.as_i64()))
+            .unwrap_or(0) as i32
+    }
+
+    fn io_start_ssh(&self, key_type: Option<&str>) -> Result<(), String> {
+        let v = self.io_call("start_ssh", json!({ "key_type": key_type }))?;
+        if v.get("ok").and_then(|b| b.as_bool()) == Some(false) {
+            return Err(v.get("message").and_then(|m| m.as_str()).unwrap_or("ssh").into());
+        }
+        Ok(())
+    }
+
+    fn io_event_set(&self) -> bool {
+        self.io_call("event_set", json!({}))
+            .ok()
+            .and_then(|v| v.get("set").and_then(|b| b.as_bool()))
+            .unwrap_or(false)
+    }
+
+    fn io_check_transport(&self) -> Result<(), String> {
+        let v = self.io_call("check_transport", json!({}))?;
+        if v.get("failed").and_then(|b| b.as_bool()).unwrap_or(false) {
+            return Err(v
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("Negotiation failed.")
+                .to_string());
+        }
+        Ok(())
+    }
+
+    fn io_key_types(&self) -> Result<Vec<String>, String> {
+        let v = self.io_call("key_types", json!({}))?;
+        Ok(v.get("key_types")
+            .and_then(|a| a.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    fn io_remote_key(&self) -> Result<String, String> {
+        let v = self.io_call("remote_key", json!({}))?;
+        Ok(v.get("key").and_then(|k| k.as_str()).unwrap_or("").to_string())
+    }
+
+    fn fail_hook(&mut self, msg: String) {
+        self.io_discard();
+        self.error = Some(msg);
+        self.conn = None;
+        self.state = COMPLETE.into();
+        self.complete = true;
     }
 
     pub fn advance(&mut self, socket_ready: bool) {
@@ -475,7 +755,7 @@ impl NodescanWorker {
 
     pub fn poll(&mut self) {
         for req in &mut self.requests {
-            if req.complete {
+            if req.complete || req.use_io_hook {
                 continue;
             }
             let ready = req.conn.as_ref().map(|c| c.ready).unwrap_or(false);

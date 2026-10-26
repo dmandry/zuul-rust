@@ -215,10 +215,9 @@ def bootstrap(launcher, config, connections, hostname):
         launcher.zk_client, _image_updated
     )
 
-    # Keep Python NodescanWorker: unit tests patch
-    # zuul.launcher.server.NodescanRequest.advance; the cloud "nodescan"
-    # adapter drives that class through this worker. Pure Rust nodescan
-    # would miss those patches.
+    # Kept only so a test that replaces NodescanRequest.advance still
+    # has a worker to drive that patched method. Socket / poll / paramiko
+    # patches are served by nodescan.io; the state machine is Rust.
     launcher.nodescan_worker = NodescanWorker()
     launcher._run_lock = threading.Lock()
     launcher.launcher_thread = threading.Thread(target=launcher.run, name="Launcher")
@@ -363,6 +362,11 @@ def emit_stats(launcher, payload):
         elif kind == "ms":
             launcher.statsd.timing(name, value)
         elif kind == "g":
+            # MonitoringThreadPoolExecutor gauges are ints (`1|g`). A
+            # Rust f64 1.0 would be sent as `1.0|g` and miss
+            # assertReportedStat(..., value='1').
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
             launcher.statsd.gauge(name, value)
 
 
@@ -587,19 +591,18 @@ def cloud_call(launcher, op, payload):
     methods (and StateMachine.advance) live in-process. AWS / Azure /
     OpenStack / Kubernetes create and delete run in Rust and call
     fine-grained ep.* ops here; sm.patched_advance covers tests that
-    replace advance with a Mock. Legacy step/fail remain for leftover
-    callers.
+    replace advance with a Mock.
     """
     import json
 
     data = json.loads(payload) if payload else {}
     try:
-        if op == "step":
-            result = _cloud_step(launcher, data)
-        elif op == "nodescan":
+        if op == "nodescan":
             result = _nodescan_step(launcher, data)
         elif op == "nodescan.mode":
             result = _nodescan_mode(launcher, data)
+        elif op == "nodescan.io":
+            result = _nodescan_io(launcher, data)
         elif op == "endpoint_limits":
             result = _endpoint_limits(launcher, data)
         elif op == "label_quota":
@@ -610,16 +613,8 @@ def cloud_call(launcher, op, payload):
             result = _image_attrs(launcher, data)
         elif op == "provider_quota":
             result = _provider_quota(launcher, data)
-        elif op == "quota_for_node":
-            # Unmanaged usage is still recorded by the Python CleanupWorker;
-            # Rust asks for the boolean until that worker is fully ported.
-            result = _quota_for_node(launcher, data)
-        elif op == "quota_for_label":
-            result = _quota_for_label(launcher, data)
         elif op == "accept_one":
             result = _accept_one(launcher, data)
-        elif op == "fail":
-            result = _cloud_fail(launcher, data)
         elif op == "node_visible":
             result = _node_visible(launcher, data)
         elif op == "node.cache_insert":
@@ -740,13 +735,9 @@ def cloud_call(launcher, op, payload):
             result = _ep_k8s_update_node(launcher, data)
         elif op == "sm.patched_advance":
             result = _sm_patched_advance(launcher, data)
-        # Upload / delete / snapshot / cleanup SDK-boundary adapters.
-        # upload.job_run   — AwsImageUploadJob / Import / Copy .run (+ azure/os)
-        # upload.delete    — provider.deleteImage + ImageUpload ZK delete
-        # snapshot.advance — lock/prepare/commit for Rust AwsSnapshot
-        # cleanup.tick     — Python CleanupWorker._run (leaked resources)
-        elif op == "upload.job_run":
-            result = _upload_job_run(launcher, data)
+        # Upload / delete / snapshot / cleanup boundary adapters.
+        # upload.sdk_run — provider getImageUpload/Import/Copy job.run only
+        # upload.delete  — provider.deleteImage + ImageUpload ZK delete
         elif op == "upload.run_is_patched":
             result = _upload_run_is_patched(launcher, data)
         elif op == "upload.artifact_job":
@@ -763,18 +754,10 @@ def cloud_call(launcher, op, payload):
             result = _upload_validate_event(launcher, data)
         elif op == "stats.timing":
             result = _stats_timing(launcher, data)
-        elif op == "upload.queue_add":
-            for uuid in data.get("upload_uuids") or []:
-                launcher.upload_uuids_in_queue.add(uuid)
-            result = {"ok": True}
         elif op == "upload.delete":
             result = _upload_delete(launcher, data)
-        elif op == "upload.reset_crashed":
-            result = _upload_reset_crashed(launcher, data)
         elif op == "upload.delete_artifact":
             result = _upload_delete_artifact(launcher, data)
-        elif op == "snapshot.advance":
-            result = _snapshot_advance(launcher, data)
         elif op == "snapshot.prepare":
             result = _snapshot_prepare(launcher, data)
         elif op == "snapshot.sdk_advance":
@@ -783,10 +766,6 @@ def cloud_call(launcher, op, payload):
             result = _snapshot_commit(launcher, data)
         elif op == "snapshot.fail":
             result = _snapshot_fail(launcher, data)
-        elif op == "snapshot.sm_advance":
-            result = _snapshot_sm_advance(launcher, data)
-        elif op == "cleanup.tick":
-            result = _cleanup_tick(launcher, data)
         elif op == "cleanup.roster":
             result = _cleanup_roster(launcher, data)
         elif op == "cleanup.inspect":
@@ -3189,7 +3168,11 @@ def _snapshot_advance(launcher, data):
 
 
 def _nodescan_mode(launcher, data):
-    """Python nodescan only when tests patched advance, the socket, or poll."""
+    """Python worker only when tests replaced NodescanRequest.advance.
+
+    Socket, poll, and paramiko patches stay on nodescan.io. Rust owns
+    the state machine and calls that hook per connect / poll / ssh step.
+    """
     import select
 
     import zuul.launcher.server as server
@@ -3204,8 +3187,158 @@ def _nodescan_mode(launcher, data):
     )
     poll_patched = server.NodescanWorker._poll_class is not select.epoll
     return {
-        "use_python": bool(advance_patched or socket_patched or poll_patched),
+        "use_python": bool(advance_patched),
+        "io_hook": bool((not advance_patched) and (socket_patched or poll_patched)),
     }
+
+
+class _ScanIO:
+    """Patched socket / poll / paramiko for one Rust nodescan request."""
+
+    def __init__(self, ip, port):
+        import socket as socket_mod
+
+        from zuul.launcher.server import NodescanRequest, NodescanWorker
+
+        addrinfo = socket_mod.getaddrinfo(ip, port)[0]
+        self.family = addrinfo[0]
+        self.sockaddr = addrinfo[4]
+        self.sock = None
+        self.transport = None
+        self.event = None
+        self._socket_class = NodescanRequest._socket_class
+        self.poll = NodescanWorker._poll_class()
+
+    def connect(self):
+        import select
+        import socket as socket_mod
+
+        self.close()
+        self.sock = self._socket_class(self.family, socket_mod.SOCK_STREAM)
+        self.sock.setblocking(False)
+        try:
+            self.sock.connect(self.sockaddr)
+        except BlockingIOError:
+            pass
+        self.poll.register(
+            self.sock,
+            select.EPOLLOUT | select.EPOLLERR | select.EPOLLHUP | select.EPOLLONESHOT,
+        )
+
+    def poll_ready(self):
+        if self.sock is None:
+            return False
+        ready = self.poll.poll(timeout=0)
+        fds = [item[0] for item in ready]
+        try:
+            fd = self.sock.fileno()
+        except Exception:
+            return False
+        return fd in fds
+
+    def so_error(self):
+        import socket as socket_mod
+
+        eno = self.sock.getsockopt(socket_mod.SOL_SOCKET, socket_mod.SO_ERROR)
+        if not eno:
+            return 0
+        return int(eno)
+
+    def start_ssh(self, key_type, timeout):
+        import threading
+
+        import paramiko.transport
+
+        self.sock.setblocking(True)
+        self.event = threading.Event()
+        self.transport = paramiko.transport.Transport(self.sock)
+        if key_type:
+            opts = self.transport.get_security_options()
+            opts.key_types = [key_type]
+        self.transport.start_client(event=self.event, timeout=timeout)
+
+    def event_set(self):
+        return bool(self.event is not None and self.event.is_set())
+
+    def check_transport(self):
+        import paramiko
+
+        if not self.transport.active:
+            exc = self.transport.get_exception()
+            if exc is not None:
+                raise exc
+            raise paramiko.exceptions.SSHException("Negotiation failed.")
+
+    def key_types(self):
+        opts = self.transport.get_security_options()
+        return list(opts.key_types)
+
+    def remote_key(self):
+        key = self.transport.get_remote_server_key()
+        if not key:
+            return ""
+        return "%s %s" % (key.get_name(), key.get_base64())
+
+    def close(self):
+        if self.transport is not None:
+            try:
+                self.transport.close()
+            except Exception:
+                pass
+            self.transport = None
+            self.event = None
+        if self.sock is not None:
+            try:
+                self.poll.unregister(self.sock)
+            except Exception:
+                pass
+            try:
+                self.sock.close()
+            except Exception:
+                pass
+            self.sock = None
+
+
+def _nodescan_io(launcher, data):
+    """Lowest nodescan hook: patched socket, poll, and paramiko only."""
+    action = data.get("action")
+    scans = launcher.__dict__.setdefault("_nodescan_io", {})
+    uuid = data.get("uuid")
+    if action == "discard":
+        io = scans.pop(uuid, None)
+        if io is not None:
+            io.close()
+        return {"ok": True}
+    io = scans.get(uuid)
+    if io is None:
+        io = _ScanIO(data.get("ip"), int(data.get("port") or 22))
+        scans[uuid] = io
+    if action == "connect":
+        io.connect()
+        return {"ok": True}
+    if action == "close":
+        io.close()
+        return {"ok": True}
+    if action == "poll":
+        return {"ready": bool(io.poll_ready())}
+    if action == "so_error":
+        return {"eno": io.so_error()}
+    if action == "start_ssh":
+        io.start_ssh(data.get("key_type") or None, data.get("timeout") or 300)
+        return {"ok": True}
+    if action == "event_set":
+        return {"set": bool(io.event_set())}
+    if action == "check_transport":
+        try:
+            io.check_transport()
+        except Exception as exc:
+            return {"failed": True, "message": str(exc)}
+        return {"failed": False, "message": ""}
+    if action == "key_types":
+        return {"key_types": io.key_types()}
+    if action == "remote_key":
+        return {"key": io.remote_key()}
+    return {"ok": False, "message": "unknown nodescan io action %s" % action}
 
 
 def _nodescan_step(launcher, data):
