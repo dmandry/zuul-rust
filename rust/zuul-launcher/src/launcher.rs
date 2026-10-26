@@ -493,6 +493,18 @@ impl Launcher {
                         .and_then(|v| v.get("missing"))
                         .and_then(|m| m.as_bool())
                         .unwrap_or(false);
+                    // Another launcher holds the lock. Do not treat this
+                    // request as still ours for the rest of the pass, or a
+                    // later request for the same label waits forever.
+                    let locked_out = invoked
+                        .as_ref()
+                        .ok()
+                        .and_then(|v| v.get("locked"))
+                        .and_then(|m| m.as_bool())
+                        == Some(false);
+                    if locked_out {
+                        self.pass_request_ids.remove(&id);
+                    }
                     if missing {
                         let _ = self.accept_request_by_uuid(&id);
                     }
