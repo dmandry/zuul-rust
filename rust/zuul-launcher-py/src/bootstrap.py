@@ -625,6 +625,8 @@ def cloud_call(launcher, op, payload):
             result = _class_attr(data)
         elif op == "matching_requests":
             result = _matching_requests(launcher)
+        elif op == "owned_requests":
+            result = _owned_requests(launcher, data)
         elif op == "matching_nodes":
             result = _matching_nodes(launcher)
         elif op == "request_cache_ready":
@@ -3524,6 +3526,54 @@ def _matching_requests(launcher):
     return {"ids": [request.uuid for request in launcher.api.getMatchingRequests()]}
 
 
+def _request_winner(launcher, request):
+    """Hostname that getMatchingRequests would yield this request to."""
+    from zuul.zk.launcher import launcher_score
+
+    candidate_launchers = {
+        c.hostname: c for c in launcher.api.component_registry.all("launcher")
+    }
+    if not candidate_launchers:
+        return launcher.hostname
+    scores = {launcher_score(name, request): name for name in candidate_launchers}
+    for _score, name in sorted(scores.items()):
+        comp = candidate_launchers.get(name)
+        if comp is None or comp.state != comp.RUNNING:
+            continue
+        return name
+    return None
+
+
+def _owned_requests(launcher, data):
+    """REQUESTED uuids this launcher should accept, including cache misses.
+
+    launcher_score is patched by tests. A request that is not in the
+    Python cache yet is scored from its labels on a transient
+    NodesetRequest that is not inserted into the cache.
+    """
+    from zuul.model import NodesetRequest
+
+    owned = []
+    for item in data.get("requests") or []:
+        uuid = item.get("uuid")
+        if not uuid:
+            continue
+        cached = launcher.api.getNodesetRequest(uuid)
+        if cached is not None and cached.hasLock():
+            owned.append(uuid)
+            continue
+        request = cached
+        if request is None:
+            labels = list(item.get("labels") or [])
+            if not labels:
+                continue
+            request = NodesetRequest()
+            request._set(uuid=uuid, labels=labels)
+        if _request_winner(launcher, request) == launcher.hostname:
+            owned.append(uuid)
+    return {"ids": owned}
+
+
 def _matching_nodes(launcher):
     return {
         "ids": [node.uuid for node in launcher.api.getMatchingProviderNodes()]
@@ -3625,6 +3675,24 @@ def _accept_one(launcher, data):
                     )
         if payloads:
             launcher.seed_quota_cache(_json.dumps(payloads))
+        # nodes_cache.getQuota is what server.py subtracts. Seed it here,
+        # after the previous accept's cache_insert and before orig_accept,
+        # so a node created for an earlier request counts immediately.
+        used_payloads = {}
+        for providers in launcher.tenant_providers.values():
+            for provider in providers:
+                try:
+                    used = launcher.api.nodes_cache.getQuota(
+                        provider, include_requested=True
+                    )
+                    payload = _quota_payload(used)
+                    used_payloads[provider.canonical_name] = payload
+                    used_payloads[provider.name] = payload
+                except Exception:
+                    launcher.log.exception(
+                        "Unable to read node quota for %s", provider.canonical_name
+                    )
+        launcher.seed_used_quota(_json.dumps(used_payloads))
         # unassigned/pending are unused by the Rust-backed method; pass
         # placeholders so patched wrappers that forward *args still work.
         unassigned = call_launcher(launcher, "_getUnassignedNodes")

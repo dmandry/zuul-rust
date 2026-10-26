@@ -86,6 +86,22 @@ impl PyLauncher {
         Ok(())
     }
 
+    /// Python nodes_cache.getQuota snapshot for the accept about to run.
+    fn seed_used_quota(slf: &Bound<'_, Self>, payload: String) -> PyResult<()> {
+        let rust = slf.borrow().rust.clone();
+        if let Some(ptr) = zuul_launcher::cloud::active_launcher() {
+            let launcher =
+                unsafe { &mut *(ptr as *mut zuul_launcher::launcher::Launcher) };
+            launcher.seed_used_quota_from_json(&payload);
+            return Ok(());
+        }
+        let mut guard = rust.lock().unwrap();
+        if let Some(launcher) = guard.as_mut() {
+            launcher.seed_used_quota_from_json(&payload);
+        }
+        Ok(())
+    }
+
     /// One CleanupWorker pass. cleanup_worker._run() calls this so tests
     /// that invoke the Python method still run the Rust matcher.
     fn run_cleanup_now(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {

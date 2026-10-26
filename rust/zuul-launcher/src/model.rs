@@ -207,6 +207,18 @@ impl QuotaInformation {
         }
     }
 
+    /// Raise each resource to `other`'s value when that is larger.
+    /// Missing keys count as zero so a source that recorded `instances`
+    /// still counts when this side only has cores/ram.
+    pub fn max_cover(&mut self, other: &QuotaInformation) {
+        for (resource, theirs) in &other.quota {
+            let ours = self.quota.get(resource).copied().unwrap_or(0.0);
+            if *theirs > ours {
+                self.quota.insert(resource.clone(), *theirs);
+            }
+        }
+    }
+
     pub fn non_negative(&self) -> bool {
         self.quota.values().all(|v| *v >= 0.0)
     }
@@ -320,7 +332,7 @@ impl NodesetRequest {
     pub fn request_time(&self) -> f64 {
         self.fields
             .get("request_time")
-            .and_then(|v| v.as_f64())
+            .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
             .unwrap_or(0.0)
     }
 

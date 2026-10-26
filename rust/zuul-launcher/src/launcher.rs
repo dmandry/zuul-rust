@@ -82,6 +82,16 @@ pub struct Launcher {
     /// decode miss drops the node from the quota index. The earlier
     /// request would then not block the later one (test_launcher_request_order).
     remembered_node_quota: HashMap<String, (String, QuotaInformation)>,
+    /// Python nodes_cache.getQuota (include_requested) seeded by accept_one
+    /// immediately before `_acceptRequest`. That cache is what server.py
+    /// subtracts, and cache_insert updates it in the same accept that
+    /// created the node — before the next request's quota check.
+    used_node_quota: HashMap<String, QuotaInformation>,
+    /// REQUESTED uuids this launcher should handle (launcher_score).
+    /// Refreshed once per process_requests, before accept_one.
+    owned_request_ids: Vec<String>,
+    /// Uuids considered in the current process_requests pass.
+    pass_request_ids: HashSet<String>,
     stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
     stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
     cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
@@ -151,6 +161,9 @@ impl Launcher {
             upload_uuids_in_delete_queue: Arc::new(Mutex::new(HashSet::new())),
             accept_pending: HashSet::new(),
             remembered_node_quota: HashMap::new(),
+            used_node_quota: HashMap::new(),
+            owned_request_ids: Vec::new(),
+            pass_request_ids: HashSet::new(),
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
@@ -447,9 +460,20 @@ impl Launcher {
         self.reconcile_remembered_quota();
         self.refresh_cloud_quotas();
         self.accept_pending.clear();
+        self.refresh_owned_requests();
         let unassigned = self.unassigned_nodes();
         let mut pending = self.accept_pending.clone();
-        let ids = self.matching_ids("matching_requests");
+        let mut ids = self.matching_ids("matching_requests");
+        for id in &self.owned_request_ids {
+            if !ids.iter().any(|existing| existing == id) {
+                ids.push(id.clone());
+            }
+        }
+        // server.py walks sorted(requests): priority, relative_priority,
+        // request_time. A later request must not be offered the slot
+        // that frees while an earlier one is still REQUESTED.
+        let ids = self.sort_request_ids(ids);
+        self.pass_request_ids = ids.iter().cloned().collect();
         for id in ids {
             let Some(req) = self.api.requests.get(&id).cloned() else { continue };
             if model::is_final_request_state(&req.state()) && req.event_state() == model::event_state::COMPLETE {
@@ -459,7 +483,19 @@ impl Launcher {
                 if cloud::enabled() {
                     // Lock + patch hook on the Python request object;
                     // real accept is Rust via PyO3 _acceptRequest.
-                    let _ = cloud::invoke("accept_one", &json!({ "uuid": id }));
+                    // A request Rust already read from ZK but the Python
+                    // cache has not yielded is accepted here so it is not
+                    // skipped behind a later one.
+                    let invoked = cloud::invoke("accept_one", &json!({ "uuid": id }));
+                    let missing = invoked
+                        .as_ref()
+                        .ok()
+                        .and_then(|v| v.get("missing"))
+                        .and_then(|m| m.as_bool())
+                        .unwrap_or(false);
+                    if missing {
+                        let _ = self.accept_request_by_uuid(&id);
+                    }
                     self.api.sync();
                     pending = self.accept_pending.clone();
                 } else {
@@ -523,6 +559,109 @@ impl Launcher {
                 }
             }
         }
+    }
+
+    /// Replace the per-accept Python node-cache quota snapshot.
+    /// `{canonical_name: {"default": ..., "quota": {...}}}` from
+    /// `nodes_cache.getQuota(provider, include_requested=True)`.
+    pub fn seed_used_quota_from_json(&mut self, payload: &str) {
+        self.used_node_quota.clear();
+        let Ok(value) = serde_json::from_str::<Value>(payload) else {
+            return;
+        };
+        let Some(obj) = value.as_object() else {
+            return;
+        };
+        let rust_names: Vec<String> = self
+            .tenant_providers
+            .values()
+            .flat_map(|list| list.iter().map(|p| p.canonical_name().to_string()))
+            .collect();
+        for (name, entry) in obj {
+            let q = cloud::quota_from_payload(entry);
+            self.used_node_quota.insert(name.clone(), q.copy());
+            for rn in &rust_names {
+                if rn == name || rust_names.len() == 1 {
+                    self.used_node_quota.insert(rn.clone(), q.copy());
+                }
+            }
+        }
+    }
+
+    /// Ask Python which REQUESTED requests this launcher's patched
+    /// launcher_score assigns here. Includes cache misses so an earlier
+    /// request is not invisible for a pass.
+    fn refresh_owned_requests(&mut self) {
+        self.owned_request_ids.clear();
+        if !cloud::enabled() {
+            self.owned_request_ids = self.api.get_matching_requests();
+            return;
+        }
+        let requests: Vec<Value> = self
+            .api
+            .requests
+            .values()
+            .filter(|req| req.state() == request_state::REQUESTED)
+            .map(|req| json!({"uuid": req.uuid(), "labels": req.labels()}))
+            .collect();
+        if let Ok(value) = cloud::invoke("owned_requests", &json!({"requests": requests})) {
+            if let Some(ids) = value.get("ids").and_then(|v| v.as_array()) {
+                self.owned_request_ids = ids
+                    .iter()
+                    .filter_map(|id| id.as_str().map(|s| s.to_string()))
+                    .collect();
+            }
+        }
+    }
+
+    fn sort_request_ids(&self, mut ids: Vec<String>) -> Vec<String> {
+        ids.sort_by(|a, b| {
+            let ra = self.api.requests.get(a);
+            let rb = self.api.requests.get(b);
+            match (ra, rb) {
+                (Some(left), Some(right)) => left
+                    .priority()
+                    .cmp(&right.priority())
+                    .then(left.relative_priority().cmp(&right.relative_priority()))
+                    .then(
+                        left.request_time()
+                            .partial_cmp(&right.request_time())
+                            .unwrap_or(std::cmp::Ordering::Equal),
+                    ),
+                _ => std::cmp::Ordering::Equal,
+            }
+        });
+        ids
+    }
+
+    /// True when an earlier REQUESTED request for this label is one this
+    /// launcher should handle and is part of the current pass. Matches
+    /// pending_labels: the earlier request gets the next free slot.
+    fn earlier_owned_requested(&self, request: &NodesetRequest, label: &str) -> bool {
+        for id in &self.owned_request_ids {
+            if id == &request.uuid() || !self.pass_request_ids.contains(id) {
+                continue;
+            }
+            let Some(other) = self.api.requests.get(id) else {
+                continue;
+            };
+            if other.state() != request_state::REQUESTED {
+                continue;
+            }
+            if !other.labels().iter().any(|name| name == label) {
+                continue;
+            }
+            let earlier = other.priority() < request.priority()
+                || (other.priority() == request.priority()
+                    && other.relative_priority() < request.relative_priority())
+                || (other.priority() == request.priority()
+                    && other.relative_priority() == request.relative_priority()
+                    && other.request_time() < request.request_time());
+            if earlier {
+                return true;
+            }
+        }
+        false
     }
 
     /// Accept one REQUESTED nodeset by uuid. Used by the PyO3
@@ -738,7 +877,8 @@ impl Launcher {
             }
             if req.provider_node_data().is_empty() {
                 let key = (provider.name().to_string(), label.name.clone());
-                if pending.contains(&key) {
+                if pending.contains(&key) || self.earlier_owned_requested(&req, &label.name) {
+                    pending.insert(key);
                     self.messages.append(&mut messages);
                     return Ok(());
                 }
@@ -1107,7 +1247,14 @@ impl Launcher {
             let Some(mut total) = self.provider_quota_available(provider, true) else {
                 return false;
             };
-            let used = self.effective_requested_quota(provider.canonical_name());
+            let mut used = self.effective_requested_quota(provider.canonical_name());
+            if let Some(py) = self
+                .used_node_quota
+                .get(provider.canonical_name())
+                .or_else(|| self.used_node_quota.get(provider.name()))
+            {
+                used.max_cover(py);
+            }
             total.subtract(&used);
             total
         } else {
@@ -1168,13 +1315,13 @@ impl Launcher {
     /// from the in-memory map. A znode that failed to decode stays
     /// remembered so the next accept still sees its instances.
     fn reconcile_remembered_quota(&mut self) {
-        let alive: HashSet<String> = self
-            .api
-            .zk
-            .get_children("/zuul/nodes/nodes")
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+        // A failed listing must not look like "every node is gone".
+        // That dropped the instance cost of a node this launcher had
+        // just created and let the next request take the same slot.
+        let alive = match self.api.zk.get_children("/zuul/nodes/nodes") {
+            Ok(ids) => ids.into_iter().collect::<HashSet<_>>(),
+            Err(_) => return,
+        };
         self.remembered_node_quota.retain(|id, _| {
             self.api.nodes.contains_key(id) || alive.contains(id)
         });
@@ -1194,10 +1341,27 @@ impl Launcher {
                     if !model::is_requested_quota_state(&node.state()) {
                         continue;
                     }
-                    if node.provider() == provider && !node.quota().quota.is_empty() {
+                    if node.provider() != provider {
+                        total.add(quota);
                         continue;
                     }
-                    total.add(quota);
+                    let indexed = node.quota();
+                    if indexed.quota.is_empty() {
+                        total.add(quota);
+                        continue;
+                    }
+                    // Create can rewrite quota with cores/ram and drop
+                    // instances. Count remembered resources the indexed
+                    // quota does not already have.
+                    let mut missing = QuotaInformation::default();
+                    for (key, value) in &quota.quota {
+                        if !indexed.quota.contains_key(key) {
+                            missing.quota.insert(key.clone(), *value);
+                        }
+                    }
+                    if !missing.quota.is_empty() {
+                        total.add(&missing);
+                    }
                 }
                 None => total.add(quota),
             }
