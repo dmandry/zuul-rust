@@ -77,6 +77,11 @@ pub struct Launcher {
     /// process_requests pass. Shared with the accept_one PyO3 hook so
     /// patched `_acceptRequest` still sees the same deferral set.
     accept_pending: HashSet<(String, String)>,
+    /// Label quota recorded at request_node time, keyed by node uuid.
+    /// accept_one syncs from ZooKeeper before the next request, and a
+    /// decode miss drops the node from the quota index. The earlier
+    /// request would then not block the later one (test_launcher_request_order).
+    remembered_node_quota: HashMap<String, (String, QuotaInformation)>,
     stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
     stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
     cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
@@ -145,6 +150,7 @@ impl Launcher {
             upload_uuids_in_queue: Arc::new(Mutex::new(HashSet::new())),
             upload_uuids_in_delete_queue: Arc::new(Mutex::new(HashSet::new())),
             accept_pending: HashSet::new(),
+            remembered_node_quota: HashMap::new(),
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
@@ -228,10 +234,22 @@ impl Launcher {
         // process_provider_node directly keep an injected clock.
         self.now = model::now_secs();
         self.refresh_worker_shared();
+        // maintain_images_and_uploads clears layout_updated. A tenant
+        // that landed in ZooKeeper after the previous min-ready pass
+        // must be filled before this pass can mark the earlier batch
+        // READY; the test samples the ready gauge as soon as every
+        // cached node is ready (TestMinReadyLauncher.test_min_ready).
+        let layout_changed = self.layout_updated;
+        let fill_min_ready_first = layout_changed && self.has_inflight_unassigned();
         self.maintain_images_and_uploads();
         self.process_requests();
+        if fill_min_ready_first {
+            self.process_min_ready();
+        }
         self.process_nodes();
-        self.process_min_ready();
+        if !fill_min_ready_first {
+            self.process_min_ready();
+        }
     }
 
     /// Launcher.updateTenantProviders / _updateTenantProviders.
@@ -426,6 +444,7 @@ impl Launcher {
         // the method itself drives Rust accept_request_by_uuid.
         // Refresh provider quota (including unmanaged usage from the
         // cleanup worker) before accept_one nests another cloud call.
+        self.reconcile_remembered_quota();
         self.refresh_cloud_quotas();
         self.accept_pending.clear();
         let unassigned = self.unassigned_nodes();
@@ -515,6 +534,9 @@ impl Launcher {
         if req.state() != request_state::REQUESTED {
             return Ok(());
         }
+        // _acceptRequest syncs before this call. Reconcile after that
+        // sync so a node written by the previous request still counts.
+        self.reconcile_remembered_quota();
         let unassigned = self.unassigned_nodes();
         let mut pending = self.accept_pending.clone();
         let result = self.accept_request(&req, &unassigned, &mut pending);
@@ -1085,7 +1107,7 @@ impl Launcher {
             let Some(mut total) = self.provider_quota_available(provider, true) else {
                 return false;
             };
-            let used = self.api.get_quota(provider.canonical_name(), true);
+            let used = self.effective_requested_quota(provider.canonical_name());
             total.subtract(&used);
             total
         } else {
@@ -1132,6 +1154,55 @@ impl Launcher {
             .unwrap_or_default();
         let usage = self.api.node_count(tenant, &providers, &label.name);
         usage < limit
+    }
+
+    fn remember_node_quota(&mut self, id: &str, provider: &str, quota: &QuotaInformation) {
+        if quota.quota.is_empty() {
+            return;
+        }
+        self.remembered_node_quota
+            .insert(id.to_string(), (provider.to_string(), quota.copy()));
+    }
+
+    /// Drop remembered quota once the node is gone from ZooKeeper and
+    /// from the in-memory map. A znode that failed to decode stays
+    /// remembered so the next accept still sees its instances.
+    fn reconcile_remembered_quota(&mut self) {
+        let alive: HashSet<String> = self
+            .api
+            .zk
+            .get_children("/zuul/nodes/nodes")
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        self.remembered_node_quota.retain(|id, _| {
+            self.api.nodes.contains_key(id) || alive.contains(id)
+        });
+    }
+
+    /// Requested quota for one provider. Nodes already indexed with a
+    /// non-empty quota are left to get_quota. Empty-quota and
+    /// decode-miss nodes contribute the quota captured at creation.
+    fn effective_requested_quota(&self, provider: &str) -> QuotaInformation {
+        let mut total = self.api.get_quota(provider, true);
+        for (id, (pname, quota)) in &self.remembered_node_quota {
+            if pname != provider || quota.quota.is_empty() {
+                continue;
+            }
+            match self.api.nodes.get(id) {
+                Some(node) => {
+                    if !model::is_requested_quota_state(&node.state()) {
+                        continue;
+                    }
+                    if node.provider() == provider && !node.quota().quota.is_empty() {
+                        continue;
+                    }
+                    total.add(quota);
+                }
+                None => total.add(quota),
+            }
+        }
+        total
     }
 
     fn cloud_endpoint_limits(&self, provider: &dyn Provider) -> Option<QuotaInformation> {
@@ -1340,6 +1411,7 @@ impl Launcher {
             let sub_ids: Vec<String> = (0..slot_count).map(|_| hex_id()).collect();
             node.fields.insert("subnodes".into(), json!(sub_ids));
             self.api.write_node(&node).map_err(|e| e.to_string())?;
+            self.remember_node_quota(&id, provider.canonical_name(), &quota);
             self.python_cache_insert(&id, false);
             let mut returned = id.clone();
             for (slot, sub_id) in sub_ids.iter().enumerate() {
@@ -1391,6 +1463,7 @@ impl Launcher {
             node.request_id = Some(req.uuid());
         }
         self.api.write_node(&node).map_err(|e| e.to_string())?;
+        self.remember_node_quota(&id, provider.canonical_name(), &quota);
         if let Some(req) = request {
             let min_ver = req.zk_version.unwrap_or(0) + 1;
             let assign = json!({
@@ -2029,6 +2102,15 @@ impl Launcher {
             Some(min) => request.zk_version.map(|version| version >= min).unwrap_or(false),
         };
         up_to_date && !request.nodes().iter().any(|id| id == &node.uuid())
+    }
+
+    /// Unassigned nodes still in a create state. The next layout pass
+    /// must add any newly visible min-ready slots before these flip
+    /// to ready.
+    fn has_inflight_unassigned(&self) -> bool {
+        self.api.nodes.values().any(|n| {
+            n.request_id.is_none() && model::is_create_state(&n.state())
+        })
     }
 
     pub fn process_min_ready(&mut self) {
