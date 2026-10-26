@@ -86,6 +86,26 @@ impl PyLauncher {
         Ok(())
     }
 
+    /// One CleanupWorker pass. cleanup_worker._run() calls this so tests
+    /// that invoke the Python method still run the Rust matcher.
+    fn run_cleanup_now(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {
+        let hostname: String = slf.getattr("hostname")?.extract()?;
+        let rust = slf.borrow().rust.clone();
+        py.allow_threads(|| {
+            let _cloud = zuul_launcher::cloud::enter(&hostname);
+            let leaks = {
+                let guard = rust.lock().unwrap();
+                guard.as_ref().map(|launcher| launcher.leaks.clone())
+            };
+            if let Some(leaks) = leaks {
+                if let Ok(mut book) = leaks.lock() {
+                    zuul_launcher::workers::cleanup_pass(&mut book);
+                }
+            }
+        });
+        Ok(())
+    }
+
     /// Stop Rust cleanup / stats / upload pools (called from bootstrap.stop).
     ///
     /// Must release the GIL while joining: cleanup/upload ticks call back

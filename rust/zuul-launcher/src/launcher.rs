@@ -4,7 +4,6 @@
 // Control flow from zuul/launcher/server.py. Timing constants are unchanged.
 
 use crate::cloud;
-use crate::endpoint;
 use crate::jsonutil;
 use crate::layout::{self, LayoutState};
 use crate::mmh3;
@@ -17,8 +16,9 @@ use crate::provider::{
     AdvanceError, AwsSnapshot, Provider, StateMachine, StaticNodeConfig,
 };
 use crate::upload::{PlannedJob, UploadArgs, UploadPlanner};
+use crate::upload_job;
 use crate::workers::{
-    matching_endpoints, CleanupWorker, EndpointRef, StatsWorker, UploadPools,
+    cleanup_pass, CleanupWorker, EndpointRef, LeakBook, StatsWorker, UploadPools,
 };
 use crate::zk::{self, ComponentInfo, LauncherApi, ZkOps};
 use rand::seq::SliceRandom;
@@ -80,6 +80,9 @@ pub struct Launcher {
     stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
     stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
     cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
+    /// Two-cycle leak confirmation shared by the cleanup thread and
+    /// cleanup_worker._run() (tests call that directly).
+    pub leaks: Arc<Mutex<LeakBook>>,
 }
 
 /// Data the stats election thread reads to emit `_runStats` gauges.
@@ -145,6 +148,7 @@ impl Launcher {
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
+            leaks: Arc::new(Mutex::new(LeakBook::default())),
         }
     }
 
@@ -1794,7 +1798,15 @@ impl Launcher {
         // Always drive the Python NodescanRequest when the test handler
         // is installed. host-key-checking false still calls advance(),
         // which unit tests patch.
-        if cloud::enabled() {
+        let use_python = if cloud::enabled() {
+            cloud::invoke("nodescan.mode", &json!({}))
+                .ok()
+                .and_then(|v| v.get("use_python").and_then(|b| b.as_bool()))
+                .unwrap_or(true)
+        } else {
+            false
+        };
+        if use_python {
             let result = cloud::invoke(
                 "nodescan",
                 &json!({
@@ -2296,13 +2308,13 @@ impl Launcher {
                 endpoints: self.endpoint_refs(),
             }));
             self.cleanup_shared = Some(cleanup_shared.clone());
+            let leaks = self.leaks.clone();
+            let host = self.hostname.clone();
             self.cleanup_worker = Some(CleanupWorker::start(move || {
-                let shared = cleanup_shared.lock().unwrap().clone();
-                let matched =
-                    matching_endpoints(&shared.hostname, &shared.components, &shared.endpoints);
-                let _ = matched;
-                if cloud::enabled() {
-                    let _ = cloud::invoke("cleanup.tick", &json!({}));
+                let _cloud = cloud::enter(&host);
+                let _shared = cleanup_shared.lock().unwrap().clone();
+                if let Ok(mut book) = leaks.lock() {
+                    cleanup_pass(&mut book);
                 }
             }));
         }
@@ -2600,23 +2612,10 @@ impl Launcher {
         let Some(pools) = self.upload_pools.as_ref() else {
             return;
         };
-        // Crashed uploads (UPLOADING, unlocked): reset via Python ZKObject
-        // lock/refresh/double-check (server.py checkMissingUploads). Never
-        // write_upload here — that bypasses the advisory lock and races the
-        // UploadJob that still holds it (BadVersion on finalize).
-        let crashed: Vec<String> = self
-            .api
-            .uploads
-            .values()
-            .filter(|u| u.state() == upload_state::UPLOADING && !u.is_locked)
-            .map(|u| u.uuid())
-            .collect();
-        for uuid in crashed {
-            let _ = cloud::invoke(
-                "upload.reset_crashed",
-                &json!({ "upload_uuid": uuid }),
-            );
-        }
+        // Crashed uploads (UPLOADING, unlocked): kazoo lock, refresh,
+        // double-check, then PENDING. Same rule as checkMissingUploads.
+        upload_job::reset_crashed_uploads(self.api.zk.as_ref(), &self.hostname);
+        self.api.sync();
         let all: Vec<&model::ImageUpload> = self.api.uploads.values().collect();
         // Group PENDING uploads by artifact (one UploadJob each).
         let mut pending_by_artifact: HashMap<String, Vec<String>> = HashMap::new();
@@ -2742,6 +2741,8 @@ impl Launcher {
             let q = queue.clone();
             let art = artifact_uuid.clone();
             let uuids = upload_uuids.clone();
+            let zk = self.api.zk.clone();
+            let host = self.hostname.clone();
             let placeholder = PlannedJob {
                 kind: "artifact".into(),
                 upload_uuid: artifact_uuid,
@@ -2750,14 +2751,8 @@ impl Launcher {
                 dependents: Vec::new(),
             };
             pools.submit_upload(placeholder, move |_job| {
-                let _ = cloud::invoke(
-                    "upload.artifact_job",
-                    &json!({
-                        "artifact_uuid": art,
-                        "upload_uuids": uuids,
-                        "planned": planned,
-                    }),
-                );
+                let _cloud = cloud::enter(&host);
+                upload_job::run_artifact(zk.as_ref(), &host, &art, &uuids, &planned);
                 for uuid in &uuids {
                     Self::queue_discard(&q, uuid);
                 }
@@ -2817,9 +2812,9 @@ impl Launcher {
         Self::queue_discard(queue, &job.upload_uuid);
     }
 
-    /// Snapshot nodes. In the PyO3 harness, drive Python
-    /// getSnapshotStateMachine.advance (snapshot.sm_advance) so test
-    /// MonkeyPatches apply. The shipped binary uses Rust AwsSnapshot.
+    /// Snapshot nodes. Lock, timeout, and completion live here.
+    /// AwsSnapshotStateMachine.advance stays in Python when tests patch it;
+    /// otherwise Rust AwsSnapshot drives ep.create_snapshot / refresh.
     pub fn process_snapshots(&mut self) {
         let ids: Vec<String> = self
             .api
@@ -2829,18 +2824,115 @@ impl Launcher {
             .map(|n| n.uuid())
             .collect();
         for id in ids {
-            if cloud::enabled() {
+            if !cloud::enabled() {
+                let mut sm = AwsSnapshot::new();
+                sm.node_uuid = id.clone();
+                sm.start_time = self.now;
+                let _ = sm.advance();
+                continue;
+            }
+            let Ok(prep) = cloud::invoke("snapshot.prepare", &json!({"node_uuid": id})) else {
+                continue;
+            };
+            if prep.get("skip").and_then(|v| v.as_bool()).unwrap_or(false) {
+                continue;
+            }
+            if prep.get("error").and_then(|v| v.as_bool()).unwrap_or(false) {
+                let message = prep.get("message").and_then(|v| v.as_str()).unwrap_or("");
                 let _ = cloud::invoke(
-                    "snapshot.sm_advance",
-                    &json!({ "node_uuid": id }),
+                    "snapshot.fail",
+                    &json!({"node_uuid": id, "reason": "error", "message": message}),
                 );
                 continue;
             }
-            // Binary path: Rust AwsSnapshot + live endpoint ops.
+            let timeout = prep.get("snapshot_timeout").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let patched = prep.get("patched").and_then(|v| v.as_bool()).unwrap_or(false);
+            if patched {
+                let Ok(step) = cloud::invoke("snapshot.sdk_advance", &json!({"node_uuid": id})) else {
+                    continue;
+                };
+                if step.get("error").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    let message = step.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                    let _ = cloud::invoke(
+                        "snapshot.fail",
+                        &json!({"node_uuid": id, "reason": "error", "message": message}),
+                    );
+                    continue;
+                }
+                let complete = step.get("complete").and_then(|v| v.as_bool()).unwrap_or(false);
+                let start = step.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                if !complete && timeout > 0.0 && model::now_secs() - start > timeout {
+                    let _ = cloud::invoke("snapshot.fail", &json!({"node_uuid": id, "reason": "timeout"}));
+                    continue;
+                }
+                let external = step.get("external_id").and_then(|v| v.as_str()).unwrap_or("");
+                let _ = cloud::invoke(
+                    "snapshot.commit",
+                    &json!({
+                        "node_uuid": id,
+                        "complete": complete,
+                        "external_id": if external.is_empty() { Value::Null } else { json!(external) },
+                        "state": step.get("snapshot_state").cloned().unwrap_or(json!({})),
+                    }),
+                );
+                continue;
+            }
             let mut sm = AwsSnapshot::new();
+            sm.provider = prep
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             sm.node_uuid = id.clone();
-            sm.start_time = self.now;
-            let _ = sm.advance();
+            sm.volume_id = prep
+                .get("volume_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            sm.region = prep.get("region").and_then(|v| v.as_str()).map(|s| s.to_string());
+            sm.account_id = prep
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            sm.tags = prep.get("tags").cloned().unwrap_or(json!({}));
+            let saved = prep.get("snapshot_state").cloned().unwrap_or(json!({}));
+            if let Some(state) = saved.get("state").and_then(|v| v.as_str()) {
+                sm.state = state.to_string();
+            }
+            sm.start_time = saved
+                .get("start_time")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            sm.snapshot_id = saved
+                .get("snapshot_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if let Some(snap_id) = &sm.snapshot_id {
+                sm.snapshot_obj = Some(json!({"SnapshotId": snap_id}));
+            }
+            if sm.state == "start" && sm.start_time == 0.0 {
+                sm.start_time = model::now_secs();
+            }
+            if let Err(err) = sm.advance() {
+                let _ = cloud::invoke(
+                    "snapshot.fail",
+                    &json!({"node_uuid": id, "reason": "error", "message": err.to_string()}),
+                );
+                continue;
+            }
+            if !sm.complete && timeout > 0.0 && model::now_secs() - sm.start_time > timeout {
+                let _ = cloud::invoke("snapshot.fail", &json!({"node_uuid": id, "reason": "timeout"}));
+                continue;
+            }
+            let external = sm.external_id.clone().unwrap_or_default();
+            let _ = cloud::invoke(
+                "snapshot.commit",
+                &json!({
+                    "node_uuid": id,
+                    "complete": sm.complete,
+                    "external_id": if external.is_empty() { Value::Null } else { json!(external) },
+                    "state": sm.to_dict(),
+                }),
+            );
         }
     }
 

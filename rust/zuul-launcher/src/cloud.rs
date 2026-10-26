@@ -75,6 +75,10 @@ pub fn unregister_handler(id: &str) {
     handlers().lock().unwrap().remove(id);
 }
 
+pub fn current_id() -> Option<String> {
+    CURRENT.with(|c| c.borrow().clone())
+}
+
 pub fn enabled() -> bool {
     !handlers().lock().unwrap().is_empty()
 }

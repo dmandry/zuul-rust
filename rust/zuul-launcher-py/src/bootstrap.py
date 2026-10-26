@@ -77,6 +77,16 @@ except Exception:
 
 def bootstrap(launcher, config, connections, hostname):
     _record_original_sms()
+    # Captured once, before tests MonkeyPatch these callables. Later
+    # cloud_call execs this file again, so the originals live on the
+    # launcher object rather than in this script's globals.
+    import zuul.launcher.server as _server
+    import zuul.driver.aws.awsendpoint as _aws
+
+    launcher._orig_upload_run = _server.UploadJob.run
+    launcher._orig_nodescan_advance = _server.NodescanRequest.advance
+    launcher._orig_nodescan_socket = _server.NodescanRequest._socket_class
+    launcher._orig_snap_advance = _aws.AwsSnapshotStateMachine.advance
     launcher._running = True
     # Default matches server.Launcher; tests.base createLauncher sets
     # False so unit tests do not run leaked-resource cleanup (moto has
@@ -223,6 +233,16 @@ def bootstrap(launcher, config, connections, hostname):
     launcher.endpoint_upload_executor = None
     launcher.endpoint_import_executor = None
     launcher.cleanup_worker = CleanupWorker(launcher)
+
+    def _cleanup_run_rust():
+        # Leak matching runs in Rust. This binding keeps
+        # cleanup_worker._run() / .start() on that path.
+        try:
+            launcher.run_cleanup_now()
+        except Exception:
+            launcher.log.exception("Error in cleanup worker:")
+
+    launcher.cleanup_worker._run = _cleanup_run_rust
     # Upload, snapshot, and cleanup call back into Launcher methods the
     # PyO3 class does not define (_getProviders, _processNodeSnapshot).
     _bind_missing_methods(launcher)
@@ -578,6 +598,8 @@ def cloud_call(launcher, op, payload):
             result = _cloud_step(launcher, data)
         elif op == "nodescan":
             result = _nodescan_step(launcher, data)
+        elif op == "nodescan.mode":
+            result = _nodescan_mode(launcher, data)
         elif op == "endpoint_limits":
             result = _endpoint_limits(launcher, data)
         elif op == "label_quota":
@@ -725,8 +747,22 @@ def cloud_call(launcher, op, payload):
         # cleanup.tick     — Python CleanupWorker._run (leaked resources)
         elif op == "upload.job_run":
             result = _upload_job_run(launcher, data)
+        elif op == "upload.run_is_patched":
+            result = _upload_run_is_patched(launcher, data)
         elif op == "upload.artifact_job":
             result = _upload_artifact_job(launcher, data)
+        elif op == "upload.sdk_run":
+            result = _upload_sdk_run(launcher, data)
+        elif op == "upload.fetch":
+            result = _upload_fetch(launcher, data)
+        elif op == "upload.log":
+            result = _upload_log(launcher, data)
+        elif op == "upload.notify":
+            result = _upload_notify(launcher, data)
+        elif op == "upload.validate_event":
+            result = _upload_validate_event(launcher, data)
+        elif op == "stats.timing":
+            result = _stats_timing(launcher, data)
         elif op == "upload.queue_add":
             for uuid in data.get("upload_uuids") or []:
                 launcher.upload_uuids_in_queue.add(uuid)
@@ -739,10 +775,24 @@ def cloud_call(launcher, op, payload):
             result = _upload_delete_artifact(launcher, data)
         elif op == "snapshot.advance":
             result = _snapshot_advance(launcher, data)
+        elif op == "snapshot.prepare":
+            result = _snapshot_prepare(launcher, data)
+        elif op == "snapshot.sdk_advance":
+            result = _snapshot_sdk_advance(launcher, data)
+        elif op == "snapshot.commit":
+            result = _snapshot_commit(launcher, data)
+        elif op == "snapshot.fail":
+            result = _snapshot_fail(launcher, data)
         elif op == "snapshot.sm_advance":
             result = _snapshot_sm_advance(launcher, data)
         elif op == "cleanup.tick":
             result = _cleanup_tick(launcher, data)
+        elif op == "cleanup.roster":
+            result = _cleanup_roster(launcher, data)
+        elif op == "cleanup.inspect":
+            result = _cleanup_inspect(launcher, data)
+        elif op == "cleanup.apply":
+            result = _cleanup_apply(launcher, data)
         else:
             result = {"error_kind": "other", "message": "unknown cloud op %s" % op}
     except Exception as exc:
@@ -1868,6 +1918,178 @@ def _sm_patched_advance(launcher, data):
     return payload
 
 
+def _cleanup_roster(launcher, data):
+    """Endpoint and launcher lists for Rust getMatchingEndpoints.
+
+    Listing is the registry the Python worker used. Scoring stays in Rust.
+    """
+    _ = data
+    launchers = []
+    for comp in COMPONENT_REGISTRY.registry.all("launcher"):
+        filt = getattr(comp, "connection_filter", None)
+        launchers.append({
+            "hostname": comp.hostname,
+            "state": comp.state,
+            "connection_filter": list(filt) if filt else None,
+        })
+    endpoints = []
+    for endpoint in launcher.endpoints.values():
+        endpoints.append({
+            "name": endpoint.name,
+            "canonical_name": endpoint.canonical_name,
+            "connection_name": endpoint.connection.connection_name,
+        })
+    return {
+        "system_id": launcher.system.system_id,
+        "launchers": launchers,
+        "endpoints": endpoints,
+    }
+
+
+def _meta_json(meta):
+    out = {}
+    if not meta:
+        return out
+    try:
+        items = meta.items()
+    except Exception:
+        return out
+    for key, value in items:
+        out[str(key)] = _jsonable(value)
+    return out
+
+
+def _cleanup_inspect(launcher, data):
+    """SDK list* for one endpoint. Matching runs in Rust."""
+    import math
+
+    from zuul.model import QuotaInformation
+
+    _bind_missing_methods(launcher)
+    canonical = data["canonical_name"]
+    endpoint = None
+    for ep in launcher.endpoints.values():
+        if ep.canonical_name == canonical:
+            endpoint = ep
+            break
+    if endpoint is None:
+        return {"error": True, "message": "missing endpoint"}
+    providers = [
+        p
+        for p in launcher._getProviders()
+        if p.getEndpoint().canonical_name == endpoint.canonical_name
+    ]
+    try:
+        required = [
+            r.unique_id for r in endpoint.listRequiredInfrastructureResources()
+        ]
+        types = [str(t) for t in endpoint.getResourceTypes()]
+        nodes = []
+        for node in launcher.api.nodes_cache.getItems():
+            required_node = []
+            if node.endpoint_name == endpoint.name:
+                try:
+                    required_node = [str(x) for x in node.getRequiredResources()]
+                except Exception:
+                    required_node = []
+            nodes.append({
+                "uuid": node.uuid,
+                "endpoint_name": node.endpoint_name,
+                "required": required_node,
+            })
+        uploads = [u.uuid for u in launcher.image_upload_registry.getItems()]
+        instances = []
+        for instance in endpoint.listInstances():
+            qi = instance.getQuotaInformation()
+            quota = {}
+            for key, value in qi.quota.items():
+                if isinstance(value, float) and (math.isinf(value) or math.isnan(value)):
+                    quota[key] = None
+                else:
+                    quota[key] = value
+            instances.append({
+                "metadata": _meta_json(getattr(instance, "metadata", None)),
+                "quota": quota,
+                "default": 0,
+            })
+    except Exception:
+        launcher.log.exception("Error in cleanup worker:")
+        return {"error": True}
+    try:
+        resources = []
+        for resource in endpoint.listResources(providers):
+            resources.append({
+                "type": str(resource.type),
+                "id": resource.id,
+                "unique_id": resource.unique_id,
+                "bucket_name": getattr(resource, "bucket_name", None),
+                "metadata": _meta_json(getattr(resource, "metadata", None)),
+            })
+    except Exception:
+        launcher.log.exception("Error in cleanup worker:")
+        # listResources failed after quota inputs were collected.
+        # Python setUnmanagedUsage has already run by this point and
+        # does not update the leak maps.
+        return {
+            "error": True,
+            "partial": True,
+            "instances": instances,
+            "nodes": nodes,
+            "system_id": launcher.system.system_id,
+        }
+    _ = QuotaInformation
+    return {
+        "error": False,
+        "name": endpoint.name,
+        "canonical_name": endpoint.canonical_name,
+        "system_id": launcher.system.system_id,
+        "required_infra": required,
+        "resource_types": types,
+        "nodes": nodes,
+        "upload_ids": uploads,
+        "instances": instances,
+        "resources": resources,
+    }
+
+
+def _cleanup_apply(launcher, data):
+    """deleteResource, setUnmanagedUsage, and the cleanup statsd names."""
+    from zuul.model import QuotaInformation
+
+    canonical = data["canonical_name"]
+    endpoint = None
+    for ep in launcher.endpoints.values():
+        if ep.canonical_name == canonical:
+            endpoint = ep
+            break
+    if endpoint is None:
+        return {"ok": False}
+    for item in data.get("deletes") or []:
+        resource = type("LeakResource", (), {})()
+        resource.type = item.get("type")
+        resource.id = item.get("id")
+        resource.unique_id = item.get("unique_id")
+        resource.bucket_name = item.get("bucket_name")
+        resource.metadata = item.get("metadata") or {}
+        try:
+            endpoint.deleteResource(resource)
+            if item.get("count") and getattr(launcher, "statsd", None):
+                launcher.statsd.incr(item["metric"], 1)
+        except Exception:
+            launcher.log.exception(item.get("error") or "Unable to delete leaked resource")
+    quota = data.get("unmanaged_quota") or {}
+    clean = {}
+    for key, value in quota.items():
+        if value is None:
+            continue
+        clean[key] = value
+    endpoint.quota_cache.setUnmanagedUsage(QuotaInformation(default=0, **clean))
+    if getattr(launcher, "statsd", None):
+        for gauge in data.get("gauges") or []:
+            launcher.statsd.gauge(gauge["name"], gauge["value"])
+    return {"ok": True}
+
+
 def _cleanup_tick(launcher, data):
     """One CleanupWorker._run pass (list/delete leaked cloud resources)."""
     _ = data
@@ -2333,7 +2555,7 @@ def _upload_job_run(launcher, data):
     }
 
 
-def _upload_download(launcher, iba):
+def _upload_download(launcher, iba, decompress=True):
     from urllib.parse import urlparse
 
     _bind_missing_methods(launcher)
@@ -2366,7 +2588,8 @@ def _upload_download(launcher, iba):
         raise Exception("Unable to download artifact %s" % iba)
     path = downloaded
     # Decompress .zst like UploadJob._handleCompression.
-    if path.endswith(".zst"):
+    # The Rust upload body passes decompress=False and runs zstd itself.
+    if decompress and path.endswith(".zst"):
         import subprocess
 
         orig = path
@@ -2387,6 +2610,171 @@ def _upload_download(launcher, iba):
                 os.unlink(orig)
         path = inflated
     return path
+
+
+def _upload_run_is_patched(launcher, data):
+    import zuul.launcher.server as server
+
+    _ = data
+    current = server.UploadJob.run
+    original = getattr(launcher, "_orig_upload_run", current)
+    return {"patched": _callable_is_patched(current, original)}
+
+
+def _upload_log(launcher, data):
+    from zuul.lib.logutil import get_annotated_logger
+
+    level = data.get("level") or "debug"
+    message = data.get("message") or ""
+    log = launcher.log
+    if data.get("upload_uuid"):
+        log = get_annotated_logger(log, upload=data["upload_uuid"])
+    fn = getattr(log, level, None) or log.debug
+    if level == "exception":
+        log.error("%s", message)
+    else:
+        fn("%s", message)
+    return {"ok": True}
+
+
+def _upload_notify(launcher, data):
+    if data.get("image_updated"):
+        launcher.image_updated_event.set()
+    if data.get("upload_deleted"):
+        launcher.upload_deleted_event.set()
+    if data.get("wake", True):
+        launcher.wake_event.set()
+    return {"ok": True}
+
+
+def _upload_validate_event(launcher, data):
+    _bind_missing_methods(launcher)
+    upload = launcher.image_upload_registry.getItem(data["upload_uuid"])
+    if upload is None:
+        return {"ok": False}
+    # The Rust writer just updated ZK. Refresh so the event sees READY
+    # rather than a cache entry that the watch has not applied yet.
+    try:
+        with launcher.createZKContext(None, launcher.log) as ctx:
+            upload.refresh(ctx)
+    except Exception:
+        launcher.log.exception("Unable to refresh upload %s", data["upload_uuid"])
+    launcher.addImageValidateEvent(upload)
+    return {"ok": True}
+
+
+def _stats_timing(launcher, data):
+    if not getattr(launcher, "statsd", None):
+        return {"ok": False}
+    launcher.statsd.timing(data["name"], data.get("ms") or 0)
+    return {"ok": True}
+
+
+def _upload_fetch(launcher, data):
+    """Download an artifact with the test's requests mock. No decompress."""
+    _bind_missing_methods(launcher)
+    iba = launcher.image_build_registry.getItem(data["artifact_uuid"])
+    if iba is None:
+        return {"ok": False, "error": "missing artifact"}
+    try:
+        path = _upload_download(launcher, iba, decompress=False)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "path": path,
+        "temp_dir": launcher.temp_dir,
+        "sha256": iba.sha256 or "",
+        "artifact_repr": repr(iba),
+    }
+
+
+def _upload_sdk_run(launcher, data):
+    """getImageImportJob / getImageCopyJob / getImageUploadJob .run only."""
+    from zuul.lib.logutil import get_annotated_logger
+
+    _bind_missing_methods(launcher)
+    kind = data.get("kind") or "upload"
+    upload = launcher.image_upload_registry.getItem(data["upload_uuid"])
+    if upload is None:
+        return {"external_id": None, "error": "missing upload"}
+    iba = launcher.image_build_registry.getItem(upload.artifact_uuid)
+    if iba is None:
+        return {"external_id": None, "error": "missing artifact"}
+    log = get_annotated_logger(launcher.log, upload=upload.uuid)
+    try:
+        log.info("Starting upload %s", upload)
+        provider = launcher._getProviderByCanonicalName(upload.providers[0])
+        provider_image = None
+        for image in provider.images.values():
+            if image.canonical_name == upload.canonical_name:
+                provider_image = image
+                break
+        if provider_image is None:
+            raise Exception("Unable to find image %s" % upload.canonical_name)
+        metadata = provider.getUploadTags(
+            launcher.system.system_id, provider_image, upload.uuid
+        )
+        image_name = "%s-%s" % (provider_image.name, upload.uuid)
+        md5 = iba.md5sum
+        sha256 = iba.sha256
+        image_format = iba.format
+        if kind == "import":
+            job = provider.getImageImportJob(
+                iba.url,
+                provider_image,
+                image_name,
+                image_format,
+                metadata,
+                md5,
+                sha256,
+            )
+            if job is None:
+                raise Exception("no import job for %s" % upload.uuid)
+            external_id = job.run()
+        elif kind == "copy":
+            source_external_id = data.get("source_external_id")
+            if not source_external_id:
+                raise Exception("copy requires source_external_id")
+            source_provider = provider
+            if data.get("source_provider"):
+                source_provider = launcher._getProviderByCanonicalName(
+                    data["source_provider"]
+                )
+            job = provider.getImageCopyJob(
+                source_provider,
+                provider_image,
+                image_name,
+                image_format,
+                metadata,
+                md5,
+                sha256,
+            )
+            if job is None:
+                raise Exception("no copy job for %s" % upload.uuid)
+            external_id = job.run(source_external_id)
+        else:
+            path = data.get("path")
+            if not path:
+                raise Exception("Unable to download artifact %s" % iba)
+            job = provider.getImageUploadJob(
+                provider_image,
+                image_name,
+                image_format,
+                metadata,
+                md5,
+                sha256,
+            )
+            if job is None:
+                raise Exception("no upload job for %s" % upload.uuid)
+            external_id = job.run(path)
+        log.info("Finished upload %s", upload)
+        if external_id is None:
+            return {"external_id": None}
+        return {"external_id": external_id}
+    except Exception:
+        log.exception("Error in endpoint upload job")
+        return {"external_id": None}
 
 
 def _upload_reset_crashed(launcher, data):
@@ -2474,6 +2862,216 @@ def _upload_delete(launcher, data):
     finally:
         launcher.upload_uuids_in_delete_queue.discard(upload_uuid)
     return {"deleted": True}
+
+
+class _SnapshotDict:
+    """In-memory snapshot machine so ProviderNodeSnapshot.serialize persists.
+
+    serialize() emits state_machine.toDict() and otherwise writes {}.
+    """
+
+    def __init__(self, data):
+        data = dict(data or {})
+        self.state = data.get("state") or "start"
+        self.start_time = data.get("start_time") or 0
+        self.complete = bool(data.get("complete"))
+        self.snapshot_id = data.get("snapshot_id")
+        self._data = data
+
+    def toDict(self):
+        out = dict(self._data)
+        out["state"] = self.state
+        out["start_time"] = self.start_time
+        if self.snapshot_id:
+            out["snapshot_id"] = self.snapshot_id
+        return out
+
+
+def _snapshot_tags(node):
+    import copy
+    import time as _time
+
+    tags = copy.deepcopy(node.tags or {})
+    tags.pop("zuul_node_uuid", None)
+    exp = int(_time.time() + (node.snapshot_expiration or 0))
+    tags["zuul_expiration"] = str(exp)
+    return tags
+
+
+def _snapshot_prepare(launcher, data):
+    """Lock the snapshot and build tags. Patched advance keeps the Python SM."""
+    from zuul.driver.aws import awsendpoint
+    from zuul.lib.logutil import get_annotated_logger
+
+    _bind_missing_methods(launcher)
+    node = launcher.api.getProviderNode(data["node_uuid"])
+    if node is None or node.state != node.State.SNAPSHOT:
+        return {"skip": True}
+    snapshot = node.snapshot
+    if snapshot.complete:
+        return {"skip": True, "complete": True}
+    log = get_annotated_logger(
+        launcher.log, node, request=getattr(node, "request_id", None)
+    )
+    if not snapshot.hasLock():
+        with launcher.createZKContext(None, log) as ctx:
+            if not snapshot.acquireLock(ctx, blocking=False):
+                log.debug("Failed to lock node %s for snapshot", node)
+                return {"skip": True, "locked": False}
+            snapshot.refresh(ctx)
+    patched = _callable_is_patched(
+        awsendpoint.AwsSnapshotStateMachine.advance,
+        getattr(launcher, "_orig_snap_advance", awsendpoint.AwsSnapshotStateMachine.advance),
+    )
+    provider = launcher._getProviderForNode(node)
+    with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:
+        with snapshot.activeContext(ctx):
+            if not snapshot.tags:
+                snapshot.tags = _snapshot_tags(node)
+            if patched and not snapshot.state_machine:
+                log.debug("Snapshotting node %s", node)
+                snapshot.state_machine = provider.getSnapshotStateMachine(node, log)
+                sm = snapshot.state_machine
+                if sm is not None and sm.state == sm.START:
+                    sm.start_time = time.time()
+    volume_id = None
+    region = None
+    account_id = None
+    endpoint = provider.getEndpoint()
+    if not patched and getattr(node, "aws_instance_id", None):
+        try:
+            instance = endpoint._refresh(dict(InstanceId=node.aws_instance_id))
+            for attachment in instance.get("BlockDeviceMappings") or []:
+                if attachment.get("DeviceName") == instance.get("RootDeviceName"):
+                    volume_id = attachment.get("Ebs", {}).get("VolumeId")
+                    break
+            region = getattr(endpoint, "region", None)
+            if hasattr(endpoint, "_getAccountId"):
+                account_id = endpoint._getAccountId()
+        except Exception as exc:
+            return {"error": True, "message": str(exc), "skip": False}
+    sm = snapshot.state_machine
+    state = dict(snapshot.snapshot_state or {})
+    return {
+        "skip": False,
+        "patched": patched,
+        "provider": provider.canonical_name,
+        "volume_id": volume_id,
+        "region": region,
+        "account_id": account_id,
+        "tags": snapshot.tags or {},
+        "snapshot_state": state,
+        "state": getattr(sm, "state", None) or state.get("state") or "start",
+        "start_time": getattr(sm, "start_time", None) or state.get("start_time") or 0,
+        "snapshot_id": getattr(sm, "snapshot_id", None) or state.get("snapshot_id"),
+        "snapshot_timeout": node.snapshot_timeout,
+    }
+
+
+def _snapshot_sdk_advance(launcher, data):
+    """AwsSnapshotStateMachine.advance, including a test replacement."""
+    from zuul.lib.logutil import get_annotated_logger
+
+    node = launcher.api.getProviderNode(data["node_uuid"])
+    if node is None or node.snapshot.state_machine is None:
+        return {"complete": False, "external_id": None}
+    log = get_annotated_logger(
+        launcher.log, node, request=getattr(node, "request_id", None)
+    )
+    sm = node.snapshot.state_machine
+    old_state = sm.state
+    if old_state == sm.START:
+        sm.start_time = time.time()
+    try:
+        external_id = sm.advance()
+    except Exception as exc:
+        return {
+            "error": True,
+            "message": str(exc),
+            "complete": False,
+            "start_time": getattr(sm, "start_time", 0) or 0,
+            "state": getattr(sm, "state", None),
+        }
+    new_state = sm.state
+    if old_state != new_state:
+        log.debug(
+            "Snapshot for %s advanced from %s to %s", node, old_state, new_state
+        )
+    try:
+        snap_state = sm.toDict()
+    except Exception:
+        snap_state = {"state": sm.state, "start_time": sm.start_time}
+    return {
+        "complete": bool(getattr(sm, "complete", False)),
+        "external_id": _jsonable(external_id),
+        "state": sm.state,
+        "start_time": sm.start_time,
+        "snapshot_state": _jsonable(snap_state),
+    }
+
+
+def _checkNodeSnapshot():
+    """Name matches okay_tracebacks('_checkNodeSnapshot') on the timeout path."""
+    raise Exception("Timeout snapshotting node")
+
+
+def _snapshot_fail(launcher, data):
+    from zuul.lib.logutil import get_annotated_logger
+
+    node = launcher.api.getProviderNode(data["node_uuid"])
+    if node is None:
+        return {"complete": True}
+    log = get_annotated_logger(
+        launcher.log, node, request=getattr(node, "request_id", None)
+    )
+    # Timeout is raised inside a function named _checkNodeSnapshot so
+    # okay_tracebacks('_checkNodeSnapshot') matches server.py. Other
+    # advance errors are logged the same way _processNodeSnapshot does,
+    # without the timeout message.
+    if data.get("reason") == "error":
+        try:
+            raise Exception(data.get("message") or "Error processing snapshot")
+        except Exception:
+            log.exception("Error processing node %s snapshot", node)
+    else:
+        log.error("Timeout snapshotting node %s", node)
+        try:
+            _checkNodeSnapshot()
+        except Exception:
+            log.exception("Error processing node %s snapshot", node)
+    snapshot = node.snapshot
+    with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:
+        with snapshot.activeContext(ctx):
+            snapshot.complete = True
+        snapshot.releaseLock(ctx)
+    launcher.wake_event.set()
+    return {"complete": True}
+
+
+def _snapshot_commit(launcher, data):
+    node = launcher.api.getProviderNode(data["node_uuid"])
+    if node is None:
+        return {"skip": True}
+    snapshot = node.snapshot
+    complete = bool(data.get("complete"))
+    external_id = data.get("external_id")
+    state = data.get("state")
+    with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:
+        with snapshot.activeContext(ctx):
+            # serialize() writes state_machine.toDict() when a machine
+            # is attached, and {} otherwise. Keep a dict-backed machine
+            # so an unpatched Rust advance survives the ZK round trip.
+            if snapshot.state_machine is None and isinstance(state, dict):
+                snapshot.snapshot_state = state
+                snapshot.state_machine = _SnapshotDict(state)
+            if complete:
+                snapshot.complete = True
+                snapshot.external_id = external_id
+        if complete:
+            snapshot.releaseLock(ctx)
+    if not complete:
+        launcher.wake_event.set()
+    return {"complete": complete, "external_id": external_id}
 
 
 def _snapshot_sm_advance(launcher, data):
@@ -2588,6 +3186,26 @@ def _snapshot_advance(launcher, data):
     if not complete:
         launcher.wake_event.set()
     return {"complete": complete, "external_id": external_id}
+
+
+def _nodescan_mode(launcher, data):
+    """Python nodescan only when tests patched advance, the socket, or poll."""
+    import select
+
+    import zuul.launcher.server as server
+
+    _ = data
+    advance_patched = _callable_is_patched(
+        server.NodescanRequest.advance,
+        getattr(launcher, "_orig_nodescan_advance", server.NodescanRequest.advance),
+    )
+    socket_patched = server.NodescanRequest._socket_class is not getattr(
+        launcher, "_orig_nodescan_socket", server.NodescanRequest._socket_class
+    )
+    poll_patched = server.NodescanWorker._poll_class is not select.epoll
+    return {
+        "use_python": bool(advance_patched or socket_patched or poll_patched),
+    }
 
 
 def _nodescan_step(launcher, data):

@@ -69,6 +69,14 @@ fn run(args: &[String]) -> Result<(), String> {
     if foreground {
         // SIGTERM is handled by stop+join on the main thread.
         install_signals();
+        // AWS, Azure, OpenStack, and Kubernetes state machines in this
+        // binary call advance_offline unless a cloud handler is installed.
+        // No boto, Azure, OpenStack, or Kubernetes HTTP client is linked.
+        // The PyO3 harness installs that handler and uses the Python SDKs.
+        eprintln!(
+            "zuul-launcher: cloud drivers (aws, azure, openstack, kubernetes) \
+             use offline stubs; static nodes do not call a cloud API"
+        );
         run_foreground(&zk_cfg, &launcher_cfg)?;
     } else {
         install_signals();
