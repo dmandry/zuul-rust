@@ -824,16 +824,113 @@ fn cache_should_wake(event: &ZkWatchEvent) -> bool {
             return true;
         }
     }
-    for root in [
-        "/zuul/nodes/locks/",
-        "/zuul/images/locks/",
-        "/zuul/image-uploads/locks/",
-    ] {
-        if let Some(rest) = path.strip_prefix(root) {
-            return rest.contains('/');
+    false
+}
+
+/// Contenders for one lockable object. Playback updates this in event
+/// order, the same order kazoo's playback worker updates
+/// `_lock_contenders`, and wakes only when the result changes.
+#[derive(Clone, Default)]
+struct LockSlot {
+    contenders: BTreeMap<String, Vec<u8>>,
+    is_locked: bool,
+    holder: Option<String>,
+}
+
+struct LockMirror {
+    nodes: HashMap<String, LockSlot>,
+    uploads: HashMap<String, LockSlot>,
+    artifacts: HashMap<String, LockSlot>,
+}
+
+impl LockMirror {
+    fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            uploads: HashMap::new(),
+            artifacts: HashMap::new(),
         }
     }
-    false
+
+    /// Returns true when a node, upload, or image lock event changes
+    /// `is_locked` or `lock_holder`. Request locks are ignored.
+    /// `LockableZKObjectCache.preCacheHook` returns without waking when
+    /// the object is not in the cache yet.
+    fn observe(&mut self, event: &ZkWatchEvent) -> bool {
+        let path = event.path.as_str();
+        if let Some(id) = path.strip_prefix("/zuul/nodes/nodes/") {
+            if !id.is_empty() && !id.contains('/') {
+                note_object(&mut self.nodes, id, event);
+            }
+            return false;
+        }
+        if let Some(id) = path.strip_prefix("/zuul/image-uploads/uploads/") {
+            if !id.is_empty() && !id.contains('/') {
+                note_object(&mut self.uploads, id, event);
+            }
+            return false;
+        }
+        if let Some(id) = path.strip_prefix("/zuul/images/artifacts/") {
+            if !id.is_empty() && !id.contains('/') {
+                note_object(&mut self.artifacts, id, event);
+            }
+            return false;
+        }
+        if let Some(rest) = path.strip_prefix("/zuul/nodes/locks/") {
+            return observe_lock(&mut self.nodes, rest, event);
+        }
+        if let Some(rest) = path.strip_prefix("/zuul/image-uploads/locks/") {
+            return observe_lock(&mut self.uploads, rest, event);
+        }
+        if let Some(rest) = path.strip_prefix("/zuul/images/locks/") {
+            return observe_lock(&mut self.artifacts, rest, event);
+        }
+        false
+    }
+}
+
+fn note_object(map: &mut HashMap<String, LockSlot>, id: &str, event: &ZkWatchEvent) {
+    if event.kind == EVENT_DELETED {
+        map.remove(id);
+    } else {
+        map.entry(id.to_string()).or_default();
+    }
+}
+
+fn observe_lock(
+    map: &mut HashMap<String, LockSlot>,
+    rest: &str,
+    event: &ZkWatchEvent,
+) -> bool {
+    let (id, sub) = match split_child(rest) {
+        Some(pair) => pair,
+        None => return false,
+    };
+    let Some(name) = sub else {
+        return false;
+    };
+    let Some(slot) = map.get_mut(id) else {
+        return false;
+    };
+    if event.kind == EVENT_DELETED {
+        slot.contenders.remove(name);
+    } else {
+        match &event.fetch {
+            CacheFetch::Ready(Some((data, _))) => {
+                slot.contenders.insert(name.to_string(), data.clone());
+            }
+            CacheFetch::Ready(None) => {
+                slot.contenders.remove(name);
+            }
+            CacheFetch::Inline => return false,
+        }
+    }
+    let locked = !slot.contenders.is_empty();
+    let holder = lock_winner(&slot.contenders);
+    let changed = slot.is_locked != locked || slot.holder != holder;
+    slot.is_locked = locked;
+    slot.holder = holder;
+    changed
 }
 
 struct PlayState {
@@ -848,6 +945,7 @@ pub struct Playback {
     tx: Mutex<Option<Sender<ZkWatchEvent>>>,
     user_wake: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     enabled: AtomicBool,
+    locks: Mutex<LockMirror>,
 }
 
 impl Playback {
@@ -858,7 +956,52 @@ impl Playback {
             tx: Mutex::new(None),
             user_wake: Mutex::new(None),
             enabled: AtomicBool::new(false),
+            locks: Mutex::new(LockMirror::new()),
         })
+    }
+
+    fn reseed_locks(
+        &self,
+        nodes: &HashMap<String, ProviderNode>,
+        node_locks: &HashMap<String, BTreeMap<String, Vec<u8>>>,
+        uploads: &HashMap<String, ImageUpload>,
+        upload_locks: &HashMap<String, BTreeMap<String, Vec<u8>>>,
+        artifacts: &HashMap<String, ImageBuildArtifact>,
+    ) {
+        let mut mirror = self.locks.lock().unwrap();
+        mirror.nodes.clear();
+        for (id, node) in nodes {
+            mirror.nodes.insert(
+                id.clone(),
+                LockSlot {
+                    contenders: node_locks.get(id).cloned().unwrap_or_default(),
+                    is_locked: node.is_locked,
+                    holder: node.lock_holder.clone(),
+                },
+            );
+        }
+        mirror.uploads.clear();
+        for (id, upload) in uploads {
+            mirror.uploads.insert(
+                id.clone(),
+                LockSlot {
+                    contenders: upload_locks.get(id).cloned().unwrap_or_default(),
+                    is_locked: upload.is_locked,
+                    holder: upload.lock_holder.clone(),
+                },
+            );
+        }
+        mirror.artifacts.clear();
+        for (id, artifact) in artifacts {
+            mirror.artifacts.insert(
+                id.clone(),
+                LockSlot {
+                    contenders: BTreeMap::new(),
+                    is_locked: artifact.is_locked,
+                    holder: artifact.lock_holder.clone(),
+                },
+            );
+        }
     }
 
     /// Start the playback thread. `user_wake` runs once per played event,
@@ -881,7 +1024,8 @@ impl Playback {
                             Err(_) => CacheFetch::Ready(None),
                         };
                     }
-                    let wake_user = cache_should_wake(&event);
+                    let lock_changed = playback.locks.lock().unwrap().observe(&event);
+                    let wake_user = lock_changed || cache_should_wake(&event);
                     playback.state.lock().unwrap().ready.push(event);
                     if wake_user {
                         if let Some(wake) = playback.user_wake.lock().unwrap().clone() {
@@ -1083,7 +1227,18 @@ impl LauncherApi {
     /// events; `user_wake` runs once per played event that 14.3.0 would
     /// pass to `updated_event`.
     pub fn enable_playback(&self, user_wake: Arc<dyn Fn() + Send + Sync>) {
+        self.reseed_lock_mirror();
         self.playback.enable(user_wake);
+    }
+
+    fn reseed_lock_mirror(&self) {
+        self.playback.reseed_locks(
+            &self.nodes,
+            &self.node_locks,
+            &self.uploads,
+            &self.upload_locks,
+            &self.artifacts,
+        );
     }
 
     pub fn claim_watches(&self) {
@@ -1351,6 +1506,7 @@ impl LauncherApi {
         }
         self.load_components();
         self.ready = true;
+        self.reseed_lock_mirror();
     }
 
     /// Tree-cache get. Playback has already done it when `fetch` is `Ready`.
@@ -1367,6 +1523,10 @@ impl LauncherApi {
             self.apply_upload_lock(rest, event);
             return;
         }
+        if let Some(rest) = path.strip_prefix("/zuul/images/locks/") {
+            self.apply_artifact_lock(rest, event);
+            return;
+        }
         if let Some(id) = path.strip_prefix("/zuul/images/artifacts/") {
             if id.is_empty() || id.contains('/') {
                 return;
@@ -1377,7 +1537,13 @@ impl LauncherApi {
             }
             if let Some((data, _)) = self.fetch_data(path, event) {
                 if let Ok(val) = decode_zkobject(&data) {
-                    self.artifacts.insert(id.to_string(), ImageBuildArtifact::from_value(val));
+                    let prev = self.artifacts.get(id);
+                    let locked = prev.map(|a| a.is_locked).unwrap_or(false);
+                    let holder = prev.and_then(|a| a.lock_holder.clone());
+                    let mut artifact = ImageBuildArtifact::from_value(val);
+                    artifact.is_locked = locked;
+                    artifact.lock_holder = holder;
+                    self.artifacts.insert(id.to_string(), artifact);
                 }
             } else {
                 self.artifacts.remove(id);
@@ -1409,9 +1575,12 @@ impl LauncherApi {
                 return;
             }
             if let Ok(val) = decode_zkobject(&data) {
-                let locked = self.uploads.get(id).map(|u| u.is_locked).unwrap_or(false);
+                let prev = self.uploads.get(id);
+                let locked = prev.map(|u| u.is_locked).unwrap_or(false);
+                let holder = prev.and_then(|u| u.lock_holder.clone());
                 let mut upload = ImageUpload::from_value(val);
                 upload.is_locked = locked;
+                upload.lock_holder = holder;
                 self.upload_wire
                     .insert(id.to_string(), dumps_compressed(&upload.serialize()));
                 self.upload_version.insert(id.to_string(), stat.version);
@@ -1437,7 +1606,7 @@ impl LauncherApi {
             let path = format!("/zuul/image-uploads/locks/{id}/{name}");
             self.fetch_data(&path, event)
         };
-        let locked = {
+        let (winner, locked) = {
             let held = self.upload_locks.entry(id.to_string()).or_default();
             if event.kind == EVENT_DELETED {
                 held.remove(name);
@@ -1446,13 +1615,54 @@ impl LauncherApi {
             } else {
                 held.remove(name);
             }
-            !held.is_empty()
+            let winner = lock_winner(held);
+            let locked = !held.is_empty();
+            (winner, locked)
         };
         if !locked {
             self.upload_locks.remove(id);
         }
         if let Some(upload) = self.uploads.get_mut(id) {
             upload.is_locked = locked;
+            upload.lock_holder = winner;
+        }
+    }
+
+    /// Same contender rules as `apply_upload_lock`, for an image artifact.
+    fn apply_artifact_lock(&mut self, rest: &str, event: &ZkWatchEvent) {
+        let (id, sub) = match split_child(rest) {
+            Some(pair) => pair,
+            None => return,
+        };
+        let Some(name) = sub else {
+            return;
+        };
+        let fetched = if event.kind == EVENT_DELETED {
+            None
+        } else {
+            let path = format!("/zuul/images/locks/{id}/{name}");
+            self.fetch_data(&path, event)
+        };
+        let (winner, locked) = {
+            let held = self.upload_locks.entry(format!("artifact:{id}")).or_default();
+            if event.kind == EVENT_DELETED {
+                held.remove(name);
+            } else if let Some((data, _)) = fetched {
+                held.insert(name.to_string(), data);
+            } else {
+                held.remove(name);
+            }
+            let winner = lock_winner(held);
+            let locked = !held.is_empty();
+            (winner, locked)
+        };
+        let key = format!("artifact:{id}");
+        if !locked {
+            self.upload_locks.remove(&key);
+        }
+        if let Some(artifact) = self.artifacts.get_mut(id) {
+            artifact.is_locked = locked;
+            artifact.lock_holder = winner;
         }
     }
 

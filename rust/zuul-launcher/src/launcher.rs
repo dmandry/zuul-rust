@@ -4220,4 +4220,182 @@ mod tests {
         launcher.api.prepare();
         assert!(launcher.api.requests.contains_key("req-bin-2"));
     }
+
+    fn lock_name(seq: u32) -> String {
+        format!("0123456789abcdef0123456789abcdef__lock__{seq:010}")
+    }
+
+    fn drain_short(launcher: &Launcher) {
+        let _ = launcher.wait_wake(Duration::from_millis(40));
+    }
+
+    /// `LockableZKObjectCache.preCacheHook` wakes only when `is_locked`
+    /// or `lock_holder` changes. A later contender that loses the sort,
+    /// and deleting that loser, do not wake. Request locks never wake.
+    #[test]
+    fn lock_wake_follows_holder_change_for_nodes_and_uploads() {
+        let zk = MemoryZk::new();
+        let ops: Arc<dyn ZkOps> = Arc::new(zk.clone());
+        let mut launcher = Launcher::new("launcher-locks", ops);
+        launcher.install_waker(None);
+        launcher.arm_watches();
+        launcher.api.prepare();
+        drain_short(&launcher);
+
+        let node = crate::model::ProviderNode::from_parts(
+            "static".into(),
+            json!({"uuid": "n-lock", "state": "building"}),
+        );
+        launcher.api.write_node(&node).unwrap();
+        assert!(launcher.wait_wake(Duration::from_secs(2)), "node create wakes");
+        launcher.api.prepare();
+        drain_short(&launcher);
+
+        let winner = lock_name(1);
+        let loser = lock_name(2);
+        zk.create(
+            &format!("/zuul/nodes/locks/n-lock/{winner}"),
+            b"holder-a",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        assert!(
+            launcher.wait_wake(Duration::from_secs(2)),
+            "first node contender changes is_locked"
+        );
+        launcher.api.prepare();
+        let node = &launcher.api.nodes["n-lock"];
+        assert!(node.is_locked);
+        assert_eq!(node.lock_holder.as_deref(), Some("holder-a"));
+        drain_short(&launcher);
+
+        zk.create(
+            &format!("/zuul/nodes/locks/n-lock/{loser}"),
+            b"holder-b",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        assert!(
+            !launcher.wait_wake(Duration::from_millis(80)),
+            "a losing node contender must not wake"
+        );
+        launcher.api.prepare();
+        assert_eq!(
+            launcher.api.nodes["n-lock"].lock_holder.as_deref(),
+            Some("holder-a")
+        );
+
+        zk.delete(&format!("/zuul/nodes/locks/n-lock/{loser}"), false)
+            .unwrap();
+        assert!(
+            !launcher.wait_wake(Duration::from_millis(80)),
+            "deleting the losing node contender must not wake"
+        );
+        launcher.api.prepare();
+        assert!(launcher.api.nodes["n-lock"].is_locked);
+        assert_eq!(
+            launcher.api.nodes["n-lock"].lock_holder.as_deref(),
+            Some("holder-a")
+        );
+
+        zk.delete(&format!("/zuul/nodes/locks/n-lock/{winner}"), false)
+            .unwrap();
+        assert!(
+            launcher.wait_wake(Duration::from_secs(2)),
+            "deleting the node winner clears is_locked and wakes"
+        );
+        launcher.api.prepare();
+        assert!(!launcher.api.nodes["n-lock"].is_locked);
+        assert!(launcher.api.nodes["n-lock"].lock_holder.is_none());
+
+        let upload = crate::model::ImageUpload::from_value(json!({
+            "uuid": "u-lock",
+            "_state": "ready",
+            "canonical_name": "img",
+        }));
+        launcher.api.write_upload(&upload).unwrap();
+        assert!(launcher.wait_wake(Duration::from_secs(2)), "upload create wakes");
+        launcher.api.prepare();
+        drain_short(&launcher);
+
+        zk.create(
+            &format!("/zuul/image-uploads/locks/u-lock/{winner}"),
+            b"holder-a",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        assert!(
+            launcher.wait_wake(Duration::from_secs(2)),
+            "first upload contender changes is_locked"
+        );
+        launcher.api.prepare();
+        assert!(launcher.api.uploads["u-lock"].is_locked);
+        assert_eq!(
+            launcher.api.uploads["u-lock"].lock_holder.as_deref(),
+            Some("holder-a")
+        );
+        drain_short(&launcher);
+
+        zk.create(
+            &format!("/zuul/image-uploads/locks/u-lock/{loser}"),
+            b"holder-b",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        assert!(
+            !launcher.wait_wake(Duration::from_millis(80)),
+            "a losing upload contender must not wake"
+        );
+        launcher.api.prepare();
+        assert_eq!(
+            launcher.api.uploads["u-lock"].lock_holder.as_deref(),
+            Some("holder-a")
+        );
+
+        zk.delete(&format!("/zuul/image-uploads/locks/u-lock/{winner}"), false)
+            .unwrap();
+        assert!(
+            launcher.wait_wake(Duration::from_secs(2)),
+            "upload winner change wakes"
+        );
+        launcher.api.prepare();
+        assert!(launcher.api.uploads["u-lock"].is_locked);
+        assert_eq!(
+            launcher.api.uploads["u-lock"].lock_holder.as_deref(),
+            Some("holder-b")
+        );
+
+        let bytes = dumps_compressed(&json!({"uuid": "req-lock", "state": "requested"}));
+        zk.ensure_path("/zuul/nodeset/requests").unwrap();
+        zk.ensure_path("/zuul/nodeset/locks/req-lock").unwrap();
+        zk.create(
+            "/zuul/nodeset/requests/req-lock",
+            &bytes,
+            zk::CreateMode::Persistent,
+        )
+        .unwrap();
+        assert!(launcher.wait_wake(Duration::from_secs(2)), "request create wakes");
+        launcher.api.prepare();
+        drain_short(&launcher);
+        zk.create(
+            "/zuul/nodeset/locks/req-lock/contender-a",
+            b"holder-a",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        assert!(
+            !launcher.wait_wake(Duration::from_millis(80)),
+            "RequestCache does not wake on a lock"
+        );
+        launcher.api.prepare();
+        assert!(launcher.api.requests["req-lock"].is_locked);
+        zk.delete("/zuul/nodeset/locks/req-lock/contender-a", false)
+            .unwrap();
+        assert!(
+            !launcher.wait_wake(Duration::from_millis(80)),
+            "RequestCache does not wake on a lock delete"
+        );
+        launcher.api.prepare();
+        assert!(!launcher.api.requests["req-lock"].is_locked);
+    }
 }

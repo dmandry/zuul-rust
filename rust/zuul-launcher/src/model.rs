@@ -963,6 +963,7 @@ pub struct ImageBuildArtifact {
     pub fields: Map<String, Value>,
     pub extra: Map<String, Value>,
     pub is_locked: bool,
+    pub lock_holder: Option<String>,
 }
 
 impl ImageBuildArtifact {
@@ -996,6 +997,7 @@ pub struct ImageUpload {
     pub fields: Map<String, Value>,
     pub extra: Map<String, Value>,
     pub is_locked: bool,
+    pub lock_holder: Option<String>,
 }
 
 impl ImageUpload {
@@ -1005,6 +1007,7 @@ impl ImageUpload {
             fields,
             extra,
             is_locked: false,
+            lock_holder: None,
         }
     }
     pub fn uuid(&self) -> String {
@@ -1081,6 +1084,7 @@ fn split_known(v: Value, keys: &[&str]) -> ImageBuildArtifact {
         fields,
         extra,
         is_locked: false,
+        lock_holder: None,
     }
 }
 

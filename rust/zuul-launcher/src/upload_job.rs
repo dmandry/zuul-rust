@@ -642,5 +642,6 @@ fn copy_upload(src: &ImageUpload) -> ImageUpload {
         fields,
         extra: Map::new(),
         is_locked: false,
+        lock_holder: None,
     }
 }
