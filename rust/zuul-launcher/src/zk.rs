@@ -1976,6 +1976,12 @@ impl LauncherApi {
             .zk_version
             .or_else(|| self.requests.get(&id).and_then(|r| r.zk_version));
         let new_version = self.put_tree_bytes(&path, &bytes, version)?;
+        // LockableZKObjectMixin.new creates the lock directory once,
+        // before the first save. Later saves do not ensure it again.
+        if new_version == 0 {
+            self.zk
+                .ensure_path(&format!("/zuul/nodeset/locks/{id}"))?;
+        }
         let mut stored = req.clone();
         stored.zk_version = Some(new_version as i64);
         self.request_wire.insert(id.clone(), bytes);
@@ -1999,6 +2005,11 @@ impl LauncherApi {
             .zk_version
             .or_else(|| self.nodes.get(&id).and_then(|n| n.zk_version));
         let new_version = self.put_tree_bytes(&path, &bytes, version)?;
+        // LockableZKObjectMixin.new creates the lock directory once,
+        // before the first save. acquireLock does not ensure it.
+        if new_version == 0 {
+            self.zk.ensure_path(&format!("/zuul/nodes/locks/{id}"))?;
+        }
         let mut stored = node.clone();
         stored.zk_version = Some(new_version as i64);
         self.node_wire.insert(id.clone(), bytes);
@@ -2071,6 +2082,10 @@ impl LauncherApi {
         }
         let version = self.upload_version.get(&id).copied().map(|v| v as i64);
         let new_version = self.put_tree_bytes(&path, &bytes, version)?;
+        if new_version == 0 {
+            self.zk
+                .ensure_path(&format!("/zuul/image-uploads/locks/{id}"))?;
+        }
         self.upload_version.insert(id.clone(), new_version);
         self.upload_wire.insert(id.clone(), bytes);
         self.uploads.insert(id, upload.clone());

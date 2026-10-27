@@ -4037,6 +4037,7 @@ mod tests {
             serde_json::json!({"uuid": "n1", "state": "building", "label": "debian-normal"}),
         );
         api.write_node(&node).unwrap();
+        assert!(zk.exists("/zuul/nodes/locks/n1").unwrap().is_some());
         let v1 = zk.get("/zuul/nodes/nodes/n1").unwrap().1.version;
         let again = api.nodes.get("n1").unwrap().clone();
         api.write_node(&again).unwrap();
