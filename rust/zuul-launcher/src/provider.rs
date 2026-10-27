@@ -1401,6 +1401,12 @@ impl AwsSnapshot {
             region: None,
         }
     }
+
+    /// The binary snapshot path is live even when no PyO3 handler is
+    /// registered. `new` stays offline so driver_call_order is unchanged.
+    pub fn enable_live(&mut self) {
+        self.live = true;
+    }
 }
 
 impl StateMachine for AwsSnapshot {

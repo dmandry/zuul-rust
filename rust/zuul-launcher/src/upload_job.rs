@@ -168,13 +168,14 @@ pub fn run_artifact(
     upload_uuids: &[String],
     planned: &[Value],
 ) {
-    if !cloud::enabled() {
-        return;
-    }
-    let patched = cloud::invoke("upload.run_is_patched", &json!({}))
-        .ok()
-        .and_then(|v| v.get("patched").and_then(|b| b.as_bool()))
-        .unwrap_or(false);
+    let patched = if cloud::enabled() {
+        cloud::invoke("upload.run_is_patched", &json!({}))
+            .ok()
+            .and_then(|v| v.get("patched").and_then(|b| b.as_bool()))
+            .unwrap_or(false)
+    } else {
+        false
+    };
     if patched {
         let _ = cloud::invoke(
             "upload.artifact_job",
@@ -326,7 +327,7 @@ fn run_one(
     let ename = normalize_statsd_name(&upload.endpoint_name());
     let stats_key = format!("zuul.image.{iname}.upload.{ename}.duration");
     if job.kind == "upload" && path.is_none() {
-        match fetch_image(artifact_uuid, sha) {
+        match fetch_image(zk, artifact_uuid, sha) {
             Ok(p) => *path = Some(p),
             Err(err) => {
                 let _ = cloud::invoke(
@@ -360,7 +361,11 @@ fn run_one(
             .unwrap()
             .insert("source_provider".into(), json!(sp));
     }
-    let result = cloud::invoke("upload.sdk_run", &payload);
+    let result = if cloud::enabled() {
+        cloud::invoke("upload.sdk_run", &payload)
+    } else {
+        native_upload(zk, job, &payload)
+    };
     let ms = started.elapsed().as_secs_f64() * 1000.0;
     let _ = cloud::invoke(
         "stats.timing",
@@ -383,7 +388,31 @@ fn run_one(
     external
 }
 
-fn fetch_image(artifact_uuid: &str, sha: &str) -> Result<String, String> {
+fn native_upload(zk: &dyn ZkOps, job: &Planned, payload: &Value) -> Result<Value, crate::provider::AdvanceError> {
+    let upload = load_upload(zk, &job.upload_uuid)
+        .ok_or_else(|| crate::provider::AdvanceError::Other("missing upload".into()))?;
+    let artifact = load_artifact(zk, &upload.artifact_uuid());
+    let provider = upload.providers().into_iter().next().unwrap_or_default();
+    let mut body = payload.clone();
+    if let Some(obj) = body.as_object_mut() {
+        obj.insert("provider".into(), json!(provider));
+        obj.insert("image_name".into(), json!(upload.canonical_name()));
+        if let Some(art) = artifact {
+            if let Some(fmt) = art.fields.get("format") {
+                obj.insert("image_format".into(), fmt.clone());
+            }
+            if let Some(url) = art.fields.get("url") {
+                obj.insert("artifact_url".into(), url.clone());
+            }
+        }
+    }
+    crate::native::upload_sdk_run(&body)
+}
+
+fn fetch_image(zk: &dyn ZkOps, artifact_uuid: &str, sha: &str) -> Result<String, String> {
+    if !cloud::enabled() {
+        return fetch_image_native(zk, artifact_uuid, sha);
+    }
     let fetched = cloud::invoke(
         "upload.fetch",
         &json!({"artifact_uuid": artifact_uuid}),
@@ -413,6 +442,34 @@ fn fetch_image(artifact_uuid: &str, sha: &str) -> Result<String, String> {
         .to_string();
     let path = decompress_zst(&raw, &temp_dir)?;
     validate_checksum(&path, sha, &artifact_repr)?;
+    Ok(path)
+}
+
+fn fetch_image_native(zk: &dyn ZkOps, artifact_uuid: &str, sha: &str) -> Result<String, String> {
+    let art = load_artifact(zk, artifact_uuid).ok_or_else(|| "missing artifact".to_string())?;
+    let url = art
+        .fields
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "artifact has no url".to_string())?;
+    let resp = crate::cloud_http::exchange(
+        "GET",
+        url,
+        &[],
+        &[],
+        std::time::Duration::from_secs(60),
+    )
+    .map_err(|e| e)?;
+    if resp.status >= 400 {
+        return Err(format!("artifact HTTP {}", resp.status));
+    }
+    let dir = std::env::temp_dir();
+    let raw = dir.join(format!("{artifact_uuid}.img.zst"));
+    fs::write(&raw, &resp.body).map_err(|e| e.to_string())?;
+    let raw_s = raw.to_string_lossy().into_owned();
+    let temp = dir.to_str().unwrap_or("/tmp");
+    let path = decompress_zst(&raw_s, temp)?;
+    validate_checksum(&path, sha, artifact_uuid)?;
     Ok(path)
 }
 

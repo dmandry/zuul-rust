@@ -41,6 +41,8 @@ struct Registry {
     /// login.microsoftonline.com and management.azure.com, matching azul.
     azure_login: Option<String>,
     azure_arm: Option<String>,
+    /// Zuul system uuid, used in launch-template and upload tags.
+    system_id: String,
 }
 
 struct FutureJob {
@@ -81,7 +83,13 @@ struct AwsEndpoint {
     mutating: RateLimiter,
     reading: RateLimiter,
     quota_limit: RateLimiter,
-    lists: Mutex<BTreeMap<String, (Instant, Value)>>,
+    lists: Mutex<BTreeMap<String, CachedList>>,
+}
+
+struct CachedList {
+    at: Instant,
+    value: Value,
+    refreshing: bool,
 }
 
 fn registry() -> &'static Mutex<Registry> {
@@ -97,6 +105,7 @@ fn registry() -> &'static Mutex<Registry> {
             limiters: BTreeMap::new(),
             azure_login: None,
             azure_arm: None,
+            system_id: "system".into(),
         })
     })
 }
@@ -139,6 +148,16 @@ fn set_test_azure_endpoints(login: &str, arm: &str) {
     let mut reg = registry().lock().unwrap();
     reg.azure_login = Some(login.to_string());
     reg.azure_arm = Some(arm.to_string());
+}
+
+pub fn set_system_id(id: &str) {
+    if !id.is_empty() {
+        registry().lock().unwrap().system_id = id.to_string();
+    }
+}
+
+fn system_id() -> String {
+    registry().lock().unwrap().system_id.clone()
 }
 
 pub fn set_connections(connections: Vec<ConnectionConfig>) {
@@ -249,7 +268,7 @@ pub fn invoke(op: &str, args: &Value) -> Result<Value, AdvanceError> {
         "ep.azure_submit_create_vm" => submit("azure-create", args),
         "ep.azure_complete_create_vm" => complete_azure_create(args),
         "ep.azure_delete_vm" => azure_delete_vm(args),
-        "ep.azure_update_node" => Ok(json!({"node": {}})),
+        "ep.azure_update_node" => azure_update_node(args),
         "ep.os_find_flavor" => os_find_flavor(args),
         "ep.os_list_instance_id" => os_list_instance_id(args),
         "ep.os_submit_create_server" => submit("os-create", args),
@@ -283,7 +302,7 @@ pub fn invoke(op: &str, args: &Value) -> Result<Value, AdvanceError> {
         "ep.k8s_get_pod" => k8s_get_pod(args),
         "ep.k8s_delete_namespace" => k8s_delete_namespace(args),
         "ep.k8s_delete_project" => k8s_delete_project(args),
-        "ep.k8s_update_node" => Ok(json!({"node": {}})),
+        "ep.k8s_update_node" => k8s_update_node(args),
         other => Err(AdvanceError::Other(format!(
             "native cloud op not implemented: {other}"
         ))),
@@ -608,39 +627,69 @@ fn signed_request(
     for attempt in 0..MAX_ATTEMPTS {
         match exchange(method, url, &refs, body, HTTP_TIMEOUT) {
             Ok(resp) if resp.status < 400 => return Ok(resp),
-            Ok(resp) if resp.status == 429 || resp.status >= 500 => {
-                last_err = format!("HTTP {} {}", resp.status, resp.text());
-                if attempt + 1 == MAX_ATTEMPTS {
-                    return Err(err_other(last_err));
-                }
-                std::thread::sleep(Duration::from_millis(100 * (1 << attempt)));
-            }
             Ok(resp) => {
                 let text = resp.text();
-                if text.contains("RequestLimitExceeded")
-                    || text.contains("Throttling")
-                    || text.contains("PriorRequestNotComplete")
-                    || text.contains("Unavailable")
-                {
-                    last_err = text;
-                    if attempt + 1 == MAX_ATTEMPTS {
-                        return Err(err_other(last_err));
-                    }
-                    std::thread::sleep(Duration::from_millis(100 * (1 << attempt)));
-                    continue;
+                let retry = aws_retryable(resp.status, &text);
+                last_err = format!("HTTP {} {text}", resp.status);
+                if !retry || attempt + 1 == MAX_ATTEMPTS {
+                    return Err(err_other(last_err));
                 }
-                return Err(err_other(format!("HTTP {} {text}", resp.status)));
+                std::thread::sleep(standard_backoff(attempt + 1));
             }
             Err(e) => {
                 last_err = e;
                 if attempt + 1 == MAX_ATTEMPTS {
                     return Err(err_other(last_err));
                 }
-                std::thread::sleep(Duration::from_millis(100 * (1 << attempt)));
+                std::thread::sleep(standard_backoff(attempt + 1));
             }
         }
     }
     Err(err_other(last_err))
+}
+
+/// botocore standard mode: `min(20, random() * 2**attempt_number)`.
+fn standard_backoff(attempt_number: u32) -> Duration {
+    let mut buf = [0u8; 8];
+    let _ = getrandom::getrandom(&mut buf);
+    let unit = (u64::from_le_bytes(buf) as f64) / (u64::MAX as f64);
+    let exp = 2.0_f64.powi(attempt_number as i32);
+    Duration::from_secs_f64((unit * exp).min(20.0))
+}
+
+fn aws_retryable(status: u16, body: &str) -> bool {
+    if matches!(status, 429 | 500 | 502 | 503 | 504) {
+        return true;
+    }
+    if status < 400 {
+        return false;
+    }
+    // Parsed error codes botocore standard mode retries, including
+    // TooManyRequestsException (the reason Zuul sets mode=standard).
+    const CODES: &[&str] = &[
+        "BandwidthLimitExceeded",
+        "EC2ThrottledException",
+        "IDPCommunicationError",
+        "InternalError",
+        "InternalFailure",
+        "LimitExceededException",
+        "PriorRequestNotComplete",
+        "ProvisionedThroughputExceededException",
+        "RequestLimitExceeded",
+        "RequestThrottled",
+        "RequestThrottledException",
+        "RequestTimeout",
+        "RequestTimeoutException",
+        "ServiceUnavailable",
+        "SlowDown",
+        "ThrottledException",
+        "Throttling",
+        "ThrottlingException",
+        "TooManyRequestsException",
+        "TransactionInProgressException",
+        "Unavailable",
+    ];
+    CODES.iter().any(|code| body.contains(code))
 }
 
 fn split_url(url: &str) -> Result<(String, String, &'static str), AdvanceError> {
@@ -754,39 +803,49 @@ fn ec2(ep: &AwsEndpoint, action: &str, params: Map<String, Value>, reading: bool
     Ok(parsed)
 }
 
-fn cached_list(ep: &AwsEndpoint, key: &str, ttl: Duration, load: impl FnOnce() -> Result<Value, AdvanceError>) -> Result<Value, AdvanceError> {
-    let lists = ep.lists.lock().unwrap();
-    if let Some((at, value)) = lists.get(key) {
-        if at.elapsed() < ttl {
-            return Ok(value.clone());
-        }
-    }
-    drop(lists);
-    let value = load()?;
-    ep.lists.lock().unwrap().insert(key.into(), (Instant::now(), value.clone()));
-    Ok(value)
+enum CacheHit {
+    Fresh(Value),
+    Stale(Value),
+    Miss,
 }
 
-fn list_instances(ep: &AwsEndpoint) -> Result<Vec<Value>, AdvanceError> {
-    let page = cached_list(ep, "instances", LIST_TTL, || {
-        let mut token: Option<String> = None;
-        let mut reservations = Vec::new();
-        loop {
-            let mut params = Map::new();
-            if let Some(t) = &token {
-                params.insert("NextToken".into(), json!(t));
-            }
-            let page = ec2(ep, "DescribeInstances", params, true)?;
-            if let Some(arr) = page.get("Reservations").and_then(|v| v.as_array()) {
-                reservations.extend(arr.clone());
-            }
-            token = page.get("NextToken").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(|s| s.to_string());
-            if token.is_none() {
-                break;
-            }
+/// LazyExecutorTTLCache shape: a hit inside the TTL returns the cached
+/// value. After the TTL, the caller gets the stale value and a refresh
+/// runs in the background.
+fn cache_hit(ep: &AwsEndpoint, key: &str, ttl: Duration) -> CacheHit {
+    let mut lists = ep.lists.lock().unwrap();
+    if let Some(entry) = lists.get_mut(key) {
+        if entry.at.elapsed() < ttl {
+            return CacheHit::Fresh(entry.value.clone());
         }
-        Ok(Value::Array(reservations))
-    })?;
+        let stale = entry.value.clone();
+        if !entry.refreshing {
+            entry.refreshing = true;
+            return CacheHit::Stale(stale);
+        }
+        return CacheHit::Fresh(stale);
+    }
+    CacheHit::Miss
+}
+
+fn cache_store(ep: &AwsEndpoint, key: &str, value: Value) {
+    ep.lists.lock().unwrap().insert(
+        key.into(),
+        CachedList {
+            at: Instant::now(),
+            value,
+            refreshing: false,
+        },
+    );
+}
+
+fn cache_clear_inflight(ep: &AwsEndpoint, key: &str) {
+    if let Some(entry) = ep.lists.lock().unwrap().get_mut(key) {
+        entry.refreshing = false;
+    }
+}
+
+fn instances_of(page: &Value) -> Vec<Value> {
     let mut instances = Vec::new();
     if let Some(reservations) = page.as_array() {
         for res in reservations {
@@ -795,12 +854,69 @@ fn list_instances(ep: &AwsEndpoint) -> Result<Vec<Value>, AdvanceError> {
             }
         }
     }
-    Ok(instances)
+    instances
 }
 
-fn list_hosts(ep: &AwsEndpoint) -> Result<Vec<Value>, AdvanceError> {
-    let page = cached_list(ep, "hosts", LIST_TTL, || ec2(ep, "DescribeHosts", Map::new(), true))?;
-    Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+fn fetch_reservations(ep: &AwsEndpoint) -> Result<Value, AdvanceError> {
+    let mut token: Option<String> = None;
+    let mut reservations = Vec::new();
+    loop {
+        let mut params = Map::new();
+        if let Some(t) = &token {
+            params.insert("NextToken".into(), json!(t));
+        }
+        let page = ec2(ep, "DescribeInstances", params, true)?;
+        if let Some(arr) = page.get("Reservations").and_then(|v| v.as_array()) {
+            reservations.extend(arr.clone());
+        }
+        token = page
+            .get("NextToken")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        if token.is_none() {
+            break;
+        }
+    }
+    Ok(Value::Array(reservations))
+}
+
+fn list_instances(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
+    match cache_hit(ep, "instances", LIST_TTL) {
+        CacheHit::Fresh(page) => Ok(instances_of(&page)),
+        CacheHit::Stale(page) => {
+            let bg = ep.clone();
+            std::thread::spawn(move || match fetch_reservations(&bg) {
+                Ok(fresh) => cache_store(&bg, "instances", fresh),
+                Err(_) => cache_clear_inflight(&bg, "instances"),
+            });
+            Ok(instances_of(&page))
+        }
+        CacheHit::Miss => {
+            let page = fetch_reservations(ep)?;
+            cache_store(ep, "instances", page.clone());
+            Ok(instances_of(&page))
+        }
+    }
+}
+
+fn list_hosts(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
+    match cache_hit(ep, "hosts", LIST_TTL) {
+        CacheHit::Fresh(page) => Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default()),
+        CacheHit::Stale(page) => {
+            let bg = ep.clone();
+            std::thread::spawn(move || match ec2(&bg, "DescribeHosts", Map::new(), true) {
+                Ok(fresh) => cache_store(&bg, "hosts", fresh),
+                Err(_) => cache_clear_inflight(&bg, "hosts"),
+            });
+            Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+        }
+        CacheHit::Miss => {
+            let page = ec2(ep, "DescribeHosts", Map::new(), true)?;
+            cache_store(ep, "hosts", page.clone());
+            Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+        }
+    }
 }
 
 fn aws_refresh(args: &Value) -> Result<Value, AdvanceError> {
@@ -917,7 +1033,16 @@ fn complete_aws_create(args: &Value) -> Result<Value, AdvanceError> {
     let tags = job.payload.get("tags").cloned().unwrap_or(json!({}));
     let hostname = field_str(&job.payload, &["hostname"]).unwrap_or_default();
     let host_id = field_str(&job.payload, &["dedicated_host_id"]);
-    let instance = run_instances(&ep, &label, &flavor, &image_id, &tags, &hostname, host_id.as_deref())?;
+    let instance = run_instances(
+        &ep,
+        &job.provider,
+        &label,
+        &flavor,
+        &image_id,
+        &tags,
+        &hostname,
+        host_id.as_deref(),
+    )?;
     Ok(json!({"instance": instance}))
 }
 
@@ -937,6 +1062,7 @@ fn tag_list(tags: &Value) -> Value {
 
 fn run_instances(
     ep: &AwsEndpoint,
+    provider_name: &str,
     label: &Value,
     flavor: &Value,
     image_id: &str,
@@ -944,6 +1070,9 @@ fn run_instances(
     _hostname: &str,
     dedicated_host_id: Option<&str>,
 ) -> Result<Value, AdvanceError> {
+    if flavor.get("fleet").and_then(|v| v.as_object()).is_some() {
+        return create_fleet(ep, provider_name, label, flavor, image_id, tags);
+    }
     let mut nic = Map::new();
     let public_v4 = field(flavor, &["public-ipv4", "public_ipv4"]).and_then(|v| v.as_bool()).unwrap_or(false);
     nic.insert("AssociatePublicIpAddress".into(), json!(public_v4));
@@ -1188,10 +1317,7 @@ fn quota_for_label(args: &Value) -> Result<Value, AdvanceError> {
                 .cloned()
                 .unwrap_or(json!({"default": null, "quota": {"instances": 1}}))
         }),
-        // Azure getQuotaForLabel reads a SKU cache filled by
-        // refreshQuotaLimits. Without that cache the binary reports
-        // one instance, which is the resource count of a single VM.
-        "azure" => Ok(json!({"default": null, "quota": {"instances": 1}})),
+        "azure" => azure_quota_for_label(&snap, args),
         _ => Ok(json!({"default": null, "quota": {}})),
     }
 }
@@ -1206,29 +1332,39 @@ fn aws_quota(snap: &ProviderSnap, args: &Value) -> Result<Value, AdvanceError> {
         .map(|s| s.to_string())
         .or_else(|| field_str(&flavor, &["instance-type", "instance_type"]))
         .unwrap_or_default();
-    let _ = label;
-    let mut params = Map::new();
-    params.insert("InstanceType".into(), json!([instance_type.clone()]));
-    ep.quota_limit.enter();
-    let resp = ec2(&ep, "DescribeInstanceTypes", params, true)?;
-    let info = resp
-        .pointer("/InstanceTypes/0")
-        .cloned()
-        .unwrap_or(Value::Null);
-    let cores = info.pointer("/VCpuInfo/DefaultCores").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let vcpus = info.pointer("/VCpuInfo/DefaultVCpus").and_then(|v| v.as_f64()).unwrap_or(cores);
-    let ram = info.pointer("/MemoryInfo/SizeInMiB").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let dedicated = field(&flavor, &["dedicated-host", "dedicated_host"])
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let fleet = flavor.get("fleet").and_then(|v| v.as_object()).is_some();
     let mut quota = Map::new();
-    quota.insert("cores".into(), json!(cores));
-    quota.insert("ram".into(), json!(ram));
-    quota.insert("instances".into(), json!(1));
-    let market = field_str(&flavor, &["market-type", "market_type"]).unwrap_or_default();
-    let spot = market == "spot";
-    if let Some(code) = instance_quota_code(&instance_type, spot) {
-        if !code.is_empty() {
-            quota.insert(code, json!(vcpus));
+    if dedicated {
+        // _getQuotaForHostType: one host, plus the host quota code.
+        quota.insert("instances".into(), json!(1));
+        if let Some(code) = host_quota_code(&instance_type) {
+            quota.insert(code, json!(1));
+        }
+    } else if fleet && args.get("instance_type").and_then(|v| v.as_str()).is_none() {
+        quota.insert("instances".into(), json!(1));
+    } else {
+        let mut params = Map::new();
+        params.insert("InstanceType".into(), json!([instance_type.clone()]));
+        ep.quota_limit.enter();
+        let resp = ec2(&ep, "DescribeInstanceTypes", params, true)?;
+        let info = resp.pointer("/InstanceTypes/0").cloned().unwrap_or(Value::Null);
+        let cores = info.pointer("/VCpuInfo/DefaultCores").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let vcpus = info.pointer("/VCpuInfo/DefaultVCpus").and_then(|v| v.as_f64()).unwrap_or(cores);
+        let ram = info.pointer("/MemoryInfo/SizeInMiB").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        quota.insert("cores".into(), json!(cores));
+        quota.insert("ram".into(), json!(ram));
+        quota.insert("instances".into(), json!(1));
+        let market = field_str(&flavor, &["market-type", "market_type"]).unwrap_or_default();
+        if let Some(code) = instance_quota_code(&instance_type, market == "spot") {
+            if !code.is_empty() {
+                quota.insert(code, json!(vcpus));
+            }
         }
     }
+    apply_volume_quota(&mut quota, &label);
     let _ = QUOTA_TTL;
     Ok(json!({"default": null, "quota": quota}))
 }
@@ -1273,11 +1409,31 @@ fn instance_quota_code(instance_type: &str, spot: bool) -> Option<String> {
 /// S3 PutObject. Custom endpoints (moto) use path-style; AWS uses
 /// virtual-hosted `{bucket}.s3.{region}.amazonaws.com`.
 pub fn s3_put(provider_name: &str, bucket: &str, key: &str, body: &[u8], content_type: &str) -> Result<(), AdvanceError> {
+    s3_put_tagged(provider_name, bucket, key, body, content_type, None)
+}
+
+/// PutObject. `tagging` is the `x-amz-tagging` header boto sets from
+/// `ExtraArgs={'Tagging': urlencode(metadata)}`.
+pub fn s3_put_tagged(
+    provider_name: &str,
+    bucket: &str,
+    key: &str,
+    body: &[u8],
+    content_type: &str,
+    tagging: Option<&str>,
+) -> Result<(), AdvanceError> {
     let snap = provider_by_name(provider_name)?;
     let ep = aws_endpoint(&snap)?;
     let (url, _host_for_sign) = s3_url(&ep, bucket, key);
     let payload_hash = sha256_hex(body);
     ep.mutating.enter();
+    let mut headers: Vec<(&str, &str)> = vec![
+        ("Content-Type", content_type),
+        ("x-amz-content-sha256", payload_hash.as_str()),
+    ];
+    if let Some(tags) = tagging {
+        headers.push(("x-amz-tagging", tags));
+    }
     signed_request(
         "PUT",
         &url,
@@ -1286,10 +1442,7 @@ pub fn s3_put(provider_name: &str, bucket: &str, key: &str, body: &[u8], content
         &ep.sig.access_key,
         &ep.sig.secret_key,
         ep.sig.session_token.as_deref(),
-        &[
-            ("Content-Type", content_type),
-            ("x-amz-content-sha256", payload_hash.as_str()),
-        ],
+        &headers,
         body,
         true,
     )?;
@@ -1377,7 +1530,7 @@ pub fn ebs_put_snapshot(provider_name: &str, volume_gib: i64, blocks: &[Vec<u8>]
         let len = data.len().to_string();
         ep.mutating.enter();
         let url = format!("{base}/snapshots/{snapshot_id}/blocks/{index}");
-        signed_request(
+        let put = signed_request(
             "PUT",
             &url,
             "ebs",
@@ -1392,23 +1545,72 @@ pub fn ebs_put_snapshot(provider_name: &str, volume_gib: i64, blocks: &[Vec<u8>]
             ],
             &data,
             true,
-        )?;
+        );
+        let put = match put {
+            Ok(resp) => resp,
+            Err(err) => {
+                delete_snapshot_id(&ep, &snapshot_id);
+                return Err(err);
+            }
+        };
+        let echoed = put.json().ok().and_then(|v| {
+            v.get("Checksum")
+                .or_else(|| v.get("checksum"))
+                .and_then(|c| c.as_str())
+                .map(|s| s.to_string())
+        });
+        if let Some(got) = echoed {
+            if got != checksum {
+                delete_snapshot_id(&ep, &snapshot_id);
+                return Err(AdvanceError::Other(format!(
+                    "Checksums do not match; received {got} expected {checksum}"
+                )));
+            }
+        }
     }
     let done = serde_json::to_vec(&json!({"ChangedBlocksCount": blocks.len()})).unwrap_or_default();
-    ep.mutating.enter();
-    signed_request(
-        "POST",
-        &format!("{base}/snapshots/completion/{snapshot_id}"),
-        "ebs",
-        &ep.region,
-        &ep.sig.access_key,
-        &ep.sig.secret_key,
-        ep.sig.session_token.as_deref(),
-        &[("Content-Type", "application/json")],
-        &done,
-        true,
-    )?;
+    // EbsSnapshotUploader.finishUpload polls CompleteSnapshot until
+    // Status is completed, and abortUpload deletes the snapshot.
+    loop {
+        ep.mutating.enter();
+        let resp = match signed_request(
+            "POST",
+            &format!("{base}/snapshots/completion/{snapshot_id}"),
+            "ebs",
+            &ep.region,
+            &ep.sig.access_key,
+            &ep.sig.secret_key,
+            ep.sig.session_token.as_deref(),
+            &[("Content-Type", "application/json")],
+            &done,
+            true,
+        ) {
+            Ok(resp) => resp,
+            Err(err) => {
+                delete_snapshot_id(&ep, &snapshot_id);
+                return Err(err);
+            }
+        };
+        let status = resp
+            .json()
+            .ok()
+            .and_then(|v| v.get("Status").or_else(|| v.get("status")).and_then(|s| s.as_str()).map(|s| s.to_string()))
+            .unwrap_or_else(|| "completed".into());
+        if status == "completed" {
+            break;
+        }
+        if status == "error" {
+            delete_snapshot_id(&ep, &snapshot_id);
+            return Err(AdvanceError::Other("Snapshot in error state".into()));
+        }
+    }
     Ok(snapshot_id)
+}
+
+fn delete_snapshot_id(ep: &AwsEndpoint, snapshot_id: &str) {
+    let mut params = Map::new();
+    params.insert("SnapshotId".into(), json!(snapshot_id));
+    let _ = ec2(ep, "DeleteSnapshot", params, false);
 }
 
 fn provider_by_name(name: &str) -> Result<ProviderSnap, AdvanceError> {
@@ -1659,52 +1861,19 @@ fn complete_azure_create(args: &Value) -> Result<Value, AdvanceError> {
     let subnet = field_str(&job.payload, &["subnet_id"]).unwrap_or_default();
     let image_reference = job.payload.get("image_reference").cloned().unwrap_or(json!({}));
     let tags = job.payload.get("tags").cloned().unwrap_or(json!({}));
-    let username = field_str(&image, &["username"]).unwrap_or_else(|| "zuul".into());
-    let mut os_profile = Map::new();
-    os_profile.insert("computerName".into(), json!(hostname));
-    os_profile.insert("adminUsername".into(), json!(username));
-    if let Some(key) = field_str(&label, &["key-data", "key_data"]) {
-        os_profile.insert(
-            "linuxConfiguration".into(),
-            json!({"disablePasswordAuthentication": true, "ssh": {"publicKeys": [{"path": format!("/home/{username}/.ssh/authorized_keys"), "keyData": key}]}}),
-        );
-    }
-    let mut os_disk = Map::new();
-    os_disk.insert("createOption".into(), json!("FromImage"));
-    os_disk.insert("deleteOption".into(), json!("Delete"));
-    if let Some(size) = field(&label, &["volume-size", "volume_size"]) {
-        os_disk.insert("diskSizeGB".into(), size.clone());
-    }
-    let public_v4 = field(&flavor, &["public-ipv4", "public_ipv4"]).and_then(|v| v.as_bool()).unwrap_or(false);
-    let nic = json!({
-        "name": format!("{hostname}-nic"),
-        "tags": tags,
-        "properties": {
-            "deleteOption": "Delete",
-            "ipConfigurations": [{
-                "name": format!("{hostname}-v4-config"),
-                "properties": {
-                    "privateIPAddressVersion": "IPv4",
-                    "subnet": {"id": subnet},
-                    "publicIPAddressConfiguration": if public_v4 { json!({"name": format!("{hostname}-v4-ip"), "tags": tags, "properties": {"deleteOption": "Delete", "publicIPAllocationMethod": "Static", "publicIPAddressVersion": "IPv4"}, "sku": {"name": "Standard"}}) } else { Value::Null }
-                }
-            }]
-        }
-    });
-    let vm_size = field_str(&flavor, &["vm-size", "vm_size", "instance-type"]).unwrap_or_default();
-    let spec = json!({
-        "location": region,
-        "tags": tags,
-        "properties": {
-            "osProfile": os_profile,
-            "hardwareProfile": {"vmSize": vm_size},
-            "storageProfile": {"imageReference": image_reference, "osDisk": os_disk},
-            "networkProfile": {
-                "networkApiVersion": "2020-11-01",
-                "networkInterfaceConfigurations": [nic]
-            }
-        }
-    });
+    let sub = azure_sub(&conn)?;
+    let spec = azure_vm_body(
+        &region,
+        &hostname,
+        &label,
+        &flavor,
+        &image,
+        &image_reference,
+        &subnet,
+        &tags,
+        &sub,
+        &rg,
+    );
     let url = azure_vm_url(&conn, &rg, &hostname)?;
     let vm = azure_request(&conn, "PUT", &url, Some(&spec))?;
     Ok(json!({"vm": vm}))
@@ -1992,9 +2161,52 @@ fn os_create_floating_ip(args: &Value) -> Result<Value, AdvanceError> {
     let tok = os_token(&snap)?;
     let (cloud, _) = os_config(&snap)?;
     let network = field_str(&cloud, &["external_network", "floating_ip_source"]).unwrap_or_default();
-    let body = json!({"floatingip": {"floating_network_id": network}});
-    let created = os_http(&tok, "POST", &format!("{}/v2.0/floatingips", tok.network), Some(&body))?;
-    Ok(json!({"floating_ip": created.get("floatingip").cloned().unwrap_or(created)}))
+    let server = args.get("server").cloned().unwrap_or(Value::Null);
+    if !tok.network.is_empty() {
+        // Neutron. create_floating_ip(server=server) allocates and attaches.
+        let body = json!({"floatingip": {"floating_network_id": network}});
+        let created = os_http(&tok, "POST", &format!("{}/v2.0/floatingips", tok.network), Some(&body))?;
+        let mut fip = created.get("floatingip").cloned().unwrap_or(created);
+        let sid = server.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if !sid.is_empty() {
+            if let Some(port_id) = neutron_port_for_server(&tok, sid) {
+                let id = fip.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let updated = os_http(
+                    &tok,
+                    "PUT",
+                    &format!("{}/v2.0/floatingips/{id}", tok.network),
+                    Some(&json!({"floatingip": {"port_id": port_id}})),
+                )?;
+                fip = updated.get("floatingip").cloned().unwrap_or(updated);
+            }
+        }
+        return Ok(json!({"floating_ip": fip}));
+    }
+    // Nova. The address is allocated here and attached later by addFloatingIp.
+    let created = os_http(
+        &tok,
+        "POST",
+        &format!("{}/os-floating-ips", tok.compute),
+        Some(&json!({"pool": network})),
+    )?;
+    Ok(json!({"floating_ip": created.get("floating_ip").cloned().unwrap_or(created)}))
+}
+
+fn neutron_port_for_server(tok: &OsToken, server_id: &str) -> Option<String> {
+    let listed = os_http(
+        tok,
+        "GET",
+        &format!("{}/v2.0/ports?device_id={server_id}", tok.network),
+        None,
+    )
+    .ok()?;
+    listed
+        .get("ports")?
+        .as_array()?
+        .first()?
+        .get("id")?
+        .as_str()
+        .map(|s| s.to_string())
 }
 
 fn os_refresh_floating_ip(args: &Value) -> Result<Value, AdvanceError> {
@@ -2044,29 +2256,37 @@ fn os_server_floating_ip(args: &Value) -> Result<Value, AdvanceError> {
 }
 
 fn os_get_instance(args: &Value) -> Result<Value, AdvanceError> {
-    // The Python handler mutates the ZooKeeper node. The binary has no
-    // node object here, so it returns the fields updateFromInstance
-    // would write: the address and the ids already on the request.
-    let server = args.get("server").cloned().unwrap_or(Value::Null);
-    let ip = server_interface_ip(&server);
-    let mut node = Map::new();
-    if let Some(ip) = ip {
-        node.insert("interface_ip".into(), json!(ip));
-    }
-    if let Some(id) = args.get("openstack_server_id").filter(|v| !v.is_null()) {
-        node.insert("openstack_server_id".into(), id.clone());
-    }
-    if let Some(id) = args.get("openstack_floating_ip_id").filter(|v| !v.is_null()) {
-        node.insert("openstack_floating_ip_id".into(), id.clone());
-    }
-    if let Some(q) = args.get("quota") {
-        if let Some(inner) = q.get("quota") {
-            node.insert("quota".into(), inner.clone());
-        } else {
-            node.insert("quota".into(), q.clone());
+    let snap = provider_of(args)?;
+    let mut args = args.clone();
+    if let Ok(found) = os_find_flavor(&args) {
+        if let Some(q) = found.get("quota") {
+            if let Some(obj) = args.as_object_mut() {
+                obj.insert("quota".into(), q.clone());
+            }
         }
     }
-    Ok(json!({"node": node}))
+    Ok(json!({"node": node_from_os(&args, &snap)}))
+}
+
+fn azure_update_node(args: &Value) -> Result<Value, AdvanceError> {
+    let snap = provider_of(args)?;
+    let mut args = args.clone();
+    if let Ok(q) = azure_quota_for_label(&snap, &args) {
+        if let Some(obj) = args.as_object_mut() {
+            obj.insert("quota".into(), q);
+        }
+    }
+    Ok(json!({"node": node_from_azure(&args)}))
+}
+
+fn k8s_update_node(args: &Value) -> Result<Value, AdvanceError> {
+    let mut args = args.clone();
+    if let Ok(q) = quota_for_label(&args) {
+        if let Some(obj) = args.as_object_mut() {
+            obj.insert("quota".into(), q);
+        }
+    }
+    Ok(json!({"node": node_from_k8s(&args)}))
 }
 
 fn server_interface_ip(server: &Value) -> Option<String> {
@@ -2489,12 +2709,14 @@ fn k8s_delete_project(args: &Value) -> Result<Value, AdvanceError> {
     Ok(json!({"ok": true}))
 }
 
+include!("parity_impl.rs");
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
-    use std::sync::Mutex as StdMutex;
+    use std::sync::{Arc, Mutex as StdMutex};
     use std::thread;
 
     fn test_lock() -> &'static StdMutex<()> {
@@ -2569,7 +2791,7 @@ mod tests {
 
     #[test]
     fn aws_run_instances_hits_ec2_query_api() {
-        let _guard = test_lock().lock().unwrap();
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
         let port = serve(|_port, req| {
             if req.contains("Action=DescribeImages") {
                 assert!(req.contains("ImageId.1=ami-1"), "{req}");
@@ -2635,7 +2857,7 @@ mod tests {
 
     #[test]
     fn s3_put_and_ebs_snapshot_hit_local_endpoints() {
-        let _guard = test_lock().lock().unwrap();
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
         let port = serve(|_port, req| {
             if req.starts_with("PUT /bucket/obj") {
                 assert!(req.to_ascii_lowercase().contains("x-amz-content-sha256:"), "{req}");
@@ -2689,7 +2911,7 @@ mod tests {
 
     #[test]
     fn azure_create_puts_azul_vm() {
-        let _guard = test_lock().lock().unwrap();
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
         let port = serve(|_port, req| {
             if req.contains("/oauth2/token") {
                 assert!(req.contains("grant_type=client_credentials"), "{req}");
@@ -2766,7 +2988,7 @@ mod tests {
 
     #[test]
     fn openstack_server_create_posts_nova_body() {
-        let _guard = test_lock().lock().unwrap();
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
         let port = serve(|port, req| {
             if req.contains("/auth/tokens") {
                 assert!(req.contains("\"name\":\"demo\""), "{req}");
@@ -2844,7 +3066,7 @@ mod tests {
 
     #[test]
     fn kubernetes_namespace_and_pod_match_endpoint() {
-        let _guard = test_lock().lock().unwrap();
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
         let port = serve(|_port, req| {
             if req.starts_with("POST /api/v1/namespaces ") || req.starts_with("POST /api/v1/namespaces\r") {
                 assert!(req.contains("\"kind\":\"Namespace\""), "{req}");
@@ -2916,9 +3138,603 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    fn aws_provider(name: &str, connection: &str, port: u16, labels: Value, flavors: Value, images: Value) {
+        let mut options = BTreeMap::new();
+        options.insert("access_key_id".into(), "AKID".into());
+        options.insert("secret_access_key".into(), "SECRET".into());
+        options.insert("endpoint_url".into(), format!("http://127.0.0.1:{port}"));
+        options.insert("rate".into(), "1000".into());
+        set_connections(vec![ConnectionConfig {
+            name: connection.into(),
+            driver: "aws".into(),
+            options,
+        }]);
+        let mut reg = registry().lock().unwrap();
+        reg.aws.clear();
+        reg.providers.insert(
+            name.into(),
+            ProviderSnap {
+                driver: "aws".into(),
+                connection: connection.into(),
+                region: "us-east-1".into(),
+                labels: BTreeMap::from([("debian".into(), labels)]),
+                flavors: BTreeMap::from([("small".into(), flavors)]),
+                images: BTreeMap::from([("img".into(), images)]),
+            },
+        );
+    }
+
+    #[test]
+    fn aws_retries_match_botocore_standard_mode() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let hits = Arc::new(StdMutex::new(0u32));
+        let hits_bg = hits.clone();
+        let port = serve(move |_port, req| {
+            if req.contains("Action=DescribeInstances") {
+                let n = {
+                    let mut h = hits_bg.lock().unwrap();
+                    *h += 1;
+                    *h
+                };
+                if n == 1 {
+                    return (
+                        503,
+                        Vec::new(),
+                        r#"<?xml version="1.0"?><Response><Errors><Error><Code>RequestLimitExceeded</Code><Message>slow</Message></Error></Errors></Response>"#.into(),
+                    );
+                }
+                return json_ok(
+                    r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet></reservationSet></DescribeInstancesResponse>"#,
+                );
+            }
+            (404, Vec::new(), String::new())
+        });
+        aws_provider(
+            "tenant/retry",
+            "aws-retry",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img"}),
+            json!({"instance-type": "t3.micro"}),
+            json!({"image-id": "ami-1"}),
+        );
+        let snap = provider_by_name("tenant/retry").unwrap();
+        let ep = aws_endpoint(&snap).unwrap();
+        let page = fetch_reservations(&ep).expect("retry then success");
+        assert!(page.as_array().unwrap().is_empty());
+        assert_eq!(*hits.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn instance_list_cache_returns_stale_and_refreshes() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let hits = Arc::new(StdMutex::new(0u32));
+        let hold = Arc::new(StdMutex::new(true));
+        let hits_bg = hits.clone();
+        let hold_bg = hold.clone();
+        let port = serve(move |_port, req| {
+            if req.contains("Action=DescribeInstances") {
+                let n = {
+                    let mut h = hits_bg.lock().unwrap();
+                    *h += 1;
+                    *h
+                };
+                if n >= 2 {
+                    while *hold_bg.lock().unwrap() {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    return json_ok(
+                        r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>i-new</instanceId></item></instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
+                    );
+                }
+                return json_ok(
+                    r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet><item><instancesSet><item><instanceId>i-old</instanceId></item></instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
+                );
+            }
+            (404, Vec::new(), String::new())
+        });
+        aws_provider(
+            "tenant/cache",
+            "aws-cache",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img"}),
+            json!({"instance-type": "t3.micro"}),
+            json!({"image-id": "ami-1"}),
+        );
+        let args = json!({"provider": "tenant/cache", "obj": {"InstanceId": "i-old"}});
+        let first = aws_refresh(&args).unwrap();
+        assert_eq!(first["obj"]["InstanceId"], "i-old");
+        let snap = provider_by_name("tenant/cache").unwrap();
+        let ep = aws_endpoint(&snap).unwrap();
+        ep.lists.lock().unwrap().get_mut("instances").unwrap().at =
+            Instant::now() - Duration::from_secs(30);
+        let stale = aws_refresh(&args).unwrap();
+        assert_eq!(stale["obj"]["InstanceId"], "i-old");
+        *hold.lock().unwrap() = false;
+        for _ in 0..50 {
+            if *hits.lock().unwrap() >= 2 {
+                thread::sleep(Duration::from_millis(50));
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(*hits.lock().unwrap() >= 2, "background refresh did not run");
+    }
+
+    #[test]
+    fn host_and_volume_quota_codes_match_const() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        aws_provider(
+            "tenant/quota",
+            "aws-quota",
+            9,
+            json!({"name": "debian", "flavor": "small", "image": "img", "volume-type": "gp3", "volume-size": 20}),
+            json!({"instance-type": "c5.metal", "dedicated-host": true}),
+            json!({"image-id": "ami-1"}),
+        );
+        let quota = quota_for_label(&json!({"provider": "tenant/quota", "label": "debian"})).unwrap();
+        assert_eq!(quota["quota"]["instances"].as_f64(), Some(1.0));
+        assert_eq!(quota["quota"]["L-81657574"].as_f64(), Some(1.0));
+        assert_eq!(quota["quota"]["L-7A658B76"].as_f64(), Some(20.0));
+        assert!(quota["quota"].get("cores").is_none());
+    }
+
+    #[test]
+    fn list_service_quotas_translates_ebs_storage_to_gb() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let port = serve(|_port, req| {
+            assert!(req.contains("ServiceQuotasV20190624.ListServiceQuotas"), "{req}");
+            json_ok(r#"{"Quotas":[{"QuotaCode":"L-1216C47A","Value":64},{"QuotaCode":"L-7A658B76","Value":5}]}"#)
+        });
+        aws_provider(
+            "tenant/limits",
+            "aws-limits",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img"}),
+            json!({"instance-type": "t3.micro"}),
+            json!({"image-id": "ami-1"}),
+        );
+        let limits = endpoint_limits("tenant/limits").expect("limits");
+        assert_eq!(limits.quota.get("L-1216C47A").copied().unwrap_or(0.0), 64.0);
+        assert_eq!(limits.quota.get("L-7A658B76").copied().unwrap_or(0.0), 5000.0);
+    }
+
+    #[test]
+    fn create_fleet_uses_launch_template() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let seen = Arc::new(StdMutex::new(String::new()));
+        let seen_bg = seen.clone();
+        let port = serve(move |_port, req| {
+            if req.contains("Action=DescribeLaunchTemplates") {
+                return json_ok(r#"<?xml version="1.0"?><DescribeLaunchTemplatesResponse><launchTemplateSet></launchTemplateSet></DescribeLaunchTemplatesResponse>"#);
+            }
+            if req.contains("Action=CreateLaunchTemplate") {
+                assert!(req.contains("LaunchTemplateName=zuul-launch-template-"), "{req}");
+                assert!(req.contains("AutoRecovery=disabled"), "{req}");
+                *seen_bg.lock().unwrap() = req.to_string();
+                return json_ok(r#"<?xml version="1.0"?><CreateLaunchTemplateResponse><launchTemplate><launchTemplateName>zuul</launchTemplateName></launchTemplate></CreateLaunchTemplateResponse>"#);
+            }
+            if req.contains("Action=CreateFleet") {
+                assert!(req.contains("Type=instant"), "{req}");
+                assert!(req.contains("Version=%24Latest") || req.contains("Version=$Latest"), "{req}");
+                assert!(req.contains("InstanceType=t3.micro"), "{req}");
+                return json_ok(r#"<?xml version="1.0"?><CreateFleetResponse><instancesSet><item><instanceIds><item>i-fleet</item></instanceIds></item></instancesSet></CreateFleetResponse>"#);
+            }
+            panic!("unexpected {req}");
+        });
+        set_system_id("sys-1");
+        aws_provider(
+            "tenant/fleet",
+            "aws-fleet",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img", "key-name": "zuul"}),
+            json!({"fleet": {"instance_types": ["t3.micro"], "allocation_strategy": "lowest-price"}}),
+            json!({"image-id": "ami-1"}),
+        );
+        let submitted = invoke(
+            "ep.submit_create_instance",
+            &json!({"provider": "tenant/fleet", "label": "debian", "hostname": "npf", "tags": {"Name": "npf"}}),
+        )
+        .unwrap();
+        let done = invoke(
+            "ep.complete_create_instance",
+            &json!({"provider": "tenant/fleet", "future_id": submitted["future_id"]}),
+        )
+        .unwrap();
+        assert_eq!(done["instance"]["InstanceId"], "i-fleet");
+        assert!(seen.lock().unwrap().contains("zuul_system_id"));
+        assert!(seen.lock().unwrap().contains("sys-1"));
+    }
+
+    #[test]
+    fn s3_put_sends_tagging_header() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let port = serve(|_port, req| {
+            let lower = req.to_ascii_lowercase();
+            assert!(lower.contains("x-amz-tagging:"), "{req}");
+            assert!(req.contains("zuul_upload_uuid"), "{req}");
+            (200, Vec::new(), String::new())
+        });
+        aws_provider(
+            "tenant/tag",
+            "aws-tag",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img"}),
+            json!({}),
+            json!({}),
+        );
+        s3_put_tagged("tenant/tag", "bucket", "obj", b"hello-image", "application/octet-stream", Some("zuul_upload_uuid=abc")).unwrap();
+    }
+
+    #[test]
+    fn ebs_checksum_mismatch_deletes_snapshot() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let deleted = Arc::new(StdMutex::new(false));
+        let deleted_bg = deleted.clone();
+        let port = serve(move |_port, req| {
+            if req.starts_with("POST /snapshots ") || req.starts_with("POST /snapshots\r") {
+                return json_ok(r#"{"SnapshotId":"snap-bad"}"#);
+            }
+            if req.contains("/blocks/") {
+                return json_ok(r#"{"Checksum":"not-the-digest"}"#);
+            }
+            if req.contains("Action=DeleteSnapshot") && req.contains("snap-bad") {
+                *deleted_bg.lock().unwrap() = true;
+                return json_ok(r#"<?xml version="1.0"?><DeleteSnapshotResponse></DeleteSnapshotResponse>"#);
+            }
+            (404, Vec::new(), format!("no {req}"))
+        });
+        aws_provider(
+            "tenant/ebs",
+            "aws-ebs",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img"}),
+            json!({}),
+            json!({}),
+        );
+        let err = ebs_put_snapshot("tenant/ebs", 1, &[b"block".to_vec()], &json!({})).unwrap_err();
+        assert!(err.to_string().to_ascii_lowercase().contains("checksum"), "{err}");
+        assert!(*deleted.lock().unwrap());
+    }
+
+    #[test]
+    fn import_snapshot_registers_ami() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let port = serve(|_port, req| {
+            if req.contains("Action=ImportSnapshot") {
+                assert!(req.contains("S3Bucket=bucket"), "{req}");
+                assert!(req.contains("S3Key=img.raw"), "{req}");
+                return json_ok(r#"<?xml version="1.0"?><ImportSnapshotResponse><importTaskId>import-1</importTaskId></ImportSnapshotResponse>"#);
+            }
+            if req.contains("Action=DescribeImportSnapshotTasks") {
+                return json_ok(r#"<?xml version="1.0"?><DescribeImportSnapshotTasksResponse><importSnapshotTaskSet><item><importTaskId>import-1</importTaskId><snapshotTaskDetail><status>completed</status><snapshotId>snap-imp</snapshotId></snapshotTaskDetail></item></importSnapshotTaskSet></DescribeImportSnapshotTasksResponse>"#);
+            }
+            if req.contains("Action=CreateTags") {
+                return json_ok(r#"<?xml version="1.0"?><CreateTagsResponse></CreateTagsResponse>"#);
+            }
+            if req.contains("Action=RegisterImage") {
+                assert!(req.contains("SnapshotId=snap-imp"), "{req}");
+                assert!(req.contains("DeviceName=%2Fdev%2Fsda1") || req.contains("DeviceName=/dev/sda1"), "{req}");
+                return json_ok(r#"<?xml version="1.0"?><RegisterImageResponse><imageId>ami-imp</imageId></RegisterImageResponse>"#);
+            }
+            panic!("unexpected {req}");
+        });
+        aws_provider(
+            "tenant/import",
+            "aws-import",
+            port,
+            json!({}),
+            json!({}),
+            json!({"name": "debian", "canonical_name": "debian-img", "import-method": "snapshot", "architecture": "x86_64", "volume-size": 8}),
+        );
+        let result = upload_sdk_run(&json!({
+            "provider": "tenant/import",
+            "kind": "import",
+            "upload_uuid": "up-1",
+            "image_name": "debian-img",
+            "image_format": "raw",
+            "artifact_url": "s3://bucket/img.raw"
+        }))
+        .unwrap();
+        assert_eq!(result["external_id"], "ami-imp");
+    }
+
+    #[test]
+    fn azure_vm_body_covers_14_3_0_fields() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let body = Arc::new(StdMutex::new(String::new()));
+        let body_bg = body.clone();
+        let port = serve(move |_port, req| {
+            if req.contains("/oauth2/token") {
+                return json_ok(r#"{"access_token":"tok","expires_on":"9999999999"}"#);
+            }
+            if req.starts_with("PUT ") {
+                *body_bg.lock().unwrap() = req.to_string();
+                return json_ok(r#"{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/npabc","location":"eastus","properties":{"provisioningState":"Creating"}}"#);
+            }
+            (404, Vec::new(), format!("no {req}"))
+        });
+        set_test_azure_endpoints(&format!("http://127.0.0.1:{port}"), &format!("http://127.0.0.1:{port}"));
+        let mut options = BTreeMap::new();
+        options.insert("tenant_id".into(), "tid".into());
+        options.insert("client_id".into(), "cid".into());
+        options.insert("client_secret".into(), "sec".into());
+        options.insert("subscription_id".into(), "sub".into());
+        options.insert("rate".into(), "1000".into());
+        set_connections(vec![ConnectionConfig {
+            name: "azure-full".into(),
+            driver: "azure".into(),
+            options,
+        }]);
+        {
+            let mut reg = registry().lock().unwrap();
+            reg.azure_tokens.clear();
+            reg.providers.insert(
+                "tenant/azure-full".into(),
+                ProviderSnap {
+                    driver: "azure".into(),
+                    connection: "azure-full".into(),
+                    region: "eastus".into(),
+                    labels: BTreeMap::from([(
+                        "debian".into(),
+                        json!({
+                            "name": "debian",
+                            "flavor": "small",
+                            "image": "img",
+                            "resource-group": "rg",
+                            "key-data": "ssh-rsa A",
+                            "userdata": "#!/bin/sh",
+                            "ephemeral-disk": true,
+                            "user-assigned-identities": [{"name": "zuul-id", "resource_group": "rg"}]
+                        }),
+                    )]),
+                    flavors: BTreeMap::from([(
+                        "small".into(),
+                        json!({"vm-size": "Standard_B1s", "ipv6": true, "public-ipv6": true, "ipv4": false, "priority": "spot"}),
+                    )]),
+                    images: BTreeMap::from([("img".into(), json!({"username": "zuul"}))]),
+                },
+            );
+        }
+        let submitted = invoke(
+            "ep.azure_submit_create_vm",
+            &json!({
+                "provider": "tenant/azure-full",
+                "label": "debian",
+                "hostname": "npabc",
+                "subnet_id": "/subscriptions/sub/subnets/s",
+                "image_reference": {"id": "/images/img"},
+                "tags": {"zuul_node_uuid": "u1"}
+            }),
+        )
+        .unwrap();
+        invoke(
+            "ep.azure_complete_create_vm",
+            &json!({"provider": "tenant/azure-full", "future_id": submitted["future_id"]}),
+        )
+        .unwrap();
+        let req = body.lock().unwrap().clone();
+        assert!(req.contains("IPv6"), "{req}");
+        assert!(!req.contains("\"publicIPAddressConfiguration\":null"), "{req}");
+        assert!(req.contains("diffDiskSettings"), "{req}");
+        assert!(req.contains("#!/bin/sh"), "{req}");
+        assert!(req.contains("userAssignedIdentities"), "{req}");
+        assert!(req.contains("\"priority\":\"Spot\""), "{req}");
+        assert!(req.contains("\"evictionPolicy\":\"Delete\""), "{req}");
+    }
+
+    #[test]
+    fn azure_label_quota_comes_from_sku() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let port = serve(|_port, req| {
+            if req.contains("/oauth2/token") {
+                return json_ok(r#"{"access_token":"tok","expires_on":"9999999999"}"#);
+            }
+            if req.contains("/skus?") {
+                return json_ok(r#"{"value":[{"name":"Standard_B1s","locations":["eastus"],"capabilities":[{"name":"vCPUs","value":"1"},{"name":"MemoryGB","value":"1"}]}]}"#);
+            }
+            (404, Vec::new(), format!("no {req}"))
+        });
+        set_test_azure_endpoints(&format!("http://127.0.0.1:{port}"), &format!("http://127.0.0.1:{port}"));
+        let mut options = BTreeMap::new();
+        options.insert("tenant_id".into(), "tid".into());
+        options.insert("client_id".into(), "cid".into());
+        options.insert("client_secret".into(), "sec".into());
+        options.insert("subscription_id".into(), "sub".into());
+        options.insert("rate".into(), "1000".into());
+        set_connections(vec![ConnectionConfig {
+            name: "azure-sku".into(),
+            driver: "azure".into(),
+            options,
+        }]);
+        {
+            let mut reg = registry().lock().unwrap();
+            reg.azure_tokens.clear();
+            reg.providers.insert(
+                "tenant/azure-sku".into(),
+                ProviderSnap {
+                    driver: "azure".into(),
+                    connection: "azure-sku".into(),
+                    region: "eastus".into(),
+                    labels: BTreeMap::from([("debian".into(), json!({"flavor": "small", "image": "img"}))]),
+                    flavors: BTreeMap::from([("small".into(), json!({"vm-size": "Standard_B1s", "priority": "spot"}))]),
+                    images: BTreeMap::new(),
+                },
+            );
+        }
+        let quota = quota_for_label(&json!({"provider": "tenant/azure-sku", "label": "debian"})).unwrap();
+        assert_eq!(quota["quota"]["spot_cores"].as_f64(), Some(1.0));
+        assert_eq!(quota["quota"]["ram"].as_f64(), Some(1024.0));
+        assert_eq!(quota["quota"]["instances"].as_f64(), Some(1.0));
+    }
+
+    #[test]
+    fn azure_and_k8s_update_node_return_instance_fields() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        {
+            let mut reg = registry().lock().unwrap();
+            reg.providers.insert(
+                "tenant/k8s-upd".into(),
+                ProviderSnap {
+                    driver: "kubernetes".into(),
+                    connection: "k8s-test".into(),
+                    region: String::new(),
+                    labels: BTreeMap::from([("pod".into(), json!({"kind": "pod", "flavor": "f", "image": "i"}))]),
+                    flavors: BTreeMap::new(),
+                    images: BTreeMap::new(),
+                },
+            );
+        }
+        let node = k8s_update_node(&json!({
+            "provider": "tenant/k8s-upd",
+            "label": "pod",
+            "hostname": "npk",
+            "kind": "pod",
+            "kubernetes_namespace_id": "npk",
+            "kubernetes_connection": {"token": "t"}
+        }))
+        .unwrap();
+        assert_eq!(node["node"]["kubernetes_namespace_id"], "npk");
+        assert_eq!(node["node"]["quota"]["pods"], 1);
+        assert_eq!(node["node"]["quota"]["namespaces"], 1);
+    }
+
+    fn os_cloud(port: u16, with_network: bool) -> String {
+        let dir = std::env::temp_dir().join(format!("os-{}", new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("clouds.yaml");
+        let network = if with_network {
+            format!(",{{\"type\":\"network\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/network\"}}]}}")
+        } else {
+            String::new()
+        };
+        std::fs::write(
+            &path,
+            format!("clouds:\n  demo:\n    region_name: RegionOne\n    external_network: public\n    auth:\n      auth_url: http://127.0.0.1:{port}\n      username: demo\n      password: secret\n      project_name: demo\n"),
+        )
+        .unwrap();
+        let _ = network;
+        path.display().to_string()
+    }
+
+    #[test]
+    fn neutron_floating_ip_attaches_by_port() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let port = serve(|port, req| {
+            if req.contains("/auth/tokens") {
+                let body = format!(
+                    "{{\"token\":{{\"catalog\":[{{\"type\":\"compute\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/compute\"}}]}},{{\"type\":\"network\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/network\"}}]}}]}}}}"
+                );
+                return (201, vec![("X-Subject-Token".into(), "tok".into())], body);
+            }
+            if req.contains("GET /network/v2.0/ports") {
+                return json_ok(r#"{"ports":[{"id":"port-1","device_id":"srv-1"}]}"#);
+            }
+            if req.contains("POST /network/v2.0/floatingips") {
+                return json_ok(r#"{"floatingip":{"id":"fip-1","floating_ip_address":"203.0.113.5","status":"DOWN"}}"#);
+            }
+            if req.contains("PUT /network/v2.0/floatingips/fip-1") {
+                assert!(req.contains("\"port_id\":\"port-1\""), "{req}");
+                return json_ok(r#"{"floatingip":{"id":"fip-1","floating_ip_address":"203.0.113.5","port_id":"port-1","status":"ACTIVE"}}"#);
+            }
+            (404, Vec::new(), format!("no {req}"))
+        });
+        let clouds = os_cloud(port, true);
+        let mut options = BTreeMap::new();
+        options.insert("cloud".into(), "demo".into());
+        options.insert("client_config_file".into(), clouds.clone());
+        options.insert("rate".into(), "1000".into());
+        set_connections(vec![ConnectionConfig {
+            name: "os-n".into(),
+            driver: "openstack".into(),
+            options,
+        }]);
+        {
+            let mut reg = registry().lock().unwrap();
+            reg.os_tokens.clear();
+            reg.providers.insert(
+                "tenant/os-n".into(),
+                ProviderSnap {
+                    driver: "openstack".into(),
+                    connection: "os-n".into(),
+                    region: "RegionOne".into(),
+                    labels: BTreeMap::new(),
+                    flavors: BTreeMap::new(),
+                    images: BTreeMap::new(),
+                },
+            );
+        }
+        let fip = os_create_floating_ip(&json!({"provider": "tenant/os-n", "server": {"id": "srv-1"}})).unwrap();
+        assert_eq!(fip["floating_ip"]["port_id"], "port-1");
+        let _ = std::fs::remove_file(&clouds);
+    }
+
+    #[test]
+    fn nova_floating_ip_uses_add_floating_ip() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let port = serve(|port, req| {
+            if req.contains("/auth/tokens") {
+                let body = format!(
+                    "{{\"token\":{{\"catalog\":[{{\"type\":\"compute\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/compute\"}}]}}]}}}}"
+                );
+                return (201, vec![("X-Subject-Token".into(), "tok".into())], body);
+            }
+            if req.contains("POST /compute/os-floating-ips") {
+                assert!(req.contains("\"pool\":\"public\""), "{req}");
+                return json_ok(r#"{"floating_ip":{"id":"fip-n","ip":"203.0.113.9"}}"#);
+            }
+            if req.contains("/servers/srv-1/action") {
+                assert!(req.contains("addFloatingIp"), "{req}");
+                assert!(req.contains("203.0.113.9"), "{req}");
+                return json_ok("{}");
+            }
+            (404, Vec::new(), format!("no {req}"))
+        });
+        let dir = std::env::temp_dir().join(format!("os-{}", new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let clouds = dir.join("clouds.yaml");
+        std::fs::write(
+            &clouds,
+            format!("clouds:\n  demo:\n    region_name: RegionOne\n    external_network: public\n    auth:\n      auth_url: http://127.0.0.1:{port}\n      username: demo\n      password: secret\n      project_name: demo\n"),
+        )
+        .unwrap();
+        let mut options = BTreeMap::new();
+        options.insert("cloud".into(), "demo".into());
+        options.insert("client_config_file".into(), clouds.display().to_string());
+        options.insert("rate".into(), "1000".into());
+        set_connections(vec![ConnectionConfig {
+            name: "os-nova".into(),
+            driver: "openstack".into(),
+            options,
+        }]);
+        {
+            let mut reg = registry().lock().unwrap();
+            reg.os_tokens.clear();
+            reg.providers.insert(
+                "tenant/os-nova".into(),
+                ProviderSnap {
+                    driver: "openstack".into(),
+                    connection: "os-nova".into(),
+                    region: "RegionOne".into(),
+                    labels: BTreeMap::new(),
+                    flavors: BTreeMap::new(),
+                    images: BTreeMap::new(),
+                },
+            );
+        }
+        let fip = os_create_floating_ip(&json!({"provider": "tenant/os-nova", "server": {"id": "srv-1"}})).unwrap();
+        assert!(fip["floating_ip"].get("port_id").is_none());
+        os_attach_ip(&json!({
+            "provider": "tenant/os-nova",
+            "server": {"id": "srv-1"},
+            "floating_ip": {"ip": "203.0.113.9"}
+        }))
+        .unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn aws_run_instances_against_moto_server() {
-        let _guard = test_lock().lock().unwrap();
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
         let python = std::env::var("ZUUL_PYTHON").unwrap_or_else(|_| "python3".into());
         let probe = std::process::Command::new(&python)
             .args(["-c", "import moto.server"])
@@ -3011,9 +3827,33 @@ mod tests {
             "ep.complete_create_instance",
             &json!({"provider": "tenant/moto", "future_id": submitted["future_id"]}),
         );
-        let _ = child.kill();
         let done = done.expect("moto RunInstances");
-        let id = done["instance"]["InstanceId"].as_str().unwrap_or("");
+        let id = done["instance"]["InstanceId"].as_str().unwrap_or("").to_string();
         assert!(id.starts_with('i'), "{done}");
+        let snap = provider_by_name("tenant/moto").unwrap();
+        let ep = aws_endpoint(&snap).unwrap();
+        let bucket_url = format!("{}/zuul-bucket", ep.endpoint.trim_end_matches('/'));
+        signed_request(
+            "PUT",
+            &bucket_url,
+            "s3",
+            &ep.region,
+            &ep.sig.access_key,
+            &ep.sig.secret_key,
+            None,
+            &[("Content-Type", "application/xml")],
+            b"",
+            true,
+        )
+        .expect("moto CreateBucket");
+        s3_put("tenant/moto", "zuul-bucket", "img.raw", b"raw-bytes", "application/octet-stream")
+            .expect("moto S3 PutObject");
+        invoke(
+            "ep.delete_instance",
+            &json!({"provider": "tenant/moto", "instance_id": id}),
+        )
+        .expect("moto TerminateInstances");
+        delete_uploaded_image("tenant/moto", &ami).expect("moto DeregisterImage");
+        let _ = child.kill();
     }
 }

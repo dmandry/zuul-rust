@@ -73,6 +73,9 @@ pub struct Launcher {
     /// Shared with upload pool workers so they can discard finished uuids.
     pub upload_uuids_in_queue: Arc<Mutex<HashSet<String>>>,
     pub upload_uuids_in_delete_queue: Arc<Mutex<HashSet<String>>>,
+    /// Snapshot locks held until the snapshot completes. Python keeps
+    /// the snapshot lock across advances.
+    snapshot_locks: HashMap<String, zk::HeldLock>,
     /// Pending (provider, label) keys for quota deferral within one
     /// process_requests pass. Shared with the accept_one PyO3 hook so
     /// patched `_acceptRequest` still sees the same deferral set.
@@ -126,6 +129,7 @@ struct CleanupShared {
 impl Launcher {
     pub fn new(hostname: &str, zk: Arc<dyn ZkOps>) -> Self {
         let system_id = zk::system_id(zk.as_ref()).unwrap_or_else(|_| "system".into());
+        crate::native::set_system_id(&system_id);
         let api = LauncherApi::new(zk, hostname, None);
         Self {
             hostname: hostname.into(),
@@ -158,6 +162,7 @@ impl Launcher {
             upload_pools: None,
             upload_uuids_in_queue: Arc::new(Mutex::new(HashSet::new())),
             upload_uuids_in_delete_queue: Arc::new(Mutex::new(HashSet::new())),
+            snapshot_locks: HashMap::new(),
             accept_pending: HashSet::new(),
             remembered_node_quota: HashMap::new(),
             used_node_quota: HashMap::new(),
@@ -1404,7 +1409,7 @@ impl Launcher {
 
     fn cloud_endpoint_limits(&self, provider: &dyn Provider) -> Option<QuotaInformation> {
         if !cloud::enabled() {
-            return None;
+            return crate::native::endpoint_limits(provider.canonical_name());
         }
         cloud::invoke(
             "endpoint_limits",
@@ -2846,6 +2851,9 @@ impl Launcher {
                 continue;
             }
             Self::queue_insert(&self.upload_uuids_in_delete_queue, uuid.clone());
+            let upload = self.api.uploads.get(&uuid);
+            let delete_provider = upload.and_then(|u| u.providers().into_iter().next());
+            let delete_external = upload.and_then(|u| u.external_id());
             let job = PlannedJob {
                 kind: "delete".into(),
                 upload_uuid: uuid,
@@ -2855,6 +2863,11 @@ impl Launcher {
             };
             let delete_q = self.upload_uuids_in_delete_queue.clone();
             pools.submit_upload(job, move |job| {
+                if !cloud::enabled() {
+                    if let (Some(provider), Some(external)) = (&delete_provider, &delete_external) {
+                        let _ = crate::native::delete_uploaded_image(provider, external);
+                    }
+                }
                 Self::run_upload_delete(&job, &delete_q);
             });
         }
@@ -3073,6 +3086,135 @@ impl Launcher {
         Self::queue_discard(queue, &job.upload_uuid);
     }
 
+    fn advance_native_snapshot(&mut self, id: &str) {
+        let Some(node) = self.api.nodes.get(id).cloned() else {
+            return;
+        };
+        if !self.snapshot_locks.contains_key(id) {
+            let lock_path = format!("/zuul/nodes/nodes/{id}/snapshot-lock");
+            match zk::acquire_lock(self.api.zk.as_ref(), &lock_path, &self.hostname, false) {
+                Ok(Some(held)) => {
+                    self.snapshot_locks.insert(id.to_string(), held);
+                }
+                _ => return,
+            }
+        }
+        let snap_path = format!("/zuul/nodes/nodes/{id}/snapshot");
+        let existing = self
+            .api
+            .zk
+            .get(&snap_path)
+            .ok()
+            .and_then(|(bytes, _)| crate::codec::decode_zkobject(&bytes).ok());
+        let provider = node.provider();
+        let instance = node
+            .fields
+            .get("aws_instance_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let timeout = node
+            .fields
+            .get("snapshot_timeout")
+            .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)))
+            .unwrap_or(0.0);
+        let expiration = node
+            .fields
+            .get("snapshot_expiration")
+            .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)))
+            .unwrap_or(0.0);
+        let mut sm = AwsSnapshot::new();
+        sm.enable_live();
+        sm.provider = provider.clone();
+        sm.node_uuid = id.to_string();
+        let region = node
+            .fields
+            .get("region")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                self.provider_by_any_cname(&provider)
+                    .and_then(|p| p.region().map(|s| s.to_string()))
+                    .filter(|s| !s.is_empty())
+            });
+        sm.region = region;
+        if let Some(saved) = existing.as_ref().and_then(|v| v.get("snapshot_state")) {
+            if let Some(state) = saved.get("state").and_then(|v| v.as_str()) {
+                sm.state = state.to_string();
+            }
+            sm.start_time = saved
+                .get("start_time")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            sm.snapshot_id = saved
+                .get("snapshot_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            if let Some(snap_id) = &sm.snapshot_id {
+                sm.snapshot_obj = Some(json!({"SnapshotId": snap_id}));
+            }
+        }
+        if let Some(tags) = existing.as_ref().and_then(|v| v.get("tags")).filter(|v| !v.is_null()) {
+            sm.tags = tags.clone();
+        } else {
+            let mut tags = node.fields.get("tags").cloned().unwrap_or(json!({}));
+            if let Some(obj) = tags.as_object_mut() {
+                obj.remove("zuul_node_uuid");
+                let exp = (model::now_secs() + expiration) as i64;
+                obj.insert("zuul_expiration".into(), json!(exp.to_string()));
+            }
+            sm.tags = tags;
+        }
+        if sm.volume_id.is_none() && !instance.is_empty() {
+            if let Ok(Some(vol)) = crate::native::root_volume(&provider, &instance) {
+                sm.volume_id = Some(vol);
+            }
+        }
+        if sm.account_id.is_none() {
+            if let Ok(account) = crate::native::account_id(&provider) {
+                sm.account_id = Some(account);
+            }
+        }
+        if sm.state == "start" && sm.start_time == 0.0 {
+            sm.start_time = model::now_secs();
+        }
+        let failed = if let Err(_err) = sm.advance() {
+            true
+        } else if !sm.complete && timeout > 0.0 && model::now_secs() - sm.start_time > timeout {
+            true
+        } else {
+            false
+        };
+        if failed {
+            sm.complete = true;
+            sm.state = "complete".into();
+        }
+        let external = sm.external_id.clone();
+        let body = json!({
+            "snapshot_state": sm.to_dict(),
+            "complete": if sm.complete { json!(true) } else { Value::Null },
+            "external_id": external,
+            "tags": sm.tags,
+        });
+        let bytes = crate::codec::dumps_compressed(&body);
+        let _ = self.api.zk.ensure_path(&format!("/zuul/nodes/nodes/{id}"));
+        match self.api.zk.get(&snap_path) {
+            Ok((_, stat)) => {
+                let _ = self.api.zk.set(&snap_path, &bytes, stat.version);
+            }
+            Err(_) => {
+                let _ = self.api.zk.create(&snap_path, &bytes, zk::CreateMode::Persistent);
+            }
+        }
+        if sm.complete {
+            if let Some(held) = self.snapshot_locks.remove(id) {
+                let _ = self.api.zk.delete(&held.path, false);
+            }
+            self.wake.lock().map(|mut g| *g = true).ok();
+        }
+    }
+
     /// Snapshot nodes. Lock, timeout, and completion live here.
     /// AwsSnapshotStateMachine.advance stays in Python when tests patch it;
     /// otherwise Rust AwsSnapshot drives ep.create_snapshot / refresh.
@@ -3086,10 +3228,7 @@ impl Launcher {
             .collect();
         for id in ids {
             if !cloud::enabled() {
-                let mut sm = AwsSnapshot::new();
-                sm.node_uuid = id.clone();
-                sm.start_time = self.now;
-                let _ = sm.advance();
+                self.advance_native_snapshot(&id);
                 continue;
             }
             let Ok(prep) = cloud::invoke("snapshot.prepare", &json!({"node_uuid": id})) else {
