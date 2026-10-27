@@ -760,6 +760,13 @@ pub struct LauncherApi {
     /// with one `get`, the way `LockableZKObjectCache.preCacheHook` does.
     node_locks: HashMap<String, BTreeMap<String, Vec<u8>>>,
     upload_locks: HashMap<String, BTreeMap<String, Vec<u8>>>,
+    /// Last serialized body we loaded or saved. ZKObject skips a set
+    /// when this hash matches, so an unchanged pass does not bump the
+    /// znode version out from under another client.
+    request_wire: HashMap<String, Vec<u8>>,
+    node_wire: HashMap<String, Vec<u8>>,
+    upload_wire: HashMap<String, Vec<u8>>,
+    upload_version: HashMap<String, i32>,
     /// DataWatch `stat.version` and the hostname last stored for that znode.
     component_versions: HashMap<String, i32>,
     component_hosts: HashMap<String, String>,
@@ -790,6 +797,10 @@ impl LauncherApi {
             max_zxid: 0,
             node_locks: HashMap::new(),
             upload_locks: HashMap::new(),
+            request_wire: HashMap::new(),
+            node_wire: HashMap::new(),
+            upload_wire: HashMap::new(),
+            upload_version: HashMap::new(),
             component_versions: HashMap::new(),
             component_hosts: HashMap::new(),
             watches_on: false,
@@ -977,6 +988,10 @@ impl LauncherApi {
         self.uploads.clear();
         self.node_locks.clear();
         self.upload_locks.clear();
+        self.request_wire.clear();
+        self.node_wire.clear();
+        self.upload_wire.clear();
+        self.upload_version.clear();
         self.component_versions.clear();
         self.component_hosts.clear();
         self.quota_used.clear();
@@ -1016,6 +1031,8 @@ impl LauncherApi {
                         req.revision_priority = rev.get("relative_priority").and_then(|v| v.as_i64());
                     }
                 }
+                self.request_wire
+                    .insert(id.clone(), dumps_compressed(&req.serialize()));
                 self.requests.insert(id, req);
             }
         }
@@ -1105,6 +1122,8 @@ impl LauncherApi {
                             .and_then(|v| v.as_str().map(|s| s.to_string()));
                     }
                 }
+                self.node_wire
+                    .insert(id.clone(), encode_polymorphic(&node.driver_id, &node.serialize()));
                 self.index_node(&id, &node);
                 self.nodes.insert(id, node);
                 self.max_zxid = self.max_zxid.max(stat.mzxid);
@@ -1130,9 +1149,13 @@ impl LauncherApi {
                 .collect();
             let bodies = self.multi_data(&paths);
             for (id, body) in ids.into_iter().zip(bodies) {
-                let Some((data, _)) = body else { continue };
+                let Some((data, stat)) = body else { continue };
                 if let Ok(val) = decode_zkobject(&data) {
-                    self.uploads.insert(id, ImageUpload::from_value(val));
+                    let upload = ImageUpload::from_value(val);
+                    self.upload_wire
+                        .insert(id.clone(), dumps_compressed(&upload.serialize()));
+                    self.upload_version.insert(id.clone(), stat.version);
+                    self.uploads.insert(id, upload);
                 }
             }
         }
@@ -1169,17 +1192,24 @@ impl LauncherApi {
             }
             if event.kind == EVENT_DELETED {
                 self.uploads.remove(id);
+                self.upload_wire.remove(id);
+                self.upload_version.remove(id);
                 return;
             }
-            if let Ok((data, _)) = self.zk.get(path) {
+            if let Ok((data, stat)) = self.zk.get(path) {
                 if let Ok(val) = decode_zkobject(&data) {
                     let locked = self.uploads.get(id).map(|u| u.is_locked).unwrap_or(false);
                     let mut upload = ImageUpload::from_value(val);
                     upload.is_locked = locked;
+                    self.upload_wire
+                        .insert(id.to_string(), dumps_compressed(&upload.serialize()));
+                    self.upload_version.insert(id.to_string(), stat.version);
                     self.uploads.insert(id.to_string(), upload);
                 }
             } else {
                 self.uploads.remove(id);
+                self.upload_wire.remove(id);
+                self.upload_version.remove(id);
             }
         }
     }
@@ -1246,11 +1276,13 @@ impl LauncherApi {
         if sub.is_none() {
             if event.kind == EVENT_DELETED {
                 self.requests.remove(id);
+                self.request_wire.remove(id);
                 return false;
             }
             let path = format!("/zuul/nodeset/requests/{id}");
             let Ok((data, stat)) = self.zk.get(&path) else {
                 self.requests.remove(id);
+                self.request_wire.remove(id);
                 return false;
             };
             let Ok(val) = decode_zkobject(&data) else {
@@ -1264,6 +1296,8 @@ impl LauncherApi {
                 req.revision_priority = prev.revision_priority;
                 req.has_lock = prev.has_lock;
             }
+            self.request_wire
+                .insert(id.to_string(), dumps_compressed(&req.serialize()));
             self.requests.insert(id.to_string(), req);
             return false;
         }
@@ -1318,11 +1352,13 @@ impl LauncherApi {
             if event.kind == EVENT_DELETED {
                 self.nodes.remove(id);
                 self.node_locks.remove(id);
+                self.node_wire.remove(id);
                 return;
             }
             let path = format!("/zuul/nodes/nodes/{id}");
             let Ok((data, stat)) = self.zk.get(&path) else {
                 self.nodes.remove(id);
+                self.node_wire.remove(id);
                 return;
             };
             let Ok((driver, val)) = decode_polymorphic(&data) else {
@@ -1346,6 +1382,8 @@ impl LauncherApi {
                 node.lock_holder = lock_winner(held);
             }
             self.max_zxid = self.max_zxid.max(stat.mzxid);
+            self.node_wire
+                .insert(id.to_string(), encode_polymorphic(&node.driver_id, &node.serialize()));
             self.nodes.insert(id.to_string(), node);
             return;
         }
@@ -1895,33 +1933,76 @@ impl LauncherApi {
         !nodes.is_empty() && nodes.iter().all(|n| n.has_expired(now))
     }
 
-    pub fn write_request(&mut self, req: &NodesetRequest) -> Result<(), ZkError> {
-        let path = format!("/zuul/nodeset/requests/{}", req.uuid());
-        let bytes = dumps_compressed(&req.serialize());
-        self.zk.ensure_path("/zuul/nodeset/requests")?;
-        self.zk.ensure_path(&format!("/zuul/nodeset/locks/{}", req.uuid()))?;
-        if self.zk.exists(&path)?.is_some() {
-            let ver = self.zk.get(&path)?.1.version;
-            self.zk.set(&path, &bytes, ver)?;
-        } else {
-            self.zk.create(&path, &bytes, CreateMode::Persistent)?;
+    /// `ZKObject._save` writes only when the payload changed, and it
+    /// already knows the znode version. An unchanged building node must
+    /// not `set` again: that bumps the version the Python cache still holds.
+    fn put_tree_bytes(&self, path: &str, bytes: &[u8], version: Option<i64>) -> Result<i32, ZkError> {
+        let ver = version.unwrap_or(-1) as i32;
+        match self.zk.set(path, bytes, ver) {
+            Ok(stat) => Ok(stat.version),
+            Err(ZkError::BadVersion) => {
+                let (current, stat) = self.zk.get(path)?;
+                if current == bytes {
+                    Ok(stat.version)
+                } else {
+                    Ok(self.zk.set(path, bytes, stat.version)?.version)
+                }
+            }
+            Err(ZkError::NoNode) => {
+                self.zk.ensure_path(&parent_path(path))?;
+                match self.zk.create(path, bytes, CreateMode::Persistent) {
+                    Ok(_) => Ok(0),
+                    Err(ZkError::NodeExists) => Ok(self.zk.set(path, bytes, -1)?.version),
+                    Err(e) => Err(e),
+                }
+            }
+            Err(e) => Err(e),
         }
-        self.requests.insert(req.uuid(), req.clone());
+    }
+
+    pub fn write_request(&mut self, req: &NodesetRequest) -> Result<(), ZkError> {
+        let id = req.uuid();
+        let path = format!("/zuul/nodeset/requests/{id}");
+        let bytes = dumps_compressed(&req.serialize());
+        if self.request_wire.get(&id).map(|b| b.as_slice()) == Some(bytes.as_slice()) {
+            let mut stored = req.clone();
+            if stored.zk_version.is_none() {
+                stored.zk_version = self.requests.get(&id).and_then(|r| r.zk_version);
+            }
+            self.requests.insert(id, stored);
+            return Ok(());
+        }
+        let version = req
+            .zk_version
+            .or_else(|| self.requests.get(&id).and_then(|r| r.zk_version));
+        let new_version = self.put_tree_bytes(&path, &bytes, version)?;
+        let mut stored = req.clone();
+        stored.zk_version = Some(new_version as i64);
+        self.request_wire.insert(id.clone(), bytes);
+        self.requests.insert(id, stored);
         Ok(())
     }
 
     pub fn write_node(&mut self, node: &ProviderNode) -> Result<(), ZkError> {
-        let path = format!("/zuul/nodes/nodes/{}", node.uuid());
+        let id = node.uuid();
+        let path = format!("/zuul/nodes/nodes/{id}");
         let bytes = encode_polymorphic(&node.driver_id, &node.serialize());
-        self.zk.ensure_path("/zuul/nodes/nodes")?;
-        self.zk.ensure_path(&format!("/zuul/nodes/locks/{}", node.uuid()))?;
-        if self.zk.exists(&path)?.is_some() {
-            let ver = self.zk.get(&path)?.1.version;
-            self.zk.set(&path, &bytes, ver)?;
-        } else {
-            self.zk.create(&path, &bytes, CreateMode::Persistent)?;
+        if self.node_wire.get(&id).map(|b| b.as_slice()) == Some(bytes.as_slice()) {
+            let mut stored = node.clone();
+            if stored.zk_version.is_none() {
+                stored.zk_version = self.nodes.get(&id).and_then(|n| n.zk_version);
+            }
+            self.nodes.insert(id, stored);
+            return Ok(());
         }
-        self.nodes.insert(node.uuid(), node.clone());
+        let version = node
+            .zk_version
+            .or_else(|| self.nodes.get(&id).and_then(|n| n.zk_version));
+        let new_version = self.put_tree_bytes(&path, &bytes, version)?;
+        let mut stored = node.clone();
+        stored.zk_version = Some(new_version as i64);
+        self.node_wire.insert(id.clone(), bytes);
+        self.nodes.insert(id, stored);
         self.reindex();
         Ok(())
     }
@@ -1974,24 +2055,25 @@ impl LauncherApi {
         let lock_path = format!("/zuul/nodes/locks/{node_id}");
         let _ = self.zk.delete(&lock_path, true);
         self.nodes.remove(node_id);
+        self.node_wire.remove(node_id);
         self.reindex();
         Ok(())
     }
 
     /// Persist an image upload (ImageUpload ZKObject, zlib JSON).
     pub fn write_upload(&mut self, upload: &ImageUpload) -> Result<(), ZkError> {
-        let path = format!("/zuul/image-uploads/uploads/{}", upload.uuid());
+        let id = upload.uuid();
+        let path = format!("/zuul/image-uploads/uploads/{id}");
         let bytes = dumps_compressed(&upload.serialize());
-        self.zk.ensure_path("/zuul/image-uploads/uploads")?;
-        self.zk
-            .ensure_path(&format!("/zuul/image-uploads/locks/{}", upload.uuid()))?;
-        if self.zk.exists(&path)?.is_some() {
-            let ver = self.zk.get(&path)?.1.version;
-            self.zk.set(&path, &bytes, ver)?;
-        } else {
-            self.zk.create(&path, &bytes, CreateMode::Persistent)?;
+        if self.upload_wire.get(&id).map(|b| b.as_slice()) == Some(bytes.as_slice()) {
+            self.uploads.insert(id, upload.clone());
+            return Ok(());
         }
-        self.uploads.insert(upload.uuid(), upload.clone());
+        let version = self.upload_version.get(&id).copied().map(|v| v as i64);
+        let new_version = self.put_tree_bytes(&path, &bytes, version)?;
+        self.upload_version.insert(id.clone(), new_version);
+        self.upload_wire.insert(id.clone(), bytes);
+        self.uploads.insert(id, upload.clone());
         Ok(())
     }
 
@@ -2005,6 +2087,8 @@ impl LauncherApi {
         let lock_path = format!("/zuul/image-uploads/locks/{upload_uuid}");
         let _ = self.zk.delete(&lock_path, true);
         self.uploads.remove(upload_uuid);
+        self.upload_wire.remove(upload_uuid);
+        self.upload_version.remove(upload_uuid);
         Ok(())
     }
 }

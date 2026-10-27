@@ -4022,4 +4022,30 @@ mod tests {
         assert_eq!(counted.gets(), 0, "check_missing_uploads walked {:?}", counted.paths());
         assert_eq!(counted.children_reads(), 0, "check_missing_uploads listed a tree");
     }
+
+    /// ZKObject.activeContext saves only when the serialized hash changes.
+    /// A second save of a building node must leave the znode version alone
+    /// so a test that still holds the cache object can set a new state.
+    #[test]
+    fn unchanged_node_write_keeps_the_znode_version() {
+        use crate::model::ProviderNode;
+        let zk = MemoryZk::new();
+        let ops: Arc<dyn ZkOps> = Arc::new(zk.clone());
+        let mut api = zk::LauncherApi::new(ops, "launcher-writes", None);
+        let node = ProviderNode::from_parts(
+            "static".into(),
+            serde_json::json!({"uuid": "n1", "state": "building", "label": "debian-normal"}),
+        );
+        api.write_node(&node).unwrap();
+        let v1 = zk.get("/zuul/nodes/nodes/n1").unwrap().1.version;
+        let again = api.nodes.get("n1").unwrap().clone();
+        api.write_node(&again).unwrap();
+        let v2 = zk.get("/zuul/nodes/nodes/n1").unwrap().1.version;
+        assert_eq!(v1, v2, "unchanged node must not bump the znode version");
+        let mut changed = again;
+        changed.set_state_at("failed", 10.0);
+        api.write_node(&changed).unwrap();
+        let v3 = zk.get("/zuul/nodes/nodes/n1").unwrap().1.version;
+        assert!(v3 > v1, "a real state change still writes");
+    }
 }
