@@ -17,9 +17,9 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Kazoo `EventType` values. `-1` is a session reconnect, which 14.3.0
 /// handles by rebuilding the tree cache.
@@ -836,24 +836,16 @@ fn cache_should_wake(event: &ZkWatchEvent) -> bool {
     false
 }
 
-struct PlayJob {
-    event: ZkWatchEvent,
-    external: bool,
-}
-
 struct PlayState {
     ready: Vec<ZkWatchEvent>,
-    external_left: usize,
 }
 
 /// Kazoo's event worker plus playback worker, collapsed onto one thread
 /// so gets stay ordered. The launcher applies the result later.
 pub struct Playback {
     zk: Arc<dyn ZkOps>,
-    own: Mutex<HashSet<String>>,
     state: Mutex<PlayState>,
-    cv: Condvar,
-    tx: Mutex<Option<Sender<PlayJob>>>,
+    tx: Mutex<Option<Sender<ZkWatchEvent>>>,
     user_wake: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
     enabled: AtomicBool,
 }
@@ -862,25 +854,11 @@ impl Playback {
     fn new(zk: Arc<dyn ZkOps>) -> Arc<Self> {
         Arc::new(Self {
             zk,
-            own: Mutex::new(HashSet::new()),
-            state: Mutex::new(PlayState { ready: Vec::new(), external_left: 0 }),
-            cv: Condvar::new(),
+            state: Mutex::new(PlayState { ready: Vec::new() }),
             tx: Mutex::new(None),
             user_wake: Mutex::new(None),
             enabled: AtomicBool::new(false),
         })
-    }
-
-    /// Record a path we are about to write. The next watch on it is our
-    /// echo and must not stall `prepare`.
-    fn note_own(&self, path: &str) {
-        if self.enabled.load(Ordering::Relaxed) {
-            self.own.lock().unwrap().insert(path.to_string());
-        }
-    }
-
-    fn forget_own(&self, path: &str) {
-        self.own.lock().unwrap().remove(path);
     }
 
     /// Start the playback thread. `user_wake` runs once per played event,
@@ -896,8 +874,7 @@ impl Playback {
         thread::Builder::new()
             .name("zk-playback".into())
             .spawn(move || {
-                while let Ok(job) = rx.recv() {
-                    let mut event = job.event;
+                while let Ok(mut event) = rx.recv() {
                     if cache_should_fetch(&event) {
                         event.fetch = match playback.zk.get(&event.path) {
                             Ok(pair) => CacheFetch::Ready(Some(pair)),
@@ -905,14 +882,7 @@ impl Playback {
                         };
                     }
                     let wake_user = cache_should_wake(&event);
-                    {
-                        let mut g = playback.state.lock().unwrap();
-                        if job.external {
-                            g.external_left = g.external_left.saturating_sub(1);
-                        }
-                        g.ready.push(event);
-                    }
-                    playback.cv.notify_all();
+                    playback.state.lock().unwrap().ready.push(event);
                     if wake_user {
                         if let Some(wake) = playback.user_wake.lock().unwrap().clone() {
                             wake();
@@ -927,41 +897,8 @@ impl Playback {
     pub fn claim(&self) {
         let tx = self.tx.lock().unwrap().clone();
         let Some(tx) = tx else { return };
-        let events = self.zk.take_watch_events();
-        if events.is_empty() {
-            return;
-        }
-        let mut g = self.state.lock().unwrap();
-        for event in events {
-            let external = !self.own.lock().unwrap().remove(&event.path);
-            if external {
-                g.external_left += 1;
-            }
-            let _ = tx.send(PlayJob { event, external });
-        }
-    }
-
-    /// Block until every watch that is not our own write has been fetched.
-    fn wait_external(&self) {
-        let mut spins = 0u32;
-        loop {
-            self.claim();
-            let g = self.state.lock().unwrap();
-            if g.external_left == 0 && self.zk.watch_backlog() == 0 {
-                return;
-            }
-            let (_g, timeout) = self
-                .cv
-                .wait_timeout(g, Duration::from_millis(50))
-                .unwrap();
-            if timeout.timed_out() {
-                spins += 1;
-                if spins > 400 {
-                    return;
-                }
-            } else {
-                spins = 0;
-            }
+        for event in self.zk.take_watch_events() {
+            let _ = tx.send(event);
         }
     }
 
@@ -1162,7 +1099,10 @@ impl LauncherApi {
             self.arm_watches();
         }
         let events = if self.playback.enabled.load(Ordering::Relaxed) {
-            self.playback.wait_external();
+            // Kazoo does not block the launcher on the get. The wake
+            // already ran after playback, so a waited loop finds the
+            // body here. Anything still in flight wakes the next pass.
+            self.playback.claim();
             self.playback.take_ready()
         } else {
             self.zk.take_watch_events()
@@ -2275,14 +2215,7 @@ impl LauncherApi {
         let version = req
             .zk_version
             .or_else(|| self.requests.get(&id).and_then(|r| r.zk_version));
-        self.playback.note_own(&path);
-        let new_version = match self.put_tree_bytes(&path, &bytes, version) {
-            Ok(v) => v,
-            Err(e) => {
-                self.playback.forget_own(&path);
-                return Err(e);
-            }
-        };
+        let new_version = self.put_tree_bytes(&path, &bytes, version)?;
         // LockableZKObjectMixin.new creates the lock directory once,
         // before the first save. Later saves do not ensure it again.
         if new_version == 0 {
@@ -2311,14 +2244,7 @@ impl LauncherApi {
         let version = node
             .zk_version
             .or_else(|| self.nodes.get(&id).and_then(|n| n.zk_version));
-        self.playback.note_own(&path);
-        let new_version = match self.put_tree_bytes(&path, &bytes, version) {
-            Ok(v) => v,
-            Err(e) => {
-                self.playback.forget_own(&path);
-                return Err(e);
-            }
-        };
+        let new_version = self.put_tree_bytes(&path, &bytes, version)?;
         // LockableZKObjectMixin.new creates the lock directory once,
         // before the first save. acquireLock does not ensure it.
         if new_version == 0 {
@@ -2338,11 +2264,7 @@ impl LauncherApi {
             return Err(ZkError::NodeExists);
         }
         let bytes = dumps_compressed(value);
-        self.playback.note_own(&path);
-        if let Err(e) = self.zk.create(&path, &bytes, CreateMode::Persistent) {
-            self.playback.forget_own(&path);
-            return Err(e);
-        }
+        self.zk.create(&path, &bytes, CreateMode::Persistent)?;
         if let Some(node) = self.nodes.get_mut(node_id) {
             node.request_id = value
                 .get("request_id")
@@ -2399,14 +2321,7 @@ impl LauncherApi {
             return Ok(());
         }
         let version = self.upload_version.get(&id).copied().map(|v| v as i64);
-        self.playback.note_own(&path);
-        let new_version = match self.put_tree_bytes(&path, &bytes, version) {
-            Ok(v) => v,
-            Err(e) => {
-                self.playback.forget_own(&path);
-                return Err(e);
-            }
-        };
+        let new_version = self.put_tree_bytes(&path, &bytes, version)?;
         if new_version == 0 {
             self.zk
                 .ensure_path(&format!("/zuul/image-uploads/locks/{id}"))?;

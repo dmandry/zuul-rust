@@ -4147,6 +4147,10 @@ mod tests {
             zk::CreateMode::Persistent,
         )
         .unwrap();
+        assert!(
+            launcher.wait_wake(Duration::from_secs(2)),
+            "playback did not wake"
+        );
         launcher.api.prepare();
         assert_eq!(
             counted.paths(),
