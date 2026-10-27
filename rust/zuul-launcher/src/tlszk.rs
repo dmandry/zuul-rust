@@ -20,6 +20,7 @@ const OP_GET_DATA: i32 = 4;
 const OP_SET_DATA: i32 = 5;
 const OP_GET_CHILDREN: i32 = 8;
 const OP_PING: i32 = 11;
+const OP_MULTI: i32 = 14;
 const OP_CLOSE: i32 = -11;
 
 const ERR_NONODE: i32 = -101;
@@ -266,6 +267,122 @@ impl ZkOps for TlsZk {
         kids.sort();
         Ok(kids)
     }
+
+    fn multi_get(&self, paths: &[String]) -> Result<Vec<Result<(Vec<u8>, ZkStat), ZkError>>, ZkError> {
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.multi(paths, OP_GET_DATA, true)
+            .or_else(|_| {
+                let mut out = Vec::with_capacity(paths.len());
+                for path in paths {
+                    out.push(self.get(path));
+                }
+                Ok(out)
+            })
+    }
+
+    fn multi_children(&self, paths: &[String]) -> Result<Vec<Result<Vec<String>, ZkError>>, ZkError> {
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
+        match self.multi_raw(paths, OP_GET_CHILDREN) {
+            Ok(raw) => Ok(raw
+                .into_iter()
+                .map(|item| match item {
+                    Ok(body) => Ok(parse_children(&body)),
+                    Err(err) => Err(err),
+                })
+                .collect()),
+            Err(_) => {
+                let mut out = Vec::with_capacity(paths.len());
+                for path in paths {
+                    out.push(self.get_children(path));
+                }
+                Ok(out)
+            }
+        }
+    }
+}
+
+impl TlsZk {
+    fn multi(
+        &self,
+        paths: &[String],
+        opcode: i32,
+        data: bool,
+    ) -> Result<Vec<Result<(Vec<u8>, ZkStat), ZkError>>, ZkError> {
+        let raw = self.multi_raw(paths, opcode)?;
+        let mut out = Vec::with_capacity(raw.len());
+        for item in raw {
+            match item {
+                Err(err) => out.push(Err(err)),
+                Ok(body) if data => {
+                    let (bytes, offset) = read_buffer(&body, 0).map_err(|e| ZkError::Message(e.to_string()))?;
+                    let (stat, _) = parse_stat(&body, offset)?;
+                    out.push(Ok((bytes.unwrap_or_default(), stat)));
+                }
+                Ok(_) => out.push(Err(ZkError::Message("unexpected multi payload".into()))),
+            }
+        }
+        Ok(out)
+    }
+
+    fn multi_raw(&self, paths: &[String], opcode: i32) -> Result<Vec<Result<Vec<u8>, ZkError>>, ZkError> {
+        let mut conn = self.inner.lock().unwrap();
+        let mut payload = Vec::new();
+        for path in paths {
+            let full = self.full(&conn, path);
+            write_i32(&mut payload, opcode);
+            payload.push(0); // done = false
+            write_i32(&mut payload, -1);
+            write_string(&mut payload, &full);
+            payload.push(0); // watch = false
+        }
+        write_i32(&mut payload, -1);
+        payload.push(1); // done = true
+        write_i32(&mut payload, -1);
+        let reply = invoke(&mut conn, OP_MULTI, &payload)?;
+        let mut offset = 0;
+        let mut out = Vec::with_capacity(paths.len());
+        for _ in 0..paths.len() {
+            if offset + 9 > reply.len() {
+                return Err(ZkError::Message("short multi reply".into()));
+            }
+            let _typ = read_i32(&reply, &mut offset)?;
+            let done = reply[offset];
+            offset += 1;
+            let err = read_i32(&reply, &mut offset)?;
+            if done != 0 {
+                return Err(ZkError::Message("multi ended early".into()));
+            }
+            if err != 0 {
+                out.push(Err(code_err(err)));
+                continue;
+            }
+            if opcode == OP_GET_DATA {
+                let start = offset;
+                let (_bytes, next) = read_buffer(&reply, offset).map_err(|e| ZkError::Message(e.to_string()))?;
+                offset = next;
+                let (_stat, next) = parse_stat(&reply, offset)?;
+                offset = next;
+                out.push(Ok(reply[start..offset].to_vec()));
+            } else if opcode == OP_GET_CHILDREN {
+                let start = offset;
+                let count = read_i32(&reply, &mut offset)?;
+                if count > 0 {
+                    for _ in 0..count {
+                        let (_child, next) = read_string(&reply, offset).map_err(|e| ZkError::Message(e.to_string()))?;
+                        offset = next;
+                    }
+                }
+                out.push(Ok(reply[start..offset].to_vec()));
+            } else {
+                return Err(ZkError::Message("unsupported multi opcode".into()));
+            }
+        }
+        Ok(out)
+    }
 }
 
 impl TlsZk {
@@ -385,14 +502,43 @@ fn strip_chroot(chroot: &str, path: &str) -> String {
 }
 
 fn map_err(err: i32) -> Result<(), ZkError> {
-    match err {
-        0 => Ok(()),
-        ERR_NONODE => Err(ZkError::NoNode),
-        ERR_NODEEXISTS => Err(ZkError::NodeExists),
-        ERR_NOTEMPTY => Err(ZkError::NotEmpty),
-        ERR_BADVERSION => Err(ZkError::BadVersion),
-        other => Err(ZkError::Message(format!("zookeeper error {other}"))),
+    if err == 0 {
+        Ok(())
+    } else {
+        Err(code_err(err))
     }
+}
+
+fn code_err(err: i32) -> ZkError {
+    match err {
+        ERR_NONODE => ZkError::NoNode,
+        ERR_NODEEXISTS => ZkError::NodeExists,
+        ERR_NOTEMPTY => ZkError::NotEmpty,
+        ERR_BADVERSION => ZkError::BadVersion,
+        other => ZkError::Message(format!("zookeeper error {other}")),
+    }
+}
+
+fn parse_children(body: &[u8]) -> Vec<String> {
+    let mut offset = 0;
+    let Ok(count) = read_i32(body, &mut offset) else {
+        return Vec::new();
+    };
+    if count <= 0 {
+        return Vec::new();
+    }
+    let mut kids = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let Ok((child, next)) = read_string(body, offset) else {
+            break;
+        };
+        offset = next;
+        if let Some(child) = child {
+            kids.push(child);
+        }
+    }
+    kids.sort();
+    kids
 }
 
 fn write_frame(stream: &mut openssl::ssl::SslStream<TcpStream>, body: &[u8]) -> Result<(), ZkError> {
@@ -588,6 +734,19 @@ mod tests {
         let (data, _) = zk.get(&created).unwrap();
         assert_eq!(data, b"yo");
         assert!(zk.exists(&created).unwrap().is_some());
+        let missing = "/zuul-harness-smoke/absent".to_string();
+        let got = zk
+            .multi_get(&[created.clone(), missing.clone()])
+            .unwrap();
+        assert_eq!(got[0].as_ref().unwrap().0, b"yo");
+        assert!(matches!(got[1], Err(ZkError::NoNode)));
+        zk.create("/zuul-harness-smoke/a", b"", CreateMode::Persistent)
+            .unwrap();
+        let kids = zk
+            .multi_children(&["/zuul-harness-smoke".to_string(), missing])
+            .unwrap();
+        assert!(kids[0].as_ref().unwrap().iter().any(|k| k == "a" || k == "node"));
+        assert!(matches!(kids[1], Err(ZkError::NoNode)));
         zk.delete(&created, false).unwrap();
         assert!(zk.exists(&created).unwrap().is_none());
         zk.delete("/zuul-harness-smoke", true).unwrap();

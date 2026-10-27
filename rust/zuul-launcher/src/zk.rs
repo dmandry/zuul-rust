@@ -95,6 +95,24 @@ pub trait ZkOps: Send + Sync {
     fn get(&self, path: &str) -> Result<(Vec<u8>, ZkStat), ZkError>;
     fn set(&self, path: &str, data: &[u8], version: i32) -> Result<ZkStat, ZkError>;
     fn get_children(&self, path: &str) -> Result<Vec<String>, ZkError>;
+    /// One round trip for many `get`s. A missing path is `Err(NoNode)`
+    /// in that slot. The default issues one `get` per path.
+    fn multi_get(&self, paths: &[String]) -> Result<Vec<Result<(Vec<u8>, ZkStat), ZkError>>, ZkError> {
+        let mut out = Vec::with_capacity(paths.len());
+        for path in paths {
+            out.push(self.get(path));
+        }
+        Ok(out)
+    }
+    /// One round trip for many `get_children`s. A missing path is
+    /// `Err(NoNode)` in that slot.
+    fn multi_children(&self, paths: &[String]) -> Result<Vec<Result<Vec<String>, ZkError>>, ZkError> {
+        let mut out = Vec::with_capacity(paths.len());
+        for path in paths {
+            out.push(self.get_children(path));
+        }
+        Ok(out)
+    }
     fn expire_session(&self) {}
 }
 
@@ -531,55 +549,178 @@ impl LauncherApi {
         self.provider_label_used.clear();
         self.tenant_label_used.clear();
         if let Ok(ids) = self.zk.get_children("/zuul/nodeset/requests") {
-            for id in ids {
-                let path = format!("/zuul/nodeset/requests/{id}");
-                if let Ok((data, stat)) = self.zk.get(&path) {
-                    if let Ok(val) = decode_zkobject(&data) {
-                        let mut req = NodesetRequest::from_value(val);
-                        req.zk_version = Some(stat.version as i64);
-                        self.load_request_side(&mut req);
-                        self.requests.insert(id, req);
+            let paths: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodeset/requests/{id}"))
+                .collect();
+            let bodies = self.multi_data(&paths);
+            let revs: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodeset/requests/{id}/revision"))
+                .collect();
+            let rev_data = self.multi_data(&revs);
+            let locks: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodeset/locks/{id}"))
+                .collect();
+            let lock_kids = self.multi_kids(&locks);
+            for (i, id) in ids.into_iter().enumerate() {
+                let Some((data, stat)) = bodies.get(i).and_then(|item| item.clone()) else {
+                    continue;
+                };
+                let Ok(val) = decode_zkobject(&data) else {
+                    continue;
+                };
+                let mut req = NodesetRequest::from_value(val);
+                req.zk_version = Some(stat.version as i64);
+                if let Some(Ok(kids)) = lock_kids.get(i) {
+                    req.is_locked = !kids.is_empty();
+                }
+                if let Some(Some((data, _))) = rev_data.get(i) {
+                    if let Ok(rev) = decode_zkobject(data) {
+                        req.revision_priority = rev.get("relative_priority").and_then(|v| v.as_i64());
                     }
                 }
+                self.requests.insert(id, req);
             }
         }
         if let Ok(ids) = self.zk.get_children("/zuul/nodes/nodes") {
-            for id in ids {
-                let path = format!("/zuul/nodes/nodes/{id}");
-                if let Ok((data, stat)) = self.zk.get(&path) {
-                    if let Ok((driver, val)) = decode_polymorphic(&data) {
-                        let mut node = ProviderNode::from_parts(driver, val);
-                        node.zk_version = Some(stat.version as i64);
-                        self.load_node_side(&mut node);
-                        self.index_node(&id, &node);
-                        self.nodes.insert(id, node);
-                        self.max_zxid = self.max_zxid.max(stat.mzxid);
+            let paths: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodes/nodes/{id}"))
+                .collect();
+            let bodies = self.multi_data(&paths);
+            let assigns: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodes/nodes/{id}/assignment"))
+                .collect();
+            let assign_data = self.multi_data(&assigns);
+            let lives: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodes/nodes/{id}/lifecycle"))
+                .collect();
+            let life_data = self.multi_data(&lives);
+            let locks: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/nodes/locks/{id}"))
+                .collect();
+            let lock_kids = self.multi_kids(&locks);
+            let mut child_paths = Vec::new();
+            let mut child_index = Vec::new();
+            for (i, id) in ids.iter().enumerate() {
+                if let Some(Ok(kids)) = lock_kids.get(i) {
+                    for child in kids {
+                        child_index.push(i);
+                        child_paths.push(format!("/zuul/nodes/locks/{id}/{child}"));
                     }
                 }
             }
+            let child_data = self.multi_data(&child_paths);
+            let mut contenders: Vec<BTreeMap<String, Vec<u8>>> = vec![BTreeMap::new(); ids.len()];
+            for (slot, path) in child_paths.iter().enumerate() {
+                let Some(Some((data, _))) = child_data.get(slot) else {
+                    continue;
+                };
+                let Some(name) = path.rsplit('/').next() else {
+                    continue;
+                };
+                let idx = child_index[slot];
+                contenders[idx].insert(name.to_string(), data.clone());
+            }
+            for (i, id) in ids.into_iter().enumerate() {
+                let Some((data, stat)) = bodies.get(i).and_then(|item| item.clone()) else {
+                    continue;
+                };
+                let Ok((driver, val)) = decode_polymorphic(&data) else {
+                    continue;
+                };
+                let mut node = ProviderNode::from_parts(driver, val);
+                node.zk_version = Some(stat.version as i64);
+                if let Some(Ok(_)) = lock_kids.get(i) {
+                    let held = &contenders[i];
+                    node.is_locked = !held.is_empty();
+                    node.lock_holder = lock_winner(held);
+                }
+                if let Some(Some((data, stat))) = assign_data.get(i) {
+                    if let Ok(val) = decode_zkobject(data) {
+                        node.assignment_version = Some(stat.version as i64);
+                        node.assignment_czxid = Some(stat.czxid);
+                        node.request_id = val
+                            .get("request_id")
+                            .and_then(|v| v.as_str().map(|s| s.to_string()));
+                        node.min_request_version =
+                            val.get("min_request_version").and_then(|v| v.as_i64());
+                        node.tenant_name = val
+                            .get("tenant_name")
+                            .and_then(|v| v.as_str().map(|s| s.to_string()));
+                    }
+                }
+                if let Some(Some((data, _))) = life_data.get(i) {
+                    if let Ok(val) = decode_zkobject(data) {
+                        node.next_state = val
+                            .get("next_state")
+                            .and_then(|v| v.as_str().map(|s| s.to_string()));
+                        node.next_comment = val
+                            .get("next_comment")
+                            .and_then(|v| v.as_str().map(|s| s.to_string()));
+                    }
+                }
+                self.index_node(&id, &node);
+                self.nodes.insert(id, node);
+                self.max_zxid = self.max_zxid.max(stat.mzxid);
+            }
         }
         if let Ok(ids) = self.zk.get_children("/zuul/images/artifacts") {
-            for id in ids {
-                let path = format!("/zuul/images/artifacts/{id}");
-                if let Ok((data, _)) = self.zk.get(&path) {
-                    if let Ok(val) = decode_zkobject(&data) {
-                        self.artifacts.insert(id, ImageBuildArtifact::from_value(val));
-                    }
+            let paths: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/images/artifacts/{id}"))
+                .collect();
+            let bodies = self.multi_data(&paths);
+            for (id, body) in ids.into_iter().zip(bodies) {
+                let Some((data, _)) = body else { continue };
+                if let Ok(val) = decode_zkobject(&data) {
+                    self.artifacts.insert(id, ImageBuildArtifact::from_value(val));
                 }
             }
         }
         if let Ok(ids) = self.zk.get_children("/zuul/image-uploads/uploads") {
-            for id in ids {
-                let path = format!("/zuul/image-uploads/uploads/{id}");
-                if let Ok((data, _)) = self.zk.get(&path) {
-                    if let Ok(val) = decode_zkobject(&data) {
-                        self.uploads.insert(id, ImageUpload::from_value(val));
-                    }
+            let paths: Vec<String> = ids
+                .iter()
+                .map(|id| format!("/zuul/image-uploads/uploads/{id}"))
+                .collect();
+            let bodies = self.multi_data(&paths);
+            for (id, body) in ids.into_iter().zip(bodies) {
+                let Some((data, _)) = body else { continue };
+                if let Ok(val) = decode_zkobject(&data) {
+                    self.uploads.insert(id, ImageUpload::from_value(val));
                 }
             }
         }
         self.load_components();
         self.ready = true;
+    }
+
+    fn multi_data(&self, paths: &[String]) -> Vec<Option<(Vec<u8>, ZkStat)>> {
+        if paths.is_empty() {
+            return Vec::new();
+        }
+        match self.zk.multi_get(paths) {
+            Ok(items) => items.into_iter().map(|item| item.ok()).collect(),
+            Err(_) => paths.iter().map(|path| self.zk.get(path).ok()).collect(),
+        }
+    }
+
+    fn multi_kids(&self, paths: &[String]) -> Vec<Result<Vec<String>, ZkError>> {
+        if paths.is_empty() {
+            return Vec::new();
+        }
+        match self.zk.multi_children(paths) {
+            Ok(items) => items,
+            Err(_) => paths
+                .iter()
+                .map(|path| self.zk.get_children(path))
+                .collect(),
+        }
     }
 
     /// /zuul/components/launcher/{hostname}{seq} holds uncompressed JSON.
@@ -633,6 +774,7 @@ impl LauncherApi {
         }
     }
 
+    #[allow(dead_code)]
     fn load_request_side(&self, req: &mut NodesetRequest) {
         let lock_path = format!("/zuul/nodeset/locks/{}", req.uuid());
         if let Ok(kids) = self.zk.get_children(&lock_path) {
@@ -648,6 +790,7 @@ impl LauncherApi {
         }
     }
 
+    #[allow(dead_code)]
     fn load_node_side(&self, node: &mut ProviderNode) {
         let id = node.uuid();
         let lock_path = format!("/zuul/nodes/locks/{id}");

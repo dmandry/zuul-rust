@@ -168,7 +168,9 @@ impl PyLauncher {
         let reloaded = py.allow_threads(|| {
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
-                launcher.api.sync();
+                // process_once syncs the caches. Reloading the layout
+                // reads ZooKeeper itself, so a second full sync here only
+                // doubles the lock hold.
                 match launcher.reload_providers() {
                     Ok(_) => Ok(launcher.layout_snapshot_json()),
                     Err(err) => Err(err),
