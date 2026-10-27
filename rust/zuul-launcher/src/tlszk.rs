@@ -51,6 +51,10 @@ struct Session {
     pending: Mutex<HashMap<i32, Sender<Result<Vec<u8>, ZkError>>>>,
     events: Mutex<Vec<ZkWatchEvent>>,
     waker: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    /// Wakes the Python event off the reader thread so a GIL wait cannot
+    /// stall ZooKeeper replies.
+    wake_tx: Sender<()>,
+    reader: Mutex<Option<thread::Thread>>,
     persistent: Mutex<Vec<(String, i32)>>,
     children_watches: Mutex<HashSet<String>>,
     data_watches: Mutex<HashSet<String>>,
@@ -83,6 +87,7 @@ impl TlsZk {
         let timeout_ms = timeout_ms.max(1);
         let (stream, session_id, negotiated_ms) =
             open_stream(&host, port, cert, key, ca, timeout_ms)?;
+        let (wake_tx, wake_rx) = mpsc::channel();
         let session = Arc::new(Session {
             io: Mutex::new(Io { stream }),
             write: Mutex::new(()),
@@ -90,6 +95,8 @@ impl TlsZk {
             pending: Mutex::new(HashMap::new()),
             events: Mutex::new(Vec::new()),
             waker: Mutex::new(None),
+            wake_tx,
+            reader: Mutex::new(None),
             persistent: Mutex::new(Vec::new()),
             children_watches: Mutex::new(HashSet::new()),
             data_watches: Mutex::new(HashSet::new()),
@@ -107,6 +114,7 @@ impl TlsZk {
         let zk = Arc::new(Self {
             session: session.clone(),
         });
+        spawn_waker(Arc::downgrade(&session), wake_rx);
         spawn_reader(session);
         let ping = Duration::from_millis((negotiated_ms as u64 / 3).max(1000));
         spawn_ping(Arc::downgrade(&zk), ping);
@@ -141,8 +149,27 @@ fn spawn_ping(zk: Weak<TlsZk>, interval: Duration) {
     });
 }
 
+fn spawn_waker(session: Weak<Session>, wake_rx: mpsc::Receiver<()>) {
+    thread::spawn(move || {
+        while wake_rx.recv().is_ok() {
+            let Some(session) = session.upgrade() else {
+                break;
+            };
+            if session.closed.load(Ordering::Relaxed) {
+                break;
+            }
+            let waker = session.waker.lock().unwrap().clone();
+            drop(session);
+            if let Some(waker) = waker {
+                waker();
+            }
+        }
+    });
+}
+
 fn spawn_reader(session: Arc<Session>) {
     thread::spawn(move || {
+        *session.reader.lock().unwrap() = Some(thread::current());
         while !session.closed.load(Ordering::Relaxed) {
             let frame = {
                 let mut io = session.io.lock().unwrap();
@@ -151,12 +178,11 @@ fn spawn_reader(session: Arc<Session>) {
             match frame {
                 Ok(frame) => dispatch_frame(&session, &frame),
                 Err(ZkError::Message(msg)) if msg == "read timeout" => {
-                    // The lock was released with the frame block. A short
-                    // pause keeps the idle loop from spinning. The pause is
-                    // not the read itself: a writer must be able to take the
-                    // socket in about a millisecond, or a launcher pass of
-                    // many gets misses the 10s windows in the unit tests.
-                    thread::sleep(Duration::from_millis(2));
+                    // The lock was released with the frame block. Park so a
+                    // writer can wake the next read instead of waiting out
+                    // the idle pause. Without an unpark the pause is 2ms,
+                    // which keeps the idle loop from spinning.
+                    thread::park_timeout(Duration::from_millis(2));
                     continue;
                 }
                 Err(_) => {
@@ -267,6 +293,9 @@ impl Session {
                 return Err(err);
             }
         }
+        if let Some(reader) = self.reader.lock().unwrap().clone() {
+            reader.unpark();
+        }
         let wait = Duration::from_secs(60);
         match rx.recv_timeout(wait) {
             Ok(result) => result,
@@ -346,10 +375,9 @@ impl Session {
     }
 
     fn notify(&self) {
-        let waker = self.waker.lock().unwrap().clone();
-        if let Some(waker) = waker {
-            waker();
-        }
+        // The event is already queued. Setting the Python event takes the
+        // GIL; doing that on the reader stalls every reply behind it.
+        let _ = self.wake_tx.send(());
     }
 
     fn reconnect(&self) -> Result<(), ZkError> {
