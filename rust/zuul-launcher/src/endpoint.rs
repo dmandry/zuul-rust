@@ -10,6 +10,14 @@ use crate::cloud;
 use crate::provider::AdvanceError;
 use serde_json::{json, Value};
 
+fn dispatch(op: &str, args: &Value) -> Result<Value, AdvanceError> {
+    if cloud::enabled() {
+        cloud::invoke(op, args)
+    } else {
+        crate::native::invoke(op, args)
+    }
+}
+
 fn args(provider: &str, extra: Value) -> Value {
     let mut obj = match extra {
         Value::Object(m) => m,
@@ -24,7 +32,7 @@ pub fn refresh(provider: &str, obj: &Value) -> Result<Value, AdvanceError> {
 }
 
 pub fn refresh_force(provider: &str, obj: &Value, force: bool) -> Result<Value, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.refresh",
         &args(provider, json!({ "obj": obj, "force": force })),
     )?;
@@ -32,7 +40,7 @@ pub fn refresh_force(provider: &str, obj: &Value, force: bool) -> Result<Value, 
 }
 
 pub fn refresh_delete(provider: &str, obj: &Value) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke("ep.refresh_delete", &args(provider, json!({ "obj": obj })))?;
+    let result = dispatch("ep.refresh_delete", &args(provider, json!({ "obj": obj })))?;
     match result.get("obj") {
         None | Some(Value::Null) => Ok(None),
         Some(v) => Ok(Some(v.clone())),
@@ -40,11 +48,11 @@ pub fn refresh_delete(provider: &str, obj: &Value) -> Result<Option<Value>, Adva
 }
 
 pub fn submit_create_instance(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.submit_create_instance", &args(provider, payload))
+    dispatch("ep.submit_create_instance", &args(provider, payload))
 }
 
 pub fn complete_create_instance(provider: &str, future_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.complete_create_instance",
         &args(provider, json!({ "future_id": future_id })),
     )?;
@@ -55,11 +63,11 @@ pub fn complete_create_instance(provider: &str, future_id: &str) -> Result<Optio
 }
 
 pub fn submit_allocate_host(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.submit_allocate_host", &args(provider, payload))
+    dispatch("ep.submit_allocate_host", &args(provider, payload))
 }
 
 pub fn complete_allocate_host(provider: &str, future_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.complete_allocate_host",
         &args(provider, json!({ "future_id": future_id })),
     )?;
@@ -70,7 +78,7 @@ pub fn complete_allocate_host(provider: &str, future_id: &str) -> Result<Option<
 }
 
 pub fn delete_instance(provider: &str, instance_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.delete_instance",
         &args(provider, json!({ "instance_id": instance_id })),
     )?;
@@ -81,7 +89,7 @@ pub fn delete_instance(provider: &str, instance_id: &str) -> Result<Option<Value
 }
 
 pub fn release_host(provider: &str, host_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.release_host",
         &args(provider, json!({ "host_id": host_id })),
     )?;
@@ -103,11 +111,11 @@ pub fn quota_for_label(
             .unwrap()
             .insert("instance_type".into(), json!(it));
     }
-    cloud::invoke("ep.quota_for_label", &args(provider, payload))
+    dispatch("ep.quota_for_label", &args(provider, payload))
 }
 
 pub fn create_snapshot(provider: &str, volume_id: &str, tags: &Value) -> Result<Value, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.create_snapshot",
         &args(
             provider,
@@ -142,7 +150,7 @@ pub fn patched_advance(
     payload.insert("kind".into(), json!(kind));
     payload.insert("state".into(), json!(state));
     payload.insert("complete".into(), json!(complete));
-    let result = cloud::invoke("sm.patched_advance", &Value::Object(payload))?;
+    let result = dispatch("sm.patched_advance", &Value::Object(payload))?;
     if result.get("patched").and_then(|v| v.as_bool()) == Some(true) {
         Ok(Some(result))
     } else {
@@ -155,7 +163,7 @@ pub fn patched_advance(
 // ---------------------------------------------------------------------------
 
 pub fn azure_list_instance_id(provider: &str, node_uuid: &str) -> Result<Option<String>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.azure_list_instance_id",
         &args(provider, json!({ "node_uuid": node_uuid })),
     )?;
@@ -178,12 +186,12 @@ pub fn azure_get_image_reference(
             .unwrap()
             .insert("image_external_id".into(), json!(id));
     }
-    let result = cloud::invoke("ep.azure_get_image_reference", &args(provider, payload))?;
+    let result = dispatch("ep.azure_get_image_reference", &args(provider, payload))?;
     Ok(result.get("image_reference").cloned().unwrap_or(Value::Null))
 }
 
 pub fn azure_get_subnet_id(provider: &str, label: &str) -> Result<String, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.azure_get_subnet_id",
         &args(provider, json!({ "label": label })),
     )?;
@@ -195,11 +203,11 @@ pub fn azure_get_subnet_id(provider: &str, label: &str) -> Result<String, Advanc
 }
 
 pub fn azure_submit_create_vm(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.azure_submit_create_vm", &args(provider, payload))
+    dispatch("ep.azure_submit_create_vm", &args(provider, payload))
 }
 
 pub fn azure_complete_create_vm(provider: &str, future_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.azure_complete_create_vm",
         &args(provider, json!({ "future_id": future_id })),
     )?;
@@ -210,7 +218,7 @@ pub fn azure_complete_create_vm(provider: &str, future_id: &str) -> Result<Optio
 }
 
 pub fn azure_delete_vm(provider: &str, vm_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.azure_delete_vm",
         &args(provider, json!({ "vm_id": vm_id })),
     )?;
@@ -221,7 +229,7 @@ pub fn azure_delete_vm(provider: &str, vm_id: &str) -> Result<Option<Value>, Adv
 }
 
 pub fn azure_update_node(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.azure_update_node", &args(provider, payload))
+    dispatch("ep.azure_update_node", &args(provider, payload))
 }
 
 pub fn azure_succeeded(obj: &Value) -> bool {
@@ -243,11 +251,11 @@ pub fn azure_failed(obj: &Value) -> bool {
 // ---------------------------------------------------------------------------
 
 pub fn os_find_flavor(provider: &str, label: &str) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.os_find_flavor", &args(provider, json!({ "label": label })))
+    dispatch("ep.os_find_flavor", &args(provider, json!({ "label": label })))
 }
 
 pub fn os_list_instance_id(provider: &str, node_uuid: &str) -> Result<Option<String>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_list_instance_id",
         &args(provider, json!({ "node_uuid": node_uuid })),
     )?;
@@ -259,18 +267,18 @@ pub fn os_list_instance_id(provider: &str, node_uuid: &str) -> Result<Option<Str
 }
 
 pub fn os_submit_create_server(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.os_submit_create_server", &args(provider, payload))
+    dispatch("ep.os_submit_create_server", &args(provider, payload))
 }
 
 pub fn os_complete_create_server(provider: &str, future_id: &str) -> Result<Value, AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.os_complete_create_server",
         &args(provider, json!({ "future_id": future_id })),
     )
 }
 
 pub fn os_refresh_server(provider: &str, server: &Value) -> Result<Value, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_refresh_server",
         &args(provider, json!({ "server": server })),
     )?;
@@ -278,7 +286,7 @@ pub fn os_refresh_server(provider: &str, server: &Value) -> Result<Value, Advanc
 }
 
 pub fn os_get_server(provider: &str, server_id: &str) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_get_server",
         &args(provider, json!({ "server_id": server_id })),
     )?;
@@ -289,7 +297,7 @@ pub fn os_get_server(provider: &str, server_id: &str) -> Result<Option<Value>, A
 }
 
 pub fn os_needs_floating_ip(provider: &str, server: &Value) -> Result<bool, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_needs_floating_ip",
         &args(provider, json!({ "server": server })),
     )?;
@@ -297,7 +305,7 @@ pub fn os_needs_floating_ip(provider: &str, server: &Value) -> Result<bool, Adva
 }
 
 pub fn os_create_floating_ip(provider: &str, server: &Value) -> Result<Value, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_create_floating_ip",
         &args(provider, json!({ "server": server })),
     )?;
@@ -305,7 +313,7 @@ pub fn os_create_floating_ip(provider: &str, server: &Value) -> Result<Value, Ad
 }
 
 pub fn os_refresh_floating_ip(provider: &str, fip: &Value) -> Result<Value, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_refresh_floating_ip",
         &args(provider, json!({ "floating_ip": fip })),
     )?;
@@ -313,7 +321,7 @@ pub fn os_refresh_floating_ip(provider: &str, fip: &Value) -> Result<Value, Adva
 }
 
 pub fn os_attach_ip(provider: &str, server: &Value, fip: &Value) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.os_attach_ip",
         &args(provider, json!({ "server": server, "floating_ip": fip })),
     )?;
@@ -324,7 +332,7 @@ pub fn os_server_floating_ip(
     provider: &str,
     server: &Value,
 ) -> Result<Option<String>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_server_floating_ip",
         &args(provider, json!({ "server": server })),
     )?;
@@ -335,16 +343,16 @@ pub fn os_server_floating_ip(
 }
 
 pub fn os_get_instance(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.os_get_instance", &args(provider, payload))
+    dispatch("ep.os_get_instance", &args(provider, payload))
 }
 
 pub fn os_has_floating_ips(provider: &str) -> Result<bool, AdvanceError> {
-    let result = cloud::invoke("ep.os_has_floating_ips", &args(provider, json!({})))?;
+    let result = dispatch("ep.os_has_floating_ips", &args(provider, json!({})))?;
     Ok(result.get("has").and_then(|v| v.as_bool()).unwrap_or(false))
 }
 
 pub fn os_get_floating_ips(provider: &str, server: &Value) -> Result<Vec<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_get_floating_ips",
         &args(provider, json!({ "server": server })),
     )?;
@@ -356,7 +364,7 @@ pub fn os_get_floating_ips(provider: &str, server: &Value) -> Result<Vec<Value>,
 }
 
 pub fn os_delete_floating_ip(provider: &str, fip: &Value) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.os_delete_floating_ip",
         &args(provider, json!({ "floating_ip": fip })),
     )?;
@@ -367,7 +375,7 @@ pub fn os_refresh_floating_ip_delete(
     provider: &str,
     fip: &Value,
 ) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_refresh_floating_ip_delete",
         &args(provider, json!({ "floating_ip": fip })),
     )?;
@@ -378,14 +386,14 @@ pub fn os_refresh_floating_ip_delete(
 }
 
 pub fn os_submit_delete_server(provider: &str, server_id: &str) -> Result<Value, AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.os_submit_delete_server",
         &args(provider, json!({ "server_id": server_id })),
     )
 }
 
 pub fn os_complete_delete_server(provider: &str, future_id: &str) -> Result<bool, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_complete_delete_server",
         &args(provider, json!({ "future_id": future_id })),
     )?;
@@ -396,7 +404,7 @@ pub fn os_refresh_server_delete(
     provider: &str,
     server: &Value,
 ) -> Result<Option<Value>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_refresh_server_delete",
         &args(provider, json!({ "server": server })),
     )?;
@@ -407,7 +415,7 @@ pub fn os_refresh_server_delete(
 }
 
 pub fn os_handle_server_fault(provider: &str, server_id: &str) -> Result<bool, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.os_handle_server_fault",
         &args(provider, json!({ "server_id": server_id })),
     )?;
@@ -419,11 +427,11 @@ pub fn os_handle_server_fault(provider: &str, server_id: &str) -> Result<bool, A
 // ---------------------------------------------------------------------------
 
 pub fn k8s_setup(provider: &str, label: &str) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.k8s_setup", &args(provider, json!({ "label": label })))
+    dispatch("ep.k8s_setup", &args(provider, json!({ "label": label })))
 }
 
 pub fn k8s_create_namespace(provider: &str, hostname: &str, tags: &Value) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_create_namespace",
         &args(provider, json!({ "hostname": hostname, "tags": tags })),
     )?;
@@ -431,7 +439,7 @@ pub fn k8s_create_namespace(provider: &str, hostname: &str, tags: &Value) -> Res
 }
 
 pub fn k8s_create_project(provider: &str, hostname: &str, tags: &Value) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_create_project",
         &args(provider, json!({ "hostname": hostname, "tags": tags })),
     )?;
@@ -442,7 +450,7 @@ pub fn k8s_get_subject_access_review(
     provider: &str,
     namespace: &str,
 ) -> Result<Option<bool>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.k8s_get_subject_access_review",
         &args(provider, json!({ "namespace": namespace })),
     )?;
@@ -457,7 +465,7 @@ pub fn k8s_create_image_pull_secrets(
     namespace: &str,
     label: &str,
 ) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_create_image_pull_secrets",
         &args(
             provider,
@@ -472,7 +480,7 @@ pub fn k8s_create_service_account(
     namespace: &str,
     user: &str,
 ) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_create_service_account",
         &args(
             provider,
@@ -487,7 +495,7 @@ pub fn k8s_get_token(
     namespace: &str,
     user: &str,
 ) -> Result<Option<(String, Option<String>)>, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.k8s_get_token",
         &args(
             provider,
@@ -516,7 +524,7 @@ pub fn k8s_create_role(
     user: &str,
     restricted_access: bool,
 ) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_create_role",
         &args(
             provider,
@@ -537,7 +545,7 @@ pub fn k8s_create_pod(
     label: &str,
     tags: &Value,
 ) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_create_pod",
         &args(
             provider,
@@ -553,7 +561,7 @@ pub fn k8s_create_pod(
 }
 
 pub fn k8s_get_pod(provider: &str, namespace: &str, hostname: &str) -> Result<bool, AdvanceError> {
-    let result = cloud::invoke(
+    let result = dispatch(
         "ep.k8s_get_pod",
         &args(
             provider,
@@ -564,7 +572,7 @@ pub fn k8s_get_pod(provider: &str, namespace: &str, hostname: &str) -> Result<bo
 }
 
 pub fn k8s_delete_namespace(provider: &str, namespace_id: &str) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_delete_namespace",
         &args(provider, json!({ "namespace_id": namespace_id })),
     )?;
@@ -572,7 +580,7 @@ pub fn k8s_delete_namespace(provider: &str, namespace_id: &str) -> Result<(), Ad
 }
 
 pub fn k8s_delete_project(provider: &str, namespace_id: &str) -> Result<(), AdvanceError> {
-    cloud::invoke(
+    dispatch(
         "ep.k8s_delete_project",
         &args(provider, json!({ "namespace_id": namespace_id })),
     )?;
@@ -580,11 +588,11 @@ pub fn k8s_delete_project(provider: &str, namespace_id: &str) -> Result<(), Adva
 }
 
 pub fn k8s_update_node(provider: &str, payload: Value) -> Result<Value, AdvanceError> {
-    cloud::invoke("ep.k8s_update_node", &args(provider, payload))
+    dispatch("ep.k8s_update_node", &args(provider, payload))
 }
 
 pub fn k8s_use_openshift(provider: &str) -> Result<bool, AdvanceError> {
-    let result = cloud::invoke("ep.k8s_use_openshift", &args(provider, json!({})))?;
+    let result = dispatch("ep.k8s_use_openshift", &args(provider, json!({})))?;
     Ok(result
         .get("use_openshift_projects")
         .and_then(|v| v.as_bool())

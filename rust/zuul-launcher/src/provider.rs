@@ -576,7 +576,7 @@ impl AwsCreate {
                 machine.spot = market == "spot";
             }
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             // Quota call is recorded once live_setup runs.
@@ -1142,7 +1142,7 @@ impl AwsDelete {
                 machine.start_time = t;
             }
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();
@@ -1605,7 +1605,7 @@ impl AzureCreate {
                 "id": machine.image_external_id.clone().unwrap()
             }));
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();
@@ -2036,7 +2036,7 @@ impl AzureDelete {
                 machine.start_time = t;
             }
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();
@@ -2285,7 +2285,7 @@ impl OpenstackCreate {
                 machine.start_time = t;
             }
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();
@@ -2737,7 +2737,7 @@ impl OpenstackDelete {
                 machine.start_time = t;
             }
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();
@@ -3065,7 +3065,7 @@ impl K8sCreate {
         {
             machine.kubernetes_connection = conn.clone();
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();
@@ -3430,7 +3430,7 @@ impl K8sDelete {
                 machine.start_time = t;
             }
         }
-        machine.live = cloud::enabled();
+        machine.live = true;
         machine.setup_done = !machine.live;
         if machine.live {
             machine.calls.clear();

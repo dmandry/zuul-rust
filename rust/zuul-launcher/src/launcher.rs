@@ -289,6 +289,7 @@ impl Launcher {
             self.register_and_deregister_static_nodes();
         }
         self.layout_dirty = false;
+        crate::native::sync_providers(&self.tenant_providers);
         Ok(updated)
     }
 

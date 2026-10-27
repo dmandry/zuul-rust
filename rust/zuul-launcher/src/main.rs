@@ -65,17 +65,17 @@ fn run(args: &[String]) -> Result<(), String> {
     let zk_cfg = zookeeper_config(&cfg)?;
     let _stats = zuul_launcher::config::statsd_config(&cfg)?;
     let _tracing = zuul_launcher::config::tracing_config(&cfg)?;
-    let _connections = zuul_launcher::config::provider_connections(&cfg)?;
+    let connections = zuul_launcher::config::provider_connections(&cfg)?;
+    zuul_launcher::native::set_connections(connections);
     if foreground {
         // SIGTERM is handled by stop+join on the main thread.
         install_signals();
-        // AWS, Azure, OpenStack, and Kubernetes state machines in this
-        // binary call advance_offline unless a cloud handler is installed.
-        // No boto, Azure, OpenStack, or Kubernetes HTTP client is linked.
-        // The PyO3 harness installs that handler and uses the Python SDKs.
+        // The binary talks to AWS, Azure, OpenStack, and Kubernetes with
+        // the native HTTP clients. The PyO3 harness still installs a
+        // cloud handler and uses the Python SDKs and fakes.
         eprintln!(
-            "zuul-launcher: cloud drivers (aws, azure, openstack, kubernetes) \
-             use offline stubs; static nodes do not call a cloud API"
+            "zuul-launcher: aws, azure, openstack, and kubernetes use the \
+             built-in HTTP clients; static nodes do not call a cloud API"
         );
         run_foreground(&zk_cfg, &launcher_cfg)?;
     } else {

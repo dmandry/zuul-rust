@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cloud;
+pub mod cloud_http;
 pub mod codec;
 pub mod config;
 pub mod endpoint;
@@ -11,6 +12,7 @@ pub mod layout;
 pub mod tlszk;
 pub mod mmh3;
 pub mod model;
+pub mod native;
 pub mod nodescan;
 pub mod provider;
 pub mod upload;
