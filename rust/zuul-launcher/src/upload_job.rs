@@ -374,18 +374,14 @@ fn run_one(
     let Ok(value) = result else {
         return None;
     };
-    let external = value
+    // 14.3.0 writes external_id and READY in one ZK update. Publishing
+    // the id while the state is still UPLOADING makes _waitForUploads
+    // return before getImageExternalId will accept the upload.
+    value
         .get("external_id")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-        .filter(|s| !s.is_empty());
-    if let Some(ext) = &external {
-        if let Some(mut upload) = load_upload(zk, &job.upload_uuid) {
-            upload.set_external_id(Some(ext));
-            let _ = save_upload(zk, &upload);
-        }
-    }
-    external
+        .filter(|s| !s.is_empty())
 }
 
 fn native_upload(zk: &dyn ZkOps, job: &Planned, payload: &Value) -> Result<Value, crate::provider::AdvanceError> {
