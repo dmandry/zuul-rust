@@ -61,12 +61,17 @@ impl PyLauncher {
 
     /// Start Rust cleanup / stats / upload pools (called from bootstrap.start).
     #[pyo3(signature = (start_cleanup = true))]
-    fn start_rust_workers(slf: &Bound<'_, Self>, start_cleanup: bool) -> PyResult<()> {
+    fn start_rust_workers(slf: &Bound<'_, Self>, py: Python<'_>, start_cleanup: bool) -> PyResult<()> {
+        // The launcher thread holds this mutex inside _run and then
+        // reacquires the GIL for cloud_call. Locking it while we still
+        // hold the GIL deadlocks that thread at startup.
         let rust = slf.borrow().rust.clone();
-        let mut guard = rust.lock().unwrap();
-        if let Some(launcher) = guard.as_mut() {
-            launcher.start_workers(start_cleanup);
-        }
+        py.allow_threads(|| {
+            let mut guard = rust.lock().unwrap();
+            if let Some(launcher) = guard.as_mut() {
+                launcher.start_workers(start_cleanup);
+            }
+        });
         Ok(())
     }
 
@@ -150,13 +155,16 @@ impl PyLauncher {
         call_py(py, "run", (slf,))
     }
 
-    fn _close_rust_session(slf: &Bound<'_, Self>) {
+    fn _close_rust_session(slf: &Bound<'_, Self>, py: Python<'_>) {
         if let Ok(hostname) = slf.getattr("hostname").and_then(|h| h.extract::<String>()) {
             zuul_launcher::cloud::unregister_handler(&hostname);
         }
-        if let Ok(mut guard) = slf.borrow().rust.lock() {
-            *guard = None;
-        }
+        let rust = slf.borrow().rust.clone();
+        py.allow_threads(|| {
+            if let Ok(mut guard) = rust.lock() {
+                *guard = None;
+            }
+        });
     }
 
     /// One Rust launcher iteration. The test subclass holds `_test_lock`
