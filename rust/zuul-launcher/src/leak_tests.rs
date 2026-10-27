@@ -14,6 +14,8 @@ fn reset_cloud() {
     reg.os_tokens.clear();
     reg.azure_tokens.clear();
     reg.futures.clear();
+    drop(reg);
+    clear_ttl_cache();
 }
 
 fn cleanup_ctx(
@@ -914,4 +916,443 @@ open("/tmp/py-snap.zlib","wb").write(zlib.compress(raw))
     let rust_json = crate::codec::decompress(&rust_bytes);
     assert_eq!(rust_json, py_json, "json {}", String::from_utf8_lossy(&rust_json));
     assert_eq!(rust_bytes, py_zlib);
+}
+
+#[test]
+fn unmanaged_quotas_match_14_3_0() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    set_system_id("sys-1");
+    let port = serve(|_port, req| {
+        if req.contains("Action=DescribeInstanceTypes") {
+            assert!(req.contains("t3.medium"), "{req}");
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeInstanceTypesResponse><instanceTypeSet><item>"#,
+                r#"<vCpuInfo><defaultCores>1</defaultCores><defaultVCpus>2</defaultVCpus></vCpuInfo>"#,
+                r#"<memoryInfo><sizeInMiB>4096</sizeInMiB></memoryInfo>"#,
+                r#"</item></instanceTypeSet></DescribeInstanceTypesResponse>"#,
+            ));
+        }
+        if req.contains("Action=DescribeInstances") {
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet><item><instancesSet>"#,
+                r#"<item><instanceId>i-vol</instanceId><instanceType>t3.medium</instanceType><instanceState><name>running</name></instanceState>"#,
+                r#"<blockDeviceMapping><item><ebs><volumeId>vol-1</volumeId></ebs></item></blockDeviceMapping>"#,
+                r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet></item>"#,
+                r#"<item><instanceId>i-host</instanceId><instanceType>c5.metal</instanceType><instanceState><name>running</name></instanceState>"#,
+                r#"<placement><hostId>h-1</hostId></placement>"#,
+                r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet></item>"#,
+                r#"</instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
+            ));
+        }
+        if req.contains("Action=DescribeVolumes") {
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeVolumesResponse><volumeSet>"#,
+                r#"<item><volumeId>vol-1</volumeId><volumeType>gp3</volumeType><size>20</size><status>in-use</status></item>"#,
+                r#"</volumeSet></DescribeVolumesResponse>"#,
+            ));
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    aws_provider(
+        "tenant/q",
+        "aws-q",
+        port,
+        json!({"name": "debian", "flavor": "small"}),
+        json!({"instance-type": "t3.medium"}),
+        json!({"name": "img"}),
+    );
+    post_config();
+    let inv = endpoint_inventory("aws-q/us-east-1");
+    assert!(!inv.error, "aws inventory failed");
+    let vol = inv
+        .instances
+        .iter()
+        .find(|i| i["quota"].get("L-7A658B76").is_some())
+        .unwrap_or_else(|| panic!("volume quota {:?}", inv.instances));
+    assert_eq!(vol["quota"]["instances"], 1);
+    assert_eq!(vol["quota"]["cores"].as_f64(), Some(1.0));
+    assert_eq!(vol["quota"]["ram"].as_f64(), Some(4096.0));
+    assert_eq!(vol["quota"]["L-1216C47A"].as_f64(), Some(2.0));
+    assert_eq!(vol["quota"]["L-7A658B76"].as_f64(), Some(20.0));
+    let host = inv
+        .instances
+        .iter()
+        .find(|i| i["quota"].get("L-81657574").is_some())
+        .expect("host quota");
+    assert_eq!(host["quota"]["instances"], 1);
+    assert_eq!(host["quota"]["L-81657574"], 1);
+    assert!(host["quota"].get("cores").is_none());
+    assert!(host["quota"].get("ram").is_none());
+
+    reset_cloud();
+    set_system_id("sys-1");
+    let port = serve(move |port, req| {
+        let line = req.lines().next().unwrap_or("").to_string();
+        if req.contains("/auth/tokens") {
+            let body = format!(
+                "{{\"token\":{{\"catalog\":[{{\"type\":\"compute\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/compute\"}}]}},{{\"type\":\"volumev3\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/volume\"}}]}},{{\"type\":\"network\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/network\"}}]}}]}}}}"
+            );
+            return (201, vec![("X-Subject-Token".into(), "tok".into())], body);
+        }
+        if line.contains("GET /compute/servers/detail") {
+            return json_ok(concat!(
+                r#"{"servers":[{"id":"srv-1","status":"ACTIVE","flavor":{"id":"f1"},"#,
+                r#""os-extended-volumes:volumes_attached":[{"id":"vol-os"}],"#,
+                r#""metadata":{"zuul_system_id":"sys-1"}}]}"#,
+            ));
+        }
+        if line.contains("GET /compute/flavors/detail") {
+            return json_ok(r#"{"flavors":[{"id":"f1","name":"m1","vcpus":2,"ram":2048}]}"#);
+        }
+        if line.contains("GET /volume/volumes/detail") {
+            return json_ok(r#"{"volumes":[{"id":"vol-os","size":10}]}"#);
+        }
+        if line.contains("GET /network/v2.0/ports") {
+            return json_ok(r#"{"ports":[]}"#);
+        }
+        json_ok("{}")
+    });
+    let dir = std::env::temp_dir().join(format!("os-quota-{}", new_id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let clouds = dir.join("clouds.yaml");
+    std::fs::write(
+        &clouds,
+        format!(
+            "clouds:\n  demo:\n    region_name: RegionOne\n    auth:\n      auth_url: http://127.0.0.1:{port}/v3\n      username: demo\n      password: secret\n      project_id: proj-id\n      project_name: demo\n"
+        ),
+    )
+    .unwrap();
+    let mut options = BTreeMap::new();
+    options.insert("cloud".into(), "demo".into());
+    options.insert("client_config_file".into(), clouds.display().to_string());
+    options.insert("rate".into(), "1000".into());
+    set_connections(vec![ConnectionConfig {
+        name: "os-q".into(),
+        driver: "openstack".into(),
+        options,
+    }]);
+    {
+        let mut reg = registry().lock().unwrap();
+        reg.providers.insert(
+            "tenant/os-q".into(),
+            ProviderSnap {
+                driver: "openstack".into(),
+                connection: "os-q".into(),
+                region: "RegionOne".into(),
+                labels: BTreeMap::new(),
+                flavors: BTreeMap::new(),
+                images: BTreeMap::new(),
+            },
+        );
+    }
+    let inv = endpoint_inventory("os-q/RegionOne");
+    assert!(!inv.error, "openstack inventory failed");
+    let quota = &inv.instances[0]["quota"];
+    assert_eq!(quota["instances"], 1);
+    assert_eq!(quota["cores"], 2);
+    assert_eq!(quota["ram"], 2048);
+    assert_eq!(quota["volumes"], 1);
+    assert_eq!(quota["volume-gb"], 10);
+    let _ = std::fs::remove_dir_all(dir);
+
+    reset_cloud();
+    set_system_id("sys-1");
+    let port = serve(|_port, req| {
+        if req.contains("/oauth2/token") {
+            return json_ok(r#"{"access_token":"tok","expires_in":"3600"}"#);
+        }
+        if req.contains("virtualMachines?") {
+            return json_ok(concat!(
+                r#"{"value":[{"id":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/spot","#,
+                r#""location":"eastus","tags":{"zuul_system_id":"sys-1"},"#,
+                r#""properties":{"priority":"Spot","hardwareProfile":{"vmSize":"Standard_B1s"}}}]}"#,
+            ));
+        }
+        if req.contains("/skus?") {
+            return json_ok(
+                r#"{"value":[{"name":"Standard_B1s","locations":["eastus"],"capabilities":[{"name":"vCPUs","value":"1"},{"name":"MemoryGB","value":"1"}]}]}"#,
+            );
+        }
+        json_ok(r#"{"value":[]}"#)
+    });
+    set_test_azure_endpoints(&format!("http://127.0.0.1:{port}"), &format!("http://127.0.0.1:{port}"));
+    let mut options = BTreeMap::new();
+    options.insert("tenant_id".into(), "tenant".into());
+    options.insert("client_id".into(), "client".into());
+    options.insert("client_secret".into(), "secret".into());
+    options.insert("subscription_id".into(), "sub".into());
+    options.insert("rate".into(), "1000".into());
+    set_connections(vec![ConnectionConfig {
+        name: "azure-q".into(),
+        driver: "azure".into(),
+        options,
+    }]);
+    {
+        let mut reg = registry().lock().unwrap();
+        reg.providers.insert(
+            "tenant/azure-q".into(),
+            ProviderSnap {
+                driver: "azure".into(),
+                connection: "azure-q".into(),
+                region: "eastus".into(),
+                labels: BTreeMap::new(),
+                flavors: BTreeMap::new(),
+                images: BTreeMap::new(),
+            },
+        );
+    }
+    let inv = endpoint_inventory("azure-q/eastus");
+    assert!(!inv.error, "azure inventory failed");
+    let quota = &inv.instances[0]["quota"];
+    assert_eq!(quota["instances"], 1);
+    assert_eq!(quota["cores"], 0);
+    assert_eq!(quota["spot_cores"], 1);
+    assert_eq!(quota["ram"], 1024);
+
+    reset_cloud();
+    set_system_id("sys-1");
+    let port = serve(|_port, req| {
+        let line = req.lines().next().unwrap_or("").to_string();
+        if line.contains("GET /api/v1/namespaces?") || line.contains("GET /api/v1/namespaces ") {
+            return json_ok(concat!(
+                r#"{"items":["#,
+                r#"{"metadata":{"name":"open","labels":{"zuul_system_id":"sys-1"}}},"#,
+                r#"{"metadata":{"name":"locked","labels":{"zuul_system_id":"sys-1"}}}"#,
+                r#"]}"#,
+            ));
+        }
+        if line.contains("/namespaces/locked/pods") {
+            return (403, Vec::new(), r#"{"reason":"Forbidden"}"#.into());
+        }
+        if line.contains("/namespaces/open/pods") {
+            return json_ok(r#"{"items":[{"metadata":{"name":"pod-1","labels":{"app":"one"}}}]}"#);
+        }
+        json_ok("{}")
+    });
+    let dir = std::env::temp_dir().join(format!("k8s-quota-{}", new_id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let kube = dir.join("kube");
+    std::fs::write(
+        &kube,
+        format!(
+            "apiVersion: v1\nkind: Config\ncurrent-context: c\ncontexts:\n- name: c\n  context:\n    cluster: cl\n    user: u\nclusters:\n- name: cl\n  cluster:\n    server: http://127.0.0.1:{port}\nusers:\n- name: u\n  user:\n    token: tok\n"
+        ),
+    )
+    .unwrap();
+    let mut options = BTreeMap::new();
+    options.insert("kubeconfig_file".into(), kube.display().to_string());
+    options.insert("rate".into(), "1000".into());
+    set_connections(vec![ConnectionConfig {
+        name: "k8s-q".into(),
+        driver: "kubernetes".into(),
+        options,
+    }]);
+    {
+        let mut reg = registry().lock().unwrap();
+        reg.providers.insert(
+            "tenant/k8s-q".into(),
+            ProviderSnap {
+                driver: "kubernetes".into(),
+                connection: "k8s-q".into(),
+                region: String::new(),
+                labels: BTreeMap::new(),
+                flavors: BTreeMap::new(),
+                images: BTreeMap::new(),
+            },
+        );
+    }
+    let inv = endpoint_inventory("k8s-q/k8s-q");
+    assert!(!inv.error, "k8s inventory failed");
+    assert_eq!(inv.instances.len(), 3, "{:?}", inv.instances);
+    assert_eq!(inv.instances[0]["quota"]["namespaces"], 1);
+    assert_eq!(inv.instances[1]["quota"]["pods"], 1);
+    assert_eq!(inv.instances[2]["quota"]["namespaces"], 1);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn launch_templates_are_listed_once_per_provider() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    set_system_id("sys-1");
+    let describes = Arc::new(AtomicUsize::new(0));
+    let describes_bg = describes.clone();
+    let created = Arc::new(StdMutex::new(Vec::<String>::new()));
+    let created_bg = created.clone();
+    let port = serve(move |_port, req| {
+        if req.contains("Action=DescribeLaunchTemplates") {
+            describes_bg.fetch_add(1, AtomicOrdering::SeqCst);
+            return json_ok(r#"<?xml version="1.0"?><DescribeLaunchTemplatesResponse><launchTemplateSet></launchTemplateSet></DescribeLaunchTemplatesResponse>"#);
+        }
+        if req.contains("Action=CreateLaunchTemplate") {
+            let name = req.split("LaunchTemplateName=").nth(1).unwrap_or("").split('&').next().unwrap_or("").to_string();
+            created_bg.lock().unwrap().push(name);
+            return json_ok(r#"<?xml version="1.0"?><CreateLaunchTemplateResponse></CreateLaunchTemplateResponse>"#);
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    let mut options = BTreeMap::new();
+    options.insert("access_key_id".into(), "AKID".into());
+    options.insert("secret_access_key".into(), "SECRET".into());
+    options.insert("endpoint_url".into(), format!("http://127.0.0.1:{port}"));
+    options.insert("rate".into(), "1000".into());
+    set_connections(vec![ConnectionConfig {
+        name: "aws-once".into(),
+        driver: "aws".into(),
+        options,
+    }]);
+    {
+        let mut reg = registry().lock().unwrap();
+        reg.providers.insert(
+            "tenant/once".into(),
+            ProviderSnap {
+                driver: "aws".into(),
+                connection: "aws-once".into(),
+                region: "us-east-1".into(),
+                labels: BTreeMap::from([
+                    ("a".into(), json!({"name": "a", "flavor": "big", "key-name": "one"})),
+                    ("b".into(), json!({"name": "b", "flavor": "big", "key-name": "two"})),
+                ]),
+                flavors: BTreeMap::from([(
+                    "big".into(),
+                    json!({"fleet": {"instance-types": ["t3.large"]}, "instance-type": "t3.large"}),
+                )]),
+                images: BTreeMap::new(),
+            },
+        );
+    }
+    post_config();
+    assert_eq!(describes.load(AtomicOrdering::SeqCst), 1);
+    assert_eq!(created.lock().unwrap().len(), 2, "{:?}", created.lock().unwrap());
+}
+
+#[test]
+fn ami_tag_in_the_same_pass_stays_invisible() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    set_system_id("sys-1");
+    let describes = Arc::new(AtomicUsize::new(0));
+    let describes_bg = describes.clone();
+    let tagged = Arc::new(StdMutex::new(false));
+    let tagged_bg = tagged.clone();
+    let port = serve(move |_port, req| {
+        if req.contains("Action=CreateTags") {
+            *tagged_bg.lock().unwrap() = true;
+            return json_ok(r#"<?xml version="1.0"?><CreateTagsResponse></CreateTagsResponse>"#);
+        }
+        if req.contains("Action=DescribeImages") {
+            describes_bg.fetch_add(1, AtomicOrdering::SeqCst);
+            if *tagged_bg.lock().unwrap() {
+                return json_ok(concat!(
+                    r#"<?xml version="1.0"?><DescribeImagesResponse><imagesSet><item>"#,
+                    r#"<imageId>ami-new</imageId><name>import-ami-task1</name><imageState>available</imageState>"#,
+                    r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet>"#,
+                    r#"</item></imagesSet></DescribeImagesResponse>"#,
+                ));
+            }
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeImagesResponse><imagesSet><item>"#,
+                r#"<imageId>ami-new</imageId><name>import-ami-task1</name><imageState>available</imageState>"#,
+                r#"</item></imagesSet></DescribeImagesResponse>"#,
+            ));
+        }
+        if req.contains("Action=DescribeImportImageTasks") {
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeImportImageTasksResponse><importImageTaskSet><item>"#,
+                r#"<importTaskId>import-ami-task1</importTaskId>"#,
+                r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet>"#,
+                r#"</item></importImageTaskSet></DescribeImportImageTasksResponse>"#,
+            ));
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    aws_provider(
+        "tenant/ami",
+        "aws-ami",
+        port,
+        json!({"name": "debian", "flavor": "small"}),
+        json!({}),
+        json!({"name": "img"}),
+    );
+    post_config();
+    let inv = endpoint_inventory("aws-ami/us-east-1");
+    assert!(!inv.error);
+    assert!(*tagged.lock().unwrap(), "tag was not copied");
+    assert_eq!(describes.load(AtomicOrdering::SeqCst), 1, "image list must be cached inside the pass");
+    let ami = inv.resources.iter().find(|r| r["type"] == "ami").expect("ami");
+    assert!(ami["metadata"].get("zuul_system_id").is_none(), "{ami}");
+}
+
+#[test]
+fn glance_share_uses_project_id_not_project_name() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    let seen = Arc::new(StdMutex::new(String::new()));
+    let seen_bg = seen.clone();
+    let port = serve(move |port, req| {
+        if req.contains("/auth/tokens") {
+            let body = format!(
+                "{{\"token\":{{\"catalog\":[{{\"type\":\"image\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/image\"}}]}}]}}}}"
+            );
+            return (201, vec![("X-Subject-Token".into(), "tok".into())], body);
+        }
+        if req.contains("POST ") && req.contains("/members") {
+            *seen_bg.lock().unwrap() = req.to_string();
+            return (200, Vec::new(), r#"{"member_id":"proj-id"}"#.into());
+        }
+        if req.contains("PUT ") && req.contains("/members/") {
+            return (200, Vec::new(), r#"{"status":"accepted"}"#.into());
+        }
+        json_ok("{}")
+    });
+    let dir = std::env::temp_dir().join(format!("glance-share-{}", new_id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let clouds = dir.join("clouds.yaml");
+    std::fs::write(
+        &clouds,
+        format!(
+            "clouds:\n  demo:\n    region_name: RegionOne\n    auth:\n      auth_url: http://127.0.0.1:{port}/v3\n      username: demo\n      password: secret\n      project_id: proj-id\n      project_name: proj-name\n"
+        ),
+    )
+    .unwrap();
+    let mut options = BTreeMap::new();
+    options.insert("cloud".into(), "demo".into());
+    options.insert("client_config_file".into(), clouds.display().to_string());
+    options.insert("rate".into(), "1000".into());
+    set_connections(vec![ConnectionConfig {
+        name: "os-share".into(),
+        driver: "openstack".into(),
+        options,
+    }]);
+    {
+        let mut reg = registry().lock().unwrap();
+        reg.providers.insert(
+            "tenant/share".into(),
+            ProviderSnap {
+                driver: "openstack".into(),
+                connection: "os-share".into(),
+                region: "RegionOne".into(),
+                labels: BTreeMap::new(),
+                flavors: BTreeMap::new(),
+                images: BTreeMap::from([(
+                    "img".into(),
+                    json!({"name": "img", "tags": {"visibility": "shared"}}),
+                )]),
+            },
+        );
+    }
+    let done = upload_sdk_run(&json!({
+        "provider": "tenant/share",
+        "kind": "copy",
+        "upload_uuid": "up-share",
+        "image_name": "img",
+        "source_external_id": "img-src",
+    }))
+    .unwrap();
+    assert_eq!(done["external_id"], "img-src");
+    let body = seen.lock().unwrap().clone();
+    assert!(body.contains("\"member\":\"proj-id\""), "{body}");
+    assert!(!body.contains("proj-name"), "{body}");
+    let _ = std::fs::remove_dir_all(dir);
 }

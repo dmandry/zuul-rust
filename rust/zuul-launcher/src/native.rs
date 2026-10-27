@@ -97,6 +97,7 @@ struct OsToken {
     compute: String,
     network: String,
     image: String,
+    volume: String,
     limit_key: String,
     rate: f64,
 }
@@ -762,6 +763,16 @@ fn split_url(url: &str) -> Result<(String, String, &'static str), AdvanceError> 
     Ok((host, path.to_string(), ""))
 }
 
+fn endpoint_arc(ep: &AwsEndpoint) -> Option<Arc<AwsEndpoint>> {
+    registry()
+        .lock()
+        .unwrap()
+        .aws
+        .values()
+        .find(|cand| std::ptr::eq(Arc::as_ptr(cand), ep as *const AwsEndpoint))
+        .cloned()
+}
+
 fn aws_endpoint(provider: &ProviderSnap) -> Result<Arc<AwsEndpoint>, AdvanceError> {
     let key = format!("{}:{}", provider.connection, provider.region);
     if let Some(existing) = registry().lock().unwrap().aws.get(&key).cloned() {
@@ -890,6 +901,156 @@ fn cache_clear_inflight(ep: &AwsEndpoint, key: &str) {
     }
 }
 
+fn cache_forget(ep: &AwsEndpoint, key: &str) {
+    ep.lists.lock().unwrap().remove(key);
+}
+
+fn ttl_lists() -> &'static Mutex<BTreeMap<String, CachedList>> {
+    static LISTS: std::sync::OnceLock<Mutex<BTreeMap<String, CachedList>>> = std::sync::OnceLock::new();
+    LISTS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn clear_ttl_cache() {
+    ttl_lists().lock().unwrap().clear();
+}
+
+/// LazyExecutorTTLCache for OpenStack and Azure lists. A hit inside the
+/// TTL returns the cached value. After that the caller gets the stale
+/// value and a refresh runs in the background. The first call is synchronous.
+fn with_ttl_cache(
+    key: &str,
+    ttl: Duration,
+    load: std::sync::Arc<dyn Fn() -> Result<Value, AdvanceError> + Send + Sync>,
+) -> Result<Value, AdvanceError> {
+    let stale = {
+        let mut guard = ttl_lists().lock().unwrap();
+        if let Some(entry) = guard.get_mut(key) {
+            if entry.at.elapsed() < ttl {
+                return Ok(entry.value.clone());
+            }
+            let stale = entry.value.clone();
+            if entry.refreshing {
+                return Ok(stale);
+            }
+            entry.refreshing = true;
+            Some(stale)
+        } else {
+            None
+        }
+    };
+    if let Some(stale) = stale {
+        let key = key.to_string();
+        let load = load.clone();
+        std::thread::spawn(move || match load() {
+            Ok(fresh) => {
+                ttl_lists().lock().unwrap().insert(
+                    key,
+                    CachedList {
+                        at: Instant::now(),
+                        value: fresh,
+                        refreshing: false,
+                    },
+                );
+            }
+            Err(_) => {
+                if let Some(entry) = ttl_lists().lock().unwrap().get_mut(&key) {
+                    entry.refreshing = false;
+                }
+            }
+        });
+        return Ok(stale);
+    }
+    let fresh = load()?;
+    ttl_lists().lock().unwrap().insert(
+        key.to_string(),
+        CachedList {
+            at: Instant::now(),
+            value: fresh.clone(),
+            refreshing: false,
+        },
+    );
+    Ok(fresh)
+}
+
+fn cached_ec2_items(
+    ep: &Arc<AwsEndpoint>,
+    cache_key: &str,
+    action: &str,
+    item_key: &str,
+    base: Map<String, Value>,
+) -> Result<Vec<Value>, AdvanceError> {
+    let fetch = |ep: &AwsEndpoint, action: &str, item_key: &str, base: &Map<String, Value>| -> Result<Vec<Value>, AdvanceError> {
+        let mut params = base.clone();
+        let mut all = Vec::new();
+        loop {
+            let page = ec2(ep, action, params.clone(), true)?;
+            if let Some(items) = page.get(item_key).and_then(|v| v.as_array()) {
+                all.extend(items.clone());
+            }
+            let token = page.get("NextToken").and_then(|v| v.as_str()).unwrap_or("");
+            if token.is_empty() {
+                break;
+            }
+            params.insert("NextToken".into(), json!(token));
+        }
+        Ok(all)
+    };
+    match cache_hit(ep, cache_key, LIST_TTL) {
+        CacheHit::Fresh(value) => Ok(value.as_array().cloned().unwrap_or_default()),
+        CacheHit::Stale(value) => {
+            let bg = ep.clone();
+            let action = action.to_string();
+            let item_key = item_key.to_string();
+            let base = base.clone();
+            let key = cache_key.to_string();
+            std::thread::spawn(move || match fetch(&bg, &action, &item_key, &base) {
+                Ok(items) => cache_store(&bg, &key, Value::Array(items)),
+                Err(_) => cache_clear_inflight(&bg, &key),
+            });
+            Ok(value.as_array().cloned().unwrap_or_default())
+        }
+        CacheHit::Miss => {
+            let items = fetch(ep, action, item_key, &base)?;
+            cache_store(ep, cache_key, Value::Array(items.clone()));
+            Ok(items)
+        }
+    }
+}
+
+fn list_volumes_cached(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
+    cached_ec2_items(ep, "volumes", "DescribeVolumes", "Volumes", Map::new())
+}
+
+fn list_images_cached(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
+    let mut params = Map::new();
+    params.insert("Owners".into(), json!(["self"]));
+    cached_ec2_items(ep, "images", "DescribeImages", "Images", params)
+}
+
+fn list_snapshots_cached(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
+    let mut params = Map::new();
+    params.insert("OwnerIds".into(), json!(["self"]));
+    cached_ec2_items(ep, "snapshots", "DescribeSnapshots", "Snapshots", params)
+}
+
+fn list_launch_templates_cached(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
+    let mut params = Map::new();
+    params.insert(
+        "Filters".into(),
+        json!([{"Name": "launch-template-name", "Value": ["zuul-launch-template-*"]}]),
+    );
+    let listed = cached_ec2_items(ep, "launch-templates", "DescribeLaunchTemplates", "LaunchTemplates", params)?;
+    Ok(listed
+        .into_iter()
+        .filter(|t| {
+            t.get("LaunchTemplateName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .starts_with("zuul-launch-template-")
+        })
+        .collect())
+}
+
 fn instances_of(page: &Value) -> Vec<Value> {
     let mut instances = Vec::new();
     if let Some(reservations) = page.as_array() {
@@ -946,22 +1107,7 @@ fn list_instances(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
 }
 
 fn list_hosts(ep: &Arc<AwsEndpoint>) -> Result<Vec<Value>, AdvanceError> {
-    match cache_hit(ep, "hosts", LIST_TTL) {
-        CacheHit::Fresh(page) => Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default()),
-        CacheHit::Stale(page) => {
-            let bg = ep.clone();
-            std::thread::spawn(move || match ec2(&bg, "DescribeHosts", Map::new(), true) {
-                Ok(fresh) => cache_store(&bg, "hosts", fresh),
-                Err(_) => cache_clear_inflight(&bg, "hosts"),
-            });
-            Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default())
-        }
-        CacheHit::Miss => {
-            let page = ec2(ep, "DescribeHosts", Map::new(), true)?;
-            cache_store(ep, "hosts", page.clone());
-            Ok(page.get("Hosts").and_then(|v| v.as_array()).cloned().unwrap_or_default())
-        }
-    }
+    cached_ec2_items(ep, "hosts", "DescribeHosts", "Hosts", Map::new())
 }
 
 fn aws_refresh(args: &Value) -> Result<Value, AdvanceError> {
@@ -1995,11 +2141,13 @@ fn os_token(snap: &ProviderSnap) -> Result<OsToken, AdvanceError> {
     let compute = catalog_endpoint(&catalog, "compute", &region);
     let network = catalog_endpoint(&catalog, "network", &region);
     let image = catalog_endpoint(&catalog, "image", &region);
+    let volume = catalog_endpoint_any(&catalog, &["volumev3", "volume", "block-storage"], &region);
     let tok = OsToken {
         token,
         compute,
         network,
         image,
+        volume,
         limit_key: format!("os:{}", snap.connection),
         rate: conn_rate(&_conn),
     };
@@ -2014,10 +2162,21 @@ impl Clone for OsToken {
             compute: self.compute.clone(),
             network: self.network.clone(),
             image: self.image.clone(),
+            volume: self.volume.clone(),
             limit_key: self.limit_key.clone(),
             rate: self.rate,
         }
     }
+}
+
+fn catalog_endpoint_any(catalog: &[Value], kinds: &[&str], region: &str) -> String {
+    for kind in kinds {
+        let url = catalog_endpoint(catalog, kind, region);
+        if !url.is_empty() {
+            return url;
+        }
+    }
+    String::new()
 }
 
 fn catalog_endpoint(catalog: &[Value], kind: &str, region: &str) -> String {
@@ -2254,13 +2413,62 @@ fn neutron_port_for_server(tok: &OsToken, server_id: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+fn floating_ip_source(cloud: &Value) -> String {
+    // openstacksdk defaults.json floating_ip_source is "neutron".
+    // "None" disables floating IPs. The source, not merely a network
+    // catalog entry, chooses Neutron versus Nova.
+    let raw = field_str(cloud, &["floating_ip_source"]).unwrap_or_else(|| "neutron".into());
+    let lower = raw.to_ascii_lowercase();
+    if lower == "none" {
+        String::new()
+    } else {
+        lower
+    }
+}
+
+fn use_neutron_floating(tok: &OsToken, cloud: &Value) -> bool {
+    floating_ip_source(cloud) == "neutron" && !tok.network.is_empty()
+}
+
+fn list_floating_ips(tok: &OsToken, cloud: &Value) -> Result<Vec<Value>, AdvanceError> {
+    let cache_key = format!("fips:{}:{}", tok.compute, floating_ip_source(cloud));
+    let tok = tok.clone();
+    let neutron = use_neutron_floating(&tok, cloud);
+    let load = std::sync::Arc::new(move || {
+        // os_http maps 404 to Null. That is the NotFound fall-through
+        // list_floating_ips uses when no filters were pushed down.
+        if neutron {
+            let doc = os_http(&tok, "GET", &format!("{}/v2.0/floatingips", tok.network), None)?;
+            if !doc.is_null() {
+                return Ok(doc.get("floatingips").cloned().unwrap_or(json!([])));
+            }
+        }
+        let doc = os_http(&tok, "GET", &format!("{}/os-floating-ips", tok.compute), None)?;
+        if doc.is_null() {
+            return Ok(json!([]));
+        }
+        Ok(doc
+            .get("floating_ips")
+            .or_else(|| doc.get("floatingips"))
+            .cloned()
+            .unwrap_or(json!([])))
+    });
+    let listed = with_ttl_cache(&cache_key, LIST_TTL, load)?;
+    Ok(listed.as_array().cloned().unwrap_or_default())
+}
+
 fn os_refresh_floating_ip(args: &Value) -> Result<Value, AdvanceError> {
     let snap = provider_of(args)?;
     let tok = os_token(&snap)?;
+    let (cloud, _) = os_config(&snap)?;
     let fip = args.get("floating_ip").cloned().unwrap_or(Value::Null);
     let id = fip.get("id").and_then(|v| v.as_str()).unwrap_or("");
-    let got = os_http(&tok, "GET", &format!("{}/v2.0/floatingips/{id}", tok.network), None)?;
-    Ok(json!({"floating_ip": got.get("floatingip").cloned().unwrap_or(got)}))
+    for item in list_floating_ips(&tok, &cloud)? {
+        if item.get("id").and_then(|v| v.as_str()) == Some(id) {
+            return Ok(json!({"floating_ip": item}));
+        }
+    }
+    Ok(json!({"floating_ip": fip}))
 }
 
 fn os_attach_ip(args: &Value) -> Result<Value, AdvanceError> {
@@ -2369,27 +2577,74 @@ fn os_has_floating_ips(args: &Value) -> Result<Value, AdvanceError> {
 fn os_get_floating_ips(args: &Value) -> Result<Value, AdvanceError> {
     let snap = provider_of(args)?;
     let tok = os_token(&snap)?;
-    let listed = os_http(&tok, "GET", &format!("{}/v2.0/floatingips", tok.network), None)?;
-    Ok(json!({"floating_ips": listed.get("floatingips").cloned().unwrap_or(json!([]))}))
+    let (cloud, _) = os_config(&snap)?;
+    let server = args.get("server").cloned().unwrap_or(Value::Null);
+    let mut wanted = Vec::new();
+    if let Some(nets) = server.get("addresses").and_then(|v| v.as_object()) {
+        for addrs in nets.values() {
+            let Some(arr) = addrs.as_array() else { continue };
+            for addr in arr {
+                let typ = addr
+                    .get("OS-EXT-IPS:type")
+                    .or_else(|| addr.get("type"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if typ == "floating" {
+                    if let Some(ip) = addr.get("addr").or_else(|| addr.get("ip")).and_then(|v| v.as_str()) {
+                        wanted.push(ip.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let mut matched = Vec::new();
+    if !wanted.is_empty() {
+        for item in list_floating_ips(&tok, &cloud)? {
+            let ip = item
+                .get("floating_ip_address")
+                .or_else(|| item.get("ip"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if wanted.iter().any(|w| w == ip) {
+                matched.push(item);
+            }
+        }
+    }
+    Ok(json!({"floating_ips": matched}))
 }
 
 fn os_delete_floating_ip(args: &Value) -> Result<Value, AdvanceError> {
     let snap = provider_of(args)?;
     let tok = os_token(&snap)?;
+    let (cloud, _) = os_config(&snap)?;
     let id = args.get("floating_ip").and_then(|v| v.get("id")).and_then(|v| v.as_str()).unwrap_or("");
-    os_http(&tok, "DELETE", &format!("{}/v2.0/floatingips/{id}", tok.network), None)?;
-    Ok(json!({"ok": true}))
+    // delete_floating_ip(..., retry=0) does not GET the address again.
+    // A 404 from Neutron falls through to Nova. os_http reports that as Null.
+    if use_neutron_floating(&tok, &cloud) {
+        let got = os_http(&tok, "DELETE", &format!("{}/v2.0/floatingips/{id}", tok.network), None)?;
+        if !got.is_null() {
+            return Ok(json!({"ok": true}));
+        }
+    }
+    let got = os_http(&tok, "DELETE", &format!("{}/os-floating-ips/{id}", tok.compute), None)?;
+    Ok(json!({"ok": !got.is_null()}))
 }
 
 fn os_refresh_floating_ip_delete(args: &Value) -> Result<Value, AdvanceError> {
     let snap = provider_of(args)?;
     let tok = os_token(&snap)?;
+    let (cloud, _) = os_config(&snap)?;
     let id = args.get("floating_ip").and_then(|v| v.get("id")).and_then(|v| v.as_str()).unwrap_or("");
-    let got = os_http(&tok, "GET", &format!("{}/v2.0/floatingips/{id}", tok.network), None)?;
-    if got.is_null() {
-        return Ok(json!({"floating_ip": null}));
+    for item in list_floating_ips(&tok, &cloud)? {
+        if item.get("id").and_then(|v| v.as_str()) != Some(id) {
+            continue;
+        }
+        if item.get("status").and_then(|v| v.as_str()) == Some("DOWN") {
+            return Ok(json!({"floating_ip": null}));
+        }
+        return Ok(json!({"floating_ip": item}));
     }
-    Ok(json!({"floating_ip": got.get("floatingip").cloned().unwrap_or(got)}))
+    Ok(json!({"floating_ip": null}))
 }
 
 fn complete_os_delete(args: &Value) -> Result<Value, AdvanceError> {
@@ -3901,6 +4156,136 @@ mod tests {
         .expect("moto TerminateInstances");
         delete_uploaded_image("tenant/moto", &ami).expect("moto DeregisterImage");
         let _ = child.kill();
+    }
+
+    #[test]
+    fn service_quota_cache_returns_stale_and_refreshes() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let hits = Arc::new(StdMutex::new(0u32));
+        let hold = Arc::new(StdMutex::new(true));
+        let hits_bg = hits.clone();
+        let hold_bg = hold.clone();
+        let port = serve(move |_port, req| {
+            if req.contains("ServiceQuotasV20190624.ListServiceQuotas") {
+                let n = {
+                    let mut h = hits_bg.lock().unwrap();
+                    *h += 1;
+                    *h
+                };
+                if n >= 3 {
+                    while *hold_bg.lock().unwrap() {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    return json_ok(r#"{"Quotas":[{"QuotaCode":"L-1216C47A","Value":9},{"QuotaCode":"L-7A658B76","Value":9}]}"#);
+                }
+                return json_ok(r#"{"Quotas":[{"QuotaCode":"L-1216C47A","Value":64},{"QuotaCode":"L-7A658B76","Value":5}]}"#);
+            }
+            (404, Vec::new(), String::new())
+        });
+        aws_provider(
+            "tenant/qcache",
+            "aws-qcache",
+            port,
+            json!({"name": "debian", "flavor": "small", "image": "img"}),
+            json!({"instance-type": "t3.micro"}),
+            json!({"image-id": "ami-1"}),
+        );
+        let first = endpoint_limits("tenant/qcache").expect("limits");
+        assert_eq!(first.quota.get("L-1216C47A").copied().unwrap_or(0.0), 64.0);
+        assert_eq!(first.quota.get("L-7A658B76").copied().unwrap_or(0.0), 5000.0);
+        let snap = provider_by_name("tenant/qcache").unwrap();
+        let ep = aws_endpoint(&snap).unwrap();
+        for key in ["quotas-ec2", "quotas-ebs"] {
+            ep.lists.lock().unwrap().get_mut(key).unwrap().at = Instant::now() - Duration::from_secs(400);
+        }
+        let stale = endpoint_limits("tenant/qcache").expect("stale limits");
+        assert_eq!(stale.quota.get("L-1216C47A").copied().unwrap_or(0.0), 64.0);
+        assert_eq!(stale.quota.get("L-7A658B76").copied().unwrap_or(0.0), 5000.0);
+        *hold.lock().unwrap() = false;
+        for _ in 0..50 {
+            if *hits.lock().unwrap() >= 4 {
+                thread::sleep(Duration::from_millis(50));
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(*hits.lock().unwrap() >= 4, "background quota refresh did not run");
+    }
+
+    #[test]
+    fn nova_floating_ip_refresh_and_delete_ignore_neutron_catalog() {
+        let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+        let hits = Arc::new(StdMutex::new(Vec::<String>::new()));
+        let hits_bg = hits.clone();
+        let port = serve(move |port, req| {
+            let line = req.lines().next().unwrap_or("").to_string();
+            hits_bg.lock().unwrap().push(line.clone());
+            if req.contains("/auth/tokens") {
+                let body = format!(
+                    "{{\"token\":{{\"catalog\":[{{\"type\":\"compute\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/compute\"}}]}},{{\"type\":\"network\",\"endpoints\":[{{\"interface\":\"public\",\"region\":\"RegionOne\",\"url\":\"http://127.0.0.1:{port}/network\"}}]}}]}}}}"
+                );
+                return (201, vec![("X-Subject-Token".into(), "tok".into())], body);
+            }
+            if line.contains("GET /compute/os-floating-ips") {
+                return json_ok(r#"{"floating_ips":[{"id":"fip-n","ip":"203.0.113.9","status":"ACTIVE"}]}"#);
+            }
+            if line.contains("DELETE /compute/os-floating-ips/fip-n") {
+                return (204, Vec::new(), String::new());
+            }
+            if line.contains("/network/") {
+                return (500, Vec::new(), "neutron must not be used".into());
+            }
+            (404, Vec::new(), format!("no {line}"))
+        });
+        let dir = std::env::temp_dir().join(format!("os-{}", new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let clouds = dir.join("clouds.yaml");
+        std::fs::write(
+            &clouds,
+            format!("clouds:\n  demo:\n    region_name: RegionOne\n    floating_ip_source: nova\n    external_network: public\n    auth:\n      auth_url: http://127.0.0.1:{port}\n      username: demo\n      password: secret\n      project_name: demo\n"),
+        )
+        .unwrap();
+        let mut options = BTreeMap::new();
+        options.insert("cloud".into(), "demo".into());
+        options.insert("client_config_file".into(), clouds.display().to_string());
+        options.insert("rate".into(), "1000".into());
+        set_connections(vec![ConnectionConfig {
+            name: "os-src".into(),
+            driver: "openstack".into(),
+            options,
+        }]);
+        {
+            let mut reg = registry().lock().unwrap();
+            reg.os_tokens.clear();
+            reg.providers.insert(
+                "tenant/os-src".into(),
+                ProviderSnap {
+                    driver: "openstack".into(),
+                    connection: "os-src".into(),
+                    region: "RegionOne".into(),
+                    labels: BTreeMap::new(),
+                    flavors: BTreeMap::new(),
+                    images: BTreeMap::new(),
+                },
+            );
+        }
+        clear_ttl_cache();
+        let refreshed = os_refresh_floating_ip(&json!({
+            "provider": "tenant/os-src",
+            "floating_ip": {"id": "fip-n"}
+        }))
+        .unwrap();
+        assert_eq!(refreshed["floating_ip"]["ip"], "203.0.113.9");
+        os_delete_floating_ip(&json!({
+            "provider": "tenant/os-src",
+            "floating_ip": {"id": "fip-n"}
+        }))
+        .unwrap();
+        let blob = hits.lock().unwrap().join("\n");
+        assert!(blob.contains("GET /compute/os-floating-ips"), "{blob}");
+        assert!(blob.contains("DELETE /compute/os-floating-ips/fip-n"), "{blob}");
+        assert!(!blob.contains("/network/"), "{blob}");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     include!("leak_tests.rs");

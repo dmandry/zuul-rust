@@ -110,7 +110,10 @@ pub fn endpoint_inventory(canonical: &str) -> LeakInventory {
         }
     }
     let types = resource_types(&driver);
-    let instances = match list_instances_for(&snaps) {
+    // Same order as cleanupLeakedResources: required infrastructure
+    // (which fills the launch-template cache), then instances, then
+    // resources. A failure before listResources skips the endpoint.
+    let required = match required_infra(canonical, &snaps) {
         Ok(v) => v,
         Err(_) => {
             return LeakInventory {
@@ -123,16 +126,16 @@ pub fn endpoint_inventory(canonical: &str) -> LeakInventory {
             };
         }
     };
-    let required = match required_infra(canonical, &snaps) {
+    let instances = match list_instances_for(&snaps) {
         Ok(v) => v,
         Err(_) => {
             return LeakInventory {
                 error: true,
                 partial: false,
-                required_infra: Vec::new(),
+                required_infra: required,
                 resource_types: types,
                 resources: Vec::new(),
-                instances,
+                instances: Vec::new(),
             };
         }
     };
@@ -211,14 +214,39 @@ pub fn testing_age_ports(canonical: &str, secs: u64) {
 fn create_provider_templates(name: &str, snap: &ProviderSnap) -> Result<(), AdvanceError> {
     let ep = aws_endpoint(snap)?;
     let mut stored = BTreeMap::new();
+    let mut fleet = Vec::new();
     for (label_name, label) in &snap.labels {
         let flavor_name = field_str(label, &["flavor"]).unwrap_or_default();
         let flavor = snap.flavors.get(&flavor_name).cloned().unwrap_or(json!({}));
         if !flavor_is_fleet(&flavor) {
             continue;
         }
-        let template = ensure_launch_template(&ep, name, label, &flavor)?;
-        stored.insert(label_name.clone(), template);
+        fleet.push((label_name.clone(), label.clone(), flavor));
+    }
+    if fleet.is_empty() {
+        registry().lock().unwrap().templates.insert(name.to_string(), stored);
+        return Ok(());
+    }
+    // 14.3.0 lists launch templates once per provider, then creates the
+    // names that are missing. The list is cached, and cleared only if
+    // a template was created.
+    let listed = list_launch_templates(&ep)?;
+    let mut existing: HashSet<String> = listed
+        .iter()
+        .filter_map(|t| t.get("LaunchTemplateName").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .collect();
+    let mut created = false;
+    for (label_name, label, flavor) in fleet {
+        let (template_name, args) = launch_template_spec(name, &label, &flavor);
+        if !existing.contains(&template_name) {
+            create_named_template(&ep, &template_name, &args)?;
+            existing.insert(template_name.clone());
+            created = true;
+        }
+        stored.insert(label_name, template_name);
+    }
+    if created {
+        cache_forget(&ep, "launch-templates");
     }
     registry().lock().unwrap().templates.insert(name.to_string(), stored);
     Ok(())
@@ -335,39 +363,9 @@ fn list_instances_for(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, Ad
     };
     match snap.driver.as_str() {
         "aws" => list_aws_instances(snap),
-        "azure" | "openstack" | "kubernetes" => {
-            let resources = match snap.driver.as_str() {
-                "azure" => list_azure(snap)?,
-                "kubernetes" => list_k8s(snap)?,
-                _ => Vec::new(),
-            };
-            let mut out = Vec::new();
-            for resource in resources {
-                if resource.get("type").and_then(|v| v.as_str()) == Some("instance")
-                    || resource.get("type").and_then(|v| v.as_str()) == Some("namespace")
-                    || resource.get("type").and_then(|v| v.as_str()) == Some("project")
-                {
-                    out.push(json!({
-                        "metadata": resource.get("metadata").cloned().unwrap_or(json!({})),
-                        "quota": {"instances": 1},
-                    }));
-                }
-            }
-            if snap.driver == "openstack" {
-                let tok = os_token(snap)?;
-                let servers = os_pages(&tok, &format!("{}/servers/detail", tok.compute), "servers")?;
-                for server in servers {
-                    if server.get("status").and_then(|v| v.as_str()).unwrap_or("").eq_ignore_ascii_case("deleted") {
-                        continue;
-                    }
-                    out.push(json!({
-                        "metadata": server.get("metadata").cloned().unwrap_or(json!({})),
-                        "quota": {"instances": 1},
-                    }));
-                }
-            }
-            Ok(out)
-        }
+        "azure" => list_azure_instances(snap),
+        "openstack" => list_os_instances(snap),
+        "kubernetes" => list_k8s_instances(snap),
         _ => Ok(Vec::new()),
     }
 }
@@ -378,7 +376,7 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
     tag_snapshots(&ep)?;
     tag_amis(&ep)?;
     let mut out = Vec::new();
-    for host in ec2_list(&ep, "DescribeHosts", "Hosts")? {
+    for host in list_hosts(&ep)? {
         let state = state_text(&host);
         if state == "released" || state == "released-permanent-failure" {
             continue;
@@ -389,7 +387,7 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
         }
         out.push(resource("host", &id, aws_tag_map(&host), None));
     }
-    for instance in ec2_instances(&ep)? {
+    for instance in list_instances(&ep)? {
         if state_text(&instance) == "terminated" {
             continue;
         }
@@ -399,7 +397,7 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
         }
         out.push(resource("instance", &id, aws_tag_map(&instance), None));
     }
-    for volume in ec2_list(&ep, "DescribeVolumes", "Volumes")? {
+    for volume in list_volumes_cached(&ep)? {
         if state_text(&volume) == "deleted" {
             continue;
         }
@@ -409,7 +407,7 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
         }
         out.push(resource("volume", &id, aws_tag_map(&volume), None));
     }
-    for ami in ec2_list(&ep, "DescribeImages", "Images")? {
+    for ami in list_images_cached(&ep)? {
         if state_text(&ami) == "deleted" {
             continue;
         }
@@ -419,7 +417,7 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
         }
         out.push(resource("ami", &id, aws_tag_map(&ami), None));
     }
-    for snap in ec2_list(&ep, "DescribeSnapshots", "Snapshots")? {
+    for snap in list_snapshots_cached(&ep)? {
         if state_text(&snap) == "deleted" {
             continue;
         }
@@ -447,7 +445,7 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
             out.push(resource("object", &key, tags, Some(bucket.as_str())));
         }
     }
-    for template in list_launch_templates(&ep)? {
+    for template in list_launch_templates_cached(&ep)? {
         let id = template.get("LaunchTemplateName").and_then(|v| v.as_str()).unwrap_or("").to_string();
         if id.is_empty() {
             continue;
@@ -459,39 +457,66 @@ fn list_aws(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError
 
 fn list_aws_instances(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
     let ep = aws_endpoint(snap)?;
+    let mut volumes = BTreeMap::new();
+    for volume in list_volumes_cached(&ep)? {
+        if let Some(id) = volume.get("VolumeId").and_then(|v| v.as_str()) {
+            volumes.insert(id.to_string(), volume);
+        }
+    }
     let mut out = Vec::new();
-    for instance in ec2_instances(&ep)? {
+    for instance in list_instances(&ep)? {
         if state_text(&instance) == "terminated" {
             continue;
         }
-        let dedicated = instance.pointer("/Placement/HostId").and_then(|v| v.as_str()).unwrap_or("").is_empty() == false;
+        let dedicated = !instance
+            .pointer("/Placement/HostId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .is_empty();
         let instance_type = instance.get("InstanceType").and_then(|v| v.as_str()).unwrap_or("");
         let spot = instance.get("InstanceLifecycle").and_then(|v| v.as_str()) == Some("spot");
         let mut quota = Map::new();
-        quota.insert("instances".into(), json!(1));
         if dedicated {
+            quota.insert("instances".into(), json!(1));
             if let Some(code) = host_quota_code(instance_type) {
                 if !code.is_empty() {
                     quota.insert(code, json!(1));
                 }
             }
-        } else if !instance_type.is_empty() {
+        } else if instance_type.is_empty() {
+            // DescribeInstances always carries InstanceType. Fixtures
+            // that omit it record instances=1 and do not call
+            // DescribeInstanceTypes.
+            quota.insert("instances".into(), json!(1));
+        } else {
             let mut params = Map::new();
             params.insert("InstanceType".into(), json!([instance_type]));
-            if let Ok(resp) = ec2(&ep, "DescribeInstanceTypes", params, true) {
-                let info = resp.pointer("/InstanceTypes/0").cloned().unwrap_or(Value::Null);
-                if let Some(cores) = info.pointer("/VCpuInfo/DefaultCores").and_then(|v| v.as_f64()) {
-                    quota.insert("cores".into(), json!(cores));
+            let resp = ec2(&ep, "DescribeInstanceTypes", params, true)?;
+            let info = resp.pointer("/InstanceTypes/0").cloned().unwrap_or(Value::Null);
+            if info.is_null() {
+                return Err(err_other(format!("invalid instance type {instance_type}")));
+            }
+            let cores = json_f64(info.pointer("/VCpuInfo/DefaultCores")).unwrap_or(0.0);
+            let ram = json_f64(info.pointer("/MemoryInfo/SizeInMiB")).unwrap_or(0.0);
+            let vcpus = json_f64(info.pointer("/VCpuInfo/DefaultVCpus")).unwrap_or(0.0);
+            quota.insert("cores".into(), json!(cores));
+            quota.insert("ram".into(), json!(ram));
+            quota.insert("instances".into(), json!(1));
+            if let Some(code) = instance_quota_code(instance_type, spot) {
+                if !code.is_empty() {
+                    quota.insert(code, json!(vcpus));
                 }
-                if let Some(ram) = info.pointer("/MemoryInfo/SizeInMiB").and_then(|v| v.as_f64()) {
-                    quota.insert("ram".into(), json!(ram));
-                }
-                let vcpus = info.pointer("/VCpuInfo/DefaultVCpus").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                if let Some(code) = instance_quota_code(instance_type, spot) {
-                    if !code.is_empty() {
-                        quota.insert(code, json!(vcpus));
-                    }
-                }
+            }
+        }
+        if let Some(maps) = instance.get("BlockDeviceMappings").and_then(|v| v.as_array()) {
+            for attachment in maps {
+                let Some(id) = attachment.pointer("/Ebs/VolumeId").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let Some(volume) = volumes.get(id) else {
+                    continue;
+                };
+                add_reported_volume_quota(&mut quota, volume);
             }
         }
         out.push(json!({
@@ -515,24 +540,139 @@ fn list_azure(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
         ("image", format!("{base}/subscriptions/{sub}/providers/Microsoft.Compute/images?api-version=2020-12-01")),
     ];
     for (kind, url) in specs {
-        let mut next = Some(url);
-        while let Some(page_url) = next.take() {
-        let doc = azure_request(&conn, "GET", &page_url, None)?;
-        let items = doc.get("value").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-        for item in items {
+        for item in cached_azure_items(&conn, &url)? {
             let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
             if id.is_empty() {
                 continue;
             }
             out.push(resource(kind, &id, json_tags(item.get("tags")), None));
         }
-        next = doc
-            .get("nextLink")
-            .or_else(|| doc.get("@odata.nextLink"))
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
+    }
+    Ok(out)
+}
+
+fn cached_azure_items(conn: &ConnectionConfig, url: &str) -> Result<Vec<Value>, AdvanceError> {
+    let cache_key = format!("azure:{url}");
+    let conn = conn.clone();
+    let url = url.to_string();
+    let load = std::sync::Arc::new(move || {
+        let mut all = Vec::new();
+        let mut next = Some(url.clone());
+        let mut seen = HashSet::new();
+        while let Some(page_url) = next.take() {
+            if !seen.insert(page_url.clone()) {
+                break;
+            }
+            let doc = azure_request(&conn, "GET", &page_url, None)?;
+            if let Some(items) = doc.get("value").and_then(|v| v.as_array()) {
+                all.extend(items.clone());
+            }
+            next = doc
+                .get("nextLink")
+                .or_else(|| doc.get("@odata.nextLink"))
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
         }
+        Ok(Value::Array(all))
+    });
+    let value = with_ttl_cache(&cache_key, LIST_TTL, load)?;
+    Ok(value.as_array().cloned().unwrap_or_default())
+}
+
+fn azure_skus(conn: &ConnectionConfig) -> Result<Vec<Value>, AdvanceError> {
+    let sub = azure_sub(conn)?;
+    let url = format!(
+        "{}/subscriptions/{sub}/providers/Microsoft.Compute/skus?api-version=2021-07-01",
+        azure_arm_base()
+    );
+    let cache_key = format!("azure-skus:{sub}");
+    let conn = conn.clone();
+    let load = std::sync::Arc::new(move || {
+        let mut all = Vec::new();
+        let mut next = Some(url.clone());
+        let mut seen = HashSet::new();
+        while let Some(page_url) = next.take() {
+            if !seen.insert(page_url.clone()) {
+                break;
+            }
+            let doc = azure_request(&conn, "GET", &page_url, None)?;
+            if let Some(items) = doc.get("value").and_then(|v| v.as_array()) {
+                all.extend(items.clone());
+            }
+            next = doc
+                .get("nextLink")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+        }
+        Ok(Value::Array(all))
+    });
+    // _getSKUs runs once when the endpoint starts and is kept for its life.
+    let value = with_ttl_cache(&cache_key, Duration::from_secs(86400 * 365), load)?;
+    Ok(value.as_array().cloned().unwrap_or_default())
+}
+
+fn quota_from_sku(sku: Option<&Value>, spot: bool) -> Map<String, Value> {
+    let mut quota = Map::new();
+    let Some(sku) = sku else {
+        quota.insert("instances".into(), json!(1));
+        return quota;
+    };
+    let mut cores = 0i64;
+    let mut spot_cores = 0i64;
+    let mut ram = 0i64;
+    if let Some(caps) = sku.get("capabilities").and_then(|v| v.as_array()) {
+        for cap in caps {
+            let name = cap.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let value = cap.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            if name == "vCPUs" {
+                let n = value.parse::<i64>().unwrap_or(0);
+                if spot {
+                    spot_cores = n;
+                } else {
+                    cores = n;
+                }
+            }
+            if name == "MemoryGB" {
+                let gb = value.parse::<f64>().unwrap_or(0.0);
+                ram = (gb * 1024.0) as i64;
+            }
+        }
+    }
+    quota.insert("cores".into(), json!(cores));
+    quota.insert("spot_cores".into(), json!(spot_cores));
+    quota.insert("ram".into(), json!(ram));
+    quota.insert("instances".into(), json!(1));
+    quota
+}
+
+fn list_azure_instances(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
+    let (conn, _) = azure_cloud(snap)?;
+    let sub = azure_sub(&conn)?;
+    let url = format!(
+        "{}/subscriptions/{sub}/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01",
+        azure_arm_base()
+    );
+    let vms = cached_azure_items(&conn, &url)?;
+    let skus = if vms.is_empty() { Vec::new() } else { azure_skus(&conn)? };
+    let mut out = Vec::new();
+    for vm in vms {
+        let size = vm.pointer("/properties/hardwareProfile/vmSize").and_then(|v| v.as_str()).unwrap_or("");
+        let location = vm.get("location").and_then(|v| v.as_str()).unwrap_or("");
+        let spot = vm.pointer("/properties/priority").and_then(|v| v.as_str()) == Some("Spot");
+        let sku = skus.iter().find(|sku| {
+            sku.get("name").and_then(|v| v.as_str()) == Some(size)
+                && sku
+                    .get("locations")
+                    .and_then(|v| v.as_array())
+                    .map(|locs| locs.iter().any(|loc| loc.as_str() == Some(location)))
+                    .unwrap_or(false)
+        });
+        out.push(json!({
+            "metadata": json_tags(vm.get("tags")),
+            "quota": quota_from_sku(sku, spot),
+        }));
     }
     Ok(out)
 }
@@ -541,7 +681,7 @@ fn list_openstack(canonical: &str, snaps: &[(String, ProviderSnap)]) -> Result<V
     let (_, snap) = &snaps[0];
     let tok = os_token(snap)?;
     let mut out = Vec::new();
-    let servers = os_pages(&tok, &format!("{}/servers/detail", tok.compute), "servers")?;
+    let servers = cached_os_pages(&tok, &format!("{}/servers/detail", tok.compute), "servers")?;
     for server in servers {
         if server.get("status").and_then(|v| v.as_str()).unwrap_or("").eq_ignore_ascii_case("deleted") {
             continue;
@@ -574,7 +714,7 @@ fn list_openstack(canonical: &str, snaps: &[(String, ProviderSnap)]) -> Result<V
         cleanup_ports(canonical, &tok, interval)?;
     }
     if floating {
-        cleanup_floating_ips(&tok)?;
+        cleanup_floating_ips(snap, &tok)?;
     }
     Ok(out)
 }
@@ -613,6 +753,140 @@ fn list_k8s(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
         }
         let base = path.split('?').next().unwrap_or(path.as_str());
         path = format!("{base}?continue={}", aws_encode(cont));
+    }
+    Ok(out)
+}
+
+fn cached_os_pages(tok: &OsToken, start: &str, key: &str) -> Result<Vec<Value>, AdvanceError> {
+    let cache_key = format!("os:{start}");
+    let tok = tok.clone();
+    let start = start.to_string();
+    let key = key.to_string();
+    let load = std::sync::Arc::new(move || {
+        let items = os_pages(&tok, &start, &key)?;
+        Ok(Value::Array(items))
+    });
+    let value = with_ttl_cache(&cache_key, LIST_TTL, load)?;
+    Ok(value.as_array().cloned().unwrap_or_default())
+}
+
+fn os_volume_map(tok: &OsToken) -> Result<BTreeMap<String, Value>, AdvanceError> {
+    if tok.volume.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let listed = cached_os_pages(tok, &format!("{}/volumes/detail", tok.volume), "volumes")?;
+    let mut volumes = BTreeMap::new();
+    for volume in listed {
+        if let Some(id) = volume.get("id").and_then(|v| v.as_str()) {
+            volumes.insert(id.to_string(), volume);
+        }
+    }
+    Ok(volumes)
+}
+
+fn os_flavor_by_id(tok: &OsToken, id: &str) -> Result<Value, AdvanceError> {
+    let cache_key = format!("flavors:{}", tok.compute);
+    let tok_load = tok.clone();
+    let load = std::sync::Arc::new(move || {
+        let listed = os_http(&tok_load, "GET", &format!("{}/flavors/detail", tok_load.compute), None)?;
+        Ok(listed.get("flavors").cloned().unwrap_or(json!([])))
+    });
+    let flavors = with_ttl_cache(&cache_key, Duration::from_secs(86400 * 365), load)?;
+    for flavor in flavors.as_array().cloned().unwrap_or_default() {
+        if flavor.get("id").and_then(|v| v.as_str()) == Some(id) {
+            return Ok(flavor);
+        }
+    }
+    Err(err_other(format!("Unable to find flavor with id: {id}")))
+}
+
+fn os_server_quota(tok: &OsToken, server: &Value, volumes: &BTreeMap<String, Value>) -> Result<Map<String, Value>, AdvanceError> {
+    let flavor = server.get("flavor").cloned().unwrap_or(Value::Null);
+    let (vcpus, ram) = if flavor.get("vcpus").is_some() {
+        (
+            flavor.get("vcpus").and_then(|v| v.as_i64()).unwrap_or(0),
+            flavor.get("ram").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    } else if let Some(id) = flavor.get("id").and_then(|v| v.as_str()) {
+        let found = os_flavor_by_id(tok, id)?;
+        (
+            found.get("vcpus").and_then(|v| v.as_i64()).unwrap_or(0),
+            found.get("ram").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    } else {
+        let mut quota = Map::new();
+        quota.insert("instances".into(), json!(1));
+        return Ok(quota);
+    };
+    let mut quota = Map::new();
+    quota.insert("instances".into(), json!(1));
+    quota.insert("cores".into(), json!(vcpus));
+    quota.insert("ram".into(), json!(ram));
+    let mut attached = Vec::new();
+    if let Some(links) = server.get("os-extended-volumes:volumes_attached").and_then(|v| v.as_array()) {
+        for link in links {
+            if let Some(id) = link.get("id").and_then(|v| v.as_str()) {
+                if let Some(volume) = volumes.get(id) {
+                    attached.push(volume);
+                }
+            }
+        }
+    }
+    if !attached.is_empty() {
+        let gb: i64 = attached
+            .iter()
+            .map(|v| v.get("size").and_then(|n| n.as_i64()).unwrap_or(0))
+            .sum();
+        quota.insert("volumes".into(), json!(attached.len()));
+        quota.insert("volume-gb".into(), json!(gb));
+    }
+    Ok(quota)
+}
+
+fn list_os_instances(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
+    let tok = os_token(snap)?;
+    let volumes = os_volume_map(&tok)?;
+    let servers = cached_os_pages(&tok, &format!("{}/servers/detail", tok.compute), "servers")?;
+    let mut out = Vec::new();
+    for server in servers {
+        if server.get("status").and_then(|v| v.as_str()).unwrap_or("").eq_ignore_ascii_case("deleted") {
+            continue;
+        }
+        let quota = os_server_quota(&tok, &server, &volumes)?;
+        out.push(json!({
+            "metadata": server.get("metadata").cloned().unwrap_or(json!({})),
+            "quota": quota,
+        }));
+    }
+    Ok(out)
+}
+
+fn list_k8s_instances(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
+    let kube = kube_of(snap)?;
+    let mut out = Vec::new();
+    for resource in list_k8s(snap)? {
+        let kind = resource.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        if kind != "namespace" && kind != "project" {
+            continue;
+        }
+        let name = resource.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        out.push(json!({
+            "metadata": resource.get("metadata").cloned().unwrap_or(json!({})),
+            "quota": {"namespaces": 1},
+        }));
+        let path = format!("/api/v1/namespaces/{name}/pods");
+        let doc = match k8s_http(&kube, "GET", &path, None) {
+            Ok(doc) => doc,
+            Err(err) if err.to_string().contains("403") || err.to_string().contains("Forbidden") => continue,
+            Err(err) => return Err(err),
+        };
+        let pods = doc.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        for pod in pods {
+            out.push(json!({
+                "metadata": json_tags(pod.pointer("/metadata/labels")),
+                "quota": {"pods": 1},
+            }));
+        }
     }
     Ok(out)
 }
@@ -693,11 +967,13 @@ fn down_port_ids(tok: &OsToken) -> Result<HashSet<String>, AdvanceError> {
     Ok(ids)
 }
 
-fn cleanup_floating_ips(tok: &OsToken) -> Result<(), AdvanceError> {
-    if tok.network.is_empty() {
+fn cleanup_floating_ips(snap: &ProviderSnap, tok: &OsToken) -> Result<(), AdvanceError> {
+    let (cloud, _) = os_config(snap)?;
+    // _delete_unattached_floating_ips iterates only when Neutron is the source.
+    if !use_neutron_floating(tok, &cloud) {
         return Ok(());
     }
-    let ips = os_pages(tok, &format!("{}/v2.0/floatingips", tok.network), "floatingips")?;
+    let ips = list_floating_ips(tok, &cloud)?;
     for ip in ips {
         let port_id = ip.get("port_id").and_then(|v| v.as_str()).unwrap_or("");
         if !port_id.is_empty() {
@@ -834,8 +1110,8 @@ fn delete_k8s(snap: &ProviderSnap, resource: &Value) -> Result<(), AdvanceError>
     Ok(())
 }
 
-fn tag_amis(ep: &AwsEndpoint) -> Result<(), AdvanceError> {
-    let amis = ec2_list(ep, "DescribeImages", "Images")?;
+fn tag_amis(ep: &Arc<AwsEndpoint>) -> Result<(), AdvanceError> {
+    let amis = list_images_cached(ep)?;
     let mut examine = Vec::new();
     for ami in amis {
         let id = ami.get("ImageId").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -885,8 +1161,8 @@ fn tag_amis(ep: &AwsEndpoint) -> Result<(), AdvanceError> {
     Ok(())
 }
 
-fn tag_snapshots(ep: &AwsEndpoint) -> Result<(), AdvanceError> {
-    let snaps = ec2_list(ep, "DescribeSnapshots", "Snapshots")?;
+fn tag_snapshots(ep: &Arc<AwsEndpoint>) -> Result<(), AdvanceError> {
+    let snaps = list_snapshots_cached(ep)?;
     let mut examine = Vec::new();
     for snap in snaps {
         let id = snap.get("SnapshotId").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1001,6 +1277,9 @@ fn ec2_until_import_limit(ep: &AwsEndpoint, action: &str, params: Map<String, Va
 }
 
 fn list_launch_templates(ep: &AwsEndpoint) -> Result<Vec<Value>, AdvanceError> {
+    if let Some(arc) = endpoint_arc(ep) {
+        return list_launch_templates_cached(&arc);
+    }
     let mut params = Map::new();
     params.insert(
         "Filters".into(),
@@ -1059,8 +1338,7 @@ fn ec2_list_params(ep: &AwsEndpoint, action: &str, key: &str, params: Map<String
     Ok(all)
 }
 
-fn list_s3_objects(snap: &ProviderSnap, bucket: &str) -> Result<Vec<(String, BTreeMap<String, String>)>, AdvanceError> {
-    let ep = aws_endpoint(snap)?;
+fn fetch_object_keys(ep: &AwsEndpoint, bucket: &str) -> Result<Vec<String>, AdvanceError> {
     let base = ep.endpoint.trim_end_matches('/');
     let mut keys = Vec::new();
     let mut token = String::new();
@@ -1113,6 +1391,42 @@ fn list_s3_objects(snap: &ProviderSnap, bucket: &str) -> Result<Vec<(String, BTr
             break;
         }
     }
+    Ok(keys)
+}
+
+fn cached_object_keys(ep: &Arc<AwsEndpoint>, bucket: &str) -> Result<Vec<String>, AdvanceError> {
+    let as_strings = |value: &Value| -> Vec<String> {
+        value
+            .as_array()
+            .map(|items| items.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .unwrap_or_default()
+    };
+    // The wrapped _listObjects ignores its arguments after the first
+    // call, the same way LazyExecutorTTLCache does. A refresh uses
+    // the bucket from the call that started it.
+    match cache_hit(ep, "objects", LIST_TTL) {
+        CacheHit::Fresh(value) => Ok(as_strings(&value)),
+        CacheHit::Stale(value) => {
+            let bg = ep.clone();
+            let bucket = bucket.to_string();
+            std::thread::spawn(move || match fetch_object_keys(&bg, &bucket) {
+                Ok(keys) => cache_store(&bg, "objects", json!(keys)),
+                Err(_) => cache_clear_inflight(&bg, "objects"),
+            });
+            Ok(as_strings(&value))
+        }
+        CacheHit::Miss => {
+            let keys = fetch_object_keys(ep, bucket)?;
+            cache_store(ep, "objects", json!(keys.clone()));
+            Ok(keys)
+        }
+    }
+}
+
+fn list_s3_objects(snap: &ProviderSnap, bucket: &str) -> Result<Vec<(String, BTreeMap<String, String>)>, AdvanceError> {
+    let ep = aws_endpoint(snap)?;
+    let base = ep.endpoint.trim_end_matches('/').to_string();
+    let keys = cached_object_keys(&ep, bucket)?;
     let mut out = Vec::new();
     for key in keys {
         let tag_url = format!("{base}/{bucket}/{key}?tagging");

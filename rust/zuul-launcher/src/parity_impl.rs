@@ -30,6 +30,47 @@ fn apply_volume_quota(quota: &mut Map<String, Value>, label: &Value) {
     }
 }
 
+fn volume_quota_codes(vtype: &str) -> (Option<&'static str>, Option<&'static str>) {
+    match vtype {
+        "io1" => (Some("L-B3A130E6"), Some("L-FD252861")),
+        "io2" => (Some("L-8D977E7E"), Some("L-09BD8365")),
+        "sc1" => (None, Some("L-17AF77E8")),
+        "gp2" => (None, Some("L-D18FCD1D")),
+        "gp3" => (None, Some("L-7A658B76")),
+        "standard" => (None, Some("L-9CF3C2EB")),
+        "st1" => (None, Some("L-82ACEF56")),
+        _ => (None, None),
+    }
+}
+
+fn add_quota_num(quota: &mut Map<String, Value>, key: &str, n: f64) {
+    let cur = quota
+        .get(key)
+        .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+        .unwrap_or(0.0);
+    quota.insert(key.into(), json!(cur + n));
+}
+
+/// Attached-volume quota from DescribeVolumes, matching _getQuotaForVolume.
+fn add_reported_volume_quota(quota: &mut Map<String, Value>, volume: &Value) {
+    let vtype = volume.get("VolumeType").and_then(|v| v.as_str()).unwrap_or("");
+    let (iops_code, storage_code) = volume_quota_codes(vtype);
+    if let Some(code) = iops_code {
+        if let Some(n) = json_f64(volume.get("Iops")) {
+            if n != 0.0 {
+                add_quota_num(quota, code, n);
+            }
+        }
+    }
+    if let Some(code) = storage_code {
+        if let Some(n) = json_f64(volume.get("Size")) {
+            if n != 0.0 {
+                add_quota_num(quota, code, n);
+            }
+        }
+    }
+}
+
 fn strip_nulls(v: &Value) -> Value {
     match v {
         Value::Object(map) => {
@@ -47,7 +88,11 @@ fn strip_nulls(v: &Value) -> Value {
 }
 
 fn json_f64(v: Option<&Value>) -> Option<f64> {
-    v.and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)))
+    v.and_then(|v| {
+        v.as_f64()
+            .or_else(|| v.as_i64().map(|n| n as f64))
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    })
 }
 
 fn image_upload_sleep() {
@@ -213,12 +258,7 @@ fn create_fleet(
     Err(AdvanceError::Other(format!("Couldn't create fleet instance because of {code}: {message}")))
 }
 
-fn ensure_launch_template(
-    ep: &AwsEndpoint,
-    provider_name: &str,
-    label: &Value,
-    flavor: &Value,
-) -> Result<String, AdvanceError> {
+fn launch_template_spec(provider_name: &str, label: &Value, flavor: &Value) -> (String, Value) {
     let mut data = Map::new();
     data.insert(
         "KeyName".into(),
@@ -269,17 +309,10 @@ fn ensure_launch_template(
         "zuul-launch-template-{}",
         sha256_hex_bytes(serde_json::to_string(&sorted_json(&args)).unwrap_or_default().as_bytes())
     );
-    let listed = ec2(ep, "DescribeLaunchTemplates", Map::new(), true).unwrap_or(json!({}));
-    let exists = listed
-        .get("LaunchTemplates")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter().any(|t| t.get("LaunchTemplateName").and_then(|v| v.as_str()) == Some(name.as_str()))
-        })
-        .unwrap_or(false);
-    if exists {
-        return Ok(name);
-    }
+    (name, args)
+}
+
+fn create_named_template(ep: &AwsEndpoint, name: &str, args: &Value) -> Result<(), AdvanceError> {
     let mut params = Map::new();
     if let Some(obj) = args.as_object() {
         for (k, v) in obj {
@@ -288,10 +321,10 @@ fn ensure_launch_template(
     }
     params.insert("LaunchTemplateName".into(), json!(name));
     match ec2(ep, "CreateLaunchTemplate", params, false) {
-        Ok(_) => Ok(name),
+        Ok(_) => Ok(()),
         Err(err) => {
             if err.to_string().contains("InvalidLaunchTemplateName.AlreadyExistsException") {
-                Ok(name)
+                Ok(())
             } else {
                 Err(err)
             }
@@ -299,9 +332,25 @@ fn ensure_launch_template(
     }
 }
 
-fn service_quotas(ep: &AwsEndpoint, service: &str) -> Result<Map<String, Value>, AdvanceError> {
-    let cache_key = format!("quotas-{service}");
-    let load = |ep: &AwsEndpoint, service: &str| -> Result<Value, AdvanceError> {
+fn ensure_launch_template(
+    ep: &AwsEndpoint,
+    provider_name: &str,
+    label: &Value,
+    flavor: &Value,
+) -> Result<String, AdvanceError> {
+    let (name, args) = launch_template_spec(provider_name, label, flavor);
+    let listed = list_launch_templates(ep).unwrap_or_default();
+    if listed.iter().any(|t| t.get("LaunchTemplateName").and_then(|v| v.as_str()) == Some(name.as_str())) {
+        return Ok(name);
+    }
+    create_named_template(ep, &name, &args)?;
+    if let Some(arc) = endpoint_arc(ep) {
+        cache_forget(&arc, "launch-templates");
+    }
+    Ok(name)
+}
+
+fn load_service_quotas(ep: &AwsEndpoint, service: &str) -> Result<Value, AdvanceError> {
         let url = if ep.endpoint.contains("amazonaws.com") {
             format!("https://servicequotas.{}.amazonaws.com/", ep.region)
         } else {
@@ -354,21 +403,26 @@ fn service_quotas(ep: &AwsEndpoint, service: &str) -> Result<Map<String, Value>,
             }
         }
         Ok(Value::Object(quotas))
-    };
+}
+
+fn service_quotas(ep: &Arc<AwsEndpoint>, service: &str) -> Result<Map<String, Value>, AdvanceError> {
+    let cache_key = format!("quotas-{service}");
+    // LazyExecutorTTLCache: after the TTL, return the stale value and
+    // refresh in the background. The first call is synchronous.
     let page = match cache_hit(ep, &cache_key, QUOTA_TTL) {
         CacheHit::Fresh(v) => v,
         CacheHit::Stale(v) => {
+            let bg = ep.clone();
             let service = service.to_string();
-            // Endpoint is not behind Arc here. Refresh on the next call
-            // by storing the stale value with refreshing cleared after a
-            // synchronous update when the caller is the limits path.
-            let fresh = load(ep, &service)?;
-            cache_store(ep, &cache_key, fresh.clone());
-            let _ = v;
-            fresh
+            let key = cache_key.clone();
+            std::thread::spawn(move || match load_service_quotas(&bg, &service) {
+                Ok(fresh) => cache_store(&bg, &key, fresh),
+                Err(_) => cache_clear_inflight(&bg, &key),
+            });
+            v
         }
         CacheHit::Miss => {
-            let fresh = load(ep, service)?;
+            let fresh = load_service_quotas(ep, service)?;
             cache_store(ep, &cache_key, fresh.clone());
             fresh
         }
@@ -1183,11 +1237,13 @@ fn os_upload_job(
             return Ok(source.to_string());
         }
         let (cloud, _) = os_config(snap)?;
+        // Connection.auth is the clouds.yaml auth dict. 14.3.0 indexes
+        // project_id only; a cloud that sets project_name instead raises KeyError.
         let project = cloud
             .pointer("/auth/project_id")
-            .or_else(|| cloud.pointer("/auth/project_name"))
             .and_then(|v| v.as_str())
-            .unwrap_or("")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| AdvanceError::Other("OpenStack auth project_id is required to share an image".into()))?
             .to_string();
         let share_tok = if let Some(sp) = args.get("source_provider").and_then(|v| v.as_str()) {
             provider_by_name(sp).and_then(|src| os_token(&src)).unwrap_or_else(|_| tok.clone())
