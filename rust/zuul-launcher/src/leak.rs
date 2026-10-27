@@ -355,8 +355,7 @@ fn list_instances_for(snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, Ad
             }
             if snap.driver == "openstack" {
                 let tok = os_token(snap)?;
-                let doc = os_http(&tok, "GET", &format!("{}/servers/detail", tok.compute), None)?;
-                let servers = doc.get("servers").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                let servers = os_pages(&tok, &format!("{}/servers/detail", tok.compute), "servers")?;
                 for server in servers {
                     if server.get("status").and_then(|v| v.as_str()).unwrap_or("").eq_ignore_ascii_case("deleted") {
                         continue;
@@ -516,7 +515,9 @@ fn list_azure(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
         ("image", format!("{base}/subscriptions/{sub}/providers/Microsoft.Compute/images?api-version=2020-12-01")),
     ];
     for (kind, url) in specs {
-        let doc = azure_request(&conn, "GET", &url, None)?;
+        let mut next = Some(url);
+        while let Some(page_url) = next.take() {
+        let doc = azure_request(&conn, "GET", &page_url, None)?;
         let items = doc.get("value").and_then(|v| v.as_array()).cloned().unwrap_or_default();
         for item in items {
             let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -525,6 +526,13 @@ fn list_azure(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
             }
             out.push(resource(kind, &id, json_tags(item.get("tags")), None));
         }
+        next = doc
+            .get("nextLink")
+            .or_else(|| doc.get("@odata.nextLink"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        }
     }
     Ok(out)
 }
@@ -532,9 +540,8 @@ fn list_azure(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
 fn list_openstack(canonical: &str, snaps: &[(String, ProviderSnap)]) -> Result<Vec<Value>, AdvanceError> {
     let (_, snap) = &snaps[0];
     let tok = os_token(snap)?;
-    let doc = os_http(&tok, "GET", &format!("{}/servers/detail", tok.compute), None)?;
     let mut out = Vec::new();
-    let servers = doc.get("servers").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let servers = os_pages(&tok, &format!("{}/servers/detail", tok.compute), "servers")?;
     for server in servers {
         if server.get("status").and_then(|v| v.as_str()).unwrap_or("").eq_ignore_ascii_case("deleted") {
             continue;
@@ -583,18 +590,56 @@ fn list_k8s(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
     } else {
         ("/api/v1/namespaces", "namespace")
     };
-    let doc = k8s_http(&kube, "GET", path, None)?;
     let mut out = Vec::new();
-    let items = doc.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    for item in items {
-        let name = item.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if name.is_empty() {
-            continue;
+    let mut path = path.to_string();
+    let mut seen = HashSet::new();
+    loop {
+        if !seen.insert(path.clone()) {
+            break;
         }
-        let labels = json_tags(item.pointer("/metadata/labels"));
-        out.push(resource(kind, &name, labels, None));
+        let doc = k8s_http(&kube, "GET", &path, None)?;
+        let items = doc.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        for item in items {
+            let name = item.pointer("/metadata/name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if name.is_empty() {
+                continue;
+            }
+            let labels = json_tags(item.pointer("/metadata/labels"));
+            out.push(resource(kind, &name, labels, None));
+        }
+        let cont = doc.pointer("/metadata/continue").and_then(|v| v.as_str()).unwrap_or("");
+        if cont.is_empty() {
+            break;
+        }
+        let base = path.split('?').next().unwrap_or(path.as_str());
+        path = format!("{base}?continue={}", aws_encode(cont));
     }
     Ok(out)
+}
+
+fn os_pages(tok: &OsToken, start: &str, key: &str) -> Result<Vec<Value>, AdvanceError> {
+    let mut url = start.to_string();
+    let mut seen = HashSet::new();
+    let mut all = Vec::new();
+    loop {
+        if !seen.insert(url.clone()) {
+            break;
+        }
+        let doc = os_http(tok, "GET", &url, None)?;
+        if let Some(items) = doc.get(key).and_then(|v| v.as_array()) {
+            all.extend(items.clone());
+        }
+        let links_key = format!("{key}_links");
+        let next = doc.get(&links_key).and_then(|v| v.as_array()).and_then(|links| {
+            links.iter().find(|link| link.get("rel").and_then(|v| v.as_str()) == Some("next"))
+        });
+        let href = next.and_then(|link| link.get("href").and_then(|v| v.as_str())).unwrap_or("");
+        if href.is_empty() {
+            break;
+        }
+        url = href.to_string();
+    }
+    Ok(all)
 }
 
 fn cleanup_ports(canonical: &str, tok: &OsToken, interval: i64) -> Result<(), AdvanceError> {
@@ -634,9 +679,8 @@ fn cleanup_ports(canonical: &str, tok: &OsToken, interval: i64) -> Result<(), Ad
 }
 
 fn down_port_ids(tok: &OsToken) -> Result<HashSet<String>, AdvanceError> {
-    let doc = os_http(tok, "GET", &format!("{}/v2.0/ports?status=DOWN", tok.network), None)?;
+    let ports = os_pages(tok, &format!("{}/v2.0/ports?status=DOWN", tok.network), "ports")?;
     let mut ids = HashSet::new();
-    let ports = doc.get("ports").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     for port in ports {
         let owner = port.get("device_owner").and_then(|v| v.as_str()).unwrap_or("");
         if !(owner.is_empty() || owner.starts_with("compute:")) {
@@ -653,8 +697,7 @@ fn cleanup_floating_ips(tok: &OsToken) -> Result<(), AdvanceError> {
     if tok.network.is_empty() {
         return Ok(());
     }
-    let doc = os_http(tok, "GET", &format!("{}/v2.0/floatingips", tok.network), None)?;
-    let ips = doc.get("floatingips").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let ips = os_pages(tok, &format!("{}/v2.0/floatingips", tok.network), "floatingips")?;
     for ip in ips {
         let port_id = ip.get("port_id").and_then(|v| v.as_str()).unwrap_or("");
         if !port_id.is_empty() {
@@ -976,13 +1019,21 @@ fn list_launch_templates(ep: &AwsEndpoint) -> Result<Vec<Value>, AdvanceError> {
 }
 
 fn ec2_instances(ep: &AwsEndpoint) -> Result<Vec<Value>, AdvanceError> {
-    let page = ec2(ep, "DescribeInstances", Map::new(), true)?;
+    let mut params = Map::new();
     let mut instances = Vec::new();
-    let reservations = page.get("Reservations").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    for res in reservations {
-        if let Some(arr) = res.get("Instances").and_then(|v| v.as_array()) {
-            instances.extend(arr.clone());
+    loop {
+        let page = ec2(ep, "DescribeInstances", params.clone(), true)?;
+        let reservations = page.get("Reservations").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        for res in reservations {
+            if let Some(arr) = res.get("Instances").and_then(|v| v.as_array()) {
+                instances.extend(arr.clone());
+            }
         }
+        let token = page.get("NextToken").and_then(|v| v.as_str()).unwrap_or("");
+        if token.is_empty() {
+            break;
+        }
+        params.insert("NextToken".into(), json!(token));
     }
     Ok(instances)
 }
@@ -992,43 +1043,75 @@ fn ec2_list(ep: &AwsEndpoint, action: &str, key: &str) -> Result<Vec<Value>, Adv
 }
 
 fn ec2_list_params(ep: &AwsEndpoint, action: &str, key: &str, params: Map<String, Value>) -> Result<Vec<Value>, AdvanceError> {
-    let page = ec2(ep, action, params, true)?;
-    Ok(page.get(key).and_then(|v| v.as_array()).cloned().unwrap_or_default())
+    let mut params = params;
+    let mut all = Vec::new();
+    loop {
+        let page = ec2(ep, action, params.clone(), true)?;
+        if let Some(items) = page.get(key).and_then(|v| v.as_array()) {
+            all.extend(items.clone());
+        }
+        let token = page.get("NextToken").and_then(|v| v.as_str()).unwrap_or("");
+        if token.is_empty() {
+            break;
+        }
+        params.insert("NextToken".into(), json!(token));
+    }
+    Ok(all)
 }
 
 fn list_s3_objects(snap: &ProviderSnap, bucket: &str) -> Result<Vec<(String, BTreeMap<String, String>)>, AdvanceError> {
     let ep = aws_endpoint(snap)?;
     let base = ep.endpoint.trim_end_matches('/');
-    let url = format!("{base}/{bucket}?list-type=2");
-    ep.reading.enter();
-    let resp = signed_request(
-        "GET",
-        &url,
-        "s3",
-        &ep.region,
-        &ep.sig.access_key,
-        &ep.sig.secret_key,
-        ep.sig.session_token.as_deref(),
-        &[],
-        b"",
-        false,
-    )?;
-    let doc = ec2_xml_to_boto(&resp.text()).unwrap_or(json!({}));
     let mut keys = Vec::new();
-    match doc.get("Contents") {
-        Some(Value::Array(items)) => {
-            for item in items {
+    let mut token = String::new();
+    loop {
+        let mut url = format!("{base}/{bucket}?list-type=2");
+        if !token.is_empty() {
+            url.push_str("&continuation-token=");
+            url.push_str(&aws_encode(&token));
+        }
+        ep.reading.enter();
+        let resp = signed_request(
+            "GET",
+            &url,
+            "s3",
+            &ep.region,
+            &ep.sig.access_key,
+            &ep.sig.secret_key,
+            ep.sig.session_token.as_deref(),
+            &[],
+            b"",
+            false,
+        )?;
+        let doc = ec2_xml_to_boto(&resp.text()).unwrap_or(json!({}));
+        match doc.get("Contents") {
+            Some(Value::Array(items)) => {
+                for item in items {
+                    if let Some(key) = item.get("Key").and_then(|v| v.as_str()) {
+                        keys.push(key.to_string());
+                    }
+                }
+            }
+            Some(item) => {
                 if let Some(key) = item.get("Key").and_then(|v| v.as_str()) {
                     keys.push(key.to_string());
                 }
             }
+            None => {}
         }
-        Some(item) => {
-            if let Some(key) = item.get("Key").and_then(|v| v.as_str()) {
-                keys.push(key.to_string());
-            }
+        let truncated = doc
+            .get("IsTruncated")
+            .and_then(|v| v.as_str())
+            .map(|s| s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        token = doc
+            .get("NextContinuationToken")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if !truncated || token.is_empty() {
+            break;
         }
-        None => {}
     }
     let mut out = Vec::new();
     for key in keys {
