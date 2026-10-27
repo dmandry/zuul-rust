@@ -341,7 +341,7 @@ impl TlsZk {
             let err = read_i32(&reply, &mut offset)?;
             if done != 0 {
                 return Err(ZkError::Message(format!(
-                    "multi ended early at {offset} done={done} err={err} bytes=",
+                    "multi ended early at {offset} done={done} err={err} bytes={}",
                     reply.iter().take(48).map(|b| b.to_string()).collect::<Vec<_>>().join(",")
                 )));
             }
