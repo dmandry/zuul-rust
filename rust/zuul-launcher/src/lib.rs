@@ -15,6 +15,7 @@ pub mod model;
 pub mod native;
 pub mod nodescan;
 pub mod provider;
+pub mod suite;
 pub mod upload;
 pub mod upload_job;
 pub mod workers;

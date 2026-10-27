@@ -835,5 +835,7 @@ name = "zuul-launcher-py"
 version = "14.3.0"
 dependencies = [
  "pyo3",
+ "serde",
+ "serde_json",
  "zuul-launcher",
 ]

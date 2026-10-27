@@ -1623,10 +1623,19 @@ impl Launcher {
                     .unwrap_or(json!("auto"))
             }),
         );
+        // Launcher._requestNode copies image.shell_type. The PyO3 hook
+        // returns that value; the native path reads the parsed image.
+        let image_shell = label.image.as_ref().and_then(|name| {
+            provider
+                .images()
+                .get(name)
+                .and_then(|image| image.shell_type.clone())
+                .map(|shell| json!(shell))
+        });
         set(
             &mut fields,
             "shell_type",
-            attr("shell_type").unwrap_or(Value::Null),
+            attr("shell_type").unwrap_or(image_shell.unwrap_or(Value::Null)),
         );
         set(&mut fields, "hold_expiration", Value::Null);
         set(&mut fields, "host_id", Value::Null);
