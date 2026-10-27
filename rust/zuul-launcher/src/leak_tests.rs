@@ -14,6 +14,7 @@ fn reset_cloud() {
     reg.os_tokens.clear();
     reg.azure_tokens.clear();
     reg.futures.clear();
+    reg.label_orders.clear();
     drop(reg);
     clear_ttl_cache();
 }
@@ -68,13 +69,21 @@ fn aws_leak_scan_skips_other_system_and_live_nodes() {
         {
             hits_bg.lock().unwrap().push(req.to_string());
         }
+        if req.contains("Action=DescribeInstanceTypes") {
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeInstanceTypesResponse><instanceTypeSet><item>"#,
+                r#"<vCpuInfo><defaultCores>1</defaultCores><defaultVCpus>2</defaultVCpus></vCpuInfo>"#,
+                r#"<memoryInfo><sizeInMiB>2048</sizeInMiB></memoryInfo>"#,
+                r#"</item></instanceTypeSet></DescribeInstanceTypesResponse>"#,
+            ));
+        }
         if req.contains("Action=DescribeInstances") {
             return json_ok(concat!(
                 r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet><item><instancesSet>"#,
-                r#"<item><instanceId>i-leaked</instanceId><instanceState><name>running</name></instanceState><tagSet><item><key>zuul_system_id</key><value>sys-1</value></item><item><key>zuul_node_uuid</key><value>gone</value></item></tagSet></item>"#,
-                r#"<item><instanceId>i-other</instanceId><instanceState><name>running</name></instanceState><tagSet><item><key>zuul_system_id</key><value>other</value></item><item><key>zuul_node_uuid</key><value>gone</value></item></tagSet></item>"#,
-                r#"<item><instanceId>i-live</instanceId><instanceState><name>running</name></instanceState><tagSet><item><key>zuul_system_id</key><value>sys-1</value></item><item><key>zuul_node_uuid</key><value>live-node</value></item></tagSet></item>"#,
-                r#"<item><instanceId>i-term</instanceId><instanceState><name>terminated</name></instanceState><tagSet><item><key>zuul_system_id</key><value>sys-1</value></item><item><key>zuul_node_uuid</key><value>gone</value></item></tagSet></item>"#,
+                r#"<item><instanceId>i-leaked</instanceId><instanceType>t3.small</instanceType><instanceState><name>running</name></instanceState><blockDeviceMapping><item><ebs><volumeId>vol-none</volumeId></ebs></item></blockDeviceMapping><tagSet><item><key>zuul_system_id</key><value>sys-1</value></item><item><key>zuul_node_uuid</key><value>gone</value></item></tagSet></item>"#,
+                r#"<item><instanceId>i-other</instanceId><instanceType>t3.small</instanceType><instanceState><name>running</name></instanceState><blockDeviceMapping><item><ebs><volumeId>vol-none</volumeId></ebs></item></blockDeviceMapping><tagSet><item><key>zuul_system_id</key><value>other</value></item><item><key>zuul_node_uuid</key><value>gone</value></item></tagSet></item>"#,
+                r#"<item><instanceId>i-live</instanceId><instanceType>t3.small</instanceType><instanceState><name>running</name></instanceState><blockDeviceMapping><item><ebs><volumeId>vol-none</volumeId></ebs></item></blockDeviceMapping><tagSet><item><key>zuul_system_id</key><value>sys-1</value></item><item><key>zuul_node_uuid</key><value>live-node</value></item></tagSet></item>"#,
+                r#"<item><instanceId>i-term</instanceId><instanceType>t3.small</instanceType><instanceState><name>terminated</name></instanceState><blockDeviceMapping><item><ebs><volumeId>vol-none</volumeId></ebs></item></blockDeviceMapping><tagSet><item><key>zuul_system_id</key><value>sys-1</value></item><item><key>zuul_node_uuid</key><value>gone</value></item></tagSet></item>"#,
                 r#"</instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
             ));
         }
@@ -298,10 +307,10 @@ fn openstack_ports_and_floating_ips_follow_14_3_0() {
         if line.contains("GET /compute/servers/detail") {
             return json_ok(concat!(
                 r#"{"servers":["#,
-                r#"{"id":"srv-leaked","status":"ACTIVE","metadata":{"zuul_system_id":"sys-1","zuul_node_uuid":"gone"}},"#,
-                r#"{"id":"srv-live","status":"ACTIVE","metadata":{"zuul_system_id":"sys-1","zuul_node_uuid":"live"}},"#,
-                r#"{"id":"srv-other","status":"ACTIVE","metadata":{"zuul_system_id":"other","zuul_node_uuid":"gone"}},"#,
-                r#"{"id":"srv-dead","status":"DELETED","metadata":{"zuul_system_id":"sys-1","zuul_node_uuid":"gone"}}"#,
+                r#"{"id":"srv-leaked","status":"ACTIVE","flavor":{"vcpus":1,"ram":512},"metadata":{"zuul_system_id":"sys-1","zuul_node_uuid":"gone"}},"#,
+                r#"{"id":"srv-live","status":"ACTIVE","flavor":{"vcpus":1,"ram":512},"metadata":{"zuul_system_id":"sys-1","zuul_node_uuid":"live"}},"#,
+                r#"{"id":"srv-other","status":"ACTIVE","flavor":{"vcpus":1,"ram":512},"metadata":{"zuul_system_id":"other","zuul_node_uuid":"gone"}},"#,
+                r#"{"id":"srv-dead","status":"DELETED","flavor":{"vcpus":1,"ram":512},"metadata":{"zuul_system_id":"sys-1","zuul_node_uuid":"gone"}}"#,
                 r#"]}"#,
             ));
         }
@@ -941,6 +950,7 @@ fn unmanaged_quotas_match_14_3_0() {
                 r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet></item>"#,
                 r#"<item><instanceId>i-host</instanceId><instanceType>c5.metal</instanceType><instanceState><name>running</name></instanceState>"#,
                 r#"<placement><hostId>h-1</hostId></placement>"#,
+                r#"<blockDeviceMapping><item><ebs><volumeId>vol-missing</volumeId></ebs></item></blockDeviceMapping>"#,
                 r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet></item>"#,
                 r#"</instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
             ));
@@ -1186,8 +1196,14 @@ fn launch_templates_are_listed_once_per_provider() {
             return json_ok(r#"<?xml version="1.0"?><DescribeLaunchTemplatesResponse><launchTemplateSet></launchTemplateSet></DescribeLaunchTemplatesResponse>"#);
         }
         if req.contains("Action=CreateLaunchTemplate") {
-            let name = req.split("LaunchTemplateName=").nth(1).unwrap_or("").split('&').next().unwrap_or("").to_string();
-            created_bg.lock().unwrap().push(name);
+            let key = if req.contains("KeyName=two") {
+                "two"
+            } else if req.contains("KeyName=one") {
+                "one"
+            } else {
+                "other"
+            };
+            created_bg.lock().unwrap().push(key.to_string());
             return json_ok(r#"<?xml version="1.0"?><CreateLaunchTemplateResponse></CreateLaunchTemplateResponse>"#);
         }
         json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
@@ -1212,7 +1228,7 @@ fn launch_templates_are_listed_once_per_provider() {
                 region: "us-east-1".into(),
                 labels: BTreeMap::from([
                     ("a".into(), json!({"name": "a", "flavor": "big", "key-name": "one"})),
-                    ("b".into(), json!({"name": "b", "flavor": "big", "key-name": "two"})),
+                    ("z-fleet".into(), json!({"name": "z-fleet", "flavor": "big", "key-name": "two"})),
                 ]),
                 flavors: BTreeMap::from([(
                     "big".into(),
@@ -1221,10 +1237,18 @@ fn launch_templates_are_listed_once_per_provider() {
                 images: BTreeMap::new(),
             },
         );
+        reg.label_orders.insert(
+            "tenant/once".into(),
+            vec!["z-fleet".into(), "a".into()],
+        );
     }
     post_config();
     assert_eq!(describes.load(AtomicOrdering::SeqCst), 1);
-    assert_eq!(created.lock().unwrap().len(), 2, "{:?}", created.lock().unwrap());
+    assert_eq!(
+        created.lock().unwrap().as_slice(),
+        ["two", "one"],
+        "fleet labels followed sorted name order"
+    );
 }
 
 #[test]
@@ -1355,4 +1379,93 @@ fn glance_share_uses_project_id_not_project_name() {
     assert!(body.contains("\"member\":\"proj-id\""), "{body}");
     assert!(!body.contains("proj-name"), "{body}");
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn missing_describe_fields_fail_like_keyerror() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    let port = serve(|_port, req| {
+        if req.contains("Action=DescribeVolumes") {
+            return json_ok(r#"<?xml version="1.0"?><DescribeVolumesResponse><volumeSet></volumeSet></DescribeVolumesResponse>"#);
+        }
+        if req.contains("Action=DescribeInstances") {
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet><item><instancesSet>"#,
+                r#"<item><instanceId>i-bare</instanceId><instanceState><name>running</name></instanceState></item>"#,
+                r#"</instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
+            ));
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    aws_provider(
+        "tenant/key",
+        "aws-key",
+        port,
+        json!({}),
+        json!({}),
+        json!({}),
+    );
+    let snap = registry().lock().unwrap().providers.get("tenant/key").unwrap().clone();
+    let err = list_aws_instances(&snap).unwrap_err();
+    let text = err.to_string();
+    assert!(text.contains("InstanceType"), "{text}");
+}
+
+#[test]
+fn missing_openstack_flavor_fails_like_keyerror() {
+    let tok = OsToken {
+        token: String::new(),
+        compute: String::new(),
+        network: String::new(),
+        image: String::new(),
+        volume: String::new(),
+        limit_key: String::new(),
+        rate: 1.0,
+    };
+    let err = os_server_quota(&tok, &json!({"id": "srv", "status": "ACTIVE"}), &BTreeMap::new()).unwrap_err();
+    assert!(err.to_string().contains("flavor"), "{err}");
+}
+
+#[test]
+fn flavor_cache_does_not_refresh() {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits_bg = hits.clone();
+    let load = std::sync::Arc::new(move || {
+        hits_bg.fetch_add(1, AtomicOrdering::SeqCst);
+        Ok(json!([{"id": "f1", "vcpus": 1, "ram": 512}]))
+    });
+    let key = "flavors-once-test";
+    cache_once(key, load.clone()).unwrap();
+    cache_once(key, load).unwrap();
+    assert_eq!(hits.load(AtomicOrdering::SeqCst), 1);
+    ttl_lists().lock().unwrap().remove(key);
+}
+
+#[test]
+fn delete_existence_uses_the_list_cache() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    let describes = Arc::new(AtomicUsize::new(0));
+    let describes_bg = describes.clone();
+    let port = serve(move |_port, req| {
+        if req.contains("Action=DescribeInstances") {
+            describes_bg.fetch_add(1, AtomicOrdering::SeqCst);
+            return json_ok(r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet></reservationSet></DescribeInstancesResponse>"#);
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    aws_provider(
+        "tenant/del",
+        "aws-del",
+        port,
+        json!({}),
+        json!({}),
+        json!({}),
+    );
+    let snap = registry().lock().unwrap().providers.get("tenant/del").unwrap().clone();
+    let resource = json!({"type": "instance", "id": "i-missing"});
+    delete_aws(&snap, &resource).unwrap();
+    delete_aws(&snap, &resource).unwrap();
+    assert_eq!(describes.load(AtomicOrdering::SeqCst), 1);
 }

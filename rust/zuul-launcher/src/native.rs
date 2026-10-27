@@ -53,6 +53,8 @@ struct Registry {
     unmanaged: BTreeMap<String, BTreeMap<String, f64>>,
     /// OpenStack DOWN-port sets, keyed by endpoint canonical name.
     ports: BTreeMap<String, PortBook>,
+    /// Fleet-label names in config order, keyed by provider canonical name.
+    label_orders: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Clone)]
@@ -139,6 +141,7 @@ fn registry() -> &'static Mutex<Registry> {
             templates: BTreeMap::new(),
             unmanaged: BTreeMap::new(),
             ports: BTreeMap::new(),
+            label_orders: BTreeMap::new(),
         })
     })
 }
@@ -205,12 +208,17 @@ pub fn set_connections(connections: Vec<ConnectionConfig>) {
 pub fn sync_providers(tenants: &std::collections::HashMap<String, Vec<Arc<dyn Provider>>>) {
     let mut reg = registry().lock().unwrap();
     reg.providers.clear();
+    reg.label_orders.clear();
     for list in tenants.values() {
         for provider in list {
             let mut labels = BTreeMap::new();
             for (name, label) in provider.labels() {
                 labels.insert(name.clone(), label_value(label));
             }
+            reg.label_orders.insert(
+                provider.canonical_name().to_string(),
+                provider.label_order(),
+            );
             let mut flavors = BTreeMap::new();
             for (name, flavor) in provider.flavors() {
                 flavors.insert(name.clone(), flavor.raw.clone());
@@ -959,6 +967,28 @@ fn with_ttl_cache(
             }
         });
         return Ok(stale);
+    }
+    let fresh = load()?;
+    ttl_lists().lock().unwrap().insert(
+        key.to_string(),
+        CachedList {
+            at: Instant::now(),
+            value: fresh.clone(),
+            refreshing: false,
+        },
+    );
+    Ok(fresh)
+}
+
+/// Unbounded cache. OpenStack flavor lists are `lru_cache(maxsize=None)`
+/// and Azure SKUs are stored on the endpoint at startup. Neither refreshes
+/// until the process (or a test reset) drops the map.
+fn cache_once(
+    key: &str,
+    load: std::sync::Arc<dyn Fn() -> Result<Value, AdvanceError> + Send + Sync>,
+) -> Result<Value, AdvanceError> {
+    if let Some(entry) = ttl_lists().lock().unwrap().get(key) {
+        return Ok(entry.value.clone());
     }
     let fresh = load()?;
     ttl_lists().lock().unwrap().insert(

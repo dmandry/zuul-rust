@@ -156,6 +156,11 @@ pub trait Provider: Send + Sync {
     fn connection_name(&self) -> &str;
     fn endpoint(&self) -> &EndpointInfo;
     fn labels(&self) -> &BTreeMap<String, Label>;
+    /// Config order. The default is sorted map order, which is only
+    /// correct when the provider was not parsed from a label list.
+    fn label_order(&self) -> Vec<String> {
+        self.labels().keys().cloned().collect()
+    }
     fn images(&self) -> &BTreeMap<String, Image>;
     fn flavors(&self) -> &BTreeMap<String, Flavor>;
     fn launch_attempts(&self) -> i64;
@@ -3813,6 +3818,9 @@ pub struct CloudProvider {
     pub connection_name: String,
     pub endpoint_info: EndpointInfo,
     pub labels: BTreeMap<String, Label>,
+    /// Label names in config-list order. Fleet templates follow this,
+    /// not the sorted `BTreeMap` key order.
+    pub label_order: Vec<String>,
     pub images: BTreeMap<String, Image>,
     pub flavors: BTreeMap<String, Flavor>,
     pub launch_attempts: i64,
@@ -3830,6 +3838,7 @@ impl Provider for CloudProvider {
     fn connection_name(&self) -> &str { &self.connection_name }
     fn endpoint(&self) -> &EndpointInfo { &self.endpoint_info }
     fn labels(&self) -> &BTreeMap<String, Label> { &self.labels }
+    fn label_order(&self) -> Vec<String> { self.label_order.clone() }
     fn images(&self) -> &BTreeMap<String, Image> { &self.images }
     fn flavors(&self) -> &BTreeMap<String, Flavor> { &self.flavors }
     fn launch_attempts(&self) -> i64 { self.launch_attempts }
@@ -3930,6 +3939,7 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         .unwrap_or(canonical)
         .to_string();
     let mut labels = BTreeMap::new();
+    let mut label_order = Vec::new();
     if let Some(list) = obj.and_then(|m| m.get("labels")).and_then(|v| v.as_array()) {
         for item in list {
             if let Some(n) = item.get("name").and_then(|v| v.as_str()) {
@@ -4025,6 +4035,7 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
                     label.host_key_checking = b;
                 }
                 label.raw = item.clone();
+                label_order.push(n.to_string());
                 labels.insert(n.to_string(), label);
             }
         }
@@ -4226,6 +4237,7 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
             limits,
         },
         labels,
+        label_order,
         images,
         flavors,
         launch_attempts,
