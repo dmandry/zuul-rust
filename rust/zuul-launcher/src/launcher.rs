@@ -2642,12 +2642,15 @@ impl Launcher {
         woke
     }
 
-    /// Wake on ZooKeeper watch events. `extra` runs on the watch thread
-    /// and is how the PyO3 loop sets Python's `wake_event`.
+    /// Wake on ZooKeeper watch events the way 14.3.0's tree cache does:
+    /// the reader only queues the event, playback gets it, then one
+    /// `updated_event`. `extra` is the PyO3 `wake_event.set` and runs on
+    /// the playback thread, not the ZooKeeper reader. `None` is the
+    /// production binary (`main` passes no Python callback).
     pub fn install_waker(&self, extra: Option<Arc<dyn Fn() + Send + Sync>>) {
         let flag = self.wake.clone();
         let cv = self.wake_cv.clone();
-        self.api.zk.set_waker(Some(Arc::new(move || {
+        self.api.enable_playback(Arc::new(move || {
             if let Ok(mut guard) = flag.lock() {
                 *guard = true;
             }
@@ -2655,6 +2658,10 @@ impl Launcher {
             if let Some(extra) = &extra {
                 extra();
             }
+        }));
+        let playback = self.api.playback_handle();
+        self.api.zk.set_waker(Some(Arc::new(move || {
+            playback.claim();
         })));
     }
 
@@ -3898,6 +3905,9 @@ mod tests {
         fn take_watch_events(&self) -> Vec<zk::ZkWatchEvent> {
             self.inner.take_watch_events()
         }
+        fn watch_backlog(&self) -> usize {
+            self.inner.watch_backlog()
+        }
         fn set_waker(&self, waker: Option<Arc<dyn Fn() + Send + Sync>>) {
             self.inner.set_waker(waker);
         }
@@ -4048,5 +4058,162 @@ mod tests {
         api.write_node(&changed).unwrap();
         let v3 = zk.get("/zuul/nodes/nodes/n1").unwrap().1.version;
         assert!(v3 > v1, "a real state change still writes");
+    }
+
+    /// `RequestCache.preCacheHook` sets `is_locked` from the event that
+    /// just arrived. It does not keep the other contenders. Deleting one
+    /// of two clears `is_locked` and does not get.
+    #[test]
+    fn request_lock_delete_clears_is_locked_while_another_contender_remains() {
+        let zk = MemoryZk::new();
+        zk.ensure_path("/zuul/nodeset/requests").unwrap();
+        zk.ensure_path("/zuul/nodeset/locks/req-1").unwrap();
+        let bytes = dumps_compressed(&json!({
+            "uuid": "req-1",
+            "state": "requested",
+        }));
+        zk.create(
+            "/zuul/nodeset/requests/req-1",
+            &bytes,
+            zk::CreateMode::Persistent,
+        )
+        .unwrap();
+        let (mut launcher, counted) = counting_launcher(&zk);
+        launcher.arm_watches();
+        launcher.api.prepare();
+        counted.reset();
+
+        zk.create(
+            "/zuul/nodeset/locks/req-1/contender-a",
+            b"launcher-a",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        launcher.api.prepare();
+        assert_eq!(
+            counted.paths(),
+            vec!["/zuul/nodeset/locks/req-1/contender-a".to_string()]
+        );
+        assert!(launcher.api.requests["req-1"].is_locked);
+        counted.reset();
+
+        zk.create(
+            "/zuul/nodeset/locks/req-1/contender-b",
+            b"launcher-b",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        launcher.api.prepare();
+        assert_eq!(
+            counted.paths(),
+            vec!["/zuul/nodeset/locks/req-1/contender-b".to_string()]
+        );
+        assert!(launcher.api.requests["req-1"].is_locked);
+        counted.reset();
+
+        zk.delete("/zuul/nodeset/locks/req-1/contender-a", false).unwrap();
+        launcher.api.prepare();
+        assert_eq!(counted.gets(), 0, "delete gets {:?}", counted.paths());
+        assert!(
+            !launcher.api.requests["req-1"].is_locked,
+            "RequestCache sets is_locked from this delete, even though contender-b remains"
+        );
+
+        zk.delete("/zuul/nodeset/locks/req-1/contender-b", false).unwrap();
+        launcher.api.prepare();
+        assert_eq!(counted.gets(), 0, "second delete gets {:?}", counted.paths());
+        assert!(!launcher.api.requests["req-1"].is_locked);
+    }
+
+    /// Playback still gets an external create once. The get is not a
+    /// second read inside `prepare` after the playback thread did it.
+    #[test]
+    fn playback_external_create_is_one_get() {
+        let zk = MemoryZk::new();
+        zk.ensure_path("/zuul/nodeset/requests").unwrap();
+        let (mut launcher, counted) = counting_launcher(&zk);
+        launcher.install_waker(None);
+        launcher.arm_watches();
+        launcher.api.prepare();
+        let _ = launcher.take_wake();
+        counted.reset();
+        let bytes = dumps_compressed(&json!({
+            "uuid": "req-play",
+            "state": "requested",
+        }));
+        zk.create(
+            "/zuul/nodeset/requests/req-play",
+            &bytes,
+            zk::CreateMode::Persistent,
+        )
+        .unwrap();
+        launcher.api.prepare();
+        assert_eq!(
+            counted.paths(),
+            vec!["/zuul/nodeset/requests/req-play".to_string()],
+            "playback get is the only get {:?}",
+            counted.paths()
+        );
+        assert!(launcher.api.requests.contains_key("req-play"));
+        let before = counted.gets();
+        launcher.api.prepare();
+        assert_eq!(counted.gets(), before, "the played event is not gotten again");
+    }
+
+    /// Production binary path: `install_waker(None)`, then the same loop
+    /// order as `main::run_foreground`. One request create wakes once.
+    #[test]
+    fn native_binary_wakes_once_per_watch_event() {
+        let zk = MemoryZk::new();
+        zk.ensure_path("/zuul/nodeset/requests").unwrap();
+        let ops: Arc<dyn ZkOps> = Arc::new(zk.clone());
+        let mut launcher = Launcher::new("launcher-binary", ops);
+        launcher.install_waker(None);
+        launcher.arm_watches();
+        launcher.api.prepare();
+        assert!(!launcher.take_wake(), "startup left a wake set");
+        let (sleep, interval) = loop_waits(Instant::now());
+        assert!(sleep <= Duration::from_secs_f64(MAX_SLEEP));
+        assert_eq!(interval, Duration::from_secs_f64(MIN_INTERVAL));
+        assert!((MAX_SLEEP - 1.0).abs() < f64::EPSILON);
+        assert!((MIN_INTERVAL - 60.0).abs() < f64::EPSILON);
+
+        let bytes = dumps_compressed(&json!({
+            "uuid": "req-bin",
+            "state": "requested",
+        }));
+        zk.create(
+            "/zuul/nodeset/requests/req-bin",
+            &bytes,
+            zk::CreateMode::Persistent,
+        )
+        .unwrap();
+        let started = Instant::now();
+        assert!(
+            launcher.wait_wake(Duration::from_secs(2)),
+            "binary waker did not wake"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "woke via the MIN_INTERVAL timer ({:?})",
+            started.elapsed()
+        );
+        assert!(
+            !launcher.wait_wake(Duration::from_millis(50)),
+            "a second wake arrived for one create"
+        );
+        launcher.api.prepare();
+        assert!(launcher.api.requests.contains_key("req-bin"));
+
+        zk.create(
+            "/zuul/nodeset/requests/req-bin-2",
+            &dumps_compressed(&json!({"uuid": "req-bin-2", "state": "requested"})),
+            zk::CreateMode::Persistent,
+        )
+        .unwrap();
+        assert!(launcher.wait_wake(Duration::from_secs(2)));
+        assert!(!launcher.wait_wake(Duration::from_millis(50)));
+        launcher.api.prepare();
+        assert!(launcher.api.requests.contains_key("req-bin-2"));
     }
 }

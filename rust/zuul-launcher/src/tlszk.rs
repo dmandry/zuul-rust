@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 use crate::zk::{
-    CreateMode, ZkError, ZkOps, ZkStat, ZkWatchEvent, ADD_WATCH_PERSISTENT,
+    CacheFetch, CreateMode, ZkError, ZkOps, ZkStat, ZkWatchEvent, ADD_WATCH_PERSISTENT,
     ADD_WATCH_PERSISTENT_RECURSIVE, EVENT_CHANGED, EVENT_CHILDREN, EVENT_CREATED,
     EVENT_DELETED, EVENT_SESSION,
 };
@@ -321,6 +321,7 @@ impl Session {
                     data: None,
                     exists: true,
                     version: 0,
+                    fetch: CacheFetch::Inline,
                 });
             }
             Err(ZkError::NoNode) => {
@@ -331,6 +332,7 @@ impl Session {
                     data: None,
                     exists: false,
                     version: 0,
+                    fetch: CacheFetch::Inline,
                 });
             }
             Err(_) => {}
@@ -353,6 +355,7 @@ impl Session {
                     data,
                     exists: true,
                     version,
+                    fetch: CacheFetch::Inline,
                 });
             }
             Err(ZkError::NoNode) => {
@@ -363,6 +366,7 @@ impl Session {
                     data: None,
                     exists: false,
                     version: 0,
+                    fetch: CacheFetch::Inline,
                 });
             }
             Err(_) => {}
@@ -407,6 +411,7 @@ impl Session {
             data: None,
             exists: false,
             version: 0,
+            fetch: CacheFetch::Inline,
         });
         Ok(())
     }
@@ -489,6 +494,7 @@ fn handle_watch(session: &Arc<Session>, rest: &[u8]) {
         data: None,
         exists: kind != EVENT_DELETED,
         version: 0,
+        fetch: CacheFetch::Inline,
     });
 }
 
@@ -610,6 +616,9 @@ impl ZkOps for TlsZk {
 
     fn take_watch_events(&self) -> Vec<ZkWatchEvent> {
         std::mem::take(&mut *self.session.events.lock().unwrap())
+    }
+    fn watch_backlog(&self) -> usize {
+        self.session.events.lock().unwrap().len()
     }
 
     fn set_waker(&self, waker: Option<Arc<dyn Fn() + Send + Sync>>) {
