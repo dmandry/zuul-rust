@@ -469,16 +469,34 @@ fn call_py(py: Python<'_>, name: &str, args: impl IntoPy<Py<PyTuple>>) -> PyResu
     Ok(())
 }
 
+fn helpers(py: Python<'_>) -> PyResult<Py<PyDict>> {
+    // bootstrap.py is a few thousand lines and imports the drivers.
+    // Executing it on every cloud_call made each launcher pass hold
+    // the test lock for most of MAX_SLEEP.
+    static CACHED: Mutex<Option<Py<PyDict>>> = Mutex::new(None);
+    if let Some(dict) = CACHED.lock().unwrap().as_ref() {
+        return Ok(dict.clone_ref(py));
+    }
+    let dict = PyDict::new_bound(py);
+    // Same dict for globals and locals so imports are visible inside
+    // the helper functions (Python binds a function's globals at def time).
+    py.run_bound(BOOTSTRAP, Some(&dict), Some(&dict))?;
+    let owned = dict.unbind();
+    let mut guard = CACHED.lock().unwrap();
+    if guard.is_none() {
+        *guard = Some(owned.clone_ref(py));
+    }
+    Ok(guard.as_ref().unwrap().clone_ref(py))
+}
+
 fn call_py_value(
     py: Python<'_>,
     name: &str,
     args: impl IntoPy<Py<PyTuple>>,
 ) -> PyResult<PyObject> {
-    let dict = PyDict::new_bound(py);
-    // Same dict for globals and locals so imports are visible inside
-    // the helper functions (Python binds a function's globals at def time).
-    py.run_bound(BOOTSTRAP, Some(&dict), Some(&dict))?;
+    let dict = helpers(py)?;
     let func = dict
+        .bind(py)
         .get_item(name)?
         .ok_or_else(|| PyRuntimeError::new_err(format!("missing helper {name}")))?;
     Ok(func.call1(args)?.into())
