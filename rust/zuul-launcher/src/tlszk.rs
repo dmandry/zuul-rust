@@ -151,10 +151,12 @@ fn spawn_reader(session: Arc<Session>) {
             match frame {
                 Ok(frame) => dispatch_frame(&session, &frame),
                 Err(ZkError::Message(msg)) if msg == "read timeout" => {
-                    // The lock was released with the frame block. Pause so a
-                    // writer can take the socket; looping straight back would
-                    // starve every request and ping.
-                    thread::sleep(Duration::from_millis(20));
+                    // The lock was released with the frame block. A short
+                    // pause keeps the idle loop from spinning. The pause is
+                    // not the read itself: a writer must be able to take the
+                    // socket in about a millisecond, or a launcher pass of
+                    // many gets misses the 10s windows in the unit tests.
+                    thread::sleep(Duration::from_millis(2));
                     continue;
                 }
                 Err(_) => {
@@ -201,9 +203,9 @@ fn open_stream(
         ZkError::Message(format!("tls handshake {host}:{port}: {e}"))
     })?;
     let (session_id, negotiated_ms) = handshake(&mut stream, timeout_ms)?;
-    // The reader blocks until a frame arrives. Ping timeouts close the
-    // socket, which is what unblocks a dead session.
-    stream.get_mut().set_read_timeout(Some(Duration::from_millis(200))).ok();
+    // Idle reads time out so the reader does not hold the socket. Ping
+    // failure still closes a dead session.
+    stream.get_mut().set_read_timeout(Some(Duration::from_millis(1))).ok();
     stream.get_mut().set_write_timeout(Some(Duration::from_secs(30))).ok();
     Ok((stream, session_id, negotiated_ms))
 }
@@ -839,7 +841,7 @@ fn read_frame(stream: &mut openssl::ssl::SslStream<TcpStream>) -> Result<Vec<u8>
     // Time out only while waiting for the first byte so a writer can take
     // the socket between frames. Once a byte arrives, read the rest of the
     // frame without a timeout so a partial header cannot desync the session.
-    stream.get_mut().set_read_timeout(Some(Duration::from_millis(200))).ok();
+    stream.get_mut().set_read_timeout(Some(Duration::from_millis(1))).ok();
     let mut len_buf = [0u8; 4];
     match stream.read(&mut len_buf[..1]) {
         Ok(0) => return Err(ZkError::Message("zk read: eof".into())),
