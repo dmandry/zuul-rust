@@ -6,8 +6,10 @@
 // Python call order in each driver's statemachine module.
 
 use crate::cloud;
+use crate::codec;
 use crate::config::quote_plus;
 use crate::endpoint;
+use crate::jsonutil;
 use crate::model::{ProviderNode, QuotaInformation};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -204,6 +206,10 @@ pub trait Provider: Send + Sync {
         Ok(self.endpoint().unmanaged.copy())
     }
     fn notify_nodescan_failure(&self, _node: &ProviderNode) {}
+    /// Driver options the native cleanup worker reads (bucket, port interval).
+    fn provider_options(&self) -> BTreeMap<String, String> {
+        BTreeMap::new()
+    }
     /// Static provider hosts keyed by uuid5 node id. Empty for other drivers.
     fn static_nodes(&self) -> &BTreeMap<String, StaticNodeConfig> {
         static EMPTY: std::sync::OnceLock<BTreeMap<String, StaticNodeConfig>> =
@@ -1407,6 +1413,27 @@ impl AwsSnapshot {
     pub fn enable_live(&mut self) {
         self.live = true;
     }
+
+    /// ProviderNodeSnapshot.serialize: sort_keys JSON then zlib.
+    /// `start_time` is a Python float, so whole seconds stay `N.0`.
+    pub fn znode_bytes(&self) -> Vec<u8> {
+        let snap_id = match &self.snapshot_id {
+            Some(id) => jsonutil::dumps(&json!(id)),
+            None => "null".into(),
+        };
+        let external = match &self.external_id {
+            Some(id) => jsonutil::dumps(&json!(id)),
+            None => "null".into(),
+        };
+        let complete = if self.complete { "true" } else { "null" };
+        let start = jsonutil::format_float(self.start_time);
+        let state = jsonutil::dumps(&json!(self.state));
+        let tags = jsonutil::dumps(&self.tags);
+        let raw = format!(
+            "{{\"complete\": {complete}, \"external_id\": {external}, \"snapshot_state\": {{\"snapshot_id\": {snap_id}, \"start_time\": {start}, \"state\": {state}}}, \"tags\": {tags}}}"
+        );
+        codec::compress(raw.as_bytes())
+    }
 }
 
 impl StateMachine for AwsSnapshot {
@@ -1496,9 +1523,10 @@ impl StateMachine for AwsSnapshot {
         let mut m = Map::new();
         m.insert("state".into(), json!(self.state));
         m.insert("start_time".into(), json!(self.start_time));
-        if let Some(id) = &self.snapshot_id {
-            m.insert("snapshot_id".into(), json!(id));
-        }
+        m.insert(
+            "snapshot_id".into(),
+            self.snapshot_id.as_ref().map(|id| json!(id)).unwrap_or(Value::Null),
+        );
         Value::Object(m)
     }
 }
@@ -3823,6 +3851,9 @@ impl Provider for CloudProvider {
     fn static_nodes(&self) -> &BTreeMap<String, StaticNodeConfig> {
         &self.static_nodes
     }
+    fn provider_options(&self) -> BTreeMap<String, String> {
+        self.options.clone()
+    }
     fn create_machine(&self, node: &ProviderNode, label: &Label) -> Box<dyn StateMachine> {
         if self.driver_name == "static" {
             let mut sm = StaticCreate::new();
@@ -4160,6 +4191,27 @@ pub fn parse_provider_config(driver: &str, connection: &str, canonical: &str, co
         {
             options.insert("bucket_name".into(), bucket.to_string());
         }
+    }
+    if let Some(rg) = obj
+        .and_then(|m| m.get("resource-group").or_else(|| m.get("resource_group")))
+        .and_then(|v| v.as_str())
+    {
+        options.insert("resource_group".into(), rg.to_string());
+    }
+    if let Some(n) = obj
+        .and_then(|m| m.get("port-cleanup-interval").or_else(|| m.get("port_cleanup_interval")))
+        .and_then(|v| v.as_i64())
+    {
+        options.insert("port_cleanup_interval".into(), n.to_string());
+    }
+    if let Some(b) = obj
+        .and_then(|m| m.get("floating-ip-cleanup").or_else(|| m.get("floating_ip_cleanup")))
+        .and_then(|v| v.as_bool())
+    {
+        options.insert(
+            "floating_ip_cleanup".into(),
+            if b { "true" } else { "false" }.into(),
+        );
     }
     CloudProvider {
         name,

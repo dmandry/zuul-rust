@@ -19,7 +19,7 @@ use crate::config::ConnectionConfig;
 use crate::provider::{AdvanceError, Image, Label, Provider};
 use base64::Engine;
 use serde_json::{json, Map, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -43,6 +43,31 @@ struct Registry {
     azure_arm: Option<String>,
     /// Zuul system uuid, used in launch-template and upload tags.
     system_id: String,
+    /// Provider options the cleanup worker needs (buckets, port interval).
+    extras: BTreeMap<String, ProviderExtra>,
+    /// Endpoint canonical names whose postConfig finished.
+    ready: BTreeMap<String, bool>,
+    /// provider canonical → label → launch template name.
+    templates: BTreeMap<String, BTreeMap<String, String>>,
+    /// Unmanaged quota recorded by the native cleanup worker.
+    unmanaged: BTreeMap<String, BTreeMap<String, f64>>,
+    /// OpenStack DOWN-port sets, keyed by endpoint canonical name.
+    ports: BTreeMap<String, PortBook>,
+}
+
+#[derive(Clone)]
+struct ProviderExtra {
+    endpoint_canonical: String,
+    #[allow(dead_code)]
+    endpoint_name: String,
+    bucket: Option<String>,
+    port_interval: Option<i64>,
+    floating_ip_cleanup: bool,
+}
+
+struct PortBook {
+    last: Option<Instant>,
+    down: HashSet<String>,
 }
 
 struct FutureJob {
@@ -84,6 +109,8 @@ struct AwsEndpoint {
     reading: RateLimiter,
     quota_limit: RateLimiter,
     lists: Mutex<BTreeMap<String, CachedList>>,
+    not_our_images: Mutex<HashSet<String>>,
+    not_our_snapshots: Mutex<HashSet<String>>,
 }
 
 struct CachedList {
@@ -106,6 +133,11 @@ fn registry() -> &'static Mutex<Registry> {
             azure_login: None,
             azure_arm: None,
             system_id: "system".into(),
+            extras: BTreeMap::new(),
+            ready: BTreeMap::new(),
+            templates: BTreeMap::new(),
+            unmanaged: BTreeMap::new(),
+            ports: BTreeMap::new(),
         })
     })
 }
@@ -186,6 +218,17 @@ pub fn sync_providers(tenants: &std::collections::HashMap<String, Vec<Arc<dyn Pr
             for (name, image) in provider.images() {
                 images.insert(name.clone(), image_value(image));
             }
+            let options = provider.provider_options();
+            reg.extras.insert(
+                provider.canonical_name().to_string(),
+                ProviderExtra {
+                    endpoint_canonical: provider.endpoint().canonical_name.clone(),
+                    endpoint_name: provider.endpoint().name.clone(),
+                    bucket: options.get("bucket_name").cloned(),
+                    port_interval: options.get("port_cleanup_interval").and_then(|s| s.parse().ok()),
+                    floating_ip_cleanup: options.get("floating_ip_cleanup").map(|s| s == "true").unwrap_or(false),
+                },
+            );
             reg.providers.insert(
                 provider.canonical_name().to_string(),
                 ProviderSnap {
@@ -752,6 +795,8 @@ fn aws_endpoint(provider: &ProviderSnap) -> Result<Arc<AwsEndpoint>, AdvanceErro
         reading: RateLimiter::new(rate * 10.0),
         quota_limit: RateLimiter::new(rate),
         lists: Mutex::new(BTreeMap::new()),
+        not_our_images: Mutex::new(HashSet::new()),
+        not_our_snapshots: Mutex::new(HashSet::new()),
     });
     registry().lock().unwrap().aws.insert(key, ep.clone());
     Ok(ep)
@@ -2709,6 +2754,7 @@ fn k8s_delete_project(args: &Value) -> Result<Value, AdvanceError> {
     Ok(json!({"ok": true}))
 }
 
+include!("leak.rs");
 include!("parity_impl.rs");
 
 #[cfg(test)]
@@ -3856,4 +3902,6 @@ mod tests {
         delete_uploaded_image("tenant/moto", &ami).expect("moto DeregisterImage");
         let _ = child.kill();
     }
+
+    include!("leak_tests.rs");
 }

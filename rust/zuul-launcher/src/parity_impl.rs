@@ -57,6 +57,14 @@ fn image_upload_sleep() {
     std::thread::sleep(Duration::from_secs(30));
 }
 
+/// Image.import_timeout defaults to 300. Zero disables the limit retry.
+fn import_timeout_of(image: &Value) -> f64 {
+    match field(image, &["import-timeout", "import_timeout"]) {
+        Some(v) => v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)).unwrap_or(300.0),
+        None => 300.0,
+    }
+}
+
 fn sorted_json(v: &Value) -> Value {
     match v {
         Value::Object(map) => {
@@ -86,7 +94,15 @@ fn create_fleet(
     image_id: &str,
     tags: &Value,
 ) -> Result<Value, AdvanceError> {
-    let template = ensure_launch_template(ep, provider_name, label, flavor)?;
+    let template = if let Some(name) = label
+        .get("name")
+        .and_then(|v| v.as_str())
+        .and_then(|n| stored_launch_template(provider_name, n))
+    {
+        name
+    } else {
+        ensure_launch_template(ep, provider_name, label, flavor)?
+    };
     let fleet = flavor.get("fleet").cloned().unwrap_or(json!({}));
     let types = as_str_list(fleet.get("instance_types").or_else(|| fleet.get("instance-types")));
     let strategy = fleet
@@ -758,10 +774,11 @@ fn aws_upload_job(
         if method == "ebs-direct" {
             return Err(AdvanceError::Other("no import job for ebs-direct".into()));
         }
+        let timeout = import_timeout_of(image);
         return if method == "image" {
-            import_image(provider_name, &ep, image, image_name, format, bucket, key, tags, false)
+            import_image(provider_name, &ep, image, image_name, format, bucket, key, tags, false, timeout)
         } else {
-            import_snapshot(provider_name, &ep, image, image_name, format, bucket, key, tags, false)
+            import_snapshot(provider_name, &ep, image, image_name, format, bucket, key, tags, false, timeout)
         };
     }
     let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
@@ -778,9 +795,11 @@ fn aws_upload_job(
     let bytes = std::fs::read(path).map_err(|e| AdvanceError::Other(e.to_string()))?;
     s3_put_tagged(provider_name, &bucket, &key, &bytes, "application/octet-stream", Some(&tagging_header(tags)))?;
     let image_id = if method == "image" {
-        import_image(provider_name, &ep, image, image_name, format, &bucket, &key, tags, true)?
+        let timeout = import_timeout_of(image);
+        import_image(provider_name, &ep, image, image_name, format, &bucket, &key, tags, true, timeout)?
     } else {
-        import_snapshot(provider_name, &ep, image, image_name, format, &bucket, &key, tags, true)?
+        let timeout = import_timeout_of(image);
+        import_snapshot(provider_name, &ep, image, image_name, format, &bucket, &key, tags, true, timeout)?
     };
     Ok(image_id)
 }
@@ -795,8 +814,9 @@ fn import_snapshot(
     key: &str,
     tags: &Value,
     delete_object: bool,
+    timeout: f64,
 ) -> Result<String, AdvanceError> {
-    let task_id = start_import_snapshot(ep, format, bucket, key, tags)?;
+    let task_id = start_import_snapshot(ep, format, bucket, key, tags, timeout)?;
     let task = wait_import(ep, "DescribeImportSnapshotTasks", "ImportSnapshotTasks", &task_id, "SnapshotTaskDetail")?;
     if delete_object {
         let _ = s3_delete(provider_name, bucket, key);
@@ -828,7 +848,24 @@ fn import_image(
     key: &str,
     tags: &Value,
     delete_object: bool,
+    timeout: f64,
 ) -> Result<String, AdvanceError> {
+    if let Some(existing) = find_tagged_import(ep, "DescribeImportImageTasks", "ImportImageTasks", tags)? {
+        let task = wait_import(ep, "DescribeImportImageTasks", "ImportImageTasks", &existing, "")?;
+        if delete_object {
+            let _ = s3_delete(provider_name, bucket, key);
+        }
+        let status = task.get("Status").and_then(|v| v.as_str()).unwrap_or("").to_ascii_lowercase();
+        if status != "completed" {
+            return Err(AdvanceError::Other(format!("Error uploading image: {task}")));
+        }
+        let image_id = task.get("ImageId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let _ = create_tags(ep, &image_id, tags);
+        if let Some(snap) = task.pointer("/SnapshotDetails/0/SnapshotId").and_then(|v| v.as_str()) {
+            let _ = create_tags(ep, snap, tags);
+        }
+        return Ok(image_id);
+    }
     let arch = field_str(image, &["architecture"]).unwrap_or_else(|| "x86_64".into());
     let mut params = Map::new();
     params.insert("Architecture".into(), json!(arch));
@@ -840,7 +877,7 @@ fn import_image(
         "TagSpecifications".into(),
         json!([{"ResourceType": "import-image-task", "Tag": tag_list(tags)}]),
     );
-    let started = ec2(ep, "ImportImage", params, false)?;
+    let started = ec2_until_import_limit(ep, "ImportImage", params, timeout)?;
     let task_id = started
         .get("ImportTaskId")
         .and_then(|v| v.as_str())
@@ -868,7 +905,11 @@ fn start_import_snapshot(
     bucket: &str,
     key: &str,
     tags: &Value,
+    timeout: f64,
 ) -> Result<String, AdvanceError> {
+    if let Some(existing) = find_tagged_import(ep, "DescribeImportSnapshotTasks", "ImportSnapshotTasks", tags)? {
+        return Ok(existing);
+    }
     let mut params = Map::new();
     params.insert(
         "DiskContainer".into(),
@@ -878,7 +919,7 @@ fn start_import_snapshot(
         "TagSpecifications".into(),
         json!([{"ResourceType": "import-snapshot-task", "Tag": tag_list(tags)}]),
     );
-    let started = ec2(ep, "ImportSnapshot", params, false)?;
+    let started = ec2_until_import_limit(ep, "ImportSnapshot", params, timeout)?;
     Ok(started.get("ImportTaskId").and_then(|v| v.as_str()).unwrap_or("").to_string())
 }
 
@@ -932,7 +973,12 @@ fn copy_image(
         q.insert("ImageId".into(), json!([image_id.clone()]));
         let listed = ec2(ep, "DescribeImages", q, true)?;
         if let Some(ami) = listed.get("Images").and_then(|v| v.as_array()).and_then(|a| a.first()) {
-            let state = ami.get("State").and_then(|v| v.as_str()).unwrap_or("").to_ascii_lowercase();
+            let state = ami
+                .get("State")
+                .or_else(|| ami.get("ImageState"))
+                .and_then(|v| v.as_str().or_else(|| v.get("Name").and_then(|n| n.as_str())))
+                .unwrap_or("")
+                .to_ascii_lowercase();
             if state == "available" {
                 return Ok(image_id);
             }

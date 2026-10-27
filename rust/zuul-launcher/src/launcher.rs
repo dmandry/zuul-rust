@@ -18,7 +18,8 @@ use crate::provider::{
 use crate::upload::{PlannedJob, UploadArgs, UploadPlanner};
 use crate::upload_job;
 use crate::workers::{
-    cleanup_pass, CleanupWorker, EndpointRef, LeakBook, StatsWorker, UploadPools,
+    cleanup_pass, native_cleanup_pass, CleanupCtx, CleanupNode, CleanupWorker, EndpointRef,
+    LeakBook, StatsWorker, UploadPools,
 };
 use crate::zk::{self, ComponentInfo, LauncherApi, ZkOps};
 use rand::seq::SliceRandom;
@@ -97,6 +98,7 @@ pub struct Launcher {
     stats_snapshot: Option<Arc<Mutex<StatsSnapshot>>>,
     stats_worker_sink: Option<Arc<Mutex<Vec<StatEvent>>>>,
     cleanup_shared: Option<Arc<Mutex<CleanupShared>>>,
+    cleanup_stats: Option<Arc<Mutex<Vec<StatEvent>>>>,
     /// Two-cycle leak confirmation shared by the cleanup thread and
     /// cleanup_worker._run() (tests call that directly).
     pub leaks: Arc<Mutex<LeakBook>>,
@@ -122,8 +124,11 @@ struct ProviderStatsRow {
 #[derive(Clone, Default)]
 struct CleanupShared {
     hostname: String,
+    system_id: String,
     components: Vec<ComponentInfo>,
     endpoints: Vec<EndpointRef>,
+    nodes: Vec<CleanupNode>,
+    upload_ids: Vec<String>,
 }
 
 impl Launcher {
@@ -170,6 +175,7 @@ impl Launcher {
             stats_snapshot: None,
             stats_worker_sink: None,
             cleanup_shared: None,
+            cleanup_stats: None,
             leaks: Arc::new(Mutex::new(LeakBook::default())),
         }
     }
@@ -295,6 +301,9 @@ impl Launcher {
         }
         self.layout_dirty = false;
         crate::native::sync_providers(&self.tenant_providers);
+        if updated && !crate::cloud::enabled() {
+            crate::native::post_config();
+        }
         Ok(updated)
     }
 
@@ -1238,7 +1247,12 @@ impl Launcher {
             }
         }
         let mut quota = provider.endpoint().limits.copy();
-        let unmanaged = provider.endpoint().unmanaged.copy();
+        let mut unmanaged = provider.endpoint().unmanaged.copy();
+        if !crate::cloud::enabled() {
+            unmanaged.add(&crate::native::unmanaged_quota(
+                &provider.endpoint().canonical_name,
+            ));
+        }
         quota.subtract(&unmanaged);
         quota
     }
@@ -2600,19 +2614,32 @@ impl Launcher {
             return;
         }
         if start_cleanup && self.cleanup_worker.is_none() {
-            let cleanup_shared = Arc::new(Mutex::new(CleanupShared {
-                hostname: self.hostname.clone(),
-                components: self.api.components.clone(),
-                endpoints: self.endpoint_refs(),
-            }));
+            let cleanup_shared = Arc::new(Mutex::new(self.cleanup_snapshot()));
             self.cleanup_shared = Some(cleanup_shared.clone());
+            let cleanup_stats = Arc::new(Mutex::new(Vec::new()));
+            self.cleanup_stats = Some(cleanup_stats.clone());
             let leaks = self.leaks.clone();
             let host = self.hostname.clone();
             self.cleanup_worker = Some(CleanupWorker::start(move || {
                 let _cloud = cloud::enter(&host);
-                let _shared = cleanup_shared.lock().unwrap().clone();
+                let shared = cleanup_shared.lock().unwrap().clone();
                 if let Ok(mut book) = leaks.lock() {
-                    cleanup_pass(&mut book);
+                    if cloud::enabled() {
+                        cleanup_pass(&mut book);
+                    } else {
+                        let ctx = CleanupCtx {
+                            hostname: shared.hostname,
+                            system_id: shared.system_id,
+                            components: shared.components,
+                            endpoints: shared.endpoints,
+                            nodes: shared.nodes,
+                            upload_ids: shared.upload_ids,
+                        };
+                        let events = native_cleanup_pass(&mut book, &ctx);
+                        if let Ok(mut sink) = cleanup_stats.lock() {
+                            sink.extend(events);
+                        }
+                    }
                 }
             }));
         }
@@ -2647,6 +2674,7 @@ impl Launcher {
         self.stats_snapshot = None;
         self.stats_worker_sink = None;
         self.cleanup_shared = None;
+        self.cleanup_stats = None;
         // Cancel/wake before join so election and interval waits unblock.
         if let Some(worker) = stats {
             worker.join();
@@ -2656,6 +2684,43 @@ impl Launcher {
         }
         if let Some(pools) = pools {
             pools.shutdown();
+        }
+    }
+
+    fn cleanup_snapshot(&self) -> CleanupShared {
+        let nodes = self
+            .api
+            .nodes
+            .values()
+            .map(|node| {
+                let required = node
+                    .fields
+                    .get("aws_launch_template_name")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .into_iter()
+                    .collect();
+                CleanupNode {
+                    uuid: node.uuid(),
+                    endpoint_name: node
+                        .fields
+                        .get("endpoint_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    required,
+                }
+            })
+            .collect();
+        let upload_ids = self.api.uploads.keys().cloned().collect();
+        CleanupShared {
+            hostname: self.hostname.clone(),
+            system_id: self.system_id.clone(),
+            components: self.api.components.clone(),
+            endpoints: self.endpoint_refs(),
+            nodes,
+            upload_ids,
         }
     }
 
@@ -2679,9 +2744,12 @@ impl Launcher {
     fn refresh_worker_shared(&mut self) {
         if let Some(shared) = &self.cleanup_shared {
             if let Ok(mut g) = shared.lock() {
-                g.hostname = self.hostname.clone();
-                g.components = self.api.components.clone();
-                g.endpoints = self.endpoint_refs();
+                *g = self.cleanup_snapshot();
+            }
+        }
+        if let Some(sink) = &self.cleanup_stats {
+            if let Ok(mut g) = sink.lock() {
+                self.stats.append(&mut *g);
             }
         }
         if let Some(snap) = &self.stats_snapshot {
@@ -3190,14 +3258,7 @@ impl Launcher {
             sm.complete = true;
             sm.state = "complete".into();
         }
-        let external = sm.external_id.clone();
-        let body = json!({
-            "snapshot_state": sm.to_dict(),
-            "complete": if sm.complete { json!(true) } else { Value::Null },
-            "external_id": external,
-            "tags": sm.tags,
-        });
-        let bytes = crate::codec::dumps_compressed(&body);
+        let bytes = sm.znode_bytes();
         let _ = self.api.zk.ensure_path(&format!("/zuul/nodes/nodes/{id}"));
         match self.api.zk.get(&snap_path) {
             Ok((_, stat)) => {

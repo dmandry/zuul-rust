@@ -622,144 +622,7 @@ pub fn cleanup_pass(book: &mut LeakBook) {
             }
             continue;
         }
-        let system_id = inv
-            .get("system_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let node_ids = node_id_set(inv.get("nodes"));
-        let upload_ids = string_set(inv.get("upload_ids"));
-        let mut required = string_set(inv.get("required_infra"));
-        if let Some(nodes) = inv.get("nodes").and_then(|v| v.as_array()) {
-            for node in nodes {
-                if let Some(req) = node.get("required").and_then(|v| v.as_array()) {
-                    for item in req {
-                        if let Some(s) = item.as_str() {
-                            required.insert(s.to_string());
-                        }
-                    }
-                }
-            }
-        }
-        let quota = unmanaged_quota_for(inv.get("instances"), &system_id, &node_ids);
-        let safe = normalize_statsd_name(&canonical);
-        let mut types: Vec<String> = inv
-            .get("resource_types")
-            .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-            .unwrap_or_default();
-        types.sort();
-        let mut unmanaged: BTreeMap<String, i64> = types.iter().map(|t| (t.clone(), 0)).collect();
-        let mut leaked: BTreeMap<String, i64> = types.iter().map(|t| (t.clone(), 0)).collect();
-        let prev_nodes = book.nodes.get(&canonical).cloned().unwrap_or_default();
-        let prev_uploads = book.uploads.get(&canonical).cloned().unwrap_or_default();
-        let prev_resources = book.resources.get(&canonical).cloned().unwrap_or_default();
-        let mut new_nodes = HashSet::new();
-        let mut new_uploads = HashSet::new();
-        let mut new_resources = HashSet::new();
-        let mut deletes: Vec<Value> = Vec::new();
-        let resources = inv.get("resources").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-        for resource in resources {
-            let meta = resource.get("metadata").and_then(|v| v.as_object());
-            let meta_str = |key: &str| -> Option<String> {
-                meta.and_then(|m| m.get(key)).and_then(|v| match v {
-                    Value::String(s) => Some(s.clone()),
-                    Value::Number(n) => Some(n.to_string()),
-                    Value::Bool(b) => Some(b.to_string()),
-                    _ => None,
-                })
-            };
-            let rtype = resource
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let unique_id = resource
-                .get("unique_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            if meta_str("zuul_system_id").as_deref() != Some(system_id.as_str()) {
-                *unmanaged.entry(rtype).or_insert(0) += 1;
-                continue;
-            }
-            let metric = format!("zuul.provider_endpoint.{safe}.leaked.{rtype}");
-            let node_id = meta_str("zuul_node_uuid");
-            let upload_id = meta_str("zuul_upload_uuid");
-            let expiration = meta_str("zuul_expiration");
-            if let Some(node_id) = node_id.clone() {
-                if !node_id.is_empty() && !node_ids.contains(&node_id) {
-                    new_nodes.insert(node_id.clone());
-                    if prev_nodes.contains(&node_id) {
-                        *leaked.entry(rtype.clone()).or_insert(0) += 1;
-                        deletes.push(delete_item(
-                            &resource,
-                            true,
-                            &metric,
-                            &format!("Unable to delete leaked resource for node {node_id}"),
-                        ));
-                    }
-                }
-            }
-            if let Some(upload_id) = upload_id.clone() {
-                if !upload_id.is_empty() && !upload_ids.contains(&upload_id) {
-                    new_uploads.insert(upload_id.clone());
-                    if prev_uploads.contains(&upload_id) {
-                        *leaked.entry(rtype.clone()).or_insert(0) += 1;
-                        deletes.push(delete_item(
-                            &resource,
-                            true,
-                            &metric,
-                            &format!("Unable to delete leaked resource for upload {upload_id}"),
-                        ));
-                    }
-                }
-            }
-            if let Some(exp) = expiration.clone() {
-                if let Ok(exp_i) = exp.parse::<i64>() {
-                    if now > exp_i {
-                        *leaked.entry(rtype.clone()).or_insert(0) += 1;
-                        deletes.push(delete_item(
-                            &resource,
-                            false,
-                            &metric,
-                            "Unable to delete leaked resource",
-                        ));
-                    }
-                }
-            }
-            let has_tag = node_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
-                || upload_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
-                || expiration.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-            if !has_tag && !required.contains(&unique_id) {
-                new_resources.insert(unique_id.clone());
-                if prev_resources.contains(&unique_id) {
-                    *leaked.entry(rtype).or_insert(0) += 1;
-                    deletes.push(delete_item(
-                        &resource,
-                        true,
-                        &metric,
-                        "Unable to delete leaked resource",
-                    ));
-                }
-            }
-        }
-        book.nodes.insert(canonical.clone(), new_nodes);
-        book.uploads.insert(canonical.clone(), new_uploads);
-        book.resources.insert(canonical.clone(), new_resources);
-        let mut gauges = Vec::new();
-        for (rtype, value) in &unmanaged {
-            gauges.push(json!({
-                "name": format!("zuul.provider_endpoint.{safe}.unmanaged.{rtype}"),
-                "value": value,
-            }));
-        }
-        for (rtype, value) in &leaked {
-            gauges.push(json!({
-                "name": format!("zuul.provider_endpoint.{safe}.leaked.{rtype}"),
-                "value": value,
-            }));
-        }
+        let (deletes, gauges, quota) = consume_inventory(book, &canonical, &inv, now);
         let _ = cloud::invoke(
             "cleanup.apply",
             &json!({
@@ -770,6 +633,255 @@ pub fn cleanup_pass(book: &mut LeakBook) {
             }),
         );
     }
+}
+
+/// One endpoint's leak decision. Book updates and stat names match
+/// CleanupWorker.cleanupLeakedResources.
+fn consume_inventory(book: &mut LeakBook, canonical: &str, inv: &Value, now: i64) -> (Vec<Value>, Vec<Value>, Value) {
+    let system_id = inv
+        .get("system_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let node_ids = node_id_set(inv.get("nodes"));
+    let upload_ids = string_set(inv.get("upload_ids"));
+    let mut required = string_set(inv.get("required_infra"));
+    if let Some(nodes) = inv.get("nodes").and_then(|v| v.as_array()) {
+        for node in nodes {
+            if let Some(req) = node.get("required").and_then(|v| v.as_array()) {
+                for item in req {
+                    if let Some(s) = item.as_str() {
+                        required.insert(s.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let quota = unmanaged_quota_for(inv.get("instances"), &system_id, &node_ids);
+    let safe = normalize_statsd_name(canonical);
+    let mut types: Vec<String> = inv
+        .get("resource_types")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    types.sort();
+    let mut unmanaged: BTreeMap<String, i64> = types.iter().map(|t| (t.clone(), 0)).collect();
+    let mut leaked: BTreeMap<String, i64> = types.iter().map(|t| (t.clone(), 0)).collect();
+    let prev_nodes = book.nodes.get(canonical).cloned().unwrap_or_default();
+    let prev_uploads = book.uploads.get(canonical).cloned().unwrap_or_default();
+    let prev_resources = book.resources.get(canonical).cloned().unwrap_or_default();
+    let mut new_nodes = HashSet::new();
+    let mut new_uploads = HashSet::new();
+    let mut new_resources = HashSet::new();
+    let mut deletes: Vec<Value> = Vec::new();
+    let resources = inv.get("resources").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    for resource in resources {
+        let meta = resource.get("metadata").and_then(|v| v.as_object());
+        let meta_str = |key: &str| -> Option<String> {
+            meta.and_then(|m| m.get(key)).and_then(|v| match v {
+                Value::String(s) => Some(s.clone()),
+                Value::Number(n) => Some(n.to_string()),
+                Value::Bool(b) => Some(b.to_string()),
+                _ => None,
+            })
+        };
+        let rtype = resource
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let unique_id = resource
+            .get("unique_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if meta_str("zuul_system_id").as_deref() != Some(system_id.as_str()) {
+            *unmanaged.entry(rtype).or_insert(0) += 1;
+            continue;
+        }
+        let metric = format!("zuul.provider_endpoint.{safe}.leaked.{rtype}");
+        let node_id = meta_str("zuul_node_uuid");
+        let upload_id = meta_str("zuul_upload_uuid");
+        let expiration = meta_str("zuul_expiration");
+        if let Some(node_id) = node_id.clone() {
+            if !node_id.is_empty() && !node_ids.contains(&node_id) {
+                new_nodes.insert(node_id.clone());
+                if prev_nodes.contains(&node_id) {
+                    *leaked.entry(rtype.clone()).or_insert(0) += 1;
+                    deletes.push(delete_item(
+                        &resource,
+                        true,
+                        &metric,
+                        &format!("Unable to delete leaked resource for node {node_id}"),
+                    ));
+                }
+            }
+        }
+        if let Some(upload_id) = upload_id.clone() {
+            if !upload_id.is_empty() && !upload_ids.contains(&upload_id) {
+                new_uploads.insert(upload_id.clone());
+                if prev_uploads.contains(&upload_id) {
+                    *leaked.entry(rtype.clone()).or_insert(0) += 1;
+                    deletes.push(delete_item(
+                        &resource,
+                        true,
+                        &metric,
+                        &format!("Unable to delete leaked resource for upload {upload_id}"),
+                    ));
+                }
+            }
+        }
+        if let Some(exp) = expiration.clone() {
+            if let Ok(exp_i) = exp.parse::<i64>() {
+                if now > exp_i {
+                    *leaked.entry(rtype.clone()).or_insert(0) += 1;
+                    deletes.push(delete_item(
+                        &resource,
+                        false,
+                        &metric,
+                        "Unable to delete leaked resource",
+                    ));
+                }
+            }
+        }
+        let has_tag = node_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
+            || upload_id.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
+            || expiration.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+        if !has_tag && !required.contains(&unique_id) {
+            new_resources.insert(unique_id.clone());
+            if prev_resources.contains(&unique_id) {
+                *leaked.entry(rtype).or_insert(0) += 1;
+                deletes.push(delete_item(
+                    &resource,
+                    true,
+                    &metric,
+                    "Unable to delete leaked resource",
+                ));
+            }
+        }
+    }
+    book.nodes.insert(canonical.to_string(), new_nodes);
+    book.uploads.insert(canonical.to_string(), new_uploads);
+    book.resources.insert(canonical.to_string(), new_resources);
+    let mut gauges = Vec::new();
+    for (rtype, value) in &unmanaged {
+        gauges.push(json!({
+            "name": format!("zuul.provider_endpoint.{safe}.unmanaged.{rtype}"),
+            "value": value,
+        }));
+    }
+    for (rtype, value) in &leaked {
+        gauges.push(json!({
+            "name": format!("zuul.provider_endpoint.{safe}.leaked.{rtype}"),
+            "value": value,
+        }));
+    }
+    (deletes, gauges, quota)
+}
+
+/// Node the native cleanup worker uses when deciding required resources.
+#[derive(Clone, Debug)]
+pub struct CleanupNode {
+    pub uuid: String,
+    pub endpoint_name: String,
+    pub required: Vec<String>,
+}
+
+/// Launcher state for one native cleanup pass.
+#[derive(Clone, Debug)]
+pub struct CleanupCtx {
+    pub hostname: String,
+    pub system_id: String,
+    pub components: Vec<ComponentInfo>,
+    pub endpoints: Vec<EndpointRef>,
+    pub nodes: Vec<CleanupNode>,
+    pub upload_ids: Vec<String>,
+}
+
+/// CleanupWorker._run when the binary has no Python cloud handler.
+pub fn native_cleanup_pass(book: &mut LeakBook, ctx: &CleanupCtx) -> Vec<StatEvent> {
+    let matched = matching_endpoints(&ctx.hostname, &ctx.components, &ctx.endpoints);
+    let now = model_now();
+    let mut events = Vec::new();
+    for endpoint in matched {
+        let canonical = endpoint.canonical_name.clone();
+        let listed = crate::native::endpoint_inventory(&canonical);
+        if listed.error && !listed.partial {
+            continue;
+        }
+        let mut nodes = Vec::new();
+        for node in &ctx.nodes {
+            let required = if node.endpoint_name == endpoint.name {
+                node.required.clone()
+            } else {
+                Vec::new()
+            };
+            nodes.push(json!({
+                "uuid": node.uuid,
+                "endpoint_name": node.endpoint_name,
+                "required": required,
+            }));
+        }
+        let inv = json!({
+            "error": false,
+            "system_id": ctx.system_id,
+            "nodes": nodes,
+            "upload_ids": ctx.upload_ids,
+            "required_infra": listed.required_infra,
+            "resource_types": listed.resource_types,
+            "resources": if listed.partial { Vec::<Value>::new() } else { listed.resources },
+            "instances": listed.instances,
+        });
+        if listed.partial {
+            let node_ids = node_id_set(inv.get("nodes"));
+            let quota = unmanaged_quota_for(inv.get("instances"), &ctx.system_id, &node_ids);
+            let mut map = BTreeMap::new();
+            if let Some(obj) = quota.as_object() {
+                for (k, v) in obj {
+                    if let Some(n) = v.as_f64() {
+                        map.insert(k.clone(), n);
+                    }
+                }
+            }
+            crate::native::set_unmanaged_quota(&canonical, &map);
+            continue;
+        }
+        let (deletes, gauges, quota) = consume_inventory(book, &canonical, &inv, now);
+        for item in &deletes {
+            if item.get("count").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if let Some(metric) = item.get("metric").and_then(|v| v.as_str()) {
+                    events.push(StatEvent {
+                        kind: "c".into(),
+                        name: metric.to_string(),
+                        value: 1.0,
+                    });
+                }
+            }
+            let _ = crate::native::delete_listed(&canonical, item);
+        }
+        for gauge in &gauges {
+            if let (Some(name), Some(value)) = (
+                gauge.get("name").and_then(|v| v.as_str()),
+                gauge.get("value").and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64))),
+            ) {
+                events.push(StatEvent {
+                    kind: "g".into(),
+                    name: name.to_string(),
+                    value,
+                });
+            }
+        }
+        let mut map = BTreeMap::new();
+        if let Some(obj) = quota.as_object() {
+            for (k, v) in obj {
+                if let Some(n) = v.as_f64() {
+                    map.insert(k.clone(), n);
+                }
+            }
+        }
+        crate::native::set_unmanaged_quota(&canonical, &map);
+    }
+    events
 }
 
 fn cloud_hostname() -> Option<String> {
