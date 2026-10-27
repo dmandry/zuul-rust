@@ -25,7 +25,7 @@ use crate::zk::{self, ComponentInfo, LauncherApi, ZkOps};
 use rand::seq::SliceRandom;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 pub const MAX_SLEEP: f64 = 1.0;
@@ -67,6 +67,7 @@ pub struct Launcher {
     quota_cache: HashMap<String, (QuotaInformation, f64)>,
     pub pending_events: Vec<Value>,
     pub wake: Arc<Mutex<bool>>,
+    pub wake_cv: Arc<Condvar>,
     pub now: f64,
     pub cleanup_worker: Option<CleanupWorker>,
     pub stats_worker: Option<StatsWorker>,
@@ -102,6 +103,7 @@ pub struct Launcher {
     /// Two-cycle leak confirmation shared by the cleanup thread and
     /// cleanup_worker._run() (tests call that directly).
     pub leaks: Arc<Mutex<LeakBook>>,
+    waker_installed: bool,
 }
 
 /// Data the stats election thread reads to emit `_runStats` gauges.
@@ -161,6 +163,7 @@ impl Launcher {
             quota_cache: HashMap::new(),
             pending_events: Vec::new(),
             wake: Arc::new(Mutex::new(false)),
+            wake_cv: Arc::new(Condvar::new()),
             now: model::now_secs(),
             cleanup_worker: None,
             stats_worker: None,
@@ -177,7 +180,16 @@ impl Launcher {
             cleanup_shared: None,
             cleanup_stats: None,
             leaks: Arc::new(Mutex::new(LeakBook::default())),
+            waker_installed: false,
         }
+    }
+
+    pub fn waker_installed(&self) -> bool {
+        self.waker_installed
+    }
+
+    pub fn mark_waker_installed(&mut self) {
+        self.waker_installed = true;
     }
 
     fn queue_contains(set: &Arc<Mutex<HashSet<String>>>, uuid: &str) -> bool {
@@ -2584,6 +2596,43 @@ impl Launcher {
         if let Ok(mut g) = self.wake.lock() {
             *g = true;
         }
+        self.wake_cv.notify_one();
+    }
+
+    /// Block until `wake` is set or `timeout` elapses, then clear the flag.
+    /// Same order as `Launcher.run`: `wake_event.wait` then `clear`.
+    pub fn wait_wake(&self, timeout: Duration) -> bool {
+        let guard = match self.wake.lock() {
+            Ok(guard) => guard,
+            Err(err) => err.into_inner(),
+        };
+        let (mut guard, _) = self
+            .wake_cv
+            .wait_timeout(guard, timeout)
+            .unwrap_or_else(|err| err.into_inner());
+        let woke = *guard;
+        *guard = false;
+        woke
+    }
+
+    /// Wake on ZooKeeper watch events. `extra` runs on the watch thread
+    /// and is how the PyO3 loop sets Python's `wake_event`.
+    pub fn install_waker(&self, extra: Option<Arc<dyn Fn() + Send + Sync>>) {
+        let flag = self.wake.clone();
+        let cv = self.wake_cv.clone();
+        self.api.zk.set_waker(Some(Arc::new(move || {
+            if let Ok(mut guard) = flag.lock() {
+                *guard = true;
+            }
+            cv.notify_one();
+            if let Some(extra) = &extra {
+                extra();
+            }
+        })));
+    }
+
+    pub fn arm_watches(&mut self) {
+        self.api.arm_watches();
     }
 
     /// Consume the wake flag set by accept/check/node processing.
@@ -3638,4 +3687,89 @@ pub fn loop_waits(run_started: Instant) -> (Duration, Duration) {
     let max = Duration::from_secs_f64(MAX_SLEEP);
     let sleep = if elapsed >= max { Duration::ZERO } else { max - elapsed };
     (sleep, Duration::from_secs_f64(MIN_INTERVAL))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codec::dumps_compressed;
+    use crate::zk::{self, MemoryZk};
+    use std::thread;
+
+    /// A child create under the request tree must wake the loop through the
+    /// watch, not a timer. The wait is a single `wait_wake(MIN_INTERVAL)`
+    /// with no poll loop.
+    #[test]
+    fn child_change_wakes_the_loop_without_polling() {
+        let zk = MemoryZk::new();
+        zk.ensure_path("/zuul/nodeset/requests").unwrap();
+        let ops: Arc<dyn ZkOps> = Arc::new(zk.clone());
+        let mut launcher = Launcher::new("launcher-watch", ops.clone());
+        launcher.install_waker(None);
+        launcher.arm_watches();
+        let _ = ops.take_watch_events();
+        let writer = zk.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(50));
+            let bytes = dumps_compressed(&json!({
+                "uuid": "req-watch",
+                "state": "requested",
+            }));
+            writer
+                .create(
+                    "/zuul/nodeset/requests/req-watch",
+                    &bytes,
+                    zk::CreateMode::Persistent,
+                )
+                .unwrap();
+        });
+        let started = Instant::now();
+        let woke = launcher.wait_wake(Duration::from_secs_f64(MIN_INTERVAL));
+        assert!(woke, "watch did not wake the loop");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "woke via the MIN_INTERVAL timer ({:?})",
+            started.elapsed()
+        );
+        launcher.api.prepare();
+        assert!(
+            launcher.api.requests.contains_key("req-watch"),
+            "watch event did not update the request cache"
+        );
+    }
+
+    #[test]
+    fn children_watch_rearms_for_the_next_child() {
+        let zk = MemoryZk::new();
+        zk.ensure_path("/zuul/layout").unwrap();
+        let ops: Arc<dyn ZkOps> = Arc::new(zk.clone());
+        let kids = ops.watch_children("/zuul/layout").unwrap();
+        assert!(kids.is_empty());
+        zk.create("/zuul/layout/tenant-a", b"{}", zk::CreateMode::Persistent)
+            .unwrap();
+        let first = ops.take_watch_events();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].children.as_ref().unwrap(), &vec!["tenant-a".to_string()]);
+        zk.create("/zuul/layout/tenant-b", b"{}", zk::CreateMode::Persistent)
+            .unwrap();
+        let second = ops.take_watch_events();
+        assert_eq!(second.len(), 1, "one-shot watch was not re-armed");
+        assert!(second[0]
+            .children
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|name| name == "tenant-b"));
+    }
+
+    #[test]
+    fn session_loss_marks_a_resync() {
+        let zk = MemoryZk::new();
+        let ops: Arc<dyn ZkOps> = Arc::new(zk.clone());
+        let before = ops.session_generation();
+        zk.expire_session();
+        let events = ops.take_watch_events();
+        assert!(events.iter().any(|event| event.kind == zk::EVENT_SESSION));
+        assert_ne!(ops.session_generation(), before);
+    }
 }

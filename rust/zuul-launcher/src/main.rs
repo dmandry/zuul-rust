@@ -152,19 +152,29 @@ fn run_foreground(zk_cfg: &ZookeeperConfig, launcher_cfg: &LauncherConfig) -> Re
     .map_err(|e| format!("unable to register launcher component: {e}"))?;
     launcher.component_path = Some(path);
     launcher.start_workers(true);
+    launcher.install_waker(None);
+    launcher.arm_watches();
     let socket = launcher_cfg.command_socket.clone();
     std::thread::spawn(move || command_server(&socket));
     while !STOP.load(std::sync::atomic::Ordering::SeqCst) {
         let started = Instant::now();
-        launcher.api.sync();
-        launcher.run_once();
-        let (sleep, _) = loop_waits(started);
-        let mut left = sleep;
-        let slice = Duration::from_millis(100);
-        while !STOP.load(std::sync::atomic::Ordering::SeqCst) && left > Duration::ZERO {
-            let step = slice.min(left);
-            std::thread::sleep(step);
-            left = left.saturating_sub(step);
+        launcher.api.prepare();
+        if launcher.api.take_layout_event() {
+            launcher.layout_dirty = true;
+        }
+        if launcher.api.take_image_event() {
+            launcher.image_updated = true;
+        }
+        if launcher.layout_dirty {
+            let _ = launcher.reload_providers();
+        }
+        launcher.process_once();
+        let (sleep, interval) = loop_waits(started);
+        if !STOP.load(std::sync::atomic::Ordering::SeqCst) && sleep > Duration::ZERO {
+            std::thread::sleep(sleep);
+        }
+        if !STOP.load(std::sync::atomic::Ordering::SeqCst) {
+            launcher.wait_wake(interval);
         }
     }
     launcher.stop_workers();

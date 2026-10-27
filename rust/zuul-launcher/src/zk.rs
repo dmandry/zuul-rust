@@ -14,9 +14,33 @@ use crate::model::{
     NodesetRequest, ProviderNode, QuotaInformation,
 };
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Kazoo `EventType` values. `-1` is a session reconnect, which 14.3.0
+/// handles by rebuilding the tree cache.
+pub const EVENT_SESSION: i32 = -1;
+pub const EVENT_CREATED: i32 = 1;
+pub const EVENT_DELETED: i32 = 2;
+pub const EVENT_CHANGED: i32 = 3;
+pub const EVENT_CHILDREN: i32 = 4;
+
+/// Kazoo `AddWatchMode`. Tree caches use persistent recursive.
+pub const ADD_WATCH_PERSISTENT: i32 = 0;
+pub const ADD_WATCH_PERSISTENT_RECURSIVE: i32 = 1;
+
+/// One ZooKeeper watch notification. Children and data watches may
+/// carry the payload from the re-arm read, the way kazoo passes the
+/// result of the `get` that set the next watch.
+#[derive(Clone, Debug)]
+pub struct ZkWatchEvent {
+    pub kind: i32,
+    pub path: String,
+    pub children: Option<Vec<String>>,
+    pub data: Option<Vec<u8>>,
+    pub exists: bool,
+}
 
 #[derive(Clone, Debug)]
 pub struct ZkStat {
@@ -82,6 +106,12 @@ struct MemoryState {
     zxid: i64,
     session: i64,
     session_alive: bool,
+    generation: u64,
+    persistent: Vec<String>,
+    children_watches: HashSet<String>,
+    data_watches: HashSet<String>,
+    events: Vec<ZkWatchEvent>,
+    waker: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// Operations the launcher needs from a ZooKeeper session. `MemoryZk` is the
@@ -114,6 +144,34 @@ pub trait ZkOps: Send + Sync {
         Ok(out)
     }
     fn expire_session(&self) {}
+    /// Persistent watch. Mode 1 is `PERSISTENT_RECURSIVE`, which is what
+    /// `ZuulTreeCache` registers. The default records nothing.
+    fn add_watch(&self, _path: &str, _mode: i32) -> Result<(), ZkError> {
+        Ok(())
+    }
+    /// Kazoo `ChildrenWatch`: one `get_children` with the watch bit, then
+    /// re-arm after each child event. The default does not watch.
+    fn watch_children(&self, path: &str) -> Result<Vec<String>, ZkError> {
+        self.get_children(path)
+    }
+    /// Kazoo `DataWatch`: one `get` with the watch bit. `Ok(None)` is a
+    /// missing node, which still arms the watch.
+    fn watch_data(&self, path: &str) -> Result<Option<(Vec<u8>, ZkStat)>, ZkError> {
+        match self.get(path) {
+            Ok(pair) => Ok(Some(pair)),
+            Err(ZkError::NoNode) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+    fn take_watch_events(&self) -> Vec<ZkWatchEvent> {
+        Vec::new()
+    }
+    fn set_waker(&self, _waker: Option<Arc<dyn Fn() + Send + Sync>>) {}
+    /// Bumps when the session is replaced. A change means the cache must
+    /// be walked again, matching `ZuulTreeCache._start` after reconnect.
+    fn session_generation(&self) -> u64 {
+        0
+    }
 }
 
 #[derive(Clone)]
@@ -129,6 +187,12 @@ impl MemoryZk {
                 zxid: 1,
                 session: 0x140300,
                 session_alive: true,
+                generation: 1,
+                persistent: Vec::new(),
+                children_watches: HashSet::new(),
+                data_watches: HashSet::new(),
+                events: Vec::new(),
+                waker: None,
             })),
         };
         let _ = zk.ensure_path("/zuul");
@@ -140,20 +204,29 @@ impl MemoryZk {
     }
 
     pub fn expire_session(&self) {
-        let mut g = self.inner.lock().unwrap();
-        g.session_alive = false;
-        let session = g.session;
-        let doomed: Vec<String> = g
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.stat.ephemeral_owner == session)
-            .map(|(p, _)| p.clone())
-            .collect();
-        for path in doomed {
-            g.nodes.remove(&path);
+        let waker = {
+            let mut g = self.inner.lock().unwrap();
+            g.session_alive = false;
+            let session = g.session;
+            let doomed: Vec<String> = g
+                .nodes
+                .iter()
+                .filter(|(_, n)| n.stat.ephemeral_owner == session)
+                .map(|(p, _)| p.clone())
+                .collect();
+            for path in doomed {
+                g.nodes.remove(&path);
+                note_locked(&mut g, EVENT_DELETED, &path, None, None, false);
+            }
+            g.session_alive = true;
+            g.session += 1;
+            g.generation = g.generation.wrapping_add(1);
+            note_locked(&mut g, EVENT_SESSION, "", None, None, false);
+            g.waker.clone()
+        };
+        if let Some(waker) = waker {
+            waker();
         }
-        g.session_alive = true;
-        g.session += 1;
     }
 
     fn now() -> f64 {
@@ -164,29 +237,41 @@ impl MemoryZk {
     }
 
     pub fn ensure_path(&self, path: &str) -> Result<(), ZkError> {
-        let mut g = self.inner.lock().unwrap();
-        let mut acc = String::new();
-        for part in path.split('/').filter(|p| !p.is_empty()) {
-            acc.push('/');
-            acc.push_str(part);
-            if !g.nodes.contains_key(&acc) {
-                let zxid = g.zxid;
-                g.zxid += 1;
-                g.nodes.insert(
-                    acc.clone(),
-                    ZNode {
-                        data: Vec::new(),
-                        stat: ZkStat {
-                            version: 0,
-                            czxid: zxid,
-                            mzxid: zxid,
-                            ephemeral_owner: 0,
-                            created: Self::now(),
-                            children_count: 0,
+        let (fired, waker) = {
+            let mut g = self.inner.lock().unwrap();
+            let mut fired = false;
+            let mut acc = String::new();
+            for part in path.split('/').filter(|p| !p.is_empty()) {
+                acc.push('/');
+                acc.push_str(part);
+                if !g.nodes.contains_key(&acc) {
+                    let zxid = g.zxid;
+                    g.zxid += 1;
+                    g.nodes.insert(
+                        acc.clone(),
+                        ZNode {
+                            data: Vec::new(),
+                            stat: ZkStat {
+                                version: 0,
+                                czxid: zxid,
+                                mzxid: zxid,
+                                ephemeral_owner: 0,
+                                created: Self::now(),
+                                children_count: 0,
+                            },
+                            sequence: 0,
                         },
-                        sequence: 0,
-                    },
-                );
+                    );
+                    fired |= note_locked(&mut g, EVENT_CREATED, &acc, None, None, true);
+                    let parent = parent_path(&acc);
+                    fired |= note_children(&mut g, &parent);
+                }
+            }
+            (fired, g.waker.clone())
+        };
+        if fired {
+            if let Some(waker) = waker {
+                waker();
             }
         }
         Ok(())
@@ -226,6 +311,15 @@ impl MemoryZk {
                     sequence: 0,
                 },
             );
+            let fired = note_locked(&mut g, EVENT_CREATED, &full, None, None, true)
+                | note_children(&mut g, &parent);
+            let waker = g.waker.clone();
+            drop(g);
+            if fired {
+                if let Some(waker) = waker {
+                    waker();
+                }
+            }
             return Ok(full);
         }
         let mut g = self.inner.lock().unwrap();
@@ -254,6 +348,15 @@ impl MemoryZk {
                 sequence: 0,
             },
         );
+        let fired = note_locked(&mut g, EVENT_CREATED, path, None, None, true)
+            | note_children(&mut g, &parent);
+        let waker = g.waker.clone();
+        drop(g);
+        if fired {
+            if let Some(waker) = waker {
+                waker();
+            }
+        }
         Ok(path.to_string())
     }
 
@@ -272,10 +375,21 @@ impl MemoryZk {
         if !children.is_empty() && !recursive {
             return Err(ZkError::NotEmpty);
         }
+        let mut fired = false;
         for child in children {
             g.nodes.remove(&child);
+            fired |= note_locked(&mut g, EVENT_DELETED, &child, None, None, false);
         }
         g.nodes.remove(path);
+        fired |= note_locked(&mut g, EVENT_DELETED, path, None, None, false);
+        fired |= note_children(&mut g, &parent_path(path));
+        let waker = g.waker.clone();
+        drop(g);
+        if fired {
+            if let Some(waker) = waker {
+                waker();
+            }
+        }
         Ok(())
     }
 
@@ -306,7 +420,16 @@ impl MemoryZk {
         n.data = data.to_vec();
         n.stat.version += 1;
         n.stat.mzxid = zxid;
-        Ok(n.stat.clone())
+        let stat = n.stat.clone();
+        let fired = note_locked(&mut g, EVENT_CHANGED, path, None, None, true);
+        let waker = g.waker.clone();
+        drop(g);
+        if fired {
+            if let Some(waker) = waker {
+                waker();
+            }
+        }
+        Ok(stat)
     }
 
     pub fn get_children(&self, path: &str) -> Result<Vec<String>, ZkError> {
@@ -356,6 +479,109 @@ impl ZkOps for MemoryZk {
     fn expire_session(&self) {
         MemoryZk::expire_session(self)
     }
+    fn add_watch(&self, path: &str, mode: i32) -> Result<(), ZkError> {
+        let mut g = self.inner.lock().unwrap();
+        if mode == ADD_WATCH_PERSISTENT_RECURSIVE || mode == ADD_WATCH_PERSISTENT {
+            if !g.persistent.iter().any(|root| root == path) {
+                g.persistent.push(path.to_string());
+            }
+        }
+        Ok(())
+    }
+    fn watch_children(&self, path: &str) -> Result<Vec<String>, ZkError> {
+        let mut g = self.inner.lock().unwrap();
+        if !g.nodes.contains_key(path) {
+            return Err(ZkError::NoNode);
+        }
+        g.children_watches.insert(path.to_string());
+        Ok(kids_locked(&g, path))
+    }
+    fn watch_data(&self, path: &str) -> Result<Option<(Vec<u8>, ZkStat)>, ZkError> {
+        let mut g = self.inner.lock().unwrap();
+        g.data_watches.insert(path.to_string());
+        Ok(g.nodes.get(path).map(|n| (n.data.clone(), n.stat.clone())))
+    }
+    fn take_watch_events(&self) -> Vec<ZkWatchEvent> {
+        let mut g = self.inner.lock().unwrap();
+        std::mem::take(&mut g.events)
+    }
+    fn set_waker(&self, waker: Option<Arc<dyn Fn() + Send + Sync>>) {
+        self.inner.lock().unwrap().waker = waker;
+    }
+    fn session_generation(&self) -> u64 {
+        self.inner.lock().unwrap().generation
+    }
+}
+
+fn split_child(rest: &str) -> Option<(&str, Option<&str>)> {
+    if rest.is_empty() || rest.contains("//") {
+        return None;
+    }
+    let mut parts = rest.splitn(2, '/');
+    let id = parts.next()?;
+    if id.is_empty() {
+        return None;
+    }
+    let sub = parts.next().filter(|part| !part.is_empty());
+    Some((id, sub))
+}
+
+fn covers(root: &str, path: &str) -> bool {
+    path == root || path.starts_with(&format!("{root}/"))
+}
+
+fn interested(g: &MemoryState, path: &str) -> bool {
+    g.persistent.iter().any(|root| covers(root, path)) || g.data_watches.contains(path)
+}
+
+fn kids_locked(g: &MemoryState, path: &str) -> Vec<String> {
+    let prefix = format!("{path}/");
+    let mut kids = Vec::new();
+    for key in g.nodes.keys() {
+        if let Some(rest) = key.strip_prefix(&prefix) {
+            if !rest.is_empty() && !rest.contains('/') {
+                kids.push(rest.to_string());
+            }
+        }
+    }
+    kids.sort();
+    kids
+}
+
+fn note_locked(
+    g: &mut MemoryState,
+    kind: i32,
+    path: &str,
+    children: Option<Vec<String>>,
+    data: Option<Vec<u8>>,
+    exists: bool,
+) -> bool {
+    if kind != EVENT_SESSION && !interested(g, path) {
+        return false;
+    }
+    g.events.push(ZkWatchEvent {
+        kind,
+        path: path.to_string(),
+        children,
+        data,
+        exists,
+    });
+    true
+}
+
+fn note_children(g: &mut MemoryState, parent: &str) -> bool {
+    if parent.is_empty() || !g.children_watches.contains(parent) {
+        return false;
+    }
+    let children = kids_locked(g, parent);
+    g.events.push(ZkWatchEvent {
+        kind: EVENT_CHILDREN,
+        path: parent.to_string(),
+        children: Some(children),
+        data: None,
+        exists: true,
+    });
+    true
 }
 
 fn parent_path(path: &str) -> String {
@@ -515,6 +741,15 @@ pub struct LauncherApi {
     pub tenant_label_used: HashMap<(String, String), i64>,
     pub ready: bool,
     pub max_zxid: i64,
+    /// Contender payloads kept so a lock-child watch updates the holder
+    /// with one `get`, the way `LockableZKObjectCache.preCacheHook` does.
+    node_locks: HashMap<String, BTreeMap<String, Vec<u8>>>,
+    watches_on: bool,
+    watched_tenants: HashSet<String>,
+    watched_components: HashSet<String>,
+    session_gen: u64,
+    layout_event: bool,
+    image_event: bool,
 }
 
 impl LauncherApi {
@@ -534,9 +769,166 @@ impl LauncherApi {
             tenant_label_used: HashMap::new(),
             ready: false,
             max_zxid: 0,
+            node_locks: HashMap::new(),
+            watches_on: false,
+            watched_tenants: HashSet::new(),
+            watched_components: HashSet::new(),
+            session_gen: 0,
+            layout_event: false,
+            image_event: false,
         };
         api.sync();
+        api.session_gen = api.zk.session_generation();
         api
+    }
+
+    /// Register the same watches 14.3.0's launcher, tree cache, layout
+    /// store, and component registry register. Persistent recursive watches
+    /// cover the request, node, and image trees. Layout and components use
+    /// kazoo `ChildrenWatch` plus a `DataWatch` per child.
+    pub fn arm_watches(&mut self) {
+        if self.watches_on {
+            return;
+        }
+        for root in [
+            "/zuul/nodeset",
+            "/zuul/nodes",
+            "/zuul/images",
+            "/zuul/image-uploads",
+        ] {
+            let _ = self.zk.ensure_path(root);
+            let _ = self.zk.add_watch(root, ADD_WATCH_PERSISTENT_RECURSIVE);
+        }
+        let _ = self.zk.ensure_path("/zuul/layout");
+        if let Ok(tenants) = self.zk.watch_children("/zuul/layout") {
+            for tenant in tenants {
+                self.watch_tenant(&tenant);
+            }
+        }
+        for kind in [
+            "scheduler",
+            "executor",
+            "merger",
+            "fingergw",
+            "web",
+            "launcher",
+        ] {
+            let root = format!("/zuul/components/{kind}");
+            let _ = self.zk.ensure_path(&root);
+            if let Ok(hosts) = self.zk.watch_children(&root) {
+                for host in hosts {
+                    self.watch_component(kind, &host);
+                }
+            }
+        }
+        self.session_gen = self.zk.session_generation();
+        self.watches_on = true;
+    }
+
+    fn watch_tenant(&mut self, tenant: &str) {
+        if !self.watched_tenants.insert(tenant.to_string()) {
+            return;
+        }
+        let path = format!("/zuul/layout/{tenant}");
+        let _ = self.zk.watch_data(&path);
+    }
+
+    fn watch_component(&mut self, kind: &str, host: &str) {
+        let path = format!("/zuul/components/{kind}/{host}");
+        if !self.watched_components.insert(path.clone()) {
+            return;
+        }
+        let _ = self.zk.watch_data(&path);
+    }
+
+    pub fn take_layout_event(&mut self) -> bool {
+        let value = self.layout_event;
+        self.layout_event = false;
+        value
+    }
+
+    pub fn take_image_event(&mut self) -> bool {
+        let value = self.image_event;
+        self.image_event = false;
+        value
+    }
+
+    /// Apply watch notifications since the last pass. A quiet pass reads
+    /// nothing. A session loss walks the trees once, matching
+    /// `ZuulTreeCache._walkTree` after reconnect.
+    pub fn prepare(&mut self) {
+        if !self.watches_on {
+            self.arm_watches();
+        }
+        let events = self.zk.take_watch_events();
+        let generation = self.zk.session_generation();
+        let lost = generation != self.session_gen
+            || events.iter().any(|event| event.kind == EVENT_SESSION);
+        if lost || !self.ready {
+            // Arm watches before the walk so a change during the walk is
+            // queued, matching ZuulTreeCache._start.
+            self.rewatch_after_session();
+            self.sync();
+            self.session_gen = self.zk.session_generation();
+            return;
+        }
+        if events.is_empty() {
+            return;
+        }
+        let mut nodes_changed = false;
+        for event in events {
+            if event.kind == EVENT_SESSION {
+                continue;
+            }
+            nodes_changed |= self.apply_event(&event);
+        }
+        if nodes_changed {
+            self.reindex();
+        }
+    }
+
+    fn rewatch_after_session(&mut self) {
+        self.watched_tenants.clear();
+        self.watched_components.clear();
+        self.watches_on = false;
+        self.arm_watches();
+    }
+
+    fn apply_event(&mut self, event: &ZkWatchEvent) -> bool {
+        let path = event.path.as_str();
+        if path == "/zuul/layout" || path.starts_with("/zuul/layout/") {
+            self.layout_event = true;
+            if event.kind == EVENT_CHILDREN {
+                if let Some(tenants) = &event.children {
+                    for tenant in tenants {
+                        self.watch_tenant(tenant);
+                    }
+                }
+            } else if let Some(tenant) = path.strip_prefix("/zuul/layout/") {
+                if !tenant.is_empty() && !tenant.contains('/') {
+                    self.watch_tenant(tenant);
+                }
+            }
+            return false;
+        }
+        if path.starts_with("/zuul/components/") {
+            if event.kind == EVENT_CHILDREN {
+                let rest = path.trim_start_matches("/zuul/components/");
+                if let Some(hosts) = &event.children {
+                    for host in hosts {
+                        self.watch_component(rest, host);
+                    }
+                }
+            }
+            self.load_components();
+            return false;
+        }
+        if path.starts_with("/zuul/images/") || path.starts_with("/zuul/image-uploads/") {
+            self.image_event = true;
+            self.apply_image_event(event);
+            return false;
+        }
+        self.apply_launcher_event(event)
     }
 
     pub fn sync(&mut self) {
@@ -544,6 +936,7 @@ impl LauncherApi {
         self.nodes.clear();
         self.artifacts.clear();
         self.uploads.clear();
+        self.node_locks.clear();
         self.quota_used.clear();
         self.quota_requested.clear();
         self.provider_label_used.clear();
@@ -627,6 +1020,11 @@ impl LauncherApi {
                 let idx = child_index[slot];
                 contenders[idx].insert(name.to_string(), data.clone());
             }
+            for (i, id) in ids.iter().enumerate() {
+                if !contenders[i].is_empty() {
+                    self.node_locks.insert(id.clone(), contenders[i].clone());
+                }
+            }
             for (i, id) in ids.into_iter().enumerate() {
                 let Some((data, stat)) = bodies.get(i).and_then(|item| item.clone()) else {
                     continue;
@@ -698,6 +1096,252 @@ impl LauncherApi {
         }
         self.load_components();
         self.ready = true;
+    }
+
+    fn apply_image_event(&mut self, event: &ZkWatchEvent) {
+        let path = event.path.as_str();
+        if let Some(id) = path.strip_prefix("/zuul/images/artifacts/") {
+            if id.is_empty() || id.contains('/') {
+                return;
+            }
+            if event.kind == EVENT_DELETED {
+                self.artifacts.remove(id);
+                return;
+            }
+            if let Ok((data, _)) = self.zk.get(path) {
+                if let Ok(val) = decode_zkobject(&data) {
+                    self.artifacts.insert(id.to_string(), ImageBuildArtifact::from_value(val));
+                }
+            } else {
+                self.artifacts.remove(id);
+            }
+            return;
+        }
+        if let Some(id) = path.strip_prefix("/zuul/image-uploads/uploads/") {
+            if id.is_empty() || id.contains('/') {
+                return;
+            }
+            if event.kind == EVENT_DELETED {
+                self.uploads.remove(id);
+                return;
+            }
+            if let Ok((data, _)) = self.zk.get(path) {
+                if let Ok(val) = decode_zkobject(&data) {
+                    self.uploads.insert(id.to_string(), ImageUpload::from_value(val));
+                }
+            } else {
+                self.uploads.remove(id);
+            }
+        }
+    }
+
+    /// Returns true when the node quota index must be rebuilt.
+    fn apply_launcher_event(&mut self, event: &ZkWatchEvent) -> bool {
+        let path = event.path.as_str();
+        if let Some(rest) = path.strip_prefix("/zuul/nodeset/requests/") {
+            return self.apply_request_path(rest, event);
+        }
+        if let Some(rest) = path.strip_prefix("/zuul/nodeset/locks/") {
+            self.apply_request_lock(rest, event);
+            return false;
+        }
+        if let Some(rest) = path.strip_prefix("/zuul/nodes/nodes/") {
+            self.apply_node_path(rest, event);
+            return true;
+        }
+        if let Some(rest) = path.strip_prefix("/zuul/nodes/locks/") {
+            self.apply_node_lock(rest, event);
+            return true;
+        }
+        false
+    }
+
+    fn apply_request_path(&mut self, rest: &str, event: &ZkWatchEvent) -> bool {
+        let (id, sub) = match split_child(rest) {
+            Some(pair) => pair,
+            None => return false,
+        };
+        if sub.is_none() {
+            if event.kind == EVENT_DELETED {
+                self.requests.remove(id);
+                return false;
+            }
+            let path = format!("/zuul/nodeset/requests/{id}");
+            let Ok((data, stat)) = self.zk.get(&path) else {
+                self.requests.remove(id);
+                return false;
+            };
+            let Ok(val) = decode_zkobject(&data) else {
+                return false;
+            };
+            let prev = self.requests.get(id).cloned();
+            let mut req = NodesetRequest::from_value(val);
+            req.zk_version = Some(stat.version as i64);
+            if let Some(prev) = prev {
+                req.is_locked = prev.is_locked;
+                req.revision_priority = prev.revision_priority;
+                req.has_lock = prev.has_lock;
+            }
+            self.requests.insert(id.to_string(), req);
+            return false;
+        }
+        if sub == Some("revision") {
+            if event.kind == EVENT_DELETED {
+                if let Some(req) = self.requests.get_mut(id) {
+                    req.revision_priority = None;
+                }
+                return false;
+            }
+            let path = format!("/zuul/nodeset/requests/{id}/revision");
+            if let Ok((data, _)) = self.zk.get(&path) {
+                if let Ok(rev) = decode_zkobject(&data) {
+                    if let Some(req) = self.requests.get_mut(id) {
+                        req.revision_priority = rev.get("relative_priority").and_then(|v| v.as_i64());
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn apply_request_lock(&mut self, rest: &str, event: &ZkWatchEvent) {
+        let (id, _sub) = match split_child(rest) {
+            Some(pair) => pair,
+            None => return,
+        };
+        let path = format!("/zuul/nodeset/locks/{id}");
+        let locked = match self.zk.get_children(&path) {
+            Ok(kids) => !kids.is_empty(),
+            Err(_) => event.kind != EVENT_DELETED,
+        };
+        if let Some(req) = self.requests.get_mut(id) {
+            req.is_locked = locked;
+        }
+    }
+
+    fn apply_node_path(&mut self, rest: &str, event: &ZkWatchEvent) {
+        let (id, sub) = match split_child(rest) {
+            Some(pair) => pair,
+            None => return,
+        };
+        if sub.is_none() {
+            if event.kind == EVENT_DELETED {
+                self.nodes.remove(id);
+                self.node_locks.remove(id);
+                return;
+            }
+            let path = format!("/zuul/nodes/nodes/{id}");
+            let Ok((data, stat)) = self.zk.get(&path) else {
+                self.nodes.remove(id);
+                return;
+            };
+            let Ok((driver, val)) = decode_polymorphic(&data) else {
+                return;
+            };
+            let old = self.nodes.get(id).cloned();
+            let mut node = ProviderNode::from_parts(driver, val);
+            node.zk_version = Some(stat.version as i64);
+            if let Some(old) = old {
+                node.is_locked = old.is_locked;
+                node.lock_holder = old.lock_holder;
+                node.assignment_version = old.assignment_version;
+                node.assignment_czxid = old.assignment_czxid;
+                node.request_id = old.request_id;
+                node.min_request_version = old.min_request_version;
+                node.tenant_name = old.tenant_name;
+                node.next_state = old.next_state;
+                node.next_comment = old.next_comment;
+            } else if let Some(held) = self.node_locks.get(id) {
+                node.is_locked = !held.is_empty();
+                node.lock_holder = lock_winner(held);
+            }
+            self.max_zxid = self.max_zxid.max(stat.mzxid);
+            self.nodes.insert(id.to_string(), node);
+            return;
+        }
+        if sub == Some("assignment") {
+            self.apply_assignment(id, event.kind == EVENT_DELETED);
+            return;
+        }
+        if sub == Some("lifecycle") {
+            self.apply_lifecycle(id, event.kind == EVENT_DELETED);
+        }
+    }
+
+    fn apply_assignment(&mut self, id: &str, deleted: bool) {
+        let Some(node) = self.nodes.get_mut(id) else {
+            return;
+        };
+        if deleted {
+            node.request_id = None;
+            node.min_request_version = None;
+            node.tenant_name = None;
+            node.assignment_version = None;
+            node.assignment_czxid = None;
+            return;
+        }
+        let path = format!("/zuul/nodes/nodes/{id}/assignment");
+        let Ok((data, stat)) = self.zk.get(&path) else {
+            return;
+        };
+        let Ok(val) = decode_zkobject(&data) else {
+            return;
+        };
+        node.assignment_version = Some(stat.version as i64);
+        node.assignment_czxid = Some(stat.czxid);
+        node.request_id = val.get("request_id").and_then(|v| v.as_str().map(|s| s.to_string()));
+        node.min_request_version = val.get("min_request_version").and_then(|v| v.as_i64());
+        node.tenant_name = val.get("tenant_name").and_then(|v| v.as_str().map(|s| s.to_string()));
+    }
+
+    fn apply_lifecycle(&mut self, id: &str, deleted: bool) {
+        let Some(node) = self.nodes.get_mut(id) else {
+            return;
+        };
+        if deleted {
+            node.next_state = None;
+            node.next_comment = None;
+            return;
+        }
+        let path = format!("/zuul/nodes/nodes/{id}/lifecycle");
+        let Ok((data, _)) = self.zk.get(&path) else {
+            return;
+        };
+        let Ok(val) = decode_zkobject(&data) else {
+            return;
+        };
+        node.next_state = val.get("next_state").and_then(|v| v.as_str().map(|s| s.to_string()));
+        node.next_comment = val.get("next_comment").and_then(|v| v.as_str().map(|s| s.to_string()));
+    }
+
+    fn apply_node_lock(&mut self, rest: &str, event: &ZkWatchEvent) {
+        let (id, sub) = match split_child(rest) {
+            Some(pair) => pair,
+            None => return,
+        };
+        let (winner, locked) = {
+            let held = self.node_locks.entry(id.to_string()).or_default();
+            if let Some(name) = sub {
+                if event.kind == EVENT_DELETED {
+                    held.remove(name);
+                } else {
+                    let path = format!("/zuul/nodes/locks/{id}/{name}");
+                    if let Ok((data, _)) = self.zk.get(&path) {
+                        held.insert(name.to_string(), data);
+                    } else {
+                        held.remove(name);
+                    }
+                }
+            }
+            (lock_winner(held), !held.is_empty())
+        };
+        if !locked {
+            self.node_locks.remove(id);
+        }
+        if let Some(node) = self.nodes.get_mut(id) {
+            node.is_locked = locked;
+            node.lock_holder = winner;
+        }
     }
 
     fn multi_data(&self, paths: &[String]) -> Vec<Option<(Vec<u8>, ZkStat)>> {

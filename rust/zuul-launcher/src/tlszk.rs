@@ -5,13 +5,19 @@
 // Kazoo 2.11 uses. The shipped binary and the PyO3 test harness share it.
 
 use openssl::ssl::{SslConnector, SslFiletype, SslMethod};
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
-use crate::zk::{CreateMode, ZkError, ZkOps, ZkStat};
+use crate::zk::{
+    CreateMode, ZkError, ZkOps, ZkStat, ZkWatchEvent, ADD_WATCH_PERSISTENT,
+    ADD_WATCH_PERSISTENT_RECURSIVE, EVENT_CHANGED, EVENT_CHILDREN, EVENT_CREATED,
+    EVENT_DELETED, EVENT_SESSION,
+};
 
 const OP_CREATE: i32 = 1;
 const OP_DELETE: i32 = 2;
@@ -22,7 +28,10 @@ const OP_GET_CHILDREN: i32 = 8;
 const OP_PING: i32 = 11;
 /// Read-only multi. Opcode 14 is a transaction and rejects getData.
 const OP_MULTI_READ: i32 = 22;
+const OP_ADD_WATCH: i32 = 106;
+#[allow(dead_code)]
 const OP_CLOSE: i32 = -11;
+const XID_WATCH: i32 = -1;
 
 const ERR_NONODE: i32 = -101;
 const ERR_NODEEXISTS: i32 = -110;
@@ -31,20 +40,34 @@ const ERR_BADVERSION: i32 = -103;
 
 const XID_PING: i32 = -2;
 
-struct Conn {
-    stream: SslStreamGuard,
-    xid: i32,
-    chroot: String,
-}
-
-struct SslStreamGuard {
+struct Io {
     stream: openssl::ssl::SslStream<TcpStream>,
 }
 
-pub struct TlsZk {
-    inner: Mutex<Conn>,
+struct Session {
+    io: Mutex<Io>,
+    write: Mutex<()>,
+    xid: AtomicI32,
+    pending: Mutex<HashMap<i32, Sender<Result<Vec<u8>, ZkError>>>>,
+    events: Mutex<Vec<ZkWatchEvent>>,
+    waker: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    persistent: Mutex<Vec<(String, i32)>>,
+    children_watches: Mutex<HashSet<String>>,
+    data_watches: Mutex<HashSet<String>>,
+    chroot: String,
+    generation: AtomicU64,
     session_id: AtomicI64,
     closed: AtomicBool,
+    host: String,
+    port: u16,
+    cert: String,
+    key: String,
+    ca: String,
+    timeout_ms: i32,
+}
+
+pub struct TlsZk {
+    session: Arc<Session>,
 }
 
 impl TlsZk {
@@ -57,81 +80,46 @@ impl TlsZk {
         timeout_ms: i32,
     ) -> Result<Arc<Self>, ZkError> {
         let (host, port, chroot) = parse_hosts(hosts)?;
-        let tcp = TcpStream::connect((host.as_str(), port)).map_err(|e| {
-            ZkError::Message(format!("connect {host}:{port}: {e}"))
-        })?;
-        tcp.set_nodelay(true).ok();
-        let handshake_timeout = Duration::from_secs(30);
-        tcp.set_read_timeout(Some(handshake_timeout)).ok();
-        tcp.set_write_timeout(Some(handshake_timeout)).ok();
-
-        let mut builder = SslConnector::builder(SslMethod::tls())
-            .map_err(|e| ZkError::Message(format!("ssl: {e}")))?;
-        builder
-            .set_certificate_file(cert, SslFiletype::PEM)
-            .map_err(|e| ZkError::Message(format!("tls cert: {e}")))?;
-        builder
-            .set_private_key_file(key, SslFiletype::PEM)
-            .map_err(|e| ZkError::Message(format!("tls key: {e}")))?;
-        builder
-            .set_ca_file(ca)
-            .map_err(|e| ZkError::Message(format!("tls ca: {e}")))?;
-        let connector = builder.build();
-        let mut stream = connector.connect(&host, tcp).map_err(|e| {
-            ZkError::Message(format!("tls handshake {host}:{port}: {e}"))
-        })?;
-
-        let (session_id, negotiated_ms) =
-            handshake(&mut stream, timeout_ms.max(1))?;
-        let read_timeout = Duration::from_millis((negotiated_ms as u64 / 3).max(1000));
-        stream.get_mut().set_read_timeout(Some(read_timeout)).ok();
-        stream.get_mut().set_write_timeout(Some(read_timeout)).ok();
-
-        let zk = Arc::new(Self {
-            inner: Mutex::new(Conn {
-                stream: SslStreamGuard { stream },
-                xid: 1,
-                chroot,
-            }),
+        let timeout_ms = timeout_ms.max(1);
+        let (stream, session_id, negotiated_ms) =
+            open_stream(&host, port, cert, key, ca, timeout_ms)?;
+        let session = Arc::new(Session {
+            io: Mutex::new(Io { stream }),
+            write: Mutex::new(()),
+            xid: AtomicI32::new(1),
+            pending: Mutex::new(HashMap::new()),
+            events: Mutex::new(Vec::new()),
+            waker: Mutex::new(None),
+            persistent: Mutex::new(Vec::new()),
+            children_watches: Mutex::new(HashSet::new()),
+            data_watches: Mutex::new(HashSet::new()),
+            chroot,
+            generation: AtomicU64::new(1),
             session_id: AtomicI64::new(session_id),
             closed: AtomicBool::new(false),
+            host,
+            port,
+            cert: cert.to_string(),
+            key: key.to_string(),
+            ca: ca.to_string(),
+            timeout_ms,
         });
-        spawn_ping(Arc::downgrade(&zk), read_timeout);
+        let zk = Arc::new(Self {
+            session: session.clone(),
+        });
+        spawn_reader(session);
+        let ping = Duration::from_millis((negotiated_ms as u64 / 3).max(1000));
+        spawn_ping(Arc::downgrade(&zk), ping);
         Ok(zk)
-    }
-
-    fn ping(&self) -> Result<(), ZkError> {
-        if self.closed.load(Ordering::Relaxed) {
-            return Err(ZkError::Message("session closed".into()));
-        }
-        let mut conn = self.inner.lock().unwrap();
-        let mut body = Vec::new();
-        write_i32(&mut body, XID_PING);
-        write_i32(&mut body, OP_PING);
-        write_frame(&mut conn.stream.stream, &body)?;
-        let reply = read_frame(&mut conn.stream.stream)?;
-        let (xid, _zxid, err, _rest) = split_reply(&reply)?;
-        if xid != XID_PING {
-            return Err(ZkError::Message(format!("ping xid {xid}")));
-        }
-        map_err(err)?;
-        Ok(())
-    }
-
-    fn full(&self, conn: &Conn, path: &str) -> String {
-        qualify(&conn.chroot, path)
     }
 }
 
 impl Drop for TlsZk {
     fn drop(&mut self) {
-        self.closed.store(true, Ordering::Relaxed);
-        if let Ok(mut conn) = self.inner.lock() {
-            let mut body = Vec::new();
-            write_i32(&mut body, conn.xid);
-            write_i32(&mut body, OP_CLOSE);
-            let _ = write_frame(&mut conn.stream.stream, &body);
-            let _ = conn.stream.stream.shutdown();
+        self.session.closed.store(true, Ordering::Relaxed);
+        self.session.fail_pending("session closed");
+        if let Ok(io) = self.session.io.lock() {
+            let _ = io.stream.get_ref().shutdown(std::net::Shutdown::Both);
         }
     }
 }
@@ -139,20 +127,338 @@ impl Drop for TlsZk {
 fn spawn_ping(zk: Weak<TlsZk>, interval: Duration) {
     thread::spawn(move || {
         while let Some(zk) = zk.upgrade() {
-            if zk.closed.load(Ordering::Relaxed) {
+            if zk.session.closed.load(Ordering::Relaxed) {
                 break;
             }
             thread::sleep(interval);
-            if zk.ping().is_err() {
+            if zk.session.closed.load(Ordering::Relaxed) {
                 break;
+            }
+            if zk.session.ping().is_err() {
+                zk.session.kick();
             }
         }
     });
 }
 
+fn spawn_reader(session: Arc<Session>) {
+    thread::spawn(move || {
+        while !session.closed.load(Ordering::Relaxed) {
+            let frame = {
+                let mut io = session.io.lock().unwrap();
+                read_frame(&mut io.stream)
+            };
+            match frame {
+                Ok(frame) => dispatch_frame(&session, &frame),
+                Err(ZkError::Message(msg)) if msg == "read timeout" => {
+                    // The lock was released with the frame block. Pause so a
+                    // writer can take the socket; looping straight back would
+                    // starve every request and ping.
+                    thread::sleep(Duration::from_millis(20));
+                    continue;
+                }
+                Err(_) => {
+                    if session.closed.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if session.reconnect().is_err() {
+                        thread::sleep(Duration::from_millis(200));
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn open_stream(
+    host: &str,
+    port: u16,
+    cert: &str,
+    key: &str,
+    ca: &str,
+    timeout_ms: i32,
+) -> Result<(openssl::ssl::SslStream<TcpStream>, i64, i32), ZkError> {
+    let tcp = TcpStream::connect((host, port)).map_err(|e| {
+        ZkError::Message(format!("connect {host}:{port}: {e}"))
+    })?;
+    tcp.set_nodelay(true).ok();
+    let handshake_timeout = Duration::from_secs(30);
+    tcp.set_read_timeout(Some(handshake_timeout)).ok();
+    tcp.set_write_timeout(Some(handshake_timeout)).ok();
+    let mut builder = SslConnector::builder(SslMethod::tls())
+        .map_err(|e| ZkError::Message(format!("ssl: {e}")))?;
+    builder
+        .set_certificate_file(cert, SslFiletype::PEM)
+        .map_err(|e| ZkError::Message(format!("tls cert: {e}")))?;
+    builder
+        .set_private_key_file(key, SslFiletype::PEM)
+        .map_err(|e| ZkError::Message(format!("tls key: {e}")))?;
+    builder
+        .set_ca_file(ca)
+        .map_err(|e| ZkError::Message(format!("tls ca: {e}")))?;
+    let connector = builder.build();
+    let mut stream = connector.connect(host, tcp).map_err(|e| {
+        ZkError::Message(format!("tls handshake {host}:{port}: {e}"))
+    })?;
+    let (session_id, negotiated_ms) = handshake(&mut stream, timeout_ms)?;
+    // The reader blocks until a frame arrives. Ping timeouts close the
+    // socket, which is what unblocks a dead session.
+    stream.get_mut().set_read_timeout(Some(Duration::from_millis(200))).ok();
+    stream.get_mut().set_write_timeout(Some(Duration::from_secs(30))).ok();
+    Ok((stream, session_id, negotiated_ms))
+}
+
+impl Session {
+    fn qualify(&self, path: &str) -> String {
+        qualify(&self.chroot, path)
+    }
+
+    fn next_xid(&self) -> i32 {
+        let xid = self.xid.fetch_add(1, Ordering::Relaxed);
+        if xid < 1 {
+            self.xid.store(1, Ordering::Relaxed);
+            return 1;
+        }
+        xid
+    }
+
+    fn fail_pending(&self, message: &str) {
+        let mut pending = self.pending.lock().unwrap();
+        for (_, tx) in pending.drain() {
+            let _ = tx.send(Err(ZkError::Message(message.to_string())));
+        }
+    }
+
+    fn kick(&self) {
+        if let Ok(io) = self.io.lock() {
+            let _ = io.stream.get_ref().shutdown(std::net::Shutdown::Both);
+        }
+    }
+
+    fn ping(&self) -> Result<(), ZkError> {
+        if self.closed.load(Ordering::Relaxed) {
+            return Err(ZkError::Message("session closed".into()));
+        }
+        let mut body = Vec::new();
+        write_i32(&mut body, XID_PING);
+        write_i32(&mut body, OP_PING);
+        self.invoke_xid(XID_PING, &body).map(|_| ())
+    }
+
+    fn invoke(&self, opcode: i32, payload: &[u8]) -> Result<Vec<u8>, ZkError> {
+        let xid = self.next_xid();
+        let mut body = Vec::with_capacity(8 + payload.len());
+        write_i32(&mut body, xid);
+        write_i32(&mut body, opcode);
+        body.extend_from_slice(payload);
+        self.invoke_xid(xid, &body)
+    }
+
+    fn invoke_xid(&self, xid: i32, body: &[u8]) -> Result<Vec<u8>, ZkError> {
+        let (tx, rx) = mpsc::channel();
+        self.pending.lock().unwrap().insert(xid, tx);
+        {
+            let _write = self.write.lock().unwrap();
+            let mut io = self.io.lock().unwrap();
+            if let Err(err) = write_frame(&mut io.stream, body) {
+                self.pending.lock().unwrap().remove(&xid);
+                return Err(err);
+            }
+        }
+        let wait = Duration::from_secs(60);
+        match rx.recv_timeout(wait) {
+            Ok(result) => result,
+            Err(_) => {
+                self.pending.lock().unwrap().remove(&xid);
+                Err(ZkError::Message(format!("zookeeper reply timeout xid {xid}")))
+            }
+        }
+    }
+
+    fn rearm_children(&self, path: String) {
+        let full = self.qualify(&path);
+        let mut payload = Vec::new();
+        write_string(&mut payload, &full);
+        payload.push(1);
+        match self.invoke(OP_GET_CHILDREN, &payload) {
+            Ok(reply) => {
+                let kids = parse_children(&reply);
+                self.push_event(ZkWatchEvent {
+                    kind: EVENT_CHILDREN,
+                    path,
+                    children: Some(kids),
+                    data: None,
+                    exists: true,
+                });
+            }
+            Err(ZkError::NoNode) => {
+                self.push_event(ZkWatchEvent {
+                    kind: EVENT_DELETED,
+                    path,
+                    children: Some(Vec::new()),
+                    data: None,
+                    exists: false,
+                });
+            }
+            Err(_) => {}
+        }
+    }
+
+    fn rearm_data(&self, path: String) {
+        let full = self.qualify(&path);
+        let mut payload = Vec::new();
+        write_string(&mut payload, &full);
+        payload.push(1);
+        match self.invoke(OP_GET_DATA, &payload) {
+            Ok(reply) => {
+                let (data, _offset) = read_buffer(&reply, 0).unwrap_or((None, 0));
+                self.push_event(ZkWatchEvent {
+                    kind: EVENT_CHANGED,
+                    path,
+                    children: None,
+                    data,
+                    exists: true,
+                });
+            }
+            Err(ZkError::NoNode) => {
+                self.push_event(ZkWatchEvent {
+                    kind: EVENT_DELETED,
+                    path,
+                    children: None,
+                    data: None,
+                    exists: false,
+                });
+            }
+            Err(_) => {}
+        }
+    }
+
+    fn push_event(&self, event: ZkWatchEvent) {
+        self.events.lock().unwrap().push(event);
+        self.notify();
+    }
+
+    fn notify(&self) {
+        let waker = self.waker.lock().unwrap().clone();
+        if let Some(waker) = waker {
+            waker();
+        }
+    }
+
+    fn reconnect(&self) -> Result<(), ZkError> {
+        let _write = self.write.lock().unwrap();
+        self.fail_pending("session lost");
+        let (stream, session_id, _) = open_stream(
+            &self.host,
+            self.port,
+            &self.cert,
+            &self.key,
+            &self.ca,
+            self.timeout_ms,
+        )?;
+        {
+            let mut io = self.io.lock().unwrap();
+            *io = Io { stream };
+        }
+        self.session_id.store(session_id, Ordering::Relaxed);
+        self.generation.fetch_add(1, Ordering::Relaxed);
+        drop(_write);
+        // The old session's watches are gone. The launcher re-arms them
+        // before walking the tree (ZuulTreeCache._start).
+        self.push_event(ZkWatchEvent {
+            kind: EVENT_SESSION,
+            path: String::new(),
+            children: None,
+            data: None,
+            exists: false,
+        });
+        Ok(())
+    }
+
+    fn add_watch_raw(&self, path: &str, mode: i32) -> Result<(), ZkError> {
+        let full = self.qualify(path);
+        let mut payload = Vec::new();
+        write_string(&mut payload, &full);
+        write_i32(&mut payload, mode);
+        self.invoke(OP_ADD_WATCH, &payload)?;
+        Ok(())
+    }
+
+    fn get_raw(&self, path: &str, watch: bool) -> Result<(Vec<u8>, ZkStat), ZkError> {
+        let full = self.qualify(path);
+        let mut payload = Vec::new();
+        write_string(&mut payload, &full);
+        payload.push(if watch { 1 } else { 0 });
+        let reply = self.invoke(OP_GET_DATA, &payload)?;
+        let (data, offset) = read_buffer(&reply, 0)?;
+        let (stat, _) = parse_stat(&reply, offset)?;
+        Ok((data.unwrap_or_default(), stat))
+    }
+
+    fn get_children_raw(&self, path: &str, watch: bool) -> Result<Vec<String>, ZkError> {
+        let full = self.qualify(path);
+        let mut payload = Vec::new();
+        write_string(&mut payload, &full);
+        payload.push(if watch { 1 } else { 0 });
+        let reply = self.invoke(OP_GET_CHILDREN, &payload)?;
+        Ok(parse_children(&reply))
+    }
+}
+
+fn dispatch_frame(session: &Arc<Session>, frame: &[u8]) {
+    let Ok((xid, _zxid, err, rest)) = split_reply(frame) else {
+        return;
+    };
+    if xid == XID_WATCH {
+        handle_watch(session, &rest);
+        return;
+    }
+    if let Some(tx) = session.pending.lock().unwrap().remove(&xid) {
+        let result = match map_err(err) {
+            Ok(()) => Ok(rest),
+            Err(e) => Err(e),
+        };
+        let _ = tx.send(result);
+    }
+}
+
+fn handle_watch(session: &Arc<Session>, rest: &[u8]) {
+    let mut offset = 0;
+    let Ok(kind) = read_i32(rest, &mut offset) else {
+        return;
+    };
+    let Ok(_state) = read_i32(rest, &mut offset) else {
+        return;
+    };
+    let Ok((path, _)) = read_string(rest, offset) else {
+        return;
+    };
+    let path = strip_chroot(&session.chroot, path.as_deref().unwrap_or(""));
+    let children = session.children_watches.lock().unwrap().contains(&path);
+    let data = session.data_watches.lock().unwrap().contains(&path);
+    if children && (kind == EVENT_CHILDREN || kind == EVENT_DELETED || kind == EVENT_CREATED) {
+        let arc = session.clone();
+        thread::spawn(move || arc.rearm_children(path));
+        return;
+    }
+    if data && (kind == EVENT_CHANGED || kind == EVENT_CREATED || kind == EVENT_DELETED) {
+        let arc = session.clone();
+        thread::spawn(move || arc.rearm_data(path));
+        return;
+    }
+    session.push_event(ZkWatchEvent {
+        kind,
+        path,
+        children: None,
+        data: None,
+        exists: kind != EVENT_DELETED,
+    });
+}
+
+
 impl ZkOps for TlsZk {
     fn session_id(&self) -> i64 {
-        self.session_id.load(Ordering::Relaxed)
+        self.session.session_id.load(Ordering::Relaxed)
     }
 
     fn ensure_path(&self, path: &str) -> Result<(), ZkError> {
@@ -169,8 +475,7 @@ impl ZkOps for TlsZk {
     }
 
     fn create(&self, path: &str, data: &[u8], mode: CreateMode) -> Result<String, ZkError> {
-        let mut conn = self.inner.lock().unwrap();
-        let full = self.full(&conn, path);
+        let full = self.session.qualify(path);
         let flags = match mode {
             CreateMode::Persistent => 0,
             CreateMode::Ephemeral => 1,
@@ -185,10 +490,10 @@ impl ZkOps for TlsZk {
         write_string(&mut payload, "world");
         write_string(&mut payload, "anyone");
         write_i32(&mut payload, flags);
-        let reply = invoke(&mut conn, OP_CREATE, &payload)?;
+        let reply = self.session.invoke(OP_CREATE, &payload)?;
         let (created, _) = read_string(&reply, 0)?;
         let created = created.unwrap_or_default();
-        Ok(strip_chroot(&conn.chroot, &created))
+        Ok(strip_chroot(&self.session.chroot, &created))
     }
 
     fn delete(&self, path: &str, recursive: bool) -> Result<(), ZkError> {
@@ -210,12 +515,11 @@ impl ZkOps for TlsZk {
     }
 
     fn exists(&self, path: &str) -> Result<Option<ZkStat>, ZkError> {
-        let mut conn = self.inner.lock().unwrap();
-        let full = self.full(&conn, path);
+        let full = self.session.qualify(path);
         let mut payload = Vec::new();
         write_string(&mut payload, &full);
-        payload.push(0); // no watch
-        match invoke(&mut conn, OP_EXISTS, &payload) {
+        payload.push(0);
+        match self.session.invoke(OP_EXISTS, &payload) {
             Err(ZkError::NoNode) => Ok(None),
             Err(e) => Err(e),
             Ok(reply) => Ok(Some(parse_stat(&reply, 0)?.0)),
@@ -223,50 +527,60 @@ impl ZkOps for TlsZk {
     }
 
     fn get(&self, path: &str) -> Result<(Vec<u8>, ZkStat), ZkError> {
-        let mut conn = self.inner.lock().unwrap();
-        let full = self.full(&conn, path);
-        let mut payload = Vec::new();
-        write_string(&mut payload, &full);
-        payload.push(0);
-        let reply = invoke(&mut conn, OP_GET_DATA, &payload)?;
-        let (data, offset) = read_buffer(&reply, 0)?;
-        let (stat, _) = parse_stat(&reply, offset)?;
-        Ok((data.unwrap_or_default(), stat))
+        self.session.get_raw(path, false)
     }
 
     fn set(&self, path: &str, data: &[u8], version: i32) -> Result<ZkStat, ZkError> {
-        let mut conn = self.inner.lock().unwrap();
-        let full = self.full(&conn, path);
+        let full = self.session.qualify(path);
         let mut payload = Vec::new();
         write_string(&mut payload, &full);
         write_buffer(&mut payload, data);
         write_i32(&mut payload, version);
-        let reply = invoke(&mut conn, OP_SET_DATA, &payload)?;
+        let reply = self.session.invoke(OP_SET_DATA, &payload)?;
         Ok(parse_stat(&reply, 0)?.0)
     }
 
     fn get_children(&self, path: &str) -> Result<Vec<String>, ZkError> {
-        let mut conn = self.inner.lock().unwrap();
-        let full = self.full(&conn, path);
-        let mut payload = Vec::new();
-        write_string(&mut payload, &full);
-        payload.push(0);
-        let reply = invoke(&mut conn, OP_GET_CHILDREN, &payload)?;
-        let mut offset = 0;
-        let count = read_i32(&reply, &mut offset)?;
-        if count < 0 {
-            return Ok(Vec::new());
+        self.session.get_children_raw(path, false)
+    }
+
+    fn add_watch(&self, path: &str, mode: i32) -> Result<(), ZkError> {
+        if mode != ADD_WATCH_PERSISTENT && mode != ADD_WATCH_PERSISTENT_RECURSIVE {
+            return Err(ZkError::Message(format!("unknown watch mode {mode}")));
         }
-        let mut kids = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            let (child, next) = read_string(&reply, offset)?;
-            offset = next;
-            if let Some(child) = child {
-                kids.push(child);
-            }
+        self.session.add_watch_raw(path, mode)?;
+        let mut persistent = self.session.persistent.lock().unwrap();
+        if !persistent.iter().any(|(root, _)| root == path) {
+            persistent.push((path.to_string(), mode));
         }
-        kids.sort();
+        Ok(())
+    }
+
+    fn watch_children(&self, path: &str) -> Result<Vec<String>, ZkError> {
+        let kids = self.session.get_children_raw(path, true)?;
+        self.session.children_watches.lock().unwrap().insert(path.to_string());
         Ok(kids)
+    }
+
+    fn watch_data(&self, path: &str) -> Result<Option<(Vec<u8>, ZkStat)>, ZkError> {
+        self.session.data_watches.lock().unwrap().insert(path.to_string());
+        match self.session.get_raw(path, true) {
+            Ok(pair) => Ok(Some(pair)),
+            Err(ZkError::NoNode) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn take_watch_events(&self) -> Vec<ZkWatchEvent> {
+        std::mem::take(&mut *self.session.events.lock().unwrap())
+    }
+
+    fn set_waker(&self, waker: Option<Arc<dyn Fn() + Send + Sync>>) {
+        *self.session.waker.lock().unwrap() = waker;
+    }
+
+    fn session_generation(&self) -> u64 {
+        self.session.generation.load(Ordering::Relaxed)
     }
 
     fn multi_get(&self, paths: &[String]) -> Result<Vec<Result<(Vec<u8>, ZkStat), ZkError>>, ZkError> {
@@ -315,10 +629,9 @@ impl TlsZk {
     }
 
     fn multi_raw(&self, paths: &[String], opcode: i32) -> Result<Vec<Result<Vec<u8>, ZkError>>, ZkError> {
-        let mut conn = self.inner.lock().unwrap();
         let mut payload = Vec::new();
         for path in paths {
-            let full = self.full(&conn, path);
+            let full = self.session.qualify(path);
             write_i32(&mut payload, opcode);
             payload.push(0); // done = false
             write_i32(&mut payload, -1);
@@ -328,7 +641,7 @@ impl TlsZk {
         write_i32(&mut payload, -1);
         payload.push(1); // done = true
         write_i32(&mut payload, -1);
-        let reply = invoke(&mut conn, OP_MULTI_READ, &payload)?;
+        let reply = self.session.invoke(OP_MULTI_READ, &payload)?;
         let mut offset = 0;
         let mut out = Vec::with_capacity(paths.len());
         for _ in 0..paths.len() {
@@ -378,36 +691,13 @@ impl TlsZk {
 
 impl TlsZk {
     fn delete_one(&self, path: &str) -> Result<(), ZkError> {
-        let mut conn = self.inner.lock().unwrap();
-        let full = self.full(&conn, path);
+        let full = self.session.qualify(path);
         let mut payload = Vec::new();
         write_string(&mut payload, &full);
-        write_i32(&mut payload, -1); // any version
-        invoke(&mut conn, OP_DELETE, &payload)?;
+        write_i32(&mut payload, -1);
+        self.session.invoke(OP_DELETE, &payload)?;
         Ok(())
     }
-}
-
-fn invoke(conn: &mut Conn, opcode: i32, payload: &[u8]) -> Result<Vec<u8>, ZkError> {
-    let xid = conn.xid;
-    conn.xid = conn.xid.wrapping_add(1);
-    if conn.xid < 1 {
-        conn.xid = 1;
-    }
-    let mut body = Vec::with_capacity(8 + payload.len());
-    write_i32(&mut body, xid);
-    write_i32(&mut body, opcode);
-    body.extend_from_slice(payload);
-    write_frame(&mut conn.stream.stream, &body)?;
-    let reply = read_frame(&mut conn.stream.stream)?;
-    let (got_xid, _zxid, err, rest) = split_reply(&reply)?;
-    if got_xid != xid {
-        return Err(ZkError::Message(format!(
-            "xid mismatch expected {xid} got {got_xid}"
-        )));
-    }
-    map_err(err)?;
-    Ok(rest)
 }
 
 fn handshake(
@@ -546,8 +836,21 @@ fn write_frame(stream: &mut openssl::ssl::SslStream<TcpStream>, body: &[u8]) -> 
 }
 
 fn read_frame(stream: &mut openssl::ssl::SslStream<TcpStream>) -> Result<Vec<u8>, ZkError> {
+    // Time out only while waiting for the first byte so a writer can take
+    // the socket between frames. Once a byte arrives, read the rest of the
+    // frame without a timeout so a partial header cannot desync the session.
+    stream.get_mut().set_read_timeout(Some(Duration::from_millis(200))).ok();
     let mut len_buf = [0u8; 4];
-    read_exact(stream, &mut len_buf)?;
+    match stream.read(&mut len_buf[..1]) {
+        Ok(0) => return Err(ZkError::Message("zk read: eof".into())),
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
+            return Err(ZkError::Message("read timeout".into()));
+        }
+        Err(e) => return Err(ZkError::Message(format!("zk read: {e}"))),
+    }
+    stream.get_mut().set_read_timeout(None).ok();
+    read_exact(stream, &mut len_buf[1..])?;
     let len = i32::from_be_bytes(len_buf);
     if len < 0 || len > 64 * 1024 * 1024 {
         return Err(ZkError::Message(format!("bad frame length {len}")));
@@ -561,9 +864,13 @@ fn read_exact(
     stream: &mut openssl::ssl::SslStream<TcpStream>,
     buf: &mut [u8],
 ) -> Result<(), ZkError> {
-    stream
-        .read_exact(buf)
-        .map_err(|e| ZkError::Message(format!("zk read: {e}")))
+    stream.read_exact(buf).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock {
+            ZkError::Message("read timeout".into())
+        } else {
+            ZkError::Message(format!("zk read: {e}"))
+        }
+    })
 }
 
 fn split_reply(reply: &[u8]) -> Result<(i32, i64, i32, Vec<u8>), ZkError> {
@@ -759,8 +1066,73 @@ mod tests {
             .unwrap();
         assert!(matches!(kids_first_missing[0], Err(ZkError::NoNode)));
         assert!(kids_first_missing[1].as_ref().unwrap().iter().any(|k| k == "node"));
+        let woke = Arc::new(AtomicBool::new(false));
+        let flag = woke.clone();
+        zk.set_waker(Some(Arc::new(move || {
+            flag.store(true, Ordering::SeqCst);
+        })));
+        zk.add_watch("/zuul-harness-smoke", ADD_WATCH_PERSISTENT_RECURSIVE)
+            .unwrap();
+        woke.store(false, Ordering::SeqCst);
+        let _ = zk.take_watch_events();
+        zk.create(
+            "/zuul-harness-smoke/watched",
+            b"w",
+            CreateMode::Persistent,
+        )
+        .unwrap();
+        assert!(
+            wait_for_watch(&zk, &woke, |event| {
+                event.kind == EVENT_CREATED && event.path.ends_with("/watched")
+            }),
+            "persistent recursive watch did not deliver the child create"
+        );
+        zk.watch_children("/zuul-harness-smoke").unwrap();
+        let _ = zk.take_watch_events();
+        woke.store(false, Ordering::SeqCst);
+        zk.create("/zuul-harness-smoke/kid-a", b"", CreateMode::Persistent)
+            .unwrap();
+        assert!(
+            wait_for_watch(&zk, &woke, |event| {
+                event.kind == EVENT_CHILDREN
+                    && event
+                        .children
+                        .as_ref()
+                        .map(|kids| kids.iter().any(|k| k == "kid-a"))
+                        .unwrap_or(false)
+            }),
+            "children watch did not deliver kid-a"
+        );
+        woke.store(false, Ordering::SeqCst);
+        zk.create("/zuul-harness-smoke/kid-b", b"", CreateMode::Persistent)
+            .unwrap();
+        assert!(
+            wait_for_watch(&zk, &woke, |event| {
+                event.kind == EVENT_CHILDREN
+                    && event
+                        .children
+                        .as_ref()
+                        .map(|kids| kids.iter().any(|k| k == "kid-b"))
+                        .unwrap_or(false)
+            }),
+            "children watch was not re-armed for kid-b"
+        );
         zk.delete(&created, false).unwrap();
         assert!(zk.exists(&created).unwrap().is_none());
         zk.delete("/zuul-harness-smoke", true).unwrap();
+    }
+
+    fn wait_for_watch(zk: &TlsZk, woke: &AtomicBool, pred: impl Fn(&ZkWatchEvent) -> bool) -> bool {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if woke.load(Ordering::SeqCst) {
+                let events = zk.take_watch_events();
+                if events.iter().any(&pred) {
+                    return true;
+                }
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        false
     }
 }

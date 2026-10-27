@@ -173,15 +173,64 @@ impl PyLauncher {
     /// component is running, matching Launcher._run.
     fn _run(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {
         let rust = slf.borrow().rust.clone();
-        let reloaded = py.allow_threads(|| {
+        let flags_json = call_py_value(py, "maintenance_flags", (slf,))?;
+        let flags_text: String = flags_json.extract(py)?;
+        let hostname: String = slf.getattr("hostname")?.extract()?;
+        let event_for_watch = slf.getattr("wake_event")?.unbind();
+        let reloaded = py.allow_threads(move || {
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
-                // process_once syncs the caches. Reloading the layout
-                // reads ZooKeeper itself, so a second full sync here only
-                // doubles the lock hold.
-                match launcher.reload_providers() {
-                    Ok(_) => Ok(launcher.layout_snapshot_json()),
-                    Err(err) => Err(err),
+                if !launcher.waker_installed() {
+                    // The watch thread must set Python's event. The launcher
+                    // thread is blocked in wake_event.wait, so a flag checked
+                    // only at the end of _run would wait out MIN_INTERVAL.
+                    launcher.install_waker(Some(std::sync::Arc::new(move || {
+                        Python::with_gil(|py| {
+                            let _ = event_for_watch.bind(py).call_method0("set");
+                        });
+                    })));
+                    launcher.arm_watches();
+                    launcher.mark_waker_installed();
+                }
+                launcher.api.prepare();
+                if let Ok(flags) = zuul_launcher::jsonutil::loads(&flags_text) {
+                    if flags
+                        .get("layout_updated")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        launcher.layout_updated = true;
+                        launcher.layout_dirty = true;
+                    }
+                    if flags
+                        .get("image_updated")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        launcher.image_updated = true;
+                    }
+                    if flags
+                        .get("upload_deleted")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        launcher.upload_deleted = true;
+                    }
+                }
+                if launcher.api.take_layout_event() {
+                    launcher.layout_dirty = true;
+                    launcher.layout_updated = true;
+                }
+                if launcher.api.take_image_event() {
+                    launcher.image_updated = true;
+                }
+                if launcher.layout_dirty {
+                    match launcher.reload_providers() {
+                        Ok(_) => Ok(launcher.layout_snapshot_json()),
+                        Err(err) => Err(err),
+                    }
+                } else {
+                    Ok(String::new())
                 }
             } else {
                 Ok(String::new())
@@ -201,49 +250,22 @@ impl PyLauncher {
                 return Ok(());
             }
         }
-        // Feed layout/image/delete events into Rust maintain_images_and_uploads.
-        let flags_json = call_py_value(py, "maintenance_flags", (slf,))?;
-        let flags_text: String = flags_json.extract(py)?;
-        let hostname: String = slf.getattr("hostname")?.extract()?;
         let rust = slf.borrow().rust.clone();
-        let (events, stats) = py.allow_threads(|| {
+        let (events, stats, woke) = py.allow_threads(|| {
             let _cloud = zuul_launcher::cloud::enter(&hostname);
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
-                if let Ok(flags) = zuul_launcher::jsonutil::loads(&flags_text) {
-                    if flags
-                        .get("layout_updated")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false)
-                    {
-                        launcher.layout_updated = true;
-                    }
-                    if flags
-                        .get("image_updated")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false)
-                    {
-                        launcher.image_updated = true;
-                    }
-                    if flags
-                        .get("upload_deleted")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false)
-                    {
-                        launcher.upload_deleted = true;
-                    }
-                }
                 let _active = zuul_launcher::cloud::enter_launcher(
                     launcher as *mut _ as *mut (),
                 );
-                launcher.api.sync();
                 launcher.process_once();
                 (
                     launcher.take_pending_events_json(),
                     launcher.take_stats_json(),
+                    launcher.take_wake(),
                 )
             } else {
-                ("[]".to_string(), "[]".to_string())
+                ("[]".to_string(), "[]".to_string(), false)
             }
         });
         if events != "[]" {
@@ -252,10 +274,10 @@ impl PyLauncher {
         if stats != "[]" {
             call_py(py, "emit_stats", (slf, stats))?;
         }
-        // maintain_images_and_uploads runs inside process_once (no Python duplicate).
-        // No ChildrenWatch in this loop, so poll again after MAX_SLEEP
-        // instead of waiting out MIN_INTERVAL.
-        if slf.getattr("_running")?.is_truthy()? {
+        // In-pass work (accept retry, quota deferral) sets the Rust wake
+        // flag. ZooKeeper watches set Python's event from the watch thread.
+        // A pass with neither waits out MIN_INTERVAL, matching server.py.
+        if woke && slf.getattr("_running")?.is_truthy()? {
             slf.getattr("wake_event")?.call_method0("set")?;
         }
         Ok(())
