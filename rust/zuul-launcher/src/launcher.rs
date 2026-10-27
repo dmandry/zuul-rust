@@ -799,13 +799,45 @@ impl Launcher {
         request.set_state(state);
         request.set_event_state(model::event_state::COMPLETE);
         let _ = self.api.write_request(request);
-        self.pending_events.push(json!({
-            "tenant": request.tenant_name(),
-            "pipeline": request.pipeline_name(),
-            "uuid": request.uuid(),
-            "buildset": request.buildset_uuid(),
-        }));
+        if crate::cloud::enabled() {
+            // The PyO3 harness puts this on the Python result queue.
+            self.pending_events.push(json!({
+                "tenant": request.tenant_name(),
+                "pipeline": request.pipeline_name(),
+                "uuid": request.uuid(),
+                "buildset": request.buildset_uuid(),
+            }));
+        } else {
+            // PipelineResultEventQueue.put of NodesProvisionedEvent.
+            self.emit_provisioned_event(request);
+        }
         self.wake();
+    }
+
+    /// Small result events fit in one sequence znode. `json.dumps(sort_keys)`
+    /// and `kazoo.create(..., sequence=True)` on `{queue}/q`.
+    fn emit_provisioned_event(&self, request: &NodesetRequest) {
+        let queue = format!(
+            "/zuul/events/tenant/{}/pipelines/{}/result/queue",
+            request.tenant_name(),
+            request.pipeline_name()
+        );
+        if self.api.zk.ensure_path(&queue).is_err() {
+            return;
+        }
+        let payload = json!({
+            "event_data": {
+                "build_set_uuid": request.buildset_uuid(),
+                "request_id": request.uuid(),
+            },
+            "event_type": "NodesProvisionedEvent",
+        });
+        let bytes = payload.to_string().into_bytes();
+        let _ = self.api.zk.create(
+            &format!("{queue}/q"),
+            &bytes,
+            zk::CreateMode::PersistentSequential,
+        );
     }
 
     fn check_request(&mut self, request: &NodesetRequest, unassigned: &HashMap<String, Vec<String>>) {
@@ -2636,16 +2668,21 @@ impl Launcher {
     }
 
     /// Block until `wake` is set or `timeout` elapses, then clear the flag.
-    /// Same order as `Launcher.run`: `wake_event.wait` then `clear`.
+    /// `threading.Event.wait` returns immediately when the event is already
+    /// set. A notify that landed during the pass must not sit for
+    /// `MIN_INTERVAL`.
     pub fn wait_wake(&self, timeout: Duration) -> bool {
-        let guard = match self.wake.lock() {
+        let mut guard = match self.wake.lock() {
             Ok(guard) => guard,
             Err(err) => err.into_inner(),
         };
-        let (mut guard, _) = self
-            .wake_cv
-            .wait_timeout(guard, timeout)
-            .unwrap_or_else(|err| err.into_inner());
+        if !*guard {
+            let (next, _) = self
+                .wake_cv
+                .wait_timeout(guard, timeout)
+                .unwrap_or_else(|err| err.into_inner());
+            guard = next;
+        }
         let woke = *guard;
         *guard = false;
         woke
