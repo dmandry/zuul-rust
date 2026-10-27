@@ -458,7 +458,9 @@ impl Launcher {
 
     fn matching_ids(&mut self, op: &str) -> Vec<String> {
         if cloud::enabled() {
-            self.api.sync();
+            // prepare() already applied watch events. 14.3.0 answers
+            // getMatching* from the tree cache and does not walk the
+            // trees on a quiet pass.
             // Python getMatching* applies launcher_score patches. A miss
             // must not fall through to mmh3: that assigns the node to a
             // different launcher than the one the test (and the other
