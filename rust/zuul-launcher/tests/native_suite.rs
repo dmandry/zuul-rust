@@ -10,7 +10,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -164,12 +164,11 @@ fn launcher_loop(
             return;
         }
     };
-    static CONNECTIONS: OnceLock<()> = OnceLock::new();
-    CONNECTIONS.get_or_init(|| {
-        if let Ok(connections) = provider_connections(&cfg) {
-            native::set_connections(connections);
-        }
-    });
+    // Each test starts a new moto proxy. The endpoint URL lives in that
+    // test's zuul.conf, so connections are replaced for every launcher.
+    if let Ok(connections) = provider_connections(&cfg) {
+        native::set_connections(connections);
+    }
     let timeout_ms = (zk_cfg.session_timeout * 1000.0) as i32;
     let zk = match TlsZk::connect(
         &zk_cfg.hosts,
@@ -242,6 +241,19 @@ fn launcher_loop(
     }
 }
 
+struct EnvRestore(Vec<(String, Option<String>)>);
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        for (key, previous) in self.0.drain(..) {
+            match previous {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+}
+
 fn run(class_name: &str, method: &str) {
     if !selected(class_name, method) {
         return;
@@ -265,11 +277,14 @@ fn run(class_name: &str, method: &str) {
             begin.error.unwrap_or_default()
         );
     }
+    let mut previous_env = Vec::new();
     for (key, value) in &begin.env {
         if let Some(text) = value.as_str() {
+            previous_env.push((key.clone(), std::env::var(key).ok()));
             std::env::set_var(key, text);
         }
     }
+    let _env_restore = EnvRestore(previous_env);
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let ready = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let wakes = Arc::new(Mutex::new(Vec::new()));

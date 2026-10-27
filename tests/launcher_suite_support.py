@@ -18,6 +18,22 @@ import traceback
 _CHECKS = []
 
 
+def _pollable_nodescan_fd():
+    """An fd epoll_ctl will accept.
+
+    NodescanFixture's FakeSocket.fileno is 1. That is pollable when stdout
+    is a pipe, and EPERM when it is a regular file. A private pipe is
+    pollable either way, and it does not add a thread for shutdown() to see.
+    """
+    fd = getattr(_pollable_nodescan_fd, "fd", None)
+    if fd is None:
+        read_fd, write_fd = os.pipe()
+        _pollable_nodescan_fd.fd = read_fd
+        _pollable_nodescan_fd.write_fd = write_fd
+        fd = read_fd
+    return fd
+
+
 def _pin_executable():
     """Subprocesses must be the venv interpreter.
 
@@ -418,6 +434,16 @@ class Session:
         os.environ.pop("ZUUL_LAUNCHER_IMPL", None)
         import tests.unit.test_launcher as mod
 
+        import tests.fake_nodescan as fake_nodescan
+
+        def _fileno(self):
+            # The worker waits for EPOLLOUT. A pipe's write end is
+            # writable immediately, which is what fileno 1 is when
+            # stdout is a pipe.
+            _pollable_nodescan_fd()
+            return _pollable_nodescan_fd.write_fd
+
+        fake_nodescan.FakeSocket.fileno = _fileno
         if mode == "bridge":
             import tests.base as base
             import zuul.launcher.server as server
@@ -510,6 +536,11 @@ class Session:
                     error += "\nSUITE log tail:\n" + text[-2000:]
             except Exception as exc:
                 error += "\nSUITE history failed: " + repr(exc)
+        if os.environ.get("ZUUL_SUITE_DUMP_LOG") and self.case is not None:
+            stream = getattr(self.case, "_log_stream", None)
+            if stream is not None:
+                with open("/tmp/suite-case.log", "w", encoding="utf-8") as handle:
+                    handle.write(stream.getvalue())
         return {"ok": error is None, "checks": list(_CHECKS), "error": error}
 
     def _drain_cleanups(self):
