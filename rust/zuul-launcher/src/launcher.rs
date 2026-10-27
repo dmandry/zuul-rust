@@ -469,7 +469,7 @@ impl Launcher {
                 self.wake();
                 return Vec::new();
             };
-            return v
+            let ids: Vec<String> = v
                 .get("ids")
                 .and_then(|a| a.as_array())
                 .map(|ids| {
@@ -478,6 +478,15 @@ impl Launcher {
                         .collect()
                 })
                 .unwrap_or_default();
+            // Quota refresh can take longer than the watch delivery.
+            // Apply anything queued during that wait, and read only an
+            // id the Python cache already yielded that this map lacks.
+            if op == "matching_nodes" {
+                self.api.ensure_nodes(&ids);
+            } else {
+                self.api.ensure_requests(&ids);
+            }
+            return ids;
         }
         if op == "matching_nodes" {
             self.api.get_matching_nodes()

@@ -853,6 +853,104 @@ impl LauncherApi {
         value
     }
 
+    /// The Python cache can yield an id before this session's watch has
+    /// been applied (the kazoo callback wakes the loop). Drain events,
+    /// then read only the ids that are still absent. A quiet pass where
+    /// the maps already contain every id does not read ZooKeeper.
+    pub fn ensure_requests(&mut self, ids: &[String]) {
+        // Events can arrive during quota refresh, after _run's prepare.
+        // Applying them reads nothing unless a watch fired.
+        self.prepare();
+        for id in ids {
+            if !self.requests.contains_key(id) {
+                self.load_request(id);
+            }
+        }
+    }
+
+    pub fn ensure_nodes(&mut self, ids: &[String]) {
+        self.prepare();
+        let mut loaded = false;
+        for id in ids {
+            if !self.nodes.contains_key(id) {
+                loaded |= self.load_node(id);
+            }
+        }
+        if loaded {
+            self.reindex();
+        }
+    }
+
+    fn load_request(&mut self, id: &str) {
+        let path = format!("/zuul/nodeset/requests/{id}");
+        let Ok((data, stat)) = self.zk.get(&path) else {
+            return;
+        };
+        let Ok(val) = decode_zkobject(&data) else {
+            return;
+        };
+        let mut req = NodesetRequest::from_value(val);
+        req.zk_version = Some(stat.version as i64);
+        let lock_path = format!("/zuul/nodeset/locks/{id}");
+        if let Ok(kids) = self.zk.get_children(&lock_path) {
+            req.is_locked = !kids.is_empty();
+        }
+        let rev = format!("/zuul/nodeset/requests/{id}/revision");
+        if let Ok((data, _)) = self.zk.get(&rev) {
+            if let Ok(val) = decode_zkobject(&data) {
+                req.revision_priority = val.get("relative_priority").and_then(|v| v.as_i64());
+            }
+        }
+        self.requests.insert(id.to_string(), req);
+    }
+
+    fn load_node(&mut self, id: &str) -> bool {
+        let path = format!("/zuul/nodes/nodes/{id}");
+        let Ok((data, stat)) = self.zk.get(&path) else {
+            return false;
+        };
+        let Ok((driver, val)) = decode_polymorphic(&data) else {
+            return false;
+        };
+        let mut node = ProviderNode::from_parts(driver, val);
+        node.zk_version = Some(stat.version as i64);
+        let lock_path = format!("/zuul/nodes/locks/{id}");
+        if let Ok(kids) = self.zk.get_children(&lock_path) {
+            let mut held = BTreeMap::new();
+            for child in kids {
+                let child_path = format!("{lock_path}/{child}");
+                if let Ok((data, _)) = self.zk.get(&child_path) {
+                    held.insert(child, data);
+                }
+            }
+            node.is_locked = !held.is_empty();
+            node.lock_holder = lock_winner(&held);
+            if !held.is_empty() {
+                self.node_locks.insert(id.to_string(), held);
+            }
+        }
+        let assign = format!("/zuul/nodes/nodes/{id}/assignment");
+        if let Ok((data, stat)) = self.zk.get(&assign) {
+            if let Ok(val) = decode_zkobject(&data) {
+                node.assignment_version = Some(stat.version as i64);
+                node.assignment_czxid = Some(stat.czxid);
+                node.request_id = val.get("request_id").and_then(|v| v.as_str().map(|s| s.to_string()));
+                node.min_request_version = val.get("min_request_version").and_then(|v| v.as_i64());
+                node.tenant_name = val.get("tenant_name").and_then(|v| v.as_str().map(|s| s.to_string()));
+            }
+        }
+        let life = format!("/zuul/nodes/nodes/{id}/lifecycle");
+        if let Ok((data, _)) = self.zk.get(&life) {
+            if let Ok(val) = decode_zkobject(&data) {
+                node.next_state = val.get("next_state").and_then(|v| v.as_str().map(|s| s.to_string()));
+                node.next_comment = val.get("next_comment").and_then(|v| v.as_str().map(|s| s.to_string()));
+            }
+        }
+        self.max_zxid = self.max_zxid.max(stat.mzxid);
+        self.nodes.insert(id.to_string(), node);
+        true
+    }
+
     /// Apply watch notifications since the last pass. A quiet pass reads
     /// nothing. A session loss walks the trees once, matching
     /// `ZuulTreeCache._walkTree` after reconnect.
