@@ -20,7 +20,8 @@ const OP_GET_DATA: i32 = 4;
 const OP_SET_DATA: i32 = 5;
 const OP_GET_CHILDREN: i32 = 8;
 const OP_PING: i32 = 11;
-const OP_MULTI: i32 = 14;
+/// Read-only multi. Opcode 14 is a transaction and rejects getData.
+const OP_MULTI_READ: i32 = 22;
 const OP_CLOSE: i32 = -11;
 
 const ERR_NONODE: i32 = -101;
@@ -273,35 +274,20 @@ impl ZkOps for TlsZk {
             return Ok(Vec::new());
         }
         self.multi(paths, OP_GET_DATA, true)
-            .or_else(|_| {
-                let mut out = Vec::with_capacity(paths.len());
-                for path in paths {
-                    out.push(self.get(path));
-                }
-                Ok(out)
-            })
     }
 
     fn multi_children(&self, paths: &[String]) -> Result<Vec<Result<Vec<String>, ZkError>>, ZkError> {
         if paths.is_empty() {
             return Ok(Vec::new());
         }
-        match self.multi_raw(paths, OP_GET_CHILDREN) {
-            Ok(raw) => Ok(raw
-                .into_iter()
-                .map(|item| match item {
-                    Ok(body) => Ok(parse_children(&body)),
-                    Err(err) => Err(err),
-                })
-                .collect()),
-            Err(_) => {
-                let mut out = Vec::with_capacity(paths.len());
-                for path in paths {
-                    out.push(self.get_children(path));
-                }
-                Ok(out)
-            }
-        }
+        let raw = self.multi_raw(paths, OP_GET_CHILDREN)?;
+        Ok(raw
+            .into_iter()
+            .map(|item| match item {
+                Ok(body) => Ok(parse_children(&body)),
+                Err(err) => Err(err),
+            })
+            .collect())
     }
 }
 
@@ -342,7 +328,7 @@ impl TlsZk {
         write_i32(&mut payload, -1);
         payload.push(1); // done = true
         write_i32(&mut payload, -1);
-        let reply = invoke(&mut conn, OP_MULTI, &payload)?;
+        let reply = invoke(&mut conn, OP_MULTI_READ, &payload)?;
         let mut offset = 0;
         let mut out = Vec::with_capacity(paths.len());
         for _ in 0..paths.len() {
@@ -354,9 +340,14 @@ impl TlsZk {
             offset += 1;
             let err = read_i32(&reply, &mut offset)?;
             if done != 0 {
-                return Err(ZkError::Message("multi ended early".into()));
+                return Err(ZkError::Message(format!(
+                    "multi ended early at {offset} done={done} err={err} bytes=",
+                    reply.iter().take(48).map(|b| b.to_string()).collect::<Vec<_>>().join(",")
+                )));
             }
             if err != 0 {
+                // A failed sub-op is followed by an ErrorResponse int.
+                let _ = read_i32(&reply, &mut offset)?;
                 out.push(Err(code_err(err)));
                 continue;
             }
@@ -719,6 +710,7 @@ mod tests {
             60_000,
         )
         .unwrap();
+        let _ = zk.delete("/zuul-harness-smoke", true);
         zk.ensure_path("/zuul-harness-smoke").unwrap();
         let created = zk
             .create(
@@ -740,13 +732,33 @@ mod tests {
             .unwrap();
         assert_eq!(got[0].as_ref().unwrap().0, b"yo");
         assert!(matches!(got[1], Err(ZkError::NoNode)));
+        let only_missing = zk
+            .multi_get(&[missing.clone(), "/zuul-harness-smoke/also-absent".into()])
+            .unwrap();
+        assert!(matches!(only_missing[0], Err(ZkError::NoNode)));
+        assert!(matches!(only_missing[1], Err(ZkError::NoNode)));
+        let mixed = zk
+            .multi_get(&[
+                missing.clone(),
+                created.clone(),
+                "/zuul-harness-smoke/also-absent".into(),
+            ])
+            .unwrap();
+        assert!(matches!(mixed[0], Err(ZkError::NoNode)));
+        assert_eq!(mixed[1].as_ref().unwrap().0, b"yo");
+        assert!(matches!(mixed[2], Err(ZkError::NoNode)));
         zk.create("/zuul-harness-smoke/a", b"", CreateMode::Persistent)
             .unwrap();
         let kids = zk
-            .multi_children(&["/zuul-harness-smoke".to_string(), missing])
+            .multi_children(&["/zuul-harness-smoke".to_string(), missing.clone()])
             .unwrap();
         assert!(kids[0].as_ref().unwrap().iter().any(|k| k == "a" || k == "node"));
         assert!(matches!(kids[1], Err(ZkError::NoNode)));
+        let kids_first_missing = zk
+            .multi_children(&[missing.clone(), "/zuul-harness-smoke".into()])
+            .unwrap();
+        assert!(matches!(kids_first_missing[0], Err(ZkError::NoNode)));
+        assert!(kids_first_missing[1].as_ref().unwrap().iter().any(|k| k == "node"));
         zk.delete(&created, false).unwrap();
         assert!(zk.exists(&created).unwrap().is_none());
         zk.delete("/zuul-harness-smoke", true).unwrap();
