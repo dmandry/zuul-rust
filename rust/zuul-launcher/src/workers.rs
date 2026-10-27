@@ -659,12 +659,11 @@ fn consume_inventory(book: &mut LeakBook, canonical: &str, inv: &Value, now: i64
     }
     let quota = unmanaged_quota_for(inv.get("instances"), &system_id, &node_ids);
     let safe = normalize_statsd_name(canonical);
-    let mut types: Vec<String> = inv
+    let types: Vec<String> = inv
         .get("resource_types")
         .and_then(|v| v.as_array())
         .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_default();
-    types.sort();
     let mut unmanaged: BTreeMap<String, i64> = types.iter().map(|t| (t.clone(), 0)).collect();
     let mut leaked: BTreeMap<String, i64> = types.iter().map(|t| (t.clone(), 0)).collect();
     let prev_nodes = book.nodes.get(canonical).cloned().unwrap_or_default();
@@ -764,13 +763,33 @@ fn consume_inventory(book: &mut LeakBook, canonical: &str, inv: &Value, now: i64
     book.uploads.insert(canonical.to_string(), new_uploads);
     book.resources.insert(canonical.to_string(), new_resources);
     let mut gauges = Vec::new();
+    let mut seen = HashSet::new();
+    for rtype in &types {
+        seen.insert(rtype.clone());
+        gauges.push(json!({
+            "name": format!("zuul.provider_endpoint.{safe}.unmanaged.{rtype}"),
+            "value": unmanaged.get(rtype).copied().unwrap_or(0),
+        }));
+    }
     for (rtype, value) in &unmanaged {
+        if seen.contains(rtype) {
+            continue;
+        }
         gauges.push(json!({
             "name": format!("zuul.provider_endpoint.{safe}.unmanaged.{rtype}"),
             "value": value,
         }));
     }
+    for rtype in &types {
+        gauges.push(json!({
+            "name": format!("zuul.provider_endpoint.{safe}.leaked.{rtype}"),
+            "value": leaked.get(rtype).copied().unwrap_or(0),
+        }));
+    }
     for (rtype, value) in &leaked {
+        if seen.contains(rtype) {
+            continue;
+        }
         gauges.push(json!({
             "name": format!("zuul.provider_endpoint.{safe}.leaked.{rtype}"),
             "value": value,
