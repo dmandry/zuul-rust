@@ -78,43 +78,37 @@ fn save_upload(zk: &dyn ZkOps, upload: &ImageUpload) -> Result<(), ZkError> {
     Err(ZkError::BadVersion)
 }
 
-fn lock_held(zk: &dyn ZkOps, lock_path: &str) -> bool {
-    match zk.get_children(lock_path) {
-        Ok(kids) => !kids.is_empty(),
-        Err(_) => false,
-    }
-}
-
 fn release_lock(zk: &dyn ZkOps, held: &HeldLock) {
     let _ = zk.delete(&held.path, false);
 }
 
 /// Reset unlocked UPLOADING uploads to PENDING (checkMissingUploads).
-pub fn reset_crashed_uploads(zk: &dyn ZkOps, hostname: &str) {
-    let Ok(ids) = zk.get_children("/zuul/image-uploads/uploads") else {
-        return;
-    };
-    for uuid in ids {
-        let Some(upload) = load_upload(zk, &uuid) else {
-            continue;
-        };
-        if upload.state() != upload_state::UPLOADING {
-            continue;
-        }
-        if lock_held(zk, &upload_lock_path(&uuid)) {
+/// The caller passes the tree-cache items. Only an unlocked UPLOADING
+/// upload is refreshed, inside its lock. Returns the uuids moved to PENDING.
+pub fn reset_crashed_uploads(
+    zk: &dyn ZkOps,
+    hostname: &str,
+    uploads: &[ImageUpload],
+) -> Vec<String> {
+    let mut reset = Vec::new();
+    for upload in uploads {
+        if upload.state() != upload_state::UPLOADING || upload.is_locked {
             continue;
         }
-        let Ok(Some(held)) = acquire_lock(zk, &upload_lock_path(&uuid), hostname, false) else {
+        let Ok(Some(held)) = acquire_lock(zk, &upload_lock_path(&upload.uuid()), hostname, false) else {
             continue;
         };
-        if let Some(mut fresh) = load_upload(zk, &uuid) {
+        if let Some(mut fresh) = load_upload(zk, &upload.uuid()) {
             if fresh.state() == upload_state::UPLOADING {
                 fresh.set_state(upload_state::PENDING);
-                let _ = save_upload(zk, &fresh);
+                if save_upload(zk, &fresh).is_ok() {
+                    reset.push(fresh.uuid());
+                }
             }
         }
         release_lock(zk, &held);
     }
+    reset
 }
 
 struct Planned {

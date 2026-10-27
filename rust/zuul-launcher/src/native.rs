@@ -18,6 +18,7 @@ use crate::cloud_http::{
 use crate::config::ConnectionConfig;
 use crate::provider::{AdvanceError, Image, Label, Provider};
 use base64::Engine;
+use indexmap::IndexMap;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -84,7 +85,7 @@ struct ProviderSnap {
     driver: String,
     connection: String,
     region: String,
-    labels: BTreeMap<String, Value>,
+    labels: IndexMap<String, Value>,
     flavors: BTreeMap<String, Value>,
     images: BTreeMap<String, Value>,
 }
@@ -211,9 +212,19 @@ pub fn sync_providers(tenants: &std::collections::HashMap<String, Vec<Arc<dyn Pr
     reg.label_orders.clear();
     for list in tenants.values() {
         for provider in list {
-            let mut labels = BTreeMap::new();
+            let order = provider.label_order();
+            let mut labels = IndexMap::new();
+            let mut seen = HashSet::new();
+            for name in &order {
+                if let Some(label) = provider.labels().get(name) {
+                    labels.insert(name.clone(), label_value(label));
+                    seen.insert(name.clone());
+                }
+            }
             for (name, label) in provider.labels() {
-                labels.insert(name.clone(), label_value(label));
+                if seen.insert(name.clone()) {
+                    labels.insert(name.clone(), label_value(label));
+                }
             }
             reg.label_orders.insert(
                 provider.canonical_name().to_string(),
@@ -3159,7 +3170,7 @@ mod tests {
                     driver: "aws".into(),
                     connection: "aws-test".into(),
                     region: "us-east-1".into(),
-                    labels: BTreeMap::from([(
+                    labels: IndexMap::from([(
                         "debian".into(),
                         json!({"name": "debian", "flavor": "small", "image": "img", "key-name": "zuul"}),
                     )]),
@@ -3228,7 +3239,7 @@ mod tests {
                     driver: "aws".into(),
                     connection: "aws-s3".into(),
                     region: "us-east-1".into(),
-                    labels: BTreeMap::new(),
+                    labels: IndexMap::new(),
                     flavors: BTreeMap::new(),
                     images: BTreeMap::new(),
                 },
@@ -3284,7 +3295,7 @@ mod tests {
                     driver: "azure".into(),
                     connection: "azure-test".into(),
                     region: "eastus".into(),
-                    labels: BTreeMap::from([(
+                    labels: IndexMap::from([(
                         "debian".into(),
                         json!({"name": "debian", "flavor": "small", "image": "img", "resource-group": "rg", "key-data": "ssh-rsa A"}),
                     )]),
@@ -3371,7 +3382,7 @@ mod tests {
                     driver: "openstack".into(),
                     connection: "os-test".into(),
                     region: "RegionOne".into(),
-                    labels: BTreeMap::from([(
+                    labels: IndexMap::from([(
                         "debian".into(),
                         json!({"name": "debian", "flavor": "small", "image": "img", "config-drive": true}),
                     )]),
@@ -3441,7 +3452,7 @@ mod tests {
                     driver: "kubernetes".into(),
                     connection: "k8s-test".into(),
                     region: String::new(),
-                    labels: BTreeMap::from([(
+                    labels: IndexMap::from([(
                         "pod".into(),
                         json!({"name": "pod", "kind": "pod", "spec": {"containers": [{"name": "c", "image": "debian"}]}}),
                     )]),
@@ -3488,7 +3499,7 @@ mod tests {
                 driver: "aws".into(),
                 connection: connection.into(),
                 region: "us-east-1".into(),
-                labels: BTreeMap::from([("debian".into(), labels)]),
+                labels: IndexMap::from([("debian".into(), labels)]),
                 flavors: BTreeMap::from([("small".into(), flavors)]),
                 images: BTreeMap::from([("img".into(), images)]),
             },
@@ -3805,7 +3816,7 @@ mod tests {
                     driver: "azure".into(),
                     connection: "azure-full".into(),
                     region: "eastus".into(),
-                    labels: BTreeMap::from([(
+                    labels: IndexMap::from([(
                         "debian".into(),
                         json!({
                             "name": "debian",
@@ -3886,7 +3897,7 @@ mod tests {
                     driver: "azure".into(),
                     connection: "azure-sku".into(),
                     region: "eastus".into(),
-                    labels: BTreeMap::from([("debian".into(), json!({"flavor": "small", "image": "img"}))]),
+                    labels: IndexMap::from([("debian".into(), json!({"flavor": "small", "image": "img"}))]),
                     flavors: BTreeMap::from([("small".into(), json!({"vm-size": "Standard_B1s", "priority": "spot"}))]),
                     images: BTreeMap::new(),
                 },
@@ -3909,7 +3920,7 @@ mod tests {
                     driver: "kubernetes".into(),
                     connection: "k8s-test".into(),
                     region: String::new(),
-                    labels: BTreeMap::from([("pod".into(), json!({"kind": "pod", "flavor": "f", "image": "i"}))]),
+                    labels: IndexMap::from([("pod".into(), json!({"kind": "pod", "flavor": "f", "image": "i"}))]),
                     flavors: BTreeMap::new(),
                     images: BTreeMap::new(),
                 },
@@ -3988,7 +3999,7 @@ mod tests {
                     driver: "openstack".into(),
                     connection: "os-n".into(),
                     region: "RegionOne".into(),
-                    labels: BTreeMap::new(),
+                    labels: IndexMap::new(),
                     flavors: BTreeMap::new(),
                     images: BTreeMap::new(),
                 },
@@ -4046,7 +4057,7 @@ mod tests {
                     driver: "openstack".into(),
                     connection: "os-nova".into(),
                     region: "RegionOne".into(),
-                    labels: BTreeMap::new(),
+                    labels: IndexMap::new(),
                     flavors: BTreeMap::new(),
                     images: BTreeMap::new(),
                 },
@@ -4122,7 +4133,7 @@ mod tests {
                     driver: "aws".into(),
                     connection: "aws-moto".into(),
                     region: "us-east-1".into(),
-                    labels: BTreeMap::from([(
+                    labels: IndexMap::from([(
                         "debian".into(),
                         json!({"name": "debian", "flavor": "small", "image": "img"}),
                     )]),
@@ -4293,7 +4304,7 @@ mod tests {
                     driver: "openstack".into(),
                     connection: "os-src".into(),
                     region: "RegionOne".into(),
-                    labels: BTreeMap::new(),
+                    labels: IndexMap::new(),
                     flavors: BTreeMap::new(),
                     images: BTreeMap::new(),
                 },

@@ -40,6 +40,8 @@ pub struct ZkWatchEvent {
     pub children: Option<Vec<String>>,
     pub data: Option<Vec<u8>>,
     pub exists: bool,
+    /// `stat.version` from a DataWatch payload. `0` when the event has no stat.
+    pub version: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -559,12 +561,24 @@ fn note_locked(
     if kind != EVENT_SESSION && !interested(g, path) {
         return false;
     }
+    // Kazoo DataWatch hands the callback the bytes from the re-arm get.
+    // Persistent tree-cache notifications do not, so those stay empty and
+    // the cache get is a separate read.
+    let (payload, version) = if g.data_watches.contains(path) {
+        match g.nodes.get(path) {
+            Some(node) => (Some(node.data.clone()), node.stat.version),
+            None => (None, 0),
+        }
+    } else {
+        (data, 0)
+    };
     g.events.push(ZkWatchEvent {
         kind,
         path: path.to_string(),
         children,
-        data,
+        data: payload,
         exists,
+        version,
     });
     true
 }
@@ -580,6 +594,7 @@ fn note_children(g: &mut MemoryState, parent: &str) -> bool {
         children: Some(children),
         data: None,
         exists: true,
+        version: 0,
     });
     true
 }
@@ -744,6 +759,10 @@ pub struct LauncherApi {
     /// Contender payloads kept so a lock-child watch updates the holder
     /// with one `get`, the way `LockableZKObjectCache.preCacheHook` does.
     node_locks: HashMap<String, BTreeMap<String, Vec<u8>>>,
+    upload_locks: HashMap<String, BTreeMap<String, Vec<u8>>>,
+    /// DataWatch `stat.version` and the hostname last stored for that znode.
+    component_versions: HashMap<String, i32>,
+    component_hosts: HashMap<String, String>,
     watches_on: bool,
     watched_tenants: HashSet<String>,
     watched_components: HashSet<String>,
@@ -770,6 +789,9 @@ impl LauncherApi {
             ready: false,
             max_zxid: 0,
             node_locks: HashMap::new(),
+            upload_locks: HashMap::new(),
+            component_versions: HashMap::new(),
+            component_hosts: HashMap::new(),
             watches_on: false,
             watched_tenants: HashSet::new(),
             watched_components: HashSet::new(),
@@ -826,6 +848,11 @@ impl LauncherApi {
     }
 
     fn watch_tenant(&mut self, tenant: &str) {
+        // 14.3.0 initializes `_watched_tenants` and never inserts into it, so
+        // every children callback stacks another DataWatch on every tenant.
+        // The extra watches only repeat the same get and the same
+        // wake_event.set. One DataWatch per tenant is the set's intended
+        // behavior; stacking is an unbounded read leak, so it is not copied.
         if !self.watched_tenants.insert(tenant.to_string()) {
             return;
         }
@@ -838,7 +865,11 @@ impl LauncherApi {
         if !self.watched_components.insert(path.clone()) {
             return;
         }
-        let _ = self.zk.watch_data(&path);
+        // DataWatch's first call is the registration get. Later changes
+        // arrive as events that already carry that payload.
+        if let Ok(Some((data, stat))) = self.zk.watch_data(&path) {
+            self.store_component(&path, &data, stat.version);
+        }
     }
 
     pub fn take_layout_event(&mut self) -> bool {
@@ -854,101 +885,17 @@ impl LauncherApi {
     }
 
     /// The Python cache can yield an id before this session's watch has
-    /// been applied (the kazoo callback wakes the loop). Drain events,
-    /// then read only the ids that are still absent. A quiet pass where
-    /// the maps already contain every id does not read ZooKeeper.
+    /// been applied. Drain queued events and leave a still-absent id
+    /// absent: 14.3.0 does not get it again. The kazoo callback already
+    /// set `wake_event`, so the next pass applies the watch.
     pub fn ensure_requests(&mut self, ids: &[String]) {
-        // Events can arrive during quota refresh, after _run's prepare.
-        // Applying them reads nothing unless a watch fired.
+        let _ = ids;
         self.prepare();
-        for id in ids {
-            if !self.requests.contains_key(id) {
-                self.load_request(id);
-            }
-        }
     }
 
     pub fn ensure_nodes(&mut self, ids: &[String]) {
+        let _ = ids;
         self.prepare();
-        let mut loaded = false;
-        for id in ids {
-            if !self.nodes.contains_key(id) {
-                loaded |= self.load_node(id);
-            }
-        }
-        if loaded {
-            self.reindex();
-        }
-    }
-
-    fn load_request(&mut self, id: &str) {
-        let path = format!("/zuul/nodeset/requests/{id}");
-        let Ok((data, stat)) = self.zk.get(&path) else {
-            return;
-        };
-        let Ok(val) = decode_zkobject(&data) else {
-            return;
-        };
-        let mut req = NodesetRequest::from_value(val);
-        req.zk_version = Some(stat.version as i64);
-        let lock_path = format!("/zuul/nodeset/locks/{id}");
-        if let Ok(kids) = self.zk.get_children(&lock_path) {
-            req.is_locked = !kids.is_empty();
-        }
-        let rev = format!("/zuul/nodeset/requests/{id}/revision");
-        if let Ok((data, _)) = self.zk.get(&rev) {
-            if let Ok(val) = decode_zkobject(&data) {
-                req.revision_priority = val.get("relative_priority").and_then(|v| v.as_i64());
-            }
-        }
-        self.requests.insert(id.to_string(), req);
-    }
-
-    fn load_node(&mut self, id: &str) -> bool {
-        let path = format!("/zuul/nodes/nodes/{id}");
-        let Ok((data, stat)) = self.zk.get(&path) else {
-            return false;
-        };
-        let Ok((driver, val)) = decode_polymorphic(&data) else {
-            return false;
-        };
-        let mut node = ProviderNode::from_parts(driver, val);
-        node.zk_version = Some(stat.version as i64);
-        let lock_path = format!("/zuul/nodes/locks/{id}");
-        if let Ok(kids) = self.zk.get_children(&lock_path) {
-            let mut held = BTreeMap::new();
-            for child in kids {
-                let child_path = format!("{lock_path}/{child}");
-                if let Ok((data, _)) = self.zk.get(&child_path) {
-                    held.insert(child, data);
-                }
-            }
-            node.is_locked = !held.is_empty();
-            node.lock_holder = lock_winner(&held);
-            if !held.is_empty() {
-                self.node_locks.insert(id.to_string(), held);
-            }
-        }
-        let assign = format!("/zuul/nodes/nodes/{id}/assignment");
-        if let Ok((data, stat)) = self.zk.get(&assign) {
-            if let Ok(val) = decode_zkobject(&data) {
-                node.assignment_version = Some(stat.version as i64);
-                node.assignment_czxid = Some(stat.czxid);
-                node.request_id = val.get("request_id").and_then(|v| v.as_str().map(|s| s.to_string()));
-                node.min_request_version = val.get("min_request_version").and_then(|v| v.as_i64());
-                node.tenant_name = val.get("tenant_name").and_then(|v| v.as_str().map(|s| s.to_string()));
-            }
-        }
-        let life = format!("/zuul/nodes/nodes/{id}/lifecycle");
-        if let Ok((data, _)) = self.zk.get(&life) {
-            if let Ok(val) = decode_zkobject(&data) {
-                node.next_state = val.get("next_state").and_then(|v| v.as_str().map(|s| s.to_string()));
-                node.next_comment = val.get("next_comment").and_then(|v| v.as_str().map(|s| s.to_string()));
-            }
-        }
-        self.max_zxid = self.max_zxid.max(stat.mzxid);
-        self.nodes.insert(id.to_string(), node);
-        true
     }
 
     /// Apply watch notifications since the last pass. A quiet pass reads
@@ -988,6 +935,8 @@ impl LauncherApi {
     fn rewatch_after_session(&mut self) {
         self.watched_tenants.clear();
         self.watched_components.clear();
+        self.component_versions.clear();
+        self.component_hosts.clear();
         self.watches_on = false;
         self.arm_watches();
     }
@@ -1010,15 +959,7 @@ impl LauncherApi {
             return false;
         }
         if path.starts_with("/zuul/components/") {
-            if event.kind == EVENT_CHILDREN {
-                let rest = path.trim_start_matches("/zuul/components/");
-                if let Some(hosts) = &event.children {
-                    for host in hosts {
-                        self.watch_component(rest, host);
-                    }
-                }
-            }
-            self.load_components();
+            self.apply_component_event(event);
             return false;
         }
         if path.starts_with("/zuul/images/") || path.starts_with("/zuul/image-uploads/") {
@@ -1035,6 +976,9 @@ impl LauncherApi {
         self.artifacts.clear();
         self.uploads.clear();
         self.node_locks.clear();
+        self.upload_locks.clear();
+        self.component_versions.clear();
+        self.component_hosts.clear();
         self.quota_used.clear();
         self.quota_requested.clear();
         self.provider_label_used.clear();
@@ -1198,6 +1142,10 @@ impl LauncherApi {
 
     fn apply_image_event(&mut self, event: &ZkWatchEvent) {
         let path = event.path.as_str();
+        if let Some(rest) = path.strip_prefix("/zuul/image-uploads/locks/") {
+            self.apply_upload_lock(rest, event);
+            return;
+        }
         if let Some(id) = path.strip_prefix("/zuul/images/artifacts/") {
             if id.is_empty() || id.contains('/') {
                 return;
@@ -1225,11 +1173,47 @@ impl LauncherApi {
             }
             if let Ok((data, _)) = self.zk.get(path) {
                 if let Ok(val) = decode_zkobject(&data) {
-                    self.uploads.insert(id.to_string(), ImageUpload::from_value(val));
+                    let locked = self.uploads.get(id).map(|u| u.is_locked).unwrap_or(false);
+                    let mut upload = ImageUpload::from_value(val);
+                    upload.is_locked = locked;
+                    self.uploads.insert(id.to_string(), upload);
                 }
             } else {
                 self.uploads.remove(id);
             }
+        }
+    }
+
+    /// `LockableZKObjectCache.preCacheHook` for an upload lock child: one
+    /// get of that child, then `is_locked` from the contenders still held.
+    /// A children event on the lock directory is ignored.
+    fn apply_upload_lock(&mut self, rest: &str, event: &ZkWatchEvent) {
+        let (id, sub) = match split_child(rest) {
+            Some(pair) => pair,
+            None => return,
+        };
+        let Some(name) = sub else {
+            return;
+        };
+        let locked = {
+            let held = self.upload_locks.entry(id.to_string()).or_default();
+            if event.kind == EVENT_DELETED {
+                held.remove(name);
+            } else {
+                let path = format!("/zuul/image-uploads/locks/{id}/{name}");
+                if let Ok((data, _)) = self.zk.get(&path) {
+                    held.insert(name.to_string(), data);
+                } else {
+                    held.remove(name);
+                }
+            }
+            !held.is_empty()
+        };
+        if !locked {
+            self.upload_locks.remove(id);
+        }
+        if let Some(upload) = self.uploads.get_mut(id) {
+            upload.is_locked = locked;
         }
     }
 
@@ -1302,18 +1286,26 @@ impl LauncherApi {
         false
     }
 
+    /// `RequestCache.preCacheHook`: a lock child is one get of that child,
+    /// and `is_locked` is whether that child exists. A delete does not get,
+    /// and sets `is_locked` false even if another contender remains. A
+    /// children event on the lock directory is ignored.
     fn apply_request_lock(&mut self, rest: &str, event: &ZkWatchEvent) {
-        let (id, _sub) = match split_child(rest) {
+        let (id, sub) = match split_child(rest) {
             Some(pair) => pair,
             None => return,
         };
-        let path = format!("/zuul/nodeset/locks/{id}");
-        let locked = match self.zk.get_children(&path) {
-            Ok(kids) => !kids.is_empty(),
-            Err(_) => event.kind != EVENT_DELETED,
+        let Some(contender) = sub else {
+            return;
+        };
+        let exists = if event.kind == EVENT_DELETED {
+            false
+        } else {
+            let path = format!("/zuul/nodeset/locks/{id}/{contender}");
+            self.zk.get(&path).is_ok()
         };
         if let Some(req) = self.requests.get_mut(id) {
-            req.is_locked = locked;
+            req.is_locked = exists;
         }
     }
 
@@ -1465,6 +1457,90 @@ impl LauncherApi {
         }
     }
 
+    /// DataWatch on one component znode. A children callback only registers
+    /// a DataWatch for a host that is not cached yet. It does not get every
+    /// launcher component again.
+    fn apply_component_event(&mut self, event: &ZkWatchEvent) {
+        let path = event.path.as_str();
+        if event.kind == EVENT_CHILDREN {
+            let rest = path.trim_start_matches("/zuul/components/");
+            if rest.is_empty() || rest.contains('/') {
+                return;
+            }
+            if let Some(hosts) = &event.children {
+                for host in hosts {
+                    self.watch_component(rest, host);
+                }
+            }
+            return;
+        }
+        if event.kind == EVENT_DELETED || !event.exists {
+            if let Some(hostname) = self.component_hosts.remove(path) {
+                self.components.retain(|c| c.hostname != hostname);
+            }
+            self.component_versions.remove(path);
+            self.watched_components.remove(path);
+            return;
+        }
+        if let Some(data) = &event.data {
+            self.store_component(path, data, event.version);
+            return;
+        }
+        if event.kind == EVENT_CREATED || event.kind == EVENT_CHANGED {
+            if let Ok((data, stat)) = self.zk.get(path) {
+                self.store_component(path, &data, stat.version);
+            }
+        }
+    }
+
+    fn store_component(&mut self, path: &str, data: &[u8], version: i32) {
+        if !path.starts_with("/zuul/components/launcher/") {
+            return;
+        }
+        if let Some(prev) = self.component_versions.get(path) {
+            if version <= *prev {
+                return;
+            }
+        }
+        let Ok(val) = decode_zkobject(data) else {
+            return;
+        };
+        let Some(hostname) = val.get("hostname").and_then(|v| v.as_str()) else {
+            return;
+        };
+        let state = val
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("stopped")
+            .to_string();
+        let connection_filter = match val.get("connection_filter") {
+            Some(Value::Array(items)) => {
+                let names: Vec<String> = items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect();
+                if names.is_empty() {
+                    None
+                } else {
+                    Some(names)
+                }
+            }
+            _ => None,
+        };
+        self.component_versions.insert(path.to_string(), version);
+        self.component_hosts.insert(path.to_string(), hostname.to_string());
+        let info = ComponentInfo {
+            hostname: hostname.to_string(),
+            state,
+            connection_filter,
+        };
+        if let Some(existing) = self.components.iter_mut().find(|c| c.hostname == hostname) {
+            *existing = info;
+        } else {
+            self.components.push(info);
+        }
+    }
+
     /// /zuul/components/launcher/{hostname}{seq} holds uncompressed JSON.
     /// An empty directory leaves any test-injected component list alone.
     fn load_components(&mut self) {
@@ -1477,7 +1553,7 @@ impl LauncherApi {
         let mut loaded = Vec::new();
         for id in ids {
             let path = format!("/zuul/components/launcher/{id}");
-            let Ok((data, _)) = self.zk.get(&path) else {
+            let Ok((data, stat)) = self.zk.get(&path) else {
                 continue;
             };
             let Ok(val) = decode_zkobject(&data) else {
@@ -1505,6 +1581,8 @@ impl LauncherApi {
                 }
                 _ => None,
             };
+            self.component_hosts.insert(path.clone(), hostname.to_string());
+            self.component_versions.insert(path, stat.version);
             loaded.push(ComponentInfo {
                 hostname: hostname.to_string(),
                 state,

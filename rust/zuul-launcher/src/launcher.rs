@@ -448,7 +448,9 @@ impl Launcher {
                     return true;
                 }
                 if v.get("request_visible").and_then(|w| w.as_bool()).unwrap_or(false) {
-                    self.api.sync();
+                    // The watch already carries the request. Do not walk
+                    // the trees; 14.3.0 waits on the cache's max_zxid.
+                    self.api.prepare();
                 }
                 false
             }
@@ -563,7 +565,9 @@ impl Launcher {
                         self.wake();
                         continue;
                     }
-                    self.api.sync();
+                    // Own writes update the maps. Apply watch events that
+                    // arrived during accept_one; do not re-read the trees.
+                    self.api.prepare();
                     pending = self.accept_pending.clone();
                 } else {
                     self.process_nodeset_request(&req, &unassigned, &mut pending);
@@ -743,8 +747,8 @@ impl Launcher {
         if req.state() != request_state::REQUESTED {
             return Ok(());
         }
-        // _acceptRequest syncs before this call. Reconcile after that
-        // sync so a node written by the previous request still counts.
+        // The request is already in the watch cache. Reconcile so a node
+        // written by the previous request still counts.
         self.reconcile_remembered_quota();
         let unassigned = self.unassigned_nodes();
         let mut pending = self.accept_pending.clone();
@@ -2388,7 +2392,19 @@ impl Launcher {
             let mut group_order: Vec<String> = Vec::new();
             let mut groups: HashMap<String, Vec<crate::provider::Label>> = HashMap::new();
             for provider in providers {
-                for label in provider.labels().values() {
+                // Dict insertion order (config list, or the order labels
+                // were added on an in-memory provider). Sorted map order
+                // is only the fallback for a label the order list missed.
+                let mut label_names = provider.label_order();
+                for name in provider.labels().keys() {
+                    if !label_names.iter().any(|existing| existing == name) {
+                        label_names.push(name.clone());
+                    }
+                }
+                for name in label_names {
+                    let Some(label) = provider.labels().get(&name) else {
+                        continue;
+                    };
                     if label.min_ready.unwrap_or(0) <= 0 {
                         continue;
                     }
@@ -3039,6 +3055,9 @@ impl Launcher {
     /// pool (server.py checkMissingUploads). Planning stays in Rust; the
     /// pool worker calls upload.artifact_job so UploadJob.run patches apply.
     pub fn check_missing_uploads(&mut self) {
+        // Apply queued image watches. 14.3.0 iterates the registry and
+        // does not sync or list the upload tree here.
+        self.api.prepare();
         self.image_updated = false;
         if self.upload_pools.is_none() {
             self.upload_pools = Some(UploadPools::new(&self.hostname));
@@ -3048,8 +3067,17 @@ impl Launcher {
         };
         // Crashed uploads (UPLOADING, unlocked): kazoo lock, refresh,
         // double-check, then PENDING. Same rule as checkMissingUploads.
-        upload_job::reset_crashed_uploads(self.api.zk.as_ref(), &self.hostname);
-        self.api.sync();
+        let snapshot: Vec<model::ImageUpload> = self.api.uploads.values().cloned().collect();
+        let reset = upload_job::reset_crashed_uploads(
+            self.api.zk.as_ref(),
+            &self.hostname,
+            &snapshot,
+        );
+        for id in reset {
+            if let Some(upload) = self.api.uploads.get_mut(&id) {
+                upload.set_state(upload_state::PENDING);
+            }
+        }
         let all: Vec<&model::ImageUpload> = self.api.uploads.values().collect();
         // Group PENDING uploads by artifact (one UploadJob each).
         let mut pending_by_artifact: HashMap<String, Vec<String>> = HashMap::new();
@@ -3782,5 +3810,216 @@ mod tests {
         let events = ops.take_watch_events();
         assert!(events.iter().any(|event| event.kind == zk::EVENT_SESSION));
         assert_ne!(ops.session_generation(), before);
+    }
+
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
+    struct CountingZk {
+        inner: MemoryZk,
+        gets: AtomicUsize,
+        children: AtomicUsize,
+        get_paths: Mutex<Vec<String>>,
+    }
+
+    impl CountingZk {
+        fn new(inner: MemoryZk) -> Self {
+            Self {
+                inner,
+                gets: AtomicUsize::new(0),
+                children: AtomicUsize::new(0),
+                get_paths: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn reset(&self) {
+            self.gets.store(0, AtomicOrdering::SeqCst);
+            self.children.store(0, AtomicOrdering::SeqCst);
+            self.get_paths.lock().unwrap().clear();
+        }
+
+        fn gets(&self) -> usize {
+            self.gets.load(AtomicOrdering::SeqCst)
+        }
+
+        fn children_reads(&self) -> usize {
+            self.children.load(AtomicOrdering::SeqCst)
+        }
+
+        fn paths(&self) -> Vec<String> {
+            self.get_paths.lock().unwrap().clone()
+        }
+    }
+
+    impl ZkOps for CountingZk {
+        fn session_id(&self) -> i64 {
+            self.inner.session_id()
+        }
+        fn ensure_path(&self, path: &str) -> Result<(), zk::ZkError> {
+            self.inner.ensure_path(path)
+        }
+        fn create(&self, path: &str, data: &[u8], mode: zk::CreateMode) -> Result<String, zk::ZkError> {
+            self.inner.create(path, data, mode)
+        }
+        fn delete(&self, path: &str, recursive: bool) -> Result<(), zk::ZkError> {
+            self.inner.delete(path, recursive)
+        }
+        fn exists(&self, path: &str) -> Result<Option<zk::ZkStat>, zk::ZkError> {
+            self.inner.exists(path)
+        }
+        fn get(&self, path: &str) -> Result<(Vec<u8>, zk::ZkStat), zk::ZkError> {
+            self.gets.fetch_add(1, AtomicOrdering::SeqCst);
+            self.get_paths.lock().unwrap().push(path.to_string());
+            self.inner.get(path)
+        }
+        fn set(&self, path: &str, data: &[u8], version: i32) -> Result<zk::ZkStat, zk::ZkError> {
+            self.inner.set(path, data, version)
+        }
+        fn get_children(&self, path: &str) -> Result<Vec<String>, zk::ZkError> {
+            self.children.fetch_add(1, AtomicOrdering::SeqCst);
+            self.inner.get_children(path)
+        }
+        fn expire_session(&self) {
+            self.inner.expire_session();
+        }
+        fn add_watch(&self, path: &str, mode: i32) -> Result<(), zk::ZkError> {
+            self.inner.add_watch(path, mode)
+        }
+        fn watch_children(&self, path: &str) -> Result<Vec<String>, zk::ZkError> {
+            self.inner.watch_children(path)
+        }
+        fn watch_data(&self, path: &str) -> Result<Option<(Vec<u8>, zk::ZkStat)>, zk::ZkError> {
+            let found = self.inner.watch_data(path)?;
+            if found.is_some() {
+                self.gets.fetch_add(1, AtomicOrdering::SeqCst);
+                self.get_paths.lock().unwrap().push(path.to_string());
+            }
+            Ok(found)
+        }
+        fn take_watch_events(&self) -> Vec<zk::ZkWatchEvent> {
+            self.inner.take_watch_events()
+        }
+        fn set_waker(&self, waker: Option<Arc<dyn Fn() + Send + Sync>>) {
+            self.inner.set_waker(waker);
+        }
+        fn session_generation(&self) -> u64 {
+            self.inner.session_generation()
+        }
+    }
+
+    fn counting_launcher(zk: &MemoryZk) -> (Launcher, Arc<CountingZk>) {
+        let counted = Arc::new(CountingZk::new(zk.clone()));
+        let ops: Arc<dyn ZkOps> = counted.clone();
+        let launcher = Launcher::new("launcher-reads", ops);
+        (launcher, counted)
+    }
+
+    /// A quiet pass, a request create, a request-lock child, and a component
+    /// update read what 14.3.0's tree cache and DataWatch read.
+    #[test]
+    fn zk_reads_match_14_3_0_per_event() {
+        let zk = MemoryZk::new();
+        zk.ensure_path("/zuul/components/launcher").unwrap();
+        let running = model::component_bytes("other-launcher", "running", &None);
+        zk.create(
+            "/zuul/components/launcher/other-launcher",
+            &running,
+            zk::CreateMode::EphemeralSequential,
+        )
+        .unwrap();
+        let mine = model::component_bytes("launcher-reads", "stopped", &None);
+        let mine_path = zk
+            .create(
+                "/zuul/components/launcher/launcher-reads",
+                &mine,
+                zk::CreateMode::EphemeralSequential,
+            )
+            .unwrap();
+        zk.ensure_path("/zuul/nodeset/requests").unwrap();
+        zk.ensure_path("/zuul/nodeset/locks/req-1").unwrap();
+        let (mut launcher, counted) = counting_launcher(&zk);
+        launcher.arm_watches();
+        launcher.api.prepare();
+        counted.reset();
+
+        launcher.api.prepare();
+        assert_eq!(counted.gets(), 0, "quiet pass reads {:?}", counted.paths());
+        assert_eq!(counted.children_reads(), 0, "quiet pass listed children");
+
+        let bytes = dumps_compressed(&json!({
+            "uuid": "req-1",
+            "state": "requested",
+        }));
+        zk.create(
+            "/zuul/nodeset/requests/req-1",
+            &bytes,
+            zk::CreateMode::Persistent,
+        )
+        .unwrap();
+        launcher.api.prepare();
+        assert_eq!(
+            counted.paths(),
+            vec!["/zuul/nodeset/requests/req-1".to_string()],
+            "request create is one get of that node"
+        );
+        assert_eq!(counted.children_reads(), 0, "request create does not list");
+        counted.reset();
+
+        zk.create(
+            "/zuul/nodeset/locks/req-1/contender-1",
+            b"launcher-reads",
+            zk::CreateMode::Ephemeral,
+        )
+        .unwrap();
+        launcher.api.prepare();
+        assert_eq!(
+            counted.paths(),
+            vec!["/zuul/nodeset/locks/req-1/contender-1".to_string()],
+            "lock create is one get of the child, not the lock directory"
+        );
+        assert_eq!(counted.children_reads(), 0);
+        assert!(launcher.api.requests["req-1"].is_locked);
+        counted.reset();
+
+        zk.delete("/zuul/nodeset/locks/req-1/contender-1", false).unwrap();
+        launcher.api.prepare();
+        assert_eq!(counted.gets(), 0, "lock delete does not get {:?}", counted.paths());
+        assert_eq!(counted.children_reads(), 0);
+        assert!(!launcher.api.requests["req-1"].is_locked);
+
+        counted.reset();
+        let updated = model::component_bytes("launcher-reads", "running", &None);
+        zk.set(&mine_path, &updated, -1).unwrap();
+        launcher.api.prepare();
+        assert_eq!(
+            counted.gets(),
+            0,
+            "component DataWatch payload is not read again {:?}",
+            counted.paths()
+        );
+        assert_eq!(counted.children_reads(), 0, "component update does not list launchers");
+        let mine_state = launcher
+            .api
+            .components
+            .iter()
+            .find(|c| c.hostname == "launcher-reads")
+            .map(|c| c.state.as_str());
+        assert_eq!(mine_state, Some("running"));
+        let other = launcher
+            .api
+            .components
+            .iter()
+            .find(|c| c.hostname == "other-launcher")
+            .map(|c| c.state.as_str());
+        assert_eq!(other, Some("running"));
+
+        counted.reset();
+        launcher.api.ensure_requests(&["not-yet".into()]);
+        assert_eq!(counted.gets(), 0, "a cache miss is not an extra get");
+        assert!(!launcher.api.requests.contains_key("not-yet"));
+
+        counted.reset();
+        launcher.check_missing_uploads();
+        assert_eq!(counted.gets(), 0, "check_missing_uploads walked {:?}", counted.paths());
+        assert_eq!(counted.children_reads(), 0, "check_missing_uploads listed a tree");
     }
 }

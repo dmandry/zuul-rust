@@ -156,8 +156,9 @@ pub trait Provider: Send + Sync {
     fn connection_name(&self) -> &str;
     fn endpoint(&self) -> &EndpointInfo;
     fn labels(&self) -> &BTreeMap<String, Label>;
-    /// Config order. The default is sorted map order, which is only
-    /// correct when the provider was not parsed from a label list.
+    /// Config-list order, or dict insertion order for an in-memory provider.
+    /// The default is sorted map order, used only when the provider did not
+    /// record the order labels were added.
     fn label_order(&self) -> Vec<String> {
         self.labels().keys().cloned().collect()
     }
@@ -240,6 +241,9 @@ pub struct MemoryProvider {
     pub connection_name: String,
     pub endpoint_info: EndpointInfo,
     pub labels: BTreeMap<String, Label>,
+    /// Insertion order. `labels` is a sorted map, so fleet and min-ready
+    /// iteration must not use its key order.
+    label_order: Vec<String>,
     pub images: BTreeMap<String, Image>,
     pub flavors: BTreeMap<String, Flavor>,
     pub launch_attempts: i64,
@@ -263,6 +267,7 @@ impl MemoryProvider {
     pub fn static_like(name: &str, label_name: &str) -> Self {
         let mut labels = BTreeMap::new();
         labels.insert(label_name.to_string(), default_label(label_name, true));
+        let label_order = vec![label_name.to_string()];
         let mut images = BTreeMap::new();
         images.insert(
             "img".into(),
@@ -300,6 +305,7 @@ impl MemoryProvider {
                 limits,
             },
             labels,
+            label_order,
             images,
             flavors: BTreeMap::new(),
             launch_attempts: 3,
@@ -344,8 +350,21 @@ pub fn default_label(name: &str, reuse: bool) -> Label {
     }
 }
 
+impl MemoryProvider {
+    pub fn insert_label(&mut self, label: Label) {
+        let name = label.name.clone();
+        if !self.label_order.iter().any(|existing| existing == &name) {
+            self.label_order.push(name.clone());
+        }
+        self.labels.insert(name, label);
+    }
+}
+
 impl Provider for MemoryProvider {
     fn name(&self) -> &str { &self.name }
+    fn label_order(&self) -> Vec<String> {
+        self.label_order.clone()
+    }
     fn canonical_name(&self) -> &str { &self.canonical_name }
     fn driver_name(&self) -> &str { &self.driver_name }
     fn connection_name(&self) -> &str { &self.connection_name }
@@ -4337,5 +4356,17 @@ mod tests {
                 Some("debian")
             )
         );
+    }
+
+    #[test]
+    fn memory_provider_labels_keep_insertion_order() {
+        let mut provider = MemoryProvider::static_like("mem", "z-label");
+        provider.insert_label(default_label("a-label", true));
+        assert_eq!(
+            provider.label_order(),
+            vec!["z-label".to_string(), "a-label".to_string()]
+        );
+        let sorted: Vec<String> = provider.labels().keys().cloned().collect();
+        assert_eq!(sorted, vec!["a-label".to_string(), "z-label".to_string()]);
     }
 }

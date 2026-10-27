@@ -306,7 +306,6 @@ impl PyLauncher {
             let _cloud = zuul_launcher::cloud::enter(&hostname);
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
-                launcher.api.sync();
                 launcher.check_missing_uploads();
             }
         });
@@ -326,7 +325,7 @@ impl PyLauncher {
             let _cloud = zuul_launcher::cloud::enter(&hostname);
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
-                launcher.api.sync();
+                launcher.api.prepare();
                 launcher.check_old_images();
             }
         });
@@ -363,14 +362,14 @@ impl PyLauncher {
             if let Some(ptr) = zuul_launcher::cloud::active_launcher() {
                 let launcher =
                     unsafe { &mut *(ptr as *mut zuul_launcher::launcher::Launcher) };
-                launcher.api.sync();
+                launcher.api.prepare();
                 return launcher
                     .accept_request_by_uuid(&uuid)
                     .map_err(PyRuntimeError::new_err);
             }
             let mut guard = rust.lock().unwrap();
             if let Some(launcher) = guard.as_mut() {
-                launcher.api.sync();
+                launcher.api.prepare();
                 launcher
                     .accept_request_by_uuid(&uuid)
                     .map_err(PyRuntimeError::new_err)?;

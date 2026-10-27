@@ -291,6 +291,7 @@ impl Session {
                     children: Some(kids),
                     data: None,
                     exists: true,
+                    version: 0,
                 });
             }
             Err(ZkError::NoNode) => {
@@ -300,6 +301,7 @@ impl Session {
                     children: Some(Vec::new()),
                     data: None,
                     exists: false,
+                    version: 0,
                 });
             }
             Err(_) => {}
@@ -313,13 +315,15 @@ impl Session {
         payload.push(1);
         match self.invoke(OP_GET_DATA, &payload) {
             Ok(reply) => {
-                let (data, _offset) = read_buffer(&reply, 0).unwrap_or((None, 0));
+                let (data, offset) = read_buffer(&reply, 0).unwrap_or((None, 0));
+                let version = parse_stat(&reply, offset).map(|(stat, _)| stat.version).unwrap_or(0);
                 self.push_event(ZkWatchEvent {
                     kind: EVENT_CHANGED,
                     path,
                     children: None,
                     data,
                     exists: true,
+                    version,
                 });
             }
             Err(ZkError::NoNode) => {
@@ -329,6 +333,7 @@ impl Session {
                     children: None,
                     data: None,
                     exists: false,
+                    version: 0,
                 });
             }
             Err(_) => {}
@@ -373,6 +378,7 @@ impl Session {
             children: None,
             data: None,
             exists: false,
+            version: 0,
         });
         Ok(())
     }
@@ -454,6 +460,7 @@ fn handle_watch(session: &Arc<Session>, rest: &[u8]) {
         children: None,
         data: None,
         exists: kind != EVENT_DELETED,
+        version: 0,
     });
 }
 

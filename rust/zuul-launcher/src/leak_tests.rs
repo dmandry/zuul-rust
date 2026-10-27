@@ -247,7 +247,7 @@ fn launch_templates_are_created_at_startup_and_unused_are_deleted() {
                 driver: "aws".into(),
                 connection: "aws-fleet".into(),
                 region: "us-east-1".into(),
-                labels: BTreeMap::from([
+                labels: IndexMap::from([
                     ("fleet-label".into(), json!({"name": "fleet-label", "flavor": "big", "key-name": "pair"})),
                     ("plain".into(), json!({"name": "plain", "flavor": "small", "key-name": "pair"})),
                 ]),
@@ -360,7 +360,7 @@ fn openstack_ports_and_floating_ips_follow_14_3_0() {
                 driver: "openstack".into(),
                 connection: "os-leak".into(),
                 region: "RegionOne".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::new(),
             },
@@ -449,7 +449,7 @@ fn azure_leak_scan_skips_other_system_and_live_ids() {
                 driver: "azure".into(),
                 connection: "azure-leak".into(),
                 region: "eastus".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::new(),
             },
@@ -524,7 +524,7 @@ fn kubernetes_namespace_leak_uses_labels() {
                 driver: "kubernetes".into(),
                 connection: "k8s-leak".into(),
                 region: String::new(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::new(),
             },
@@ -750,7 +750,7 @@ fn azure_sas_page_upload_builds_a_managed_image() {
                 driver: "azure".into(),
                 connection: "azure-up".into(),
                 region: "eastus".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::from([("img".into(), json!({"name": "img"}))]),
             },
@@ -828,7 +828,7 @@ fn glance_upload_posts_the_image_then_the_file() {
                 driver: "openstack".into(),
                 connection: "os-up".into(),
                 region: "RegionOne".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::from([("img".into(), json!({"name": "img"}))]),
             },
@@ -1050,7 +1050,7 @@ fn unmanaged_quotas_match_14_3_0() {
                 driver: "openstack".into(),
                 connection: "os-q".into(),
                 region: "RegionOne".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::new(),
             },
@@ -1106,7 +1106,7 @@ fn unmanaged_quotas_match_14_3_0() {
                 driver: "azure".into(),
                 connection: "azure-q".into(),
                 region: "eastus".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::new(),
             },
@@ -1166,7 +1166,7 @@ fn unmanaged_quotas_match_14_3_0() {
                 driver: "kubernetes".into(),
                 connection: "k8s-q".into(),
                 region: String::new(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::new(),
             },
@@ -1226,7 +1226,7 @@ fn launch_templates_are_listed_once_per_provider() {
                 driver: "aws".into(),
                 connection: "aws-once".into(),
                 region: "us-east-1".into(),
-                labels: BTreeMap::from([
+                labels: IndexMap::from([
                     ("a".into(), json!({"name": "a", "flavor": "big", "key-name": "one"})),
                     ("z-fleet".into(), json!({"name": "z-fleet", "flavor": "big", "key-name": "two"})),
                 ]),
@@ -1357,7 +1357,7 @@ fn glance_share_uses_project_id_not_project_name() {
                 driver: "openstack".into(),
                 connection: "os-share".into(),
                 region: "RegionOne".into(),
-                labels: BTreeMap::new(),
+                labels: IndexMap::new(),
                 flavors: BTreeMap::new(),
                 images: BTreeMap::from([(
                     "img".into(),
@@ -1468,4 +1468,113 @@ fn delete_existence_uses_the_list_cache() {
     delete_aws(&snap, &resource).unwrap();
     delete_aws(&snap, &resource).unwrap();
     assert_eq!(describes.load(AtomicOrdering::SeqCst), 1);
+}
+
+#[test]
+fn fleet_labels_without_a_config_array_follow_insertion_order() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    set_system_id("sys-1");
+    let created = Arc::new(StdMutex::new(Vec::<String>::new()));
+    let created_bg = created.clone();
+    let port = serve(move |_port, req| {
+        if req.contains("Action=DescribeLaunchTemplates") {
+            return json_ok(r#"<?xml version="1.0"?><DescribeLaunchTemplatesResponse><launchTemplateSet></launchTemplateSet></DescribeLaunchTemplatesResponse>"#);
+        }
+        if req.contains("Action=CreateLaunchTemplate") {
+            let key = if req.contains("KeyName=two") {
+                "two"
+            } else if req.contains("KeyName=one") {
+                "one"
+            } else {
+                "other"
+            };
+            created_bg.lock().unwrap().push(key.to_string());
+            return json_ok(r#"<?xml version="1.0"?><CreateLaunchTemplateResponse></CreateLaunchTemplateResponse>"#);
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    let mut options = BTreeMap::new();
+    options.insert("access_key_id".into(), "AKID".into());
+    options.insert("secret_access_key".into(), "SECRET".into());
+    options.insert("endpoint_url".into(), format!("http://127.0.0.1:{port}"));
+    options.insert("rate".into(), "1000".into());
+    set_connections(vec![ConnectionConfig {
+        name: "aws-order".into(),
+        driver: "aws".into(),
+        options,
+    }]);
+    {
+        let mut reg = registry().lock().unwrap();
+        reg.providers.insert(
+            "tenant/order".into(),
+            ProviderSnap {
+                driver: "aws".into(),
+                connection: "aws-order".into(),
+                region: "us-east-1".into(),
+                labels: IndexMap::from([
+                    ("z-fleet".into(), json!({"name": "z-fleet", "flavor": "big", "key-name": "two"})),
+                    ("a".into(), json!({"name": "a", "flavor": "big", "key-name": "one"})),
+                ]),
+                flavors: BTreeMap::from([(
+                    "big".into(),
+                    json!({"fleet": {"instance-types": ["t3.large"]}, "instance-type": "t3.large"}),
+                )]),
+                images: BTreeMap::new(),
+            },
+        );
+    }
+    post_config();
+    assert_eq!(
+        created.lock().unwrap().as_slice(),
+        ["two", "one"],
+        "in-memory labels follow insertion order, not sorted names"
+    );
+}
+
+#[test]
+fn empty_instance_type_is_passed_to_describe() {
+    let _guard = test_lock().lock().unwrap_or_else(|err| err.into_inner());
+    reset_cloud();
+    set_system_id("sys-1");
+    let saw = Arc::new(AtomicUsize::new(0));
+    let saw_bg = saw.clone();
+    let port = serve(move |_port, req| {
+        if req.contains("Action=DescribeInstanceTypes") {
+            saw_bg.fetch_add(1, AtomicOrdering::SeqCst);
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeInstanceTypesResponse><instanceTypeSet><item>"#,
+                r#"<vCpuInfo><defaultCores>1</defaultCores><defaultVCpus>2</defaultVCpus></vCpuInfo>"#,
+                r#"<memoryInfo><sizeInMiB>512</sizeInMiB></memoryInfo>"#,
+                r#"</item></instanceTypeSet></DescribeInstanceTypesResponse>"#,
+            ));
+        }
+        if req.contains("Action=DescribeInstances") {
+            return json_ok(concat!(
+                r#"<?xml version="1.0"?><DescribeInstancesResponse><reservationSet><item><instancesSet>"#,
+                r#"<item><instanceId>i-empty</instanceId><instanceType></instanceType><instanceState><name>running</name></instanceState>"#,
+                r#"<blockDeviceMapping><item><ebs><volumeId>vol-missing</volumeId></ebs></item></blockDeviceMapping>"#,
+                r#"<tagSet><item><key>zuul_system_id</key><value>sys-1</value></item></tagSet></item>"#,
+                r#"</instancesSet></item></reservationSet></DescribeInstancesResponse>"#,
+            ));
+        }
+        if req.contains("Action=DescribeVolumes") {
+            return json_ok(r#"<?xml version="1.0"?><DescribeVolumesResponse><volumeSet></volumeSet></DescribeVolumesResponse>"#);
+        }
+        json_ok(r#"<?xml version="1.0"?><Response></Response>"#)
+    });
+    aws_provider(
+        "tenant/empty-type",
+        "aws-empty",
+        port,
+        json!({"name": "debian", "flavor": "small"}),
+        json!({"instance-type": "t3.micro"}),
+        json!({"name": "img"}),
+    );
+    post_config();
+    let inv = endpoint_inventory("aws-empty/us-east-1");
+    assert!(!inv.error, "empty InstanceType failed the quota pass: {:?}", inv.instances);
+    assert_eq!(saw.load(AtomicOrdering::SeqCst), 1, "DescribeInstanceTypes was not called");
+    assert_eq!(inv.instances[0]["quota"]["instances"], 1);
+    assert_eq!(inv.instances[0]["quota"]["cores"].as_f64(), Some(1.0));
 }

@@ -219,6 +219,8 @@ fn create_provider_templates(name: &str, snap: &ProviderSnap) -> Result<(), Adva
         let reg = registry().lock().unwrap();
         reg.label_orders.get(name).cloned().unwrap_or_default()
     };
+    // No config label array: IndexMap keeps the order labels were inserted,
+    // which is 14.3.0's dict order. A recorded label_order wins when set.
     let names = if order.is_empty() {
         snap.labels.keys().cloned().collect::<Vec<_>>()
     } else {
@@ -497,9 +499,9 @@ fn list_aws_instances(snap: &ProviderSnap) -> Result<Vec<Value>, AdvanceError> {
                     quota.insert(code, json!(1));
                 }
             }
-        } else if instance_type.is_empty() {
-            return Err(err_other("KeyError: 'InstanceType'".into()));
         } else {
+            // An empty but present InstanceType is still passed to
+            // DescribeInstanceTypes, the way 14.3.0 calls _getInstanceType.
             let mut params = Map::new();
             params.insert("InstanceType".into(), json!([instance_type]));
             let resp = ec2(&ep, "DescribeInstanceTypes", params, true)?;
