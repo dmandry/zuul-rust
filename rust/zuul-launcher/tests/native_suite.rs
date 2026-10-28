@@ -352,6 +352,10 @@ fn launcher_loop(
     let mut last = 0u64;
     let stop_path = dir.join(format!("{}.stop", spec.hostname));
     let mut handoff = false;
+    // A missed watch must not sit for MIN_INTERVAL. Claim anything the
+    // reader has not handed off, and poke at least once a second so
+    // prepare() runs. Python still sleeps out the rest of MAX_SLEEP.
+    let mut last_heartbeat = Instant::now();
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         if stop_path.exists() {
             // The test stopped this Python launcher. Leave the ZK
@@ -367,6 +371,11 @@ fn launcher_loop(
             // sets the Rust flag has to poke that wait, or the next
             // request sits until MIN_INTERVAL.
             maybe_cleanup(&mut launcher, &spec.hostname);
+            launcher.api.claim_watches();
+            if last_heartbeat.elapsed() >= Duration::from_secs(1) {
+                let _ = fs::write(dir.join(format!("{}.poke", spec.hostname)), "1");
+                last_heartbeat = Instant::now();
+            }
             poke_if_woken(&launcher, &spec.hostname);
             std::thread::sleep(Duration::from_millis(5));
             continue;
@@ -374,6 +383,7 @@ fn launcher_loop(
         run_pass(&mut launcher, &spec.hostname);
         write_wake(&launcher, &spec.hostname);
         last = seq;
+        last_heartbeat = Instant::now();
         let _ = fs::write(&done_path, last.to_string());
         // server.Launcher.run sleeps the rest of MAX_SLEEP and then
         // waits on wake_event after _run returns. This loop only runs
