@@ -1819,6 +1819,16 @@ def _sm_patched_advance(launcher, data):
         # updateFromInstance and test patches of _updateNode apply.
         current = getattr(cls, "_updateNode")
         provider, endpoint = _provider_endpoint(launcher, data)
+        label = provider.labels[data["label"]]
+        flavor = provider.flavors[label.flavor]
+        # _updateNode reads quota the launcher cached while creating.
+        # The observer does not run that refresh, so fill it first.
+        try:
+            endpoint.refreshQuotaForLabel(label, flavor, True)
+        except Exception:
+            launcher.log.debug(
+                "quota refresh before _updateNode failed", exc_info=True
+            )
         node = _load_node(launcher, data["node_uuid"])
         label = provider.labels[data["label"]]
         flavor = provider.flavors[label.flavor]
@@ -2907,9 +2917,18 @@ def _snapshot_prepare(launcher, data):
                 log.debug("Failed to lock node %s for snapshot", node)
                 return {"skip": True, "locked": False}
             snapshot.refresh(ctx)
+    # lateSetUp patches advance before the launcher exists, so the
+    # copy taken at launcher creation is already the replacement.
+    # _ORIG_SM is captured before setUp.
+    original = _ORIG_SM.get(("aws", "snapshot"))
+    if original is None:
+        original = getattr(
+            launcher,
+            "_orig_snap_advance",
+            awsendpoint.AwsSnapshotStateMachine.advance,
+        )
     patched = _callable_is_patched(
-        awsendpoint.AwsSnapshotStateMachine.advance,
-        getattr(launcher, "_orig_snap_advance", awsendpoint.AwsSnapshotStateMachine.advance),
+        awsendpoint.AwsSnapshotStateMachine.advance, original
     )
     provider = launcher._getProviderForNode(node)
     with launcher.createZKContext(snapshot._lock, launcher.log) as ctx:

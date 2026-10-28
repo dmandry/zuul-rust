@@ -3688,6 +3688,7 @@ impl Launcher {
                 continue;
             }
             let mut sm = AwsSnapshot::new();
+            sm.enable_live();
             sm.provider = prep
                 .get("provider")
                 .and_then(|v| v.as_str())
