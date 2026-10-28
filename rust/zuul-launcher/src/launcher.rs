@@ -133,6 +133,73 @@ struct CleanupShared {
     upload_ids: Vec<String>,
 }
 
+/// Provider.getNodeTags: format label tags with the request's safe
+/// attributes, then set zuul_system_id and zuul_node_uuid.
+fn native_node_tags(
+    system_id: &str,
+    node_uuid: &str,
+    label: &crate::provider::Label,
+    request: Option<&NodesetRequest>,
+) -> Value {
+    let mut attrs: Vec<(String, String)> = Vec::new();
+    if let Some(req) = request {
+        let push = |attrs: &mut Vec<(String, String)>, key: &str, value: String| {
+            attrs.push((key.to_string(), value));
+        };
+        push(&mut attrs, "request_id", req.uuid());
+        push(&mut attrs, "pipeline_name", req.pipeline_name());
+        push(&mut attrs, "buildset_uuid", req.buildset_uuid());
+        push(&mut attrs, "zuul_event_id", req.zuul_event_id());
+        push(&mut attrs, "tenant_name", req.tenant_name());
+        for key in ["job_uuid", "job_name"] {
+            if let Some(value) = req.fields.get(key).and_then(|v| v.as_str()) {
+                push(&mut attrs, key, value.to_string());
+            }
+        }
+    }
+    let mut tags = Map::new();
+    for (key, template) in &label.tags {
+        if let Some(value) = format_tag(template, &attrs) {
+            tags.insert(key.clone(), Value::String(value));
+        }
+    }
+    tags.insert(
+        "zuul_system_id".into(),
+        Value::String(system_id.to_string()),
+    );
+    tags.insert(
+        "zuul_node_uuid".into(),
+        Value::String(node_uuid.to_string()),
+    );
+    Value::Object(tags)
+}
+
+/// str.format of `{name}` placeholders. An unknown name drops the tag,
+/// matching the try/except around label tag formatting.
+fn format_tag(template: &str, attrs: &[(String, String)]) -> Option<String> {
+    let mut out = String::new();
+    let mut rest = template;
+    while let Some(start) = rest.find('{') {
+        out.push_str(&rest[..start]);
+        rest = &rest[start + 1..];
+        if let Some(stripped) = rest.strip_prefix('{') {
+            out.push('{');
+            rest = stripped;
+            continue;
+        }
+        let end = rest.find('}')?;
+        let name = &rest[..end];
+        if name.is_empty() || name.contains(['!', ':', '.']) {
+            return None;
+        }
+        let value = attrs.iter().find(|(key, _)| key == name)?;
+        out.push_str(&value.1);
+        rest = &rest[end + 1..];
+    }
+    out.push_str(rest);
+    Some(out)
+}
+
 impl Launcher {
     pub fn new(hostname: &str, zk: Arc<dyn ZkOps>) -> Self {
         let system_id = zk::system_id(zk.as_ref()).unwrap_or_else(|_| "system".into());
@@ -1584,7 +1651,7 @@ impl Launcher {
             )
             .unwrap_or_else(|_| json!({}))
         } else {
-            json!({})
+            native_node_tags(&self.system_id, &id, label, request)
         };
         set(&mut fields, "tags", tags);
         set(&mut fields, "connection_name", json!(provider.connection_name()));

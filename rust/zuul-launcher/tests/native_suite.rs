@@ -344,6 +344,7 @@ fn run(class_name: &str, method: &str) {
     let launchers_path = begin.launchers_path.clone();
     let config_path = begin.config_path.clone();
     let supervisor = std::thread::spawn(move || {
+        let _ = fs::write(pass_dir().join("supervisor"), "1");
         let mut seen = HashSet::new();
         let mut joins = Vec::new();
         while !watch_stop.load(std::sync::atomic::Ordering::SeqCst) {

@@ -494,6 +494,16 @@ def _install_observer(launchers_path):
         with open(launchers_path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\n")
             handle.flush()
+        # A launcher created after the supervisor is up has to finish
+        # its first pass before requestNodes. setUp runs before that
+        # supervisor exists, so it must not wait here.
+        ready = os.path.join(_pass_dir(), launcher.hostname + ".ready")
+        marker = os.path.join(_pass_dir(), "supervisor")
+        if os.path.exists(marker):
+            deadline = time.time() + 20
+            while time.time() < deadline and not os.path.exists(ready):
+                time.sleep(0.02)
+        launcher.wake_event.set()
         return launcher
 
     _install_observer.original = base.ZuulTestCase.createLauncher
