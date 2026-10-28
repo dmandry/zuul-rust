@@ -1059,6 +1059,11 @@ impl Launcher {
                     continue;
                 }
                 self.api.delete_assignment(node_id).ok();
+                // node.unassign keeps the node in the launcher cache.
+                // A paused or missed watch would hide the ready node
+                // locality just detached (locality_exhaustion expects it).
+                let was_sub = old.driver_id == "subnode";
+                self.python_cache_insert(node_id, was_sub);
                 req.update_provider_node(
                     i,
                     &new_id,
@@ -2038,11 +2043,16 @@ impl Launcher {
                 continue;
             };
             let after = node.state();
-            // The pass that fails a slot host must not go on to delete
-            // its subnodes. The cache has to show the failed main node
-            // with the subnodes still present.
+            // Stop after the first node that newly failed. The next
+            // pass's _checkRequest then still sees the sibling in its
+            // previous state and keeps the same provider until
+            // launch-attempts is exhausted. Applying every completed
+            // scan in one pass drops that anchor: both slots look
+            // failed, quota sort picks the other region, and the
+            // successful attempt is never left unattached.
+            // A slot host's subnodes also have to stay in the cache
+            // until the following pass.
             if before != after
-                && !node.subnodes().is_empty()
                 && matches!(after.as_str(), node_state::FAILED | node_state::TEMPFAILED)
             {
                 self.wake();
