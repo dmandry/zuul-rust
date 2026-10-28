@@ -63,7 +63,8 @@ fn run(args: &[String]) -> Result<(), String> {
     }
     let launcher_cfg = launcher_config(&cfg)?;
     let zk_cfg = zookeeper_config(&cfg)?;
-    let _stats = zuul_launcher::config::statsd_config(&cfg)?;
+    let stats = zuul_launcher::config::statsd_config(&cfg)?;
+    zuul_launcher::statsd::install(&stats);
     let _tracing = zuul_launcher::config::tracing_config(&cfg)?;
     let connections = zuul_launcher::config::provider_connections(&cfg)?;
     zuul_launcher::native::set_connections(connections);
@@ -169,6 +170,10 @@ fn run_foreground(zk_cfg: &ZookeeperConfig, launcher_cfg: &LauncherConfig) -> Re
             let _ = launcher.reload_providers();
         }
         launcher.process_once();
+        zuul_launcher::statsd::timing(
+            "zuul.launcher.run_handler",
+            started.elapsed().as_secs_f64() * 1000.0,
+        );
         let (sleep, interval) = loop_waits(started);
         if !STOP.load(std::sync::atomic::Ordering::SeqCst) && sleep > Duration::ZERO {
             std::thread::sleep(sleep);

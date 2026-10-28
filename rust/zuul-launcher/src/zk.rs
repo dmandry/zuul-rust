@@ -160,6 +160,10 @@ pub trait ZkOps: Send + Sync {
         Ok(out)
     }
     fn expire_session(&self) {}
+    /// Send CloseSession and drop the socket. Ephemeral node locks and
+    /// the component znode die with the session; waiting for the socket
+    /// Drop is not enough when another `Arc` is still alive.
+    fn close_session(&self) {}
     /// Persistent watch. Mode 1 is `PERSISTENT_RECURSIVE`, which is what
     /// `ZuulTreeCache` registers. The default records nothing.
     fn add_watch(&self, _path: &str, _mode: i32) -> Result<(), ZkError> {
@@ -2238,12 +2242,15 @@ impl LauncherApi {
             let mut ordered: Vec<(u32, String)> = scores.into_iter().collect();
             ordered.sort_by_key(|(s, _)| *s);
             for (_score, name) in ordered {
-                let Some(launcher) = candidates.iter().find(|c| c.hostname == name) else {
+                // Two components can share a hostname while a launcher
+                // is stopping. A stopped record must not hide the running
+                // one: scores are per hostname, not per znode.
+                let Some(launcher) = candidates
+                    .iter()
+                    .find(|c| c.hostname == name && c.state == "running")
+                else {
                     continue;
                 };
-                if launcher.state != "running" {
-                    continue;
-                }
                 if launcher.hostname == self.hostname {
                     matched.push(id);
                 }
@@ -2310,12 +2317,15 @@ impl LauncherApi {
                 node.lscores.clone().unwrap_or_default().into_iter().collect();
             ordered.sort_by_key(|(s, _)| *s);
             for (_score, name) in ordered {
-                let Some(launcher) = candidates.iter().find(|c| c.hostname == name) else {
+                // Two components can share a hostname while a launcher
+                // is stopping. A stopped record must not hide the running
+                // one: scores are per hostname, not per znode.
+                let Some(launcher) = candidates
+                    .iter()
+                    .find(|c| c.hostname == name && c.state == "running")
+                else {
                     continue;
                 };
-                if launcher.state != "running" {
-                    continue;
-                }
                 if launcher.hostname == self.hostname {
                     matched.push(id);
                 }

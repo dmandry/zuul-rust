@@ -505,6 +505,358 @@ def _start_moto(quotas=None):
     return server, url
 
 
+_BOOT = None
+_HOOK_LAUNCHERS = {}
+_LAUNCH_SEQ = 0
+_ORIG_CALLABLES = {}
+
+
+def _bootstrap():
+    global _BOOT
+    if _BOOT is not None:
+        return _BOOT
+    import importlib.util
+
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "rust",
+        "zuul-launcher-py",
+        "src",
+        "bootstrap.py",
+    )
+    spec = importlib.util.spec_from_file_location("zuul_launcher_bootstrap", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _BOOT = mod
+    return mod
+
+
+def _save_hook_originals():
+    if _ORIG_CALLABLES:
+        return
+    import zuul.launcher.server as server
+    import zuul.zk.launcher as zk_launcher
+    from zuul.driver.aws import awsendpoint, awsprovider
+
+    _ORIG_CALLABLES.update(
+        {
+            "getEndpointLimits": awsprovider.AwsProvider.getEndpointLimits,
+            "getQuotaForLabel": awsprovider.AwsProvider.getQuotaForLabel,
+            "doesProviderHaveQuotaForLabel": server.Launcher.doesProviderHaveQuotaForLabel,
+            "launcher_score": zk_launcher.launcher_score,
+            "refresh": awsendpoint.AwsProviderEndpoint._refresh,
+            "refresh_delete": awsendpoint.AwsProviderEndpoint._refreshDelete,
+            "create_instance": awsendpoint.AwsProviderEndpoint._createInstance,
+            "create_advance": awsendpoint.AwsCreateStateMachine.advance,
+            "delete_advance": awsendpoint.AwsDeleteStateMachine.advance,
+            "snapshot_advance": awsendpoint.AwsSnapshotStateMachine.advance,
+            "upload_run": awsendpoint.AwsImageUploadJob.run,
+            "import_run": awsendpoint.AwsImageImportJob.run,
+            "upload_job": server.UploadJob.run,
+        }
+    )
+    boot = _bootstrap()
+    boot._record_original_sms()
+
+
+def _patched(current, original):
+    boot = _bootstrap()
+    return boot._callable_is_patched(current, original)
+
+
+def _launcher_for(args):
+    name = (args or {}).get("hostname")
+    if name and name in _HOOK_LAUNCHERS:
+        return _HOOK_LAUNCHERS[name]
+    if _HOOK_LAUNCHERS:
+        return next(iter(_HOOK_LAUNCHERS.values()))
+    return None
+
+
+def _load_cloud(result):
+    """cloud_call returns json.dumps(payload). Hooks need the object."""
+    if isinstance(result, str):
+        try:
+            return json.loads(result)
+        except Exception:
+            return result
+    return result
+
+
+def _hook_reply(hooked, result=None, error=None):
+    if error is not None:
+        kind = "other"
+        text = str(error)
+        name = type(error).__name__
+        if name == "QuotaException" or "Quota" in name:
+            kind = "quota"
+        if "Capacity" in name:
+            kind = "capacity"
+        return {"hooked": True, "error_kind": kind, "message": text}
+    return {"hooked": bool(hooked), "result": result if result is not None else {}}
+
+
+def _handle_hook(msg, callback):
+    op = msg.get("op") or ""
+    args = msg.get("args") or {}
+    launcher = _launcher_for(args)
+    boot = _bootstrap()
+    try:
+        if op == "score_patched":
+            import zuul.zk.launcher as zk_launcher
+
+            patched = _patched(zk_launcher.launcher_score, _ORIG_CALLABLES["launcher_score"])
+            return _hook_reply(True, {"patched": patched})
+        if op == "accept_patched":
+            fn = getattr(launcher, "_acceptRequest", None) if launcher else None
+            wrapped = bool(getattr(fn, "_suite_accept_wrapper", False))
+            return _hook_reply(True, {"patched": not wrapped})
+        if op == "snapshot_patched":
+            from zuul.driver.aws import awsendpoint
+
+            patched = _patched(
+                awsendpoint.AwsSnapshotStateMachine.advance,
+                _ORIG_CALLABLES["snapshot_advance"],
+            )
+            return _hook_reply(True, {"patched": patched})
+        if op.startswith("upload_patched_"):
+            from zuul.driver.aws import awsendpoint
+            import zuul.launcher.server as server
+
+            kind = op[len("upload_patched_") :]
+            if kind == "import":
+                patched = _patched(
+                    awsendpoint.AwsImageImportJob.run, _ORIG_CALLABLES["import_run"]
+                )
+            else:
+                patched = _patched(
+                    awsendpoint.AwsImageUploadJob.run, _ORIG_CALLABLES["upload_run"]
+                ) or _patched(server.UploadJob.run, _ORIG_CALLABLES["upload_job"])
+            return _hook_reply(True, {"patched": patched})
+        if launcher is None:
+            return _hook_reply(False)
+        if op == "class_attr":
+            return _hook_reply(True, boot._class_attr(args))
+        if op == "node_visible":
+            return _hook_reply(True, boot._node_visible(launcher, args))
+        if op == "nodescan.mode":
+            return _hook_reply(True, boot._nodescan_mode(launcher, args))
+        if op == "nodescan":
+            return _hook_reply(True, boot._nodescan_step(launcher, args))
+        if op == "nodescan.io":
+            return _hook_reply(True, boot._nodescan_io(launcher, args))
+        if op == "request_cache_ready":
+            return _hook_reply(True, boot._request_cache_ready(launcher, args))
+        if op == "endpoint_limits":
+            from zuul.driver.aws import awsprovider
+
+            if not _patched(
+                awsprovider.AwsProvider.getEndpointLimits,
+                _ORIG_CALLABLES["getEndpointLimits"],
+            ):
+                return _hook_reply(False)
+            return _hook_reply(True, boot._endpoint_limits(launcher, args))
+        if op == "label_quota":
+            from zuul.driver.aws import awsprovider
+
+            if not _patched(
+                awsprovider.AwsProvider.getQuotaForLabel,
+                _ORIG_CALLABLES["getQuotaForLabel"],
+            ):
+                return _hook_reply(False)
+            return _hook_reply(True, boot._label_quota(launcher, args))
+        if op == "provider_quota_for_label":
+            import zuul.launcher.server as server
+
+            if not _patched(
+                server.Launcher.doesProviderHaveQuotaForLabel,
+                _ORIG_CALLABLES["doesProviderHaveQuotaForLabel"],
+            ):
+                return _hook_reply(False)
+            provider = boot._find_provider(launcher, args["provider"])
+            label = provider.labels[args["label"]]
+            messages = []
+            ok = server.Launcher.doesProviderHaveQuotaForLabel(
+                launcher,
+                args.get("tenant") or provider.tenant_name,
+                provider,
+                label,
+                messages,
+                bool(args.get("include_usage", True)),
+            )
+            return _hook_reply(True, {"ok": bool(ok)})
+        if op == "owned_requests":
+            return _hook_reply(True, boot._owned_requests(launcher, args))
+        if op == "matching_requests":
+            return _hook_reply(True, boot._matching_requests(launcher))
+        if op == "matching_nodes":
+            return _hook_reply(True, boot._matching_nodes(launcher))
+        if op == "sm.patched_advance":
+            result = boot._sm_patched_advance(launcher, args)
+            if not result.get("patched"):
+                return _hook_reply(False)
+            return _hook_reply(True, result)
+        if op in ("ep.refresh", "ep.refresh_delete", "ep.submit_create_instance", "ep.complete_create_instance"):
+            from zuul.driver.aws import awsendpoint
+
+            relevant = False
+            if op == "ep.refresh":
+                relevant = _patched(
+                    awsendpoint.AwsProviderEndpoint._refresh, _ORIG_CALLABLES["refresh"]
+                )
+            elif op == "ep.refresh_delete":
+                relevant = _patched(
+                    awsendpoint.AwsProviderEndpoint._refreshDelete,
+                    _ORIG_CALLABLES["refresh_delete"],
+                )
+            else:
+                relevant = _patched(
+                    awsendpoint.AwsProviderEndpoint._createInstance,
+                    _ORIG_CALLABLES["create_instance"],
+                )
+            if not relevant:
+                return _hook_reply(False)
+            result = _load_cloud(boot.cloud_call(launcher, op, json.dumps(args)))
+            if isinstance(result, dict) and result.get("error_kind"):
+                return {
+                    "hooked": True,
+                    "error_kind": result.get("error_kind"),
+                    "message": result.get("message") or "hook error",
+                }
+            return _hook_reply(True, result)
+        if op == "upload.sdk_run":
+            result = _load_cloud(boot.cloud_call(launcher, op, json.dumps(args)))
+            if isinstance(result, dict) and result.get("error_kind"):
+                return {
+                    "hooked": True,
+                    "error_kind": result.get("error_kind"),
+                    "message": result.get("message") or "upload error",
+                }
+            return _hook_reply(True, result)
+        if op.startswith("snapshot."):
+            result = _load_cloud(boot.cloud_call(launcher, op, json.dumps(args)))
+            if isinstance(result, dict) and result.get("error_kind"):
+                return {
+                    "hooked": True,
+                    "error_kind": result.get("error_kind"),
+                    "message": result.get("message") or "snapshot error",
+                }
+            return _hook_reply(True, result)
+        if op == "accept_one":
+            return _hook_accept(launcher, args, callback)
+        return _hook_reply(False)
+    except Exception as exc:
+        return _hook_reply(False, error=exc)
+
+
+def _hook_accept(launcher, args, callback):
+    from zuul.zk.zkobject import ZKContext
+    from kazoo.exceptions import NoNodeError
+
+    request = launcher.api.getNodesetRequest(args.get("uuid"))
+    if request is None:
+        return _hook_reply(True, {"ok": False, "missing": True})
+    log = launcher.log
+    launcher._hook_callback = callback
+    try:
+        if not request.hasLock():
+            ctx = ZKContext(launcher.zk_client, None, launcher.stop_event, log)
+            if not request.acquireLock(ctx, blocking=False):
+                return _hook_reply(True, {"ok": False, "locked": False})
+            try:
+                request.refresh(ctx)
+            except NoNodeError:
+                return _hook_reply(True, {"ok": False, "missing": True})
+        launcher._acceptRequest(request, log, None, None)
+        return _hook_reply(True, {"ok": True})
+    finally:
+        launcher._hook_callback = None
+
+
+def _serve_hook(conn):
+    try:
+        reader = conn.makefile("r", encoding="utf-8")
+        writer = conn.makefile("w", encoding="utf-8")
+
+        def callback(op, args):
+            writer.write(json.dumps({"callback": op, "args": args}) + "\n")
+            writer.flush()
+            line = reader.readline()
+            if not line:
+                return {"ok": False}
+            msg = json.loads(line)
+            return msg.get("callback_result") or {}
+
+        while True:
+            line = reader.readline()
+            if not line:
+                break
+            msg = json.loads(line)
+            reply = _handle_hook(msg, callback)
+            writer.write(json.dumps(reply) + "\n")
+            writer.flush()
+    except Exception:
+        traceback.print_exc()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _start_hook_server(path):
+    import socket as socket_mod
+
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    sock = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
+    sock.bind(path)
+    sock.listen(64)
+
+    def accept_loop():
+        while True:
+            try:
+                conn, _addr = sock.accept()
+            except OSError:
+                return
+            threading.Thread(target=_serve_hook, args=(conn,), daemon=True).start()
+
+    import threading
+
+    threading.Thread(target=accept_loop, daemon=True).start()
+    return sock
+
+
+def _note_launcher(launcher):
+    boot = _bootstrap()
+    boot._install_node_cache_hook(launcher)
+    import zuul.launcher.server as server
+
+    launcher._orig_nodescan_advance = server.NodescanRequest.advance
+    launcher._orig_nodescan_socket = server.NodescanRequest._socket_class
+    launcher._orig_upload_run = server.UploadJob.run
+    try:
+        from zuul.driver.aws import awsendpoint
+
+        launcher._orig_snap_advance = awsendpoint.AwsSnapshotStateMachine.advance
+    except Exception:
+        pass
+    if not getattr(launcher._acceptRequest, "_suite_accept_wrapper", False):
+        orig = launcher._acceptRequest
+
+        def wrapper(request, log, unassigned_nodes=None, pending_labels=None):
+            cb = getattr(launcher, "_hook_callback", None)
+            if cb is None:
+                return orig(request, log, unassigned_nodes, pending_labels)
+            return cb("rust_accept", {"uuid": getattr(request, "uuid", None)})
+
+        wrapper._suite_accept_wrapper = True
+        launcher._acceptRequest = wrapper
+    _HOOK_LAUNCHERS[launcher.hostname] = launcher
+
+
 def _install_observer(launchers_path):
     import tests.base as base
 
@@ -520,11 +872,22 @@ def _install_observer(launchers_path):
         # finished writing its result event.
         with self._test_lock:
             try:
+                if self.layout_updated_event.is_set() or not self.tenant_providers:
+                    self.layout_updated_event.clear()
+                    try:
+                        self.updateTenantProviders()
+                    except Exception:
+                        self.layout_updated_event.set()
+                        with open("/tmp/observer-provider.err", "a", encoding="utf-8") as handle:
+                            handle.write(traceback.format_exc() + "\n")
                 store = self.tenant_layout_state
                 for tenant_name in list(store):
                     state = store.get(tenant_name)
                     if state is not None:
                         self.local_layout_state[tenant_name] = state
+                boot = _bootstrap()
+                for node in list(self.api.nodes_cache.getItems()):
+                    boot._attach_state_machines(self, node)
             except Exception:
                 self.log.exception("observer layout mirror failed")
             _drive_native_pass(self)
@@ -541,6 +904,11 @@ def _install_observer(launchers_path):
                 launcher.zk_client.client.delete(path)
         except Exception:
             launcher.log.debug("observer component cleanup", exc_info=True)
+        # The supervisor starts one thread per distinct jsonl line.
+        # A replacement launcher has the same hostname, so the record
+        # needs a unique seq or the new thread is never spawned.
+        global _LAUNCH_SEQ
+        _LAUNCH_SEQ += 1
         record = {
             "hostname": launcher.hostname,
             "connection_filter": (
@@ -548,19 +916,34 @@ def _install_observer(launchers_path):
                 if launcher.connection_filter
                 else None
             ),
+            "seq": _LAUNCH_SEQ,
         }
+        # The previous Rust thread for this hostname exits by consuming
+        # {hostname}.stop and closing its ZooKeeper session (ephemeral
+        # node locks). That has to finish before the new record is
+        # written, or the new thread sees the stop file and exits.
+        stop_file = os.path.join(_pass_dir(), launcher.hostname + ".stop")
+        ready = os.path.join(_pass_dir(), launcher.hostname + ".ready")
+        if os.path.exists(stop_file):
+            deadline = time.time() + 30
+            while os.path.exists(stop_file) and time.time() < deadline:
+                time.sleep(0.01)
+            try:
+                os.remove(ready)
+            except FileNotFoundError:
+                pass
         with open(launchers_path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\n")
             handle.flush()
         # A launcher created after the supervisor is up has to finish
         # its first pass before requestNodes. setUp runs before that
         # supervisor exists, so it must not wait here.
-        ready = os.path.join(_pass_dir(), launcher.hostname + ".ready")
         marker = os.path.join(_pass_dir(), "supervisor")
         if os.path.exists(marker):
             deadline = time.time() + 20
             while time.time() < deadline and not os.path.exists(ready):
                 time.sleep(0.02)
+        _note_launcher(launcher)
         _wrap_wake_wait(launcher)
         _watch_launcher_stop(launcher)
         launcher.wake_event.set()
@@ -625,6 +1008,13 @@ class Session:
                     pass
                 shutil.rmtree(_pass_dir(), ignore_errors=True)
                 os.makedirs(_pass_dir(), exist_ok=True)
+                _HOOK_LAUNCHERS.clear()
+                global _LAUNCH_SEQ
+                _LAUNCH_SEQ = 0
+                _save_hook_originals()
+                hook_sock = os.path.join(_pass_dir(), "hooks.sock")
+                _start_hook_server(hook_sock)
+                os.environ["ZUUL_HOOK_SOCK"] = hook_sock
                 self.moto, moto_url = _start_moto(
                     _method_quotas(class_name, method)
                 )

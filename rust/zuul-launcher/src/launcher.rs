@@ -484,6 +484,36 @@ impl Launcher {
         }
     }
 
+    /// PyO3 harness or the native test-hook socket.
+    fn external(&self) -> bool {
+        cloud::enabled() || crate::hooks::active()
+    }
+
+    fn ask(&self, op: &str, args: &Value) -> Result<Value, crate::provider::AdvanceError> {
+        if cloud::enabled() {
+            return cloud::invoke(op, args);
+        }
+        crate::hooks::consult(op, args).unwrap_or_else(|| {
+            Err(crate::provider::AdvanceError::Other(format!(
+                "hook {op} was not handled"
+            )))
+        })
+    }
+
+    fn score_from_python(&self) -> bool {
+        if cloud::enabled() {
+            return true;
+        }
+        crate::hooks::active() && crate::hooks::flag("score_patched")
+    }
+
+    fn accept_from_python(&self) -> bool {
+        if cloud::enabled() {
+            return true;
+        }
+        crate::hooks::active() && crate::hooks::flag("accept_patched")
+    }
+
     pub fn sleep_after(&self, duration: Duration) -> Duration {
         let max = Duration::from_secs_f64(MAX_SLEEP);
         if duration >= max {
@@ -496,7 +526,7 @@ impl Launcher {
     /// True when the Python request cache is behind the node's assignment
     /// and this pass must not treat the request as missing.
     fn await_request_cache(&mut self, node_id: &str) -> bool {
-        if !cloud::enabled() {
+        if !self.external() {
             return false;
         }
         let Some(node) = self.api.nodes.get(node_id) else {
@@ -508,7 +538,7 @@ impl Launcher {
         // Do not trust the Rust request map here. The test locks the
         // Python cache queue, so only that cache's max_zxid reports
         // whether the assignment is safe to act on.
-        match cloud::invoke("request_cache_ready", &json!({ "uuid": node_id })) {
+        match self.ask("request_cache_ready", &json!({ "uuid": node_id })) {
             Ok(v) => {
                 if v.get("wait").and_then(|w| w.as_bool()).unwrap_or(false) {
                     self.wake();
@@ -526,7 +556,7 @@ impl Launcher {
     }
 
     fn matching_ids(&mut self, op: &str) -> Vec<String> {
-        if cloud::enabled() {
+        if self.score_from_python() || (cloud::enabled()) {
             // prepare() already applied watch events. 14.3.0 answers
             // getMatching* from the tree cache and does not walk the
             // trees on a quiet pass.
@@ -534,7 +564,7 @@ impl Launcher {
             // must not fall through to mmh3: that assigns the node to a
             // different launcher than the one the test (and the other
             // process) selected, and the second state machine fails it.
-            let Ok(v) = cloud::invoke(op, &json!({})) else {
+            let Ok(v) = self.ask(op, &json!({})) else {
                 self.wake();
                 return Vec::new();
             };
@@ -593,13 +623,38 @@ impl Launcher {
                 continue;
             }
             if req.state() == request_state::REQUESTED {
-                if cloud::enabled() {
+                if self.accept_from_python() {
                     // Lock + patch hook on the Python request object;
                     // real accept is Rust via PyO3 _acceptRequest.
                     // A request Rust already read from ZK but the Python
                     // cache has not yielded is accepted here so it is not
                     // skipped behind a later one.
-                    let invoked = cloud::invoke("accept_one", &json!({ "uuid": id }));
+                    let invoked = if cloud::enabled() {
+                        cloud::invoke("accept_one", &json!({ "uuid": id }))
+                    } else {
+                        let launcher_ptr = self as *mut Launcher;
+                        crate::hooks::consult_cb(
+                            "accept_one",
+                            &json!({ "uuid": id, "hostname": self.hostname }),
+                            &mut |name, args| {
+                                if name != "rust_accept" {
+                                    return json!({"ok": false});
+                                }
+                                let uuid = args.get("uuid").and_then(|v| v.as_str()).unwrap_or("");
+                                // The fixture called back into this pass.
+                                // Safety: this thread owns `self` for the pass,
+                                // and the callback runs before consult_cb returns.
+                                let launcher = unsafe { &mut *launcher_ptr };
+                                match launcher.accept_request_by_uuid(uuid) {
+                                    Ok(()) => json!({"ok": true}),
+                                    Err(err) => json!({"ok": false, "message": err}),
+                                }
+                            },
+                        )
+                        .unwrap_or_else(|| {
+                            Err(crate::provider::AdvanceError::Other("accept hook missing".into()))
+                        })
+                    };
                     let missing = invoked
                         .as_ref()
                         .ok()
@@ -646,7 +701,7 @@ impl Launcher {
                 // test_subnodes_crash_during_create hides nodes via that
                 // method; retrying from the Rust map alone burns through
                 // launch_attempts before the test unhides them.
-                if cloud::enabled()
+                if self.external()
                     && !req
                         .nodes()
                         .iter()
@@ -731,7 +786,7 @@ impl Launcher {
     /// request is not invisible for a pass.
     fn refresh_owned_requests(&mut self) {
         self.owned_request_ids.clear();
-        if !cloud::enabled() {
+        if !self.score_from_python() {
             self.owned_request_ids = self.api.get_matching_requests();
             return;
         }
@@ -742,7 +797,7 @@ impl Launcher {
             .filter(|req| req.state() == request_state::REQUESTED)
             .map(|req| json!({"uuid": req.uuid(), "labels": req.labels()}))
             .collect();
-        if let Ok(value) = cloud::invoke("owned_requests", &json!({"requests": requests})) {
+        if let Ok(value) = self.ask("owned_requests", &json!({"requests": requests, "hostname": self.hostname})) {
             if let Some(ids) = value.get("ids").and_then(|v| v.as_array()) {
                 self.owned_request_ids = ids
                     .iter()
@@ -1427,6 +1482,18 @@ impl Launcher {
         label: &crate::provider::Label,
         include_usage: bool,
     ) -> bool {
+        if let Some(Ok(v)) = crate::hooks::consult(
+            "provider_quota_for_label",
+            &json!({
+                "tenant": tenant,
+                "provider": provider.canonical_name(),
+                "label": label.name,
+                "include_usage": include_usage,
+                "hostname": self.hostname,
+            }),
+        ) {
+            return v.get("ok").and_then(|b| b.as_bool()).unwrap_or(false);
+        }
         // Prefer the seeded/refreshed provider_quota cache (includes
         // unmanaged usage). Nested quota_for_label cloud calls from
         // inside accept_one are unreliable; accept_one seeds the cache.
@@ -1557,27 +1624,43 @@ impl Launcher {
     }
 
     fn cloud_endpoint_limits(&self, provider: &dyn Provider) -> Option<QuotaInformation> {
-        if !cloud::enabled() {
-            return crate::native::endpoint_limits(provider.canonical_name());
+        if cloud::enabled() {
+            return cloud::invoke(
+                "endpoint_limits",
+                &json!({"provider": provider.canonical_name()}),
+            )
+            .ok()
+            .map(|v| cloud::quota_from_payload(&v));
         }
-        cloud::invoke(
+        if let Some(Ok(v)) = crate::hooks::consult(
             "endpoint_limits",
-            &json!({"provider": provider.canonical_name()}),
-        )
-        .ok()
-        .map(|v| cloud::quota_from_payload(&v))
+            &json!({"provider": provider.canonical_name(), "hostname": self.hostname}),
+        ) {
+            return Some(cloud::quota_from_payload(&v));
+        }
+        crate::native::endpoint_limits(provider.canonical_name())
     }
 
     fn cloud_label_quota(&self, provider: &dyn Provider, label: &crate::provider::Label) -> Option<QuotaInformation> {
-        if !cloud::enabled() {
-            return None;
+        if cloud::enabled() {
+            return cloud::invoke(
+                "label_quota",
+                &json!({"provider": provider.canonical_name(), "label": label.name}),
+            )
+            .ok()
+            .map(|v| cloud::quota_from_payload(&v));
         }
-        cloud::invoke(
+        if let Some(Ok(v)) = crate::hooks::consult(
             "label_quota",
-            &json!({"provider": provider.canonical_name(), "label": label.name}),
-        )
-        .ok()
-        .map(|v| cloud::quota_from_payload(&v))
+            &json!({
+                "provider": provider.canonical_name(),
+                "label": label.name,
+                "hostname": self.hostname,
+            }),
+        ) {
+            return Some(cloud::quota_from_payload(&v));
+        }
+        None
     }
 
     pub fn does_provider_have_quota_for_node(&self, provider: &dyn Provider, node: &ProviderNode) -> bool {
@@ -1913,6 +1996,14 @@ impl Launcher {
         // the lock so image snapshot work can run. The rest of node
         // processing, including cleanup, waits until that lock is gone.
         if node.is_locked && !node.has_lock {
+            // A create still locked by a launcher that just exited
+            // must be retried. The lock-delete watch can be missed
+            // across the session close, and MIN_INTERVAL is longer
+            // than failover's settle timeout. Ready nodes stay locked
+            // by the executor for the whole job; those do not wake.
+            if model::is_create_state(&node.state()) {
+                self.wake();
+            }
             return Ok(());
         }
         // A held node is left alone until hold_expiration, matching
@@ -2047,10 +2138,10 @@ impl Launcher {
     /// server.Launcher class constants. Unit tests monkeypatch the Python
     /// class; the binary keeps the Rust default.
     fn class_constant(&self, name: &str, default: f64) -> f64 {
-        if !cloud::enabled() {
+        if !self.external() {
             return default;
         }
-        match cloud::invoke("class_attr", &json!({ "name": name })) {
+        match self.ask("class_attr", &json!({ "name": name })) {
             Ok(v) => v.get("value").and_then(|n| n.as_f64()).unwrap_or(default),
             Err(_) => default,
         }
@@ -2059,10 +2150,10 @@ impl Launcher {
     /// LauncherApi.getProviderNode, so an in-process patch that hides
     /// nodes is visible to the subnode sync timeout.
     fn python_node_present(&self, uuid: &str) -> bool {
-        if !cloud::enabled() {
+        if !self.external() {
             return true;
         }
-        match cloud::invoke("node_visible", &json!({ "uuid": uuid })) {
+        match self.ask("node_visible", &json!({ "uuid": uuid, "hostname": self.hostname })) {
             Ok(v) => v.get("present").and_then(|p| p.as_bool()).unwrap_or(true),
             Err(_) => true,
         }
@@ -2233,17 +2324,17 @@ impl Launcher {
         // runs if the Python worker drives the request. Socket, poll, and
         // paramiko patches are a lower hook: the Rust machine calls
         // nodescan.io for those steps.
-        let mode = if cloud::enabled() {
-            cloud::invoke("nodescan.mode", &json!({})).ok()
+        let mode = if self.external() {
+            self.ask("nodescan.mode", &json!({})).ok()
         } else {
             None
         };
         let use_python = mode
             .as_ref()
             .and_then(|v| v.get("use_python").and_then(|b| b.as_bool()))
-            .unwrap_or(cloud::enabled());
+            .unwrap_or(false);
         if use_python {
-            let result = cloud::invoke(
+            let result = self.ask(
                 "nodescan",
                 &json!({
                     "uuid": node_id,
@@ -2297,8 +2388,25 @@ impl Launcher {
             }
         }
         if io_hook {
-            if let Some(scan) = self.nodescan.get_mut(node_id) {
-                scan.advance_hooked();
+            // NodescanWorker polls on its own thread, so one launcher
+            // pass usually observes a finished scan. Advance here until
+            // the request completes or the boot timeout elapses.
+            // Otherwise a 2s boot-timeout (nodepool-nodescan.yaml) fires
+            // between passes and the node fails.
+            let budget = Duration::from_secs_f64(node.boot_timeout().max(0.1));
+            let deadline = Instant::now() + budget;
+            loop {
+                let done = {
+                    let Some(scan) = self.nodescan.get_mut(node_id) else {
+                        break;
+                    };
+                    scan.advance_hooked();
+                    scan.complete || scan.error.is_some()
+                };
+                if done || Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
             }
         } else {
             // Drive once so an immediate (host-key-checking off) scan can
@@ -2717,23 +2825,33 @@ impl Launcher {
             format!("zuul.nodes.launch.{state}"),
             format!("zuul.provider.{safe}.nodes.launch.{state}"),
         ] {
-            self.stats.push(StatEvent { kind: "c".into(), name: name.clone(), value: 1.0 });
-            self.stats.push(StatEvent { kind: "ms".into(), name, value: duration });
+            self.note_stat("c", name.clone(), 1.0);
+            self.note_stat("ms", name, duration);
         }
         if let Some(label) = provider.labels().get(&node.label()) {
             let sl = normalize_statsd_name(&label.name);
             let name = format!("zuul.provider.{safe}.label.{sl}.launch.{state}");
-            self.stats.push(StatEvent { kind: "c".into(), name: name.clone(), value: 1.0 });
-            self.stats.push(StatEvent { kind: "ms".into(), name, value: duration });
+            self.note_stat("c", name.clone(), 1.0);
+            self.note_stat("ms", name, duration);
             if let Some(image_name) = &label.image {
                 if let Some(image) = provider.images().get(image_name) {
                     let si = normalize_statsd_name(&image.name);
                     let name = format!("zuul.provider.{safe}.image.{si}.launch.{state}");
-                    self.stats.push(StatEvent { kind: "c".into(), name: name.clone(), value: 1.0 });
-                    self.stats.push(StatEvent { kind: "ms".into(), name, value: duration });
+                    self.note_stat("c", name.clone(), 1.0);
+                    self.note_stat("ms", name, duration);
                 }
             }
         }
+    }
+
+    fn note_stat(&mut self, kind: &str, name: String, value: f64) {
+        let event = StatEvent {
+            kind: kind.into(),
+            name,
+            value,
+        };
+        crate::statsd::emit(&event);
+        self.stats.push(event);
     }
 
     fn wake(&self) {
@@ -2806,8 +2924,8 @@ impl Launcher {
     }
 
     pub fn emit_stats_gauges(&mut self, leaked: i64, unmanaged: i64) {
-        self.stats.push(StatEvent { kind: "g".into(), name: "zuul.nodes.leaked".into(), value: leaked as f64 });
-        self.stats.push(StatEvent { kind: "g".into(), name: "zuul.nodes.unmanaged".into(), value: unmanaged as f64 });
+        self.note_stat("g", "zuul.nodes.leaked".into(), leaked as f64);
+        self.note_stat("g", "zuul.nodes.unmanaged".into(), unmanaged as f64);
     }
 
     /// Start cleanup (optional), stats election, and upload pools (server.py start).
@@ -2841,6 +2959,9 @@ impl Launcher {
                             upload_ids: shared.upload_ids,
                         };
                         let events = native_cleanup_pass(&mut book, &ctx);
+                        for event in &events {
+                            crate::statsd::emit(event);
+                        }
                         if let Ok(mut sink) = cleanup_stats.lock() {
                             sink.extend(events);
                         }
@@ -2857,6 +2978,9 @@ impl Launcher {
         self.stats_worker = Some(StatsWorker::start(zk, &self.hostname, move || {
             let snap = snapshot.lock().unwrap().clone();
             let events = emit_run_stats(&snap);
+            for event in &events {
+                crate::statsd::emit(event);
+            }
             if let Ok(mut g) = sink.lock() {
                 g.extend(events);
             }
@@ -3505,46 +3629,54 @@ impl Launcher {
             .map(|n| n.uuid())
             .collect();
         for id in ids {
-            if !cloud::enabled() {
-                self.advance_native_snapshot(&id);
-                continue;
-            }
-            let Ok(prep) = cloud::invoke("snapshot.prepare", &json!({"node_uuid": id})) else {
+        let python_snapshot = cloud::enabled()
+            || (crate::hooks::active() && crate::hooks::flag("snapshot_patched"));
+        if !python_snapshot {
+            self.advance_native_snapshot(&id);
+            continue;
+        }
+        let Ok(prep) = self.ask("snapshot.prepare", &json!({"node_uuid": id, "hostname": self.hostname})) else {
                 continue;
             };
             if prep.get("skip").and_then(|v| v.as_bool()).unwrap_or(false) {
+                // The Python cache can lag the ZK state by one pass.
+                // A finished snapshot is done; anything else has to be
+                // retried or the executor waits out MIN_INTERVAL.
+                if !prep.get("complete").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    self.wake();
+                }
                 continue;
             }
             if prep.get("error").and_then(|v| v.as_bool()).unwrap_or(false) {
                 let message = prep.get("message").and_then(|v| v.as_str()).unwrap_or("");
-                let _ = cloud::invoke(
+                let _ = self.ask(
                     "snapshot.fail",
-                    &json!({"node_uuid": id, "reason": "error", "message": message}),
+                    &json!({"node_uuid": id, "reason": "error", "message": message, "hostname": self.hostname}),
                 );
                 continue;
             }
             let timeout = prep.get("snapshot_timeout").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let patched = prep.get("patched").and_then(|v| v.as_bool()).unwrap_or(false);
             if patched {
-                let Ok(step) = cloud::invoke("snapshot.sdk_advance", &json!({"node_uuid": id})) else {
+                let Ok(step) = self.ask("snapshot.sdk_advance", &json!({"node_uuid": id, "hostname": self.hostname})) else {
                     continue;
                 };
                 if step.get("error").and_then(|v| v.as_bool()).unwrap_or(false) {
                     let message = step.get("message").and_then(|v| v.as_str()).unwrap_or("");
-                    let _ = cloud::invoke(
+                    let _ = self.ask(
                         "snapshot.fail",
-                        &json!({"node_uuid": id, "reason": "error", "message": message}),
+                        &json!({"node_uuid": id, "reason": "error", "message": message, "hostname": self.hostname}),
                     );
                     continue;
                 }
                 let complete = step.get("complete").and_then(|v| v.as_bool()).unwrap_or(false);
                 let start = step.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 if !complete && timeout > 0.0 && model::now_secs() - start > timeout {
-                    let _ = cloud::invoke("snapshot.fail", &json!({"node_uuid": id, "reason": "timeout"}));
+                    let _ = self.ask("snapshot.fail", &json!({"node_uuid": id, "reason": "timeout", "hostname": self.hostname}));
                     continue;
                 }
                 let external = step.get("external_id").and_then(|v| v.as_str()).unwrap_or("");
-                let _ = cloud::invoke(
+                let _ = self.ask(
                     "snapshot.commit",
                     &json!({
                         "node_uuid": id,
@@ -3591,18 +3723,18 @@ impl Launcher {
                 sm.start_time = model::now_secs();
             }
             if let Err(err) = sm.advance() {
-                let _ = cloud::invoke(
+                let _ = self.ask(
                     "snapshot.fail",
-                    &json!({"node_uuid": id, "reason": "error", "message": err.to_string()}),
+                    &json!({"node_uuid": id, "reason": "error", "message": err.to_string(), "hostname": self.hostname}),
                 );
                 continue;
             }
             if !sm.complete && timeout > 0.0 && model::now_secs() - sm.start_time > timeout {
-                let _ = cloud::invoke("snapshot.fail", &json!({"node_uuid": id, "reason": "timeout"}));
+                let _ = self.ask("snapshot.fail", &json!({"node_uuid": id, "reason": "timeout", "hostname": self.hostname}));
                 continue;
             }
             let external = sm.external_id.clone().unwrap_or_default();
-            let _ = cloud::invoke(
+            let _ = self.ask(
                 "snapshot.commit",
                 &json!({
                     "node_uuid": id,

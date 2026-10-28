@@ -939,9 +939,12 @@ impl AwsCreate {
             self.instance_obj = Some(instance.clone());
             let state = instance
                 .get("State")
-                .and_then(|v| v.get("Name"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
+                .and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.get("Name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                })
+                .unwrap_or_default()
                 .to_lowercase();
             if state == "running" {
                 let instance_type = instance

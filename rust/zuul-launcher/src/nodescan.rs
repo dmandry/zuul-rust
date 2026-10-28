@@ -279,7 +279,16 @@ impl NodescanRequest {
             obj.entry(k.clone()).or_insert(v.clone());
         }
         obj.insert("action".into(), json!(action));
-        match cloud::invoke("nodescan.io", &extra) {
+        let result = if cloud::enabled() {
+            cloud::invoke("nodescan.io", &extra)
+        } else {
+            crate::hooks::consult("nodescan.io", &extra).unwrap_or_else(|| {
+                Err(crate::provider::AdvanceError::Other(
+                    "nodescan.io not hooked".into(),
+                ))
+            })
+        };
+        match result {
             Ok(v) => Ok(v),
             Err(e) => Err(e.to_string()),
         }

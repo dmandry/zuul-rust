@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
-use zuul_launcher::config::{provider_connections, zookeeper_config, Config};
+use zuul_launcher::config::{provider_connections, statsd_config, zookeeper_config, Config};
 use zuul_launcher::launcher::Launcher;
 use zuul_launcher::native;
 use zuul_launcher::suite::{self, Check};
@@ -158,6 +158,7 @@ fn read_seq(path: &Path) -> u64 {
 /// and then asks for this, so a test that takes the lock pauses the
 /// native launcher the way it pauses server.Launcher.
 fn run_pass(launcher: &mut Launcher, hostname: &str) {
+    let started_pass = Instant::now();
     let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         launcher.api.prepare();
         if launcher.api.take_layout_event() {
@@ -172,6 +173,10 @@ fn run_pass(launcher: &mut Launcher, hostname: &str) {
             }
         }
         launcher.process_once();
+        zuul_launcher::statsd::timing(
+            "zuul.launcher.run_handler",
+            started_pass.elapsed().as_secs_f64() * 1000.0,
+        );
     }));
     if let Err(err) = caught {
         eprintln!("launcher {hostname} panicked: {err:?}");
@@ -255,6 +260,14 @@ fn launcher_loop(
     if let Ok(connections) = provider_connections(&cfg) {
         native::set_connections(connections);
     }
+    if let Ok(stats) = statsd_config(&cfg) {
+        zuul_launcher::statsd::install(&stats);
+    }
+    if let Ok(path) = std::env::var("ZUUL_HOOK_SOCK") {
+        if !path.is_empty() {
+            zuul_launcher::hooks::set_socket(path);
+        }
+    }
     let timeout_ms = (zk_cfg.session_timeout * 1000.0) as i32;
     let zk = match TlsZk::connect(
         &zk_cfg.hosts,
@@ -271,6 +284,7 @@ fn launcher_loop(
         }
     };
     let ops: Arc<dyn ZkOps> = zk;
+    zuul_launcher::hooks::bind_hostname(&spec.hostname);
     let mut launcher = Launcher::new(&spec.hostname, ops.clone());
     launcher.connection_filter = spec.connection_filter.clone();
     launcher.api.connection_filter = spec.connection_filter.clone();
@@ -302,12 +316,14 @@ fn launcher_loop(
     ready.store(true, std::sync::atomic::Ordering::SeqCst);
     let mut last = 0u64;
     let stop_path = dir.join(format!("{}.stop", spec.hostname));
+    let mut handoff = false;
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         if stop_path.exists() {
             // The test stopped this Python launcher. Leave the ZK
             // component stopped so a later launcher can take the work.
             // A pass may have written "running" after stop().
             mark_component_stopped(&launcher);
+            handoff = true;
             break;
         }
         let seq = read_seq(&req_path);
@@ -329,6 +345,26 @@ fn launcher_loop(
     }
     mark_component_stopped(&launcher);
     let _ = fs::write(&done_path, u64::MAX.to_string());
+    // Drop the session before removing the stop file. createLauncher
+    // waits for that file to disappear, then starts the replacement
+    // thread. Ephemeral node locks die with the session, so the new
+    // launcher can take the node.
+    launcher.stop_workers();
+    // The watch waker holds Playback, and Playback holds this session.
+    // Clearing it breaks the cycle so Drop closes the socket and
+    // ZooKeeper deletes this launcher's ephemeral node locks.
+    launcher.api.zk.set_waker(None);
+    // CloseSession deletes ephemeral node locks and this component.
+    // Drop alone does not run while the playback waker still holds an Arc.
+    launcher.api.zk.close_session();
+    drop(launcher);
+    drop(ops);
+    if handoff {
+        // The replacement thread starts after this file disappears.
+        // Give ZooKeeper a moment to drop the ephemeral locks first.
+        std::thread::sleep(Duration::from_millis(200));
+        let _ = fs::remove_file(&stop_path);
+    }
 }
 
 struct EnvRestore(Vec<(String, Option<String>)>);

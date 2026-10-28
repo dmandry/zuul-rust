@@ -463,12 +463,14 @@ fn pool_worker(
 }
 
 fn emit_gauge(sink: &Mutex<Vec<StatEvent>>, name: &str, value: f64) {
+    let event = StatEvent {
+        kind: "g".into(),
+        name: name.into(),
+        value,
+    };
+    crate::statsd::emit(&event);
     if let Ok(mut g) = sink.lock() {
-        g.push(StatEvent {
-            kind: "g".into(),
-            name: name.into(),
-            value,
-        });
+        g.push(event);
     }
 }
 

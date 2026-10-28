@@ -11,6 +11,9 @@ use crate::provider::AdvanceError;
 use serde_json::{json, Value};
 
 fn dispatch(op: &str, args: &Value) -> Result<Value, AdvanceError> {
+    if let Some(hooked) = crate::hooks::consult(op, args) {
+        return hooked;
+    }
     if cloud::enabled() {
         cloud::invoke(op, args)
     } else {

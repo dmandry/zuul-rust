@@ -28,6 +28,16 @@ path = "src/lib.rs"
 name = "zuul-launcher"
 path = "src/main.rs"
 
+[features]
+default = []
+# Unix-socket hooks the native test suite uses to apply unittest patches.
+# The zuul-launcher binary is built without this feature.
+test-hooks = []
+
+[[test]]
+name = "native_suite"
+required-features = ["test-hooks"]
+
 [workspace]
 
 [dependencies]

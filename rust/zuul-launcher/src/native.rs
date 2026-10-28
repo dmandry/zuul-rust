@@ -1156,7 +1156,18 @@ fn aws_refresh(args: &Value) -> Result<Value, AdvanceError> {
     let ep = aws_endpoint(&snap)?;
     let obj = args.get("obj").cloned().unwrap_or(Value::Null);
     if let Some(id) = obj.get("InstanceId").and_then(|v| v.as_str()) {
-        for instance in list_instances(&ep)? {
+        // RunInstances can land while DescribeInstances is still inside
+        // its TTL. A refresh that misses the id has to read moto again;
+        // otherwise a create stays "pending" until the cache expires.
+        let mut instances = list_instances(&ep)?;
+        if !instances
+            .iter()
+            .any(|instance| instance.get("InstanceId").and_then(|v| v.as_str()) == Some(id))
+        {
+            ep.lists.lock().unwrap().remove("instances");
+            instances = list_instances(&ep)?;
+        }
+        for instance in instances {
             if instance.get("InstanceId").and_then(|v| v.as_str()) == Some(id) {
                 return Ok(json!({"obj": instance}));
             }
@@ -1411,6 +1422,7 @@ fn run_instances(
         }
     }
     let resp = ec2(ep, "RunInstances", params, false)?;
+    ep.lists.lock().unwrap().remove("instances");
     resp.get("Instances")
         .and_then(|v| v.as_array())
         .and_then(|a| a.first())

@@ -320,19 +320,6 @@ fn run_one(
     let iname = normalize_statsd_name(&upload.canonical_name());
     let ename = normalize_statsd_name(&upload.endpoint_name());
     let stats_key = format!("zuul.image.{iname}.upload.{ename}.duration");
-    if job.kind == "upload" && path.is_none() {
-        match fetch_image(zk, artifact_uuid, sha) {
-            Ok(p) => *path = Some(p),
-            Err(err) => {
-                let _ = cloud::invoke(
-                    "upload.log",
-                    &json!({"level": "error", "message": err}),
-                );
-                return None;
-            }
-        }
-    }
-    let started = Instant::now();
     let mut payload = json!({
         "kind": job.kind,
         "upload_uuid": job.upload_uuid,
@@ -355,12 +342,57 @@ fn run_one(
             .unwrap()
             .insert("source_provider".into(), json!(sp));
     }
+    let upload_patched =
+        crate::hooks::active() && crate::hooks::flag(&format!("upload_patched_{}", job.kind));
+    if job.kind == "upload" && path.is_none() {
+        match fetch_image(zk, artifact_uuid, sha) {
+            Ok(p) => {
+                *path = Some(p.clone());
+                payload
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("path".into(), json!(p));
+            }
+            Err(err) => {
+                if !upload_patched {
+                    let _ = cloud::invoke(
+                        "upload.log",
+                        &json!({"level": "error", "message": err}),
+                    );
+                    return None;
+                }
+                // The test replaced Job.run and ignores the file. A
+                // missing path makes the Python adapter raise before
+                // the mock runs.
+                payload.as_object_mut().unwrap().insert(
+                    "path".into(),
+                    json!("/tmp/zuul-patched-upload-image"),
+                );
+            }
+        }
+    }
+    if upload_patched {
+        let started = Instant::now();
+        let result = crate::hooks::consult("upload.sdk_run", &payload);
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        crate::statsd::timing(&stats_key, ms);
+        if let Some(Ok(value)) = result {
+            return value
+                .get("external_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .filter(|s| !s.is_empty());
+        }
+        return None;
+    }
+    let started = Instant::now();
     let result = if cloud::enabled() {
         cloud::invoke("upload.sdk_run", &payload)
     } else {
         native_upload(zk, job, &payload)
     };
     let ms = started.elapsed().as_secs_f64() * 1000.0;
+    crate::statsd::timing(&stats_key, ms);
     let _ = cloud::invoke(
         "stats.timing",
         &json!({"name": stats_key, "ms": ms}),

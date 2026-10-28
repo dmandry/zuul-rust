@@ -621,6 +621,20 @@ impl ZkOps for TlsZk {
         self.session.events.lock().unwrap().len()
     }
 
+    fn close_session(&self) {
+        if self.session.closed.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let mut body = Vec::new();
+        write_i32(&mut body, self.session.next_xid());
+        write_i32(&mut body, OP_CLOSE);
+        if let Ok(mut io) = self.session.io.lock() {
+            let _ = write_frame(&mut io.stream, &body);
+            let _ = io.stream.get_ref().shutdown(std::net::Shutdown::Both);
+        }
+        self.session.fail_pending("session closed");
+    }
+
     fn set_waker(&self, waker: Option<Arc<dyn Fn() + Send + Sync>>) {
         *self.session.waker.lock().unwrap() = waker;
     }

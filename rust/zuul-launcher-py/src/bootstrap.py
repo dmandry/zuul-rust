@@ -1846,7 +1846,14 @@ def _sm_patched_advance(launcher, data):
                 provider=provider,
                 log=launcher.log,
             )
-            current(sm)
+            try:
+                current(sm)
+            except Exception:
+                import traceback
+
+                with open("/tmp/update-node.err", "a", encoding="utf-8") as handle:
+                    handle.write(traceback.format_exc() + "\n")
+                raise
         machines = launcher.__dict__.setdefault("_cloud_sms", {})
         machines[("create", data["node_uuid"])] = _StateMachineRef(
             cls, {"state": "complete"}
@@ -3232,10 +3239,15 @@ class _ScanIO:
             return False
         ready = self.poll.poll(timeout=0)
         fds = [item[0] for item in ready]
-        try:
-            fd = self.sock.fileno()
-        except Exception:
-            return False
+        # FakePoll.register stores the number it will return on the
+        # socket's fd attribute. The native-suite fileno patch returns
+        # a real pipe instead, which is never in that list.
+        fd = getattr(self.sock, "fd", None)
+        if not isinstance(fd, int):
+            try:
+                fd = self.sock.fileno()
+            except Exception:
+                return False
         return fd in fds
 
     def so_error(self):
