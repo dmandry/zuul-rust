@@ -13,6 +13,8 @@ a moto server (the in-process moto mock is not visible to that process).
 import json
 import math
 import os
+import shutil
+import time
 import traceback
 
 _CHECKS = []
@@ -237,17 +239,83 @@ def _dump_config(case, path, moto_url):
         parser.write(handle)
 
 
+def _method_quotas(class_name, method):
+    """driver_config quotas the Python fixture feeds to getEndpointLimits."""
+    import tests.unit.test_launcher as mod
+
+    func = getattr(getattr(mod, class_name), method)
+    cfg = getattr(func, "__driver_config__", None) or {}
+    raw = (cfg.get("test_launcher") or {}).get("quotas") or {}
+    out = {}
+    for key, value in raw.items():
+        out[str(key)] = float(value)
+    return out
+
+
+def _pass_dir():
+    root = os.environ.get("ZUUL_TEST_ROOT", "/tmp/zuul-test")
+    path = os.path.join(root, "native-pass")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _drive_native_pass(launcher):
+    """One native launcher pass while this thread holds _run_lock.
+
+    server.Launcher.run holds _run_lock around _run. The observer is
+    _run, so a token issued here is a pass the test can pause by
+    taking that lock. Before the Rust thread writes the ready file,
+    return immediately so setUp does not wait on a launcher that has
+    not started.
+    """
+    hostname = launcher.hostname
+    directory = _pass_dir()
+    ready = os.path.join(directory, hostname + ".ready")
+    if not os.path.exists(ready):
+        return
+    req = os.path.join(directory, hostname + ".req")
+    done = os.path.join(directory, hostname + ".done")
+    try:
+        with open(req, encoding="utf-8") as handle:
+            seq = int(handle.read().strip() or "0")
+    except (OSError, ValueError):
+        seq = 0
+    seq += 1
+    with open(req, "w", encoding="utf-8") as handle:
+        handle.write(str(seq))
+        handle.flush()
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        try:
+            with open(done, encoding="utf-8") as handle:
+                got = int(handle.read().strip() or "0")
+        except (OSError, ValueError):
+            got = 0
+        if got >= seq:
+            wake = os.path.join(directory, hostname + ".wake")
+            try:
+                with open(wake, encoding="utf-8") as handle:
+                    pending = handle.read().strip() == "1"
+            except OSError:
+                pending = False
+            if pending:
+                launcher.wake_event.set()
+            return
+        time.sleep(0.005)
+
+
 class _MotoProxy:
     """Forward to moto, and answer ListServiceQuotas.
 
     moto 5 does not implement service quotas. The Python fixture patches
-    that call away. The native client hits the endpoint, so the proxy
-    returns an empty quota page (limits stay unlimited, matching the
-    fixture's math.inf patch) and caches instead of retrying a 500.
+    getEndpointLimits. The native client hits the endpoint, so the proxy
+    returns that patch: driver_config quotas as QuotaCode entries, or an
+    empty page when the test left the limit at infinity.
     """
 
-    def __init__(self, upstream):
+    def __init__(self, upstream, quotas=None):
         self.upstream = upstream
+        self.quotas = dict(quotas or {})
         self.httpd = None
 
     def start(self):
@@ -256,6 +324,7 @@ class _MotoProxy:
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
         upstream = self.upstream
+        quotas = dict(self.quotas)
 
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -268,7 +337,11 @@ class _MotoProxy:
                 return self.rfile.read(length) if length else b""
 
             def _empty_quotas(self):
-                data = b'{"Quotas":[]}'
+                items = [
+                    {"QuotaCode": key, "Value": value}
+                    for key, value in quotas.items()
+                ]
+                data = json.dumps({"Quotas": items}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/x-amz-json-1.1")
                 self.send_header("Content-Length", str(len(data)))
@@ -337,7 +410,7 @@ class _MotoProxy:
             self.httpd = None
 
 
-def _start_moto():
+def _start_moto(quotas=None):
     import socket
     import subprocess
     import sys
@@ -351,7 +424,7 @@ def _start_moto():
     server = ThreadedMotoServer(ip_address="127.0.0.1", port=port, verbose=False)
     server.start()
     upstream = f"http://127.0.0.1:{port}"
-    proxy = _MotoProxy(upstream)
+    proxy = _MotoProxy(upstream, quotas)
     url = proxy.start()
     server._suite_proxy = proxy
     script = (
@@ -381,6 +454,12 @@ def _install_observer(launchers_path):
         # tests/base.py waitUntilSettled compares layout uuids. The
         # observer copies the ZK layout and does not provision, so the
         # native launcher is the only component that takes work.
+        # run() already holds _run_lock. The token is issued outside
+        # _test_lock so waitUntilSettled can keep polling.
+        # TestLauncher._run holds _test_lock across the whole pass.
+        # waitUntilSettled takes that lock before it will call the
+        # system settled, so it cannot observe a pass that has not
+        # finished writing its result event.
         with self._test_lock:
             try:
                 store = self.tenant_layout_state
@@ -390,6 +469,7 @@ def _install_observer(launchers_path):
                         self.local_layout_state[tenant_name] = state
             except Exception:
                 self.log.exception("observer layout mirror failed")
+            _drive_native_pass(self)
 
     def create_launcher(self, instance_id=0, connection_filter=None):
         launcher = _install_observer.original(
@@ -473,7 +553,11 @@ class Session:
                     os.remove(launchers_path)
                 except FileNotFoundError:
                     pass
-                self.moto, moto_url = _start_moto()
+                shutil.rmtree(_pass_dir(), ignore_errors=True)
+                os.makedirs(_pass_dir(), exist_ok=True)
+                self.moto, moto_url = _start_moto(
+                    _method_quotas(class_name, method)
+                )
                 _install_observer(launchers_path)
             case.setUp()
             self.case = case
@@ -512,6 +596,10 @@ class Session:
         namespace = dict(mod.__dict__)
         namespace.update(_helpers())
         error = None
+        launcher = getattr(self.case, "launcher", None)
+        wake = getattr(launcher, "wake_event", None)
+        if wake is not None:
+            wake.set()
         try:
             if prelude:
                 exec(prelude, namespace, namespace)

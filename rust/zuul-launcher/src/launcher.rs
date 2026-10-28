@@ -1305,7 +1305,16 @@ impl Launcher {
                 return cloud::quota_from_payload(&value);
             }
         }
-        let mut quota = provider.endpoint().limits.copy();
+        // getProviderQuota starts from getEndpointLimits (service quotas).
+        // The PyO3 path gets that object from the Python provider. The
+        // binary reads ListServiceQuotas. Provider resource-limits are
+        // applied later, in provider_quota_available.
+        let mut quota = if !crate::cloud::enabled() {
+            crate::native::endpoint_limits(provider.canonical_name())
+                .unwrap_or_else(|| provider.endpoint().limits.copy())
+        } else {
+            provider.endpoint().limits.copy()
+        };
         let mut unmanaged = provider.endpoint().unmanaged.copy();
         if !crate::cloud::enabled() {
             unmanaged.add(&crate::native::unmanaged_quota(

@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -140,6 +140,65 @@ fn record_time(class_name: &str, method: &str, seconds: f64) {
     eprintln!("{class_name}.{method} {seconds:.4}s");
 }
 
+fn pass_dir() -> PathBuf {
+    let root = std::env::var("ZUUL_TEST_ROOT").unwrap_or_else(|_| "/tmp/zuul-test".into());
+    let dir = PathBuf::from(root).join("native-pass");
+    let _ = fs::create_dir_all(&dir);
+    dir
+}
+
+fn read_seq(path: &Path) -> u64 {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// One launcher iteration. The Python thread's run() holds `_run_lock`
+/// and then asks for this, so a test that takes the lock pauses the
+/// native launcher the way it pauses server.Launcher.
+fn run_pass(launcher: &mut Launcher, hostname: &str) {
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        launcher.api.prepare();
+        if launcher.api.take_layout_event() {
+            launcher.layout_dirty = true;
+        }
+        if launcher.api.take_image_event() {
+            launcher.image_updated = true;
+        }
+        if launcher.layout_dirty {
+            if let Err(err) = launcher.reload_providers() {
+                eprintln!("reload {hostname}: {err}");
+            }
+        }
+        launcher.process_once();
+    }));
+    if let Err(err) = caught {
+        eprintln!("launcher {hostname} panicked: {err:?}");
+    }
+}
+
+/// `wake()` during the pass must reach server.Launcher.wake_event.
+/// The Python thread is inside `_run` and will not notice the Rust
+/// condvar. It waits on its own event after `_run` returns.
+fn write_wake(launcher: &Launcher, hostname: &str) {
+    let woke = match launcher.wake.lock() {
+        Ok(mut guard) => {
+            let woke = *guard;
+            *guard = false;
+            woke
+        }
+        Err(err) => {
+            let mut guard = err.into_inner();
+            let woke = *guard;
+            *guard = false;
+            woke
+        }
+    };
+    let path = pass_dir().join(format!("{hostname}.wake"));
+    let _ = fs::write(path, if woke { "1" } else { "0" });
+}
+
 fn launcher_loop(
     spec: LaunchRecord,
     config_path: String,
@@ -202,43 +261,34 @@ fn launcher_loop(
     launcher.install_waker(None);
     launcher.arm_watches();
     wakes.lock().unwrap().push((launcher.wake.clone(), launcher.wake_cv.clone()));
-    let mut announced = false;
+    let dir = pass_dir();
+    let req_path = dir.join(format!("{}.req", spec.hostname));
+    let done_path = dir.join(format!("{}.done", spec.hostname));
+    let ready_path = dir.join(format!("{}.ready", spec.hostname));
+    // Register and load providers before the test body. The lock
+    // protocol starts only after the ready file exists.
+    run_pass(&mut launcher, &spec.hostname);
+    write_wake(&launcher, &spec.hostname);
+    let _ = fs::write(&req_path, "0");
+    let _ = fs::write(&done_path, "0");
+    let _ = fs::write(&ready_path, "1");
+    ready.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut last = 0u64;
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
-        let started = Instant::now();
-        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            launcher.api.prepare();
-            if launcher.api.take_layout_event() {
-                launcher.layout_dirty = true;
-            }
-            if launcher.api.take_image_event() {
-                launcher.image_updated = true;
-            }
-            if launcher.layout_dirty {
-                if let Err(err) = launcher.reload_providers() {
-                    eprintln!("reload {}: {err}", spec.hostname);
-                }
-            }
-            launcher.process_once();
-        }));
-        if let Err(err) = caught {
-            eprintln!("launcher {} panicked: {err:?}", spec.hostname);
-            break;
+        let seq = read_seq(&req_path);
+        if seq <= last {
+            std::thread::sleep(Duration::from_millis(5));
+            continue;
         }
-        if !announced {
-            ready.store(true, std::sync::atomic::Ordering::SeqCst);
-            announced = true;
-        }
-        // tests/base.py sets Launcher.MAX_SLEEP = 0.1. The production
-        // loop stays at MAX_SLEEP (1s); this suite matches the fixture.
-        let elapsed = started.elapsed();
-        let max = Duration::from_millis(100);
-        if elapsed < max && !stop.load(std::sync::atomic::Ordering::SeqCst) {
-            std::thread::sleep(max - elapsed);
-        }
-        if !stop.load(std::sync::atomic::Ordering::SeqCst) {
-            launcher.wait_wake(Duration::from_secs(60));
-        }
+        run_pass(&mut launcher, &spec.hostname);
+        write_wake(&launcher, &spec.hostname);
+        last = seq;
+        let _ = fs::write(&done_path, last.to_string());
+        // server.Launcher.run sleeps the rest of MAX_SLEEP and then
+        // waits on wake_event after _run returns. This loop only runs
+        // the pass the observer asked for.
     }
+    let _ = fs::write(&done_path, u64::MAX.to_string());
 }
 
 struct EnvRestore(Vec<(String, Option<String>)>);
