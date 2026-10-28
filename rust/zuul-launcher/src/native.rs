@@ -1497,13 +1497,21 @@ fn complete_aws_host(args: &Value) -> Result<Value, AdvanceError> {
     }
     params.insert("TagSpecification".into(), json!([{"ResourceType": "dedicated-host", "Tag": tag_list(job.payload.get("tags").unwrap_or(&json!({})))}]));
     let resp = ec2(&ep, "AllocateHosts", params, false)?;
+    // Query XML names the list hostIdSet. ec2_xml_to_boto keeps that
+    // as HostIdSet; boto3's parsed shape is HostIds.
     let host_id = resp
         .get("HostIds")
+        .or_else(|| resp.get("HostIdSet"))
         .and_then(|v| v.as_array())
         .and_then(|a| a.first())
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    if host_id.is_empty() {
+        return Err(AdvanceError::Other(format!(
+            "AllocateHosts returned no host id: {resp}"
+        )));
+    }
     Ok(json!({"host": {"HostId": host_id, "State": "pending"}}))
 }
 

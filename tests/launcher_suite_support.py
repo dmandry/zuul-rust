@@ -335,11 +335,21 @@ def _wrap_upload_checks(launcher):
     orig = launcher.checkMissingUploads
 
     def check_missing_uploads(*args, **kwargs):
-        try:
-            launcher.image_upload_registry.waitForSync(timeout=5)
-            launcher.image_build_registry.waitForSync(timeout=5)
-        except Exception:
-            launcher.log.debug("upload registry sync before check", exc_info=True)
+        # ImageUpload.new runs on the test's ZooKeeper session. The
+        # observer's watch can still be in flight when the test calls
+        # this, and one waitForSync only drains events already queued.
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            try:
+                launcher.image_upload_registry.waitForSync(timeout=0.5)
+                launcher.image_build_registry.waitForSync(timeout=0.5)
+            except Exception:
+                launcher.log.debug(
+                    "upload registry sync before check", exc_info=True
+                )
+            if launcher.image_upload_registry.getItem("upload-uuid") is not None:
+                break
+            time.sleep(0.05)
         return orig(*args, **kwargs)
 
     check_missing_uploads._suite_sync = True
@@ -362,6 +372,12 @@ def _wrap_wake_wait(launcher):
             return True
         deadline = None if timeout is None else time.monotonic() + timeout
         poke = os.path.join(_pass_dir(), host + ".poke")
+        # A pass that outlives _drive_native_pass's 30s wait writes
+        # {hostname}.wake after this thread is already in wait(). The
+        # poke file is only written while the Rust thread is idle, so
+        # that late wake has to be read here or the launcher sleeps
+        # MIN_INTERVAL.
+        wake_path = os.path.join(_pass_dir(), host + ".wake")
         while True:
             if os.path.exists(poke):
                 try:
@@ -369,6 +385,21 @@ def _wrap_wake_wait(launcher):
                 except OSError:
                     pass
                 return True
+            try:
+                with open(wake_path, encoding="utf-8") as handle:
+                    pending_wake = handle.read().strip() == "1"
+                if pending_wake:
+                    # Consume it. A stale "1" would make every later
+                    # wait return immediately and the launcher would
+                    # spin for the whole settle timeout.
+                    try:
+                        with open(wake_path, "w", encoding="utf-8") as handle:
+                            handle.write("0")
+                    except OSError:
+                        pass
+                    return True
+            except OSError:
+                pass
             if orig(0):
                 return True
             if deadline is not None:
@@ -789,7 +820,7 @@ def _handle_hook(msg, callback):
                     "message": result.get("message") or "hook error",
                 }
             return _hook_reply(True, result)
-        if op == "upload.sdk_run" or op in (
+        if op in ("node.cache_insert", "node.cache_assign") or op == "upload.sdk_run" or op in (
             "upload.delete",
             "upload.delete_artifact",
             "upload.run_is_patched",

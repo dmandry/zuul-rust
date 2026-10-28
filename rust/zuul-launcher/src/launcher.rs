@@ -1932,10 +1932,7 @@ impl Launcher {
     /// pause the cache event queue still see newly created nodes
     /// (test_subnodes_cache_insert).
     fn python_cache_insert(&self, uuid: &str, is_subnode: bool) {
-        if !cloud::enabled() {
-            return;
-        }
-        let _ = cloud::invoke(
+        let _ = crate::hooks::bridge(
             "node.cache_insert",
             &json!({ "uuid": uuid, "subnode": is_subnode }),
         );
@@ -1950,10 +1947,7 @@ impl Launcher {
         tenant_name: &str,
         min_request_version: i64,
     ) {
-        if !cloud::enabled() {
-            return;
-        }
-        let _ = cloud::invoke(
+        let _ = crate::hooks::bridge(
             "node.cache_assign",
             &json!({
                 "uuid": uuid,

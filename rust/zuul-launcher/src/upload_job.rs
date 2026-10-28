@@ -618,7 +618,7 @@ fn finalize_one(zk: &dyn ZkOps, uuid: &str, external_id: Option<&str>) {
         upload.set_state(upload_state::READY);
         let _ = save_upload(zk, &upload);
         if !upload.validated() {
-            let _ = cloud::invoke(
+            hook_or_cloud(
                 "upload.validate_event",
                 &json!({"upload_uuid": uuid}),
             );
