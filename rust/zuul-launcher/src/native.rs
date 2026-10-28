@@ -206,6 +206,27 @@ pub fn set_connections(connections: Vec<ConnectionConfig>) {
     }
 }
 
+/// Drop endpoint caches that belong to an earlier launcher in this process.
+///
+/// The native suite runs every test in one binary. Cleanup records
+/// unmanaged quota under the endpoint's canonical name, and the next
+/// test would subtract it. A launcher process starts with these maps
+/// empty and only fills them from its own cleanup pass.
+pub fn reset_endpoint_runtime() {
+    let mut reg = registry().lock().unwrap();
+    reg.aws.clear();
+    reg.ready.clear();
+    reg.templates.clear();
+    reg.unmanaged.clear();
+    reg.ports.clear();
+    reg.futures.clear();
+    reg.extras.clear();
+    reg.os_tokens.clear();
+    reg.azure_tokens.clear();
+    drop(reg);
+    clear_ttl_cache();
+}
+
 pub fn sync_providers(tenants: &std::collections::HashMap<String, Vec<Arc<dyn Provider>>>) {
     let mut reg = registry().lock().unwrap();
     reg.providers.clear();

@@ -457,6 +457,10 @@ fn run(class_name: &str, method: &str) {
         }
     }
     let _env_restore = EnvRestore(previous_env);
+    // quota_external_usage records unmanaged instances on the shared
+    // endpoint name. The next test, relative_priority, allows one
+    // instance and would wait out requestNodes if that usage survived.
+    zuul_launcher::native::reset_endpoint_runtime();
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let ready = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let wakes = Arc::new(Mutex::new(Vec::new()));
