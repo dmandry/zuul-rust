@@ -178,9 +178,6 @@ fn run_pass(launcher: &mut Launcher, hostname: &str) {
     }
 }
 
-/// A watch arrived while the Python thread was in `wake_event.wait`.
-/// Clear the flag and leave a file that wait polls. The pass that
-/// follows reports its own wake through `write_wake`.
 fn mark_component_stopped(launcher: &Launcher) {
     let Some(path) = &launcher.component_path else {
         return;
@@ -194,23 +191,14 @@ fn mark_component_stopped(launcher: &Launcher) {
     );
 }
 
+/// A watch arrived while the Python thread was in `wake_event.wait`.
+/// Leave a file that wait polls. Do not clear the flag: `write_wake`
+/// after the following pass must still see it. Relative priority frees
+/// quota in one pass and accepts in the next.
 fn poke_if_woken(launcher: &Launcher, hostname: &str) {
     let woke = match launcher.wake.lock() {
-        Ok(mut guard) => {
-            if !*guard {
-                return;
-            }
-            *guard = false;
-            true
-        }
-        Err(err) => {
-            let mut guard = err.into_inner();
-            if !*guard {
-                return;
-            }
-            *guard = false;
-            true
-        }
+        Ok(guard) => *guard,
+        Err(err) => *err.into_inner(),
     };
     if woke {
         let _ = fs::write(pass_dir().join(format!("{hostname}.poke")), "1");
