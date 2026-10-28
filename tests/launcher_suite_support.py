@@ -259,6 +259,64 @@ def _pass_dir():
     return path
 
 
+def _watch_launcher_stop(launcher):
+    """Tell the native thread this launcher was stopped.
+
+    The Rust component is a different ephemeral znode from the one
+    Launcher.stop writes. Without this, the stopped launcher stays
+    RUNNING and can win launcher_score while its thread is gone.
+    """
+    orig = launcher.stop
+    host = launcher.hostname
+
+    def stop():
+        try:
+            path = os.path.join(_pass_dir(), host + ".stop")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("1")
+        except OSError:
+            pass
+        return orig()
+
+    launcher.stop = stop
+
+
+def _wrap_wake_wait(launcher):
+    """Poll the native poke file from inside wake_event.wait.
+
+    server.Launcher.run waits on this event for MIN_INTERVAL. The Rust
+    playback thread cannot set it. Replacing wait keeps the launcher
+    thread count the same, which shutdown checks.
+    """
+    event = launcher.wake_event
+    orig = event.wait
+    host = launcher.hostname
+
+    def wait(timeout=None):
+        if orig(0):
+            return True
+        deadline = None if timeout is None else time.monotonic() + timeout
+        poke = os.path.join(_pass_dir(), host + ".poke")
+        while True:
+            if os.path.exists(poke):
+                try:
+                    os.remove(poke)
+                except OSError:
+                    pass
+                return True
+            if orig(0):
+                return True
+            if deadline is not None:
+                remain = deadline - time.monotonic()
+                if remain <= 0:
+                    return False
+                time.sleep(min(0.005, remain))
+            else:
+                time.sleep(0.005)
+
+    event.wait = wait
+
+
 def _drive_native_pass(launcher):
     """One native launcher pass while this thread holds _run_lock.
 
@@ -503,6 +561,8 @@ def _install_observer(launchers_path):
             deadline = time.time() + 20
             while time.time() < deadline and not os.path.exists(ready):
                 time.sleep(0.02)
+        _wrap_wake_wait(launcher)
+        _watch_launcher_stop(launcher)
         launcher.wake_event.set()
         return launcher
 

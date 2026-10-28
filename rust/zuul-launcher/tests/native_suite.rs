@@ -178,6 +178,45 @@ fn run_pass(launcher: &mut Launcher, hostname: &str) {
     }
 }
 
+/// A watch arrived while the Python thread was in `wake_event.wait`.
+/// Clear the flag and leave a file that wait polls. The pass that
+/// follows reports its own wake through `write_wake`.
+fn mark_component_stopped(launcher: &Launcher) {
+    let Some(path) = &launcher.component_path else {
+        return;
+    };
+    let _ = zk::set_component(
+        launcher.api.zk.as_ref(),
+        path,
+        &launcher.hostname,
+        "stopped",
+        &launcher.connection_filter,
+    );
+}
+
+fn poke_if_woken(launcher: &Launcher, hostname: &str) {
+    let woke = match launcher.wake.lock() {
+        Ok(mut guard) => {
+            if !*guard {
+                return;
+            }
+            *guard = false;
+            true
+        }
+        Err(err) => {
+            let mut guard = err.into_inner();
+            if !*guard {
+                return;
+            }
+            *guard = false;
+            true
+        }
+    };
+    if woke {
+        let _ = fs::write(pass_dir().join(format!("{hostname}.poke")), "1");
+    }
+}
+
 /// `wake()` during the pass must reach server.Launcher.wake_event.
 /// The Python thread is inside `_run` and will not notice the Rust
 /// condvar. It waits on its own event after `_run` returns.
@@ -274,9 +313,21 @@ fn launcher_loop(
     let _ = fs::write(&ready_path, "1");
     ready.store(true, std::sync::atomic::Ordering::SeqCst);
     let mut last = 0u64;
+    let stop_path = dir.join(format!("{}.stop", spec.hostname));
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+        if stop_path.exists() {
+            // The test stopped this Python launcher. Leave the ZK
+            // component stopped so a later launcher can take the work.
+            // A pass may have written "running" after stop().
+            mark_component_stopped(&launcher);
+            break;
+        }
         let seq = read_seq(&req_path);
         if seq <= last {
+            // The Python thread is in wake_event.wait. A watch that
+            // sets the Rust flag has to poke that wait, or the next
+            // request sits until MIN_INTERVAL.
+            poke_if_woken(&launcher, &spec.hostname);
             std::thread::sleep(Duration::from_millis(5));
             continue;
         }
@@ -288,6 +339,7 @@ fn launcher_loop(
         // waits on wake_event after _run returns. This loop only runs
         // the pass the observer asked for.
     }
+    mark_component_stopped(&launcher);
     let _ = fs::write(&done_path, u64::MAX.to_string());
 }
 
