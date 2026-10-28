@@ -200,14 +200,33 @@ fn mark_component_stopped(launcher: &Launcher) {
 /// Leave a file that wait polls. Do not clear the flag: `write_wake`
 /// after the following pass must still see it. Relative priority frees
 /// quota in one pass and accepts in the next.
+///
+/// Also poke while a request or a create/snapshot node is still open.
+/// A missed watch otherwise leaves the launcher in `MIN_INTERVAL` and
+/// `requestNodes` hits its 60s timeout. Python wakes on those same
+/// conditions inside the pass; this covers the watch that never landed.
 fn poke_if_woken(launcher: &Launcher, hostname: &str) {
     let woke = match launcher.wake.lock() {
         Ok(guard) => *guard,
         Err(err) => *err.into_inner(),
     };
-    if woke {
+    if woke || pass_still_needed(launcher) {
         let _ = fs::write(pass_dir().join(format!("{hostname}.poke")), "1");
     }
+}
+
+fn pass_still_needed(launcher: &Launcher) -> bool {
+    use zuul_launcher::model::{self, node_state, request_state};
+    launcher.api.requests.values().any(|req| {
+        matches!(
+            req.state().as_str(),
+            request_state::REQUESTED | request_state::ACCEPTED
+        )
+    }) || launcher
+        .api
+        .nodes
+        .values()
+        .any(|node| model::is_create_state(&node.state()) || node.state() == node_state::SNAPSHOT)
 }
 
 /// `wake()` during the pass must reach server.Launcher.wake_event.
