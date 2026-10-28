@@ -338,7 +338,7 @@ def _wrap_upload_checks(launcher):
         # ImageUpload.new runs on the test's ZooKeeper session. The
         # observer's watch can still be in flight when the test calls
         # this, and one waitForSync only drains events already queued.
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             try:
                 launcher.image_upload_registry.waitForSync(timeout=0.5)
@@ -347,7 +347,13 @@ def _wrap_upload_checks(launcher):
                 launcher.log.debug(
                     "upload registry sync before check", exc_info=True
                 )
-            if launcher.image_upload_registry.getItem("upload-uuid") is not None:
+            upload = launcher.image_upload_registry.getItem("upload-uuid")
+            artifact = launcher.image_build_registry.getItem("iba-uuid")
+            artifact_ready = (
+                artifact is not None
+                and artifact.state == artifact.State.READY
+            )
+            if upload is not None and artifact_ready:
                 break
             time.sleep(0.05)
         return orig(*args, **kwargs)
@@ -820,6 +826,9 @@ def _handle_hook(msg, callback):
                     "message": result.get("message") or "hook error",
                 }
             return _hook_reply(True, result)
+        if op == "upload.check_missing":
+            launcher.checkMissingUploads()
+            return _hook_reply(True, {"ok": True})
         if op in ("node.cache_insert", "node.cache_assign") or op == "upload.sdk_run" or op in (
             "upload.delete",
             "upload.delete_artifact",
@@ -994,6 +1003,22 @@ def _install_observer(launchers_path):
                     state = store.get(tenant_name)
                     if state is not None:
                         self.local_layout_state[tenant_name] = state
+                # updateTenantProviders assigns endpoints only when the
+                # layout reload succeeds all the way through endpoint
+                # postConfig. A first pass that raises in
+                # _chooseLauncherForEndpoint (no RUNNING component yet)
+                # keeps the providers and leaves endpoints empty, and
+                # the next call no longer sees a layout change.
+                if not self.endpoints and self.tenant_providers:
+                    self.local_layout_state.clear()
+                    try:
+                        self.updateTenantProviders()
+                    except Exception:
+                        self.layout_updated_event.set()
+                        with open(
+                            "/tmp/observer-provider.err", "a", encoding="utf-8"
+                        ) as handle:
+                            handle.write(traceback.format_exc() + "\n")
                 boot = _bootstrap()
                 for node in list(self.api.nodes_cache.getItems()):
                     boot._attach_state_machines(self, node)
