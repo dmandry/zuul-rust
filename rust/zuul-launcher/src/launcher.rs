@@ -2122,7 +2122,16 @@ impl Launcher {
                     | node_state::USED
             );
         if cleanup {
-            self.cleanup_node(node_id)?;
+            // The tree cache can miss the lock create that the test
+            // (or executor) just wrote. Deleting then removes the
+            // snapshot znode out from under that holder.
+            if self.live_node_lock(node_id) && !node.has_lock {
+                if model::is_create_state(&node.state()) || node.state() == node_state::SNAPSHOT {
+                    self.wake();
+                }
+            } else {
+                self.cleanup_node(node_id)?;
+            }
         }
         if let Some(n) = self.api.nodes.get(node_id) {
             if n.state() == node_state::READY || n.state() == node_state::HOLD {
@@ -2456,6 +2465,15 @@ impl Launcher {
                 Err(e.to_string())
             }
         }
+    }
+
+    fn live_node_lock(&self, node_id: &str) -> bool {
+        let path = format!("/zuul/nodes/locks/{node_id}");
+        self.api
+            .zk
+            .get_children(&path)
+            .map(|kids| !kids.is_empty())
+            .unwrap_or(false)
     }
 
     fn cleanup_node(&mut self, node_id: &str) -> Result<(), String> {
@@ -3016,6 +3034,32 @@ impl Launcher {
         }
     }
 
+    /// One CleanupWorker pass. Tests call cleanup_worker._run() on the
+    /// Python launcher; the native process has to record unmanaged
+    /// quota before the next accept.
+    pub fn run_cleanup_now(&mut self) {
+        let shared = self.cleanup_snapshot();
+        if let Ok(mut book) = self.leaks.lock() {
+            if cloud::enabled() {
+                cleanup_pass(&mut book);
+            } else {
+                let ctx = CleanupCtx {
+                    hostname: shared.hostname,
+                    system_id: shared.system_id,
+                    components: shared.components,
+                    endpoints: shared.endpoints,
+                    nodes: shared.nodes,
+                    upload_ids: shared.upload_ids,
+                };
+                let events = native_cleanup_pass(&mut book, &ctx);
+                for event in &events {
+                    crate::statsd::emit(event);
+                }
+                self.stats.extend(events);
+            }
+        }
+    }
+
     fn cleanup_snapshot(&self) -> CleanupShared {
         let nodes = self
             .api
@@ -3259,13 +3303,15 @@ impl Launcher {
                 dependents: Vec::new(),
             };
             let delete_q = self.upload_uuids_in_delete_queue.clone();
+            let zk = self.api.zk.clone();
             pools.submit_upload(job, move |job| {
-                if !cloud::enabled() {
-                    if let (Some(provider), Some(external)) = (&delete_provider, &delete_external) {
-                        let _ = crate::native::delete_uploaded_image(provider, external);
-                    }
-                }
-                Self::run_upload_delete(&job, &delete_q);
+                Self::run_upload_delete(
+                    &job,
+                    &delete_q,
+                    delete_provider.as_deref(),
+                    delete_external.as_deref(),
+                    zk.as_ref(),
+                );
             });
         }
         // Delete ImageBuildArtifacts with no uploads left (server.py
@@ -3297,10 +3343,7 @@ impl Launcher {
             .map(|a| a.uuid())
             .collect();
         for uuid in orphan_artifacts {
-            let _ = cloud::invoke(
-                "upload.delete_artifact",
-                &json!({ "artifact_uuid": uuid }),
-            );
+            self.delete_orphan_artifact(&uuid);
         }
     }
 
@@ -3485,12 +3528,41 @@ impl Launcher {
         })
     }
 
-    fn run_upload_delete(job: &PlannedJob, queue: &Arc<Mutex<HashSet<String>>>) {
-        if cloud::enabled() {
-            let _ = cloud::invoke(
-                "upload.delete",
-                &json!({ "upload_uuid": job.upload_uuid }),
-            );
+    fn delete_orphan_artifact(&mut self, uuid: &str) {
+        let args = json!({ "artifact_uuid": uuid });
+        if crate::hooks::bridge("upload.delete_artifact", &args).is_some() {
+            self.api.artifacts.remove(uuid);
+            return;
+        }
+        let path = format!("/zuul/images/artifacts/{uuid}");
+        let _ = self.api.zk.delete(&path, true);
+        let lock_path = format!("/zuul/images/locks/{uuid}");
+        let _ = self.api.zk.delete(&lock_path, true);
+        self.api.artifacts.remove(uuid);
+    }
+
+    fn run_upload_delete(
+        job: &PlannedJob,
+        queue: &Arc<Mutex<HashSet<String>>>,
+        provider: Option<&str>,
+        external_id: Option<&str>,
+        zk: &dyn ZkOps,
+    ) {
+        // PyO3 and the test hook both delete the cloud image and the
+        // ImageUpload znode. The production binary does that itself.
+        let handled = crate::hooks::bridge(
+            "upload.delete",
+            &json!({ "upload_uuid": job.upload_uuid }),
+        )
+        .is_some();
+        if !handled {
+            if let (Some(provider), Some(external)) = (provider, external_id) {
+                let _ = crate::native::delete_uploaded_image(provider, external);
+            }
+            let path = format!("/zuul/image-uploads/uploads/{}", job.upload_uuid);
+            let _ = zk.delete(&path, true);
+            let lock_path = format!("/zuul/image-uploads/locks/{}", job.upload_uuid);
+            let _ = zk.delete(&lock_path, true);
         }
         Self::queue_discard(queue, &job.upload_uuid);
     }

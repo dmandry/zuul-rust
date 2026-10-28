@@ -281,6 +281,71 @@ def _watch_launcher_stop(launcher):
     launcher.stop = stop
 
 
+def _wrap_cleanup_run(launcher):
+    """Run the native cleanup pass when a test calls cleanup_worker._run.
+
+    Unmanaged instances are recorded there. The observer's own pass
+    only fills the Python quota cache, which the Rust process does
+    not read.
+    """
+    worker = getattr(launcher, "cleanup_worker", None)
+    if worker is None or getattr(worker._run, "_suite_cleanup", False):
+        return
+    orig = worker._run
+    host = launcher.hostname
+
+    def _run():
+        orig()
+        directory = _pass_dir()
+        path = os.path.join(directory, host + ".cleanup")
+        done = os.path.join(directory, host + ".cleanup.done")
+        try:
+            with open(path, encoding="utf-8") as handle:
+                seq = int(handle.read().strip() or "0")
+        except (OSError, ValueError):
+            seq = 0
+        seq += 1
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(str(seq))
+            handle.flush()
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            try:
+                with open(done, encoding="utf-8") as handle:
+                    got = int(handle.read().strip() or "0")
+            except (OSError, ValueError):
+                got = 0
+            if got >= seq:
+                return
+            time.sleep(0.01)
+
+    _run._suite_cleanup = True
+    worker._run = _run
+
+
+def _wrap_upload_checks(launcher):
+    """Let a direct checkMissingUploads see znodes created by the test.
+
+    The test and the observer use different ZooKeeper sessions. The
+    upload registry watch is asynchronous, and the test calls
+    checkMissingUploads immediately after ImageUpload.new.
+    """
+    if getattr(launcher.checkMissingUploads, "_suite_sync", False):
+        return
+    orig = launcher.checkMissingUploads
+
+    def check_missing_uploads(*args, **kwargs):
+        try:
+            launcher.image_upload_registry.waitForSync(timeout=5)
+            launcher.image_build_registry.waitForSync(timeout=5)
+        except Exception:
+            launcher.log.debug("upload registry sync before check", exc_info=True)
+        return orig(*args, **kwargs)
+
+    check_missing_uploads._suite_sync = True
+    launcher.checkMissingUploads = check_missing_uploads
+
+
 def _wrap_wake_wait(launcher):
     """Poll the native poke file from inside wake_event.wait.
 
@@ -724,7 +789,18 @@ def _handle_hook(msg, callback):
                     "message": result.get("message") or "hook error",
                 }
             return _hook_reply(True, result)
-        if op == "upload.sdk_run":
+        if op == "upload.sdk_run" or op in (
+            "upload.delete",
+            "upload.delete_artifact",
+            "upload.run_is_patched",
+            "upload.artifact_job",
+            "upload.fetch",
+            "upload.log",
+            "upload.notify",
+            "upload.validate_event",
+            "upload.reset_crashed",
+            "stats.timing",
+        ):
             result = _load_cloud(boot.cloud_call(launcher, op, json.dumps(args)))
             if isinstance(result, dict) and result.get("error_kind"):
                 return {
@@ -855,6 +931,8 @@ def _note_launcher(launcher):
         wrapper._suite_accept_wrapper = True
         launcher._acceptRequest = wrapper
     _HOOK_LAUNCHERS[launcher.hostname] = launcher
+    _wrap_cleanup_run(launcher)
+    _wrap_upload_checks(launcher)
 
 
 def _install_observer(launchers_path):

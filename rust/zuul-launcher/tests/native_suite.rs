@@ -231,6 +231,22 @@ fn write_wake(launcher: &Launcher, hostname: &str) {
     let _ = fs::write(path, if woke { "1" } else { "0" });
 }
 
+/// tests call launcher.cleanup_worker._run() then immediately
+/// request nodes. That has to update this process's unmanaged quota
+/// before the next accept, so the fixture writes {hostname}.cleanup.
+fn maybe_cleanup(launcher: &mut zuul_launcher::launcher::Launcher, hostname: &str) {
+    let dir = pass_dir();
+    let req = dir.join(format!("{hostname}.cleanup"));
+    let done = dir.join(format!("{hostname}.cleanup.done"));
+    let seq = read_seq(&req);
+    let finished = read_seq(&done);
+    if seq == 0 || seq <= finished {
+        return;
+    }
+    launcher.run_cleanup_now();
+    let _ = fs::write(&done, seq.to_string());
+}
+
 fn launcher_loop(
     spec: LaunchRecord,
     config_path: String,
@@ -331,6 +347,7 @@ fn launcher_loop(
             // The Python thread is in wake_event.wait. A watch that
             // sets the Rust flag has to poke that wait, or the next
             // request sits until MIN_INTERVAL.
+            maybe_cleanup(&mut launcher, &spec.hostname);
             poke_if_woken(&launcher, &spec.hostname);
             std::thread::sleep(Duration::from_millis(5));
             continue;

@@ -22,6 +22,12 @@ use std::time::Instant;
 
 static UPLOAD_SEQ: AtomicU64 = AtomicU64::new(1);
 
+fn hook_or_cloud(op: &str, args: &Value) {
+    if let Some(result) = crate::hooks::bridge(op, args) {
+        let _ = result;
+    }
+}
+
 fn new_upload_uuid() -> String {
     let n = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -186,7 +192,7 @@ pub fn run_artifact(
     let mut held: Vec<(String, HeldLock)> = Vec::new();
     let iba = acquire_lock(zk, &artifact_lock_path(artifact_uuid), hostname, false);
     let Ok(Some(iba_lock)) = iba else {
-        let _ = cloud::invoke("upload.notify", &json!({"image_updated": true, "wake": true}));
+        hook_or_cloud("upload.notify", &json!({"image_updated": true, "wake": true}));
         return;
     };
     for uuid in upload_uuids {
@@ -289,7 +295,7 @@ pub fn run_artifact(
             }
         }
     }
-    let _ = cloud::invoke("upload.notify", &json!({"wake": true}));
+    hook_or_cloud("upload.notify", &json!({"wake": true}));
 }
 
 fn release_one(zk: &dyn ZkOps, held: &mut Vec<(String, HeldLock)>, uuid: &str) {
@@ -643,7 +649,7 @@ fn finalize_one(zk: &dyn ZkOps, uuid: &str, external_id: Option<&str>) {
         );
         upload.set_state(upload_state::DELETING);
         let _ = save_upload(zk, &upload);
-        let _ = cloud::invoke(
+        hook_or_cloud(
             "upload.notify",
             &json!({"upload_deleted": true, "wake": true}),
         );
