@@ -531,8 +531,37 @@ fn call_py_value(
     Ok(func.call1(args)?.into())
 }
 
+const CLOCK_GUARD: &str = r#"
+import time
+if not getattr(time, "_zuul_clock_guard", False):
+    _real_time = time.time
+    _real_mono = time.monotonic
+    _clock = {"wall": _real_time(), "mono": _real_mono(), "offset": 0.0}
+
+    def _guarded_time():
+        wall = _real_time()
+        mono = _real_mono()
+        dwall = wall - _clock["wall"]
+        dmono = mono - _clock["mono"]
+        # Suspend and large NTP steps move CLOCK_REALTIME forward while
+        # CLOCK_MONOTONIC does not. iterate_timeout and waitUntilSettled
+        # sample time.time() after a blocking body, so a multi-minute jump
+        # expires a 10s or 90s wait even though the process was not running.
+        if dwall > dmono + 2.0:
+            _clock["offset"] -= dwall - dmono
+        _clock["wall"] = wall
+        _clock["mono"] = mono
+        return wall + _clock["offset"]
+
+    time.time = _guarded_time
+    time._zuul_clock_guard = True
+"#;
+
 #[pymodule]
 fn zuul_launcher_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Harness only. The production binary does not load this module,
+    // and the Python stestr run never imports it.
+    m.py().run_bound(CLOCK_GUARD, None, None)?;
     m.add_class::<PyLauncher>()?;
     Ok(())
 }

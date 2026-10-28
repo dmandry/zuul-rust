@@ -17,6 +17,29 @@ import shutil
 import time
 import traceback
 
+# Same guard as zuul_launcher_py. Native and bridge fixtures import this
+# module; the Python stestr run does not. A VM suspend jumps
+# CLOCK_REALTIME by minutes while CLOCK_MONOTONIC stays put, and the
+# next iterate_timeout / waitUntilSettled sample then raises.
+if not getattr(time, "_zuul_clock_guard", False):
+    _real_time = time.time
+    _real_mono = time.monotonic
+    _clock = {"wall": _real_time(), "mono": _real_mono(), "offset": 0.0}
+
+    def _guarded_time():
+        wall = _real_time()
+        mono = _real_mono()
+        dwall = wall - _clock["wall"]
+        dmono = mono - _clock["mono"]
+        if dwall > dmono + 2.0:
+            _clock["offset"] -= dwall - dmono
+        _clock["wall"] = wall
+        _clock["mono"] = mono
+        return wall + _clock["offset"]
+
+    time.time = _guarded_time
+    time._zuul_clock_guard = True
+
 _CHECKS = []
 
 
