@@ -133,7 +133,15 @@ CMD ["/usr/local/bin/zuul-executor", "-f"]
 FROM zuul AS zuul-fingergw
 CMD ["/usr/local/bin/zuul-fingergw", "-f"]
 
+# Rust 1.83 matches the compiler this launcher was written against.
+# Only the zuul-launcher image replaces the Python entrypoint.
+FROM rust:1.83-bookworm AS rust-builder
+WORKDIR /build
+COPY rust/zuul-launcher /build/zuul-launcher
+RUN cargo build --release --locked --manifest-path /build/zuul-launcher/Cargo.toml
+
 FROM zuul AS zuul-launcher
+COPY --from=rust-builder /build/zuul-launcher/target/release/zuul-launcher /usr/local/bin/zuul-launcher
 CMD ["/usr/local/bin/zuul-launcher", "-f"]
 
 FROM zuul AS zuul-merger

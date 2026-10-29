@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.4,<1.8"]
+build-backend = "maturin"
+
+[project]
+name = "zuul-launcher-py"
+version = "14.3.0"
+description = "PyO3 test harness for the Rust zuul-launcher"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+
+[tool.maturin]
+module-name = "zuul_launcher_py"
+features = ["pyo3/extension-module"]

@@ -1255,7 +1255,16 @@ class TestScheduler(zuul.scheduler.Scheduler):
     _launcher_client_class = HoldableLauncherClient
 
 
-class TestLauncher(zuul.launcher.server.Launcher):
+def _launcher_base():
+    # Opt-in only. The default test run keeps using the Python launcher
+    # in zuul.launcher.server, which this branch does not modify.
+    if os.environ.get('ZUUL_LAUNCHER_IMPL') == 'rust':
+        import zuul_launcher_py
+        return zuul_launcher_py.Launcher
+    return zuul.launcher.server.Launcher
+
+
+class TestLauncher(_launcher_base()):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self._test_lock = threading.Lock()
@@ -2696,7 +2705,17 @@ class ZuulTestCase(BaseTestCase):
         launcher._start_cleanup = False
         launcher._stats_interval = 1
         launcher.start()
+        # The Rust swap is opt-in. Tests that build a second launcher stop
+        # it themselves only on the success path; a timeout before that
+        # leaves a non-daemon thread behind and the worker cannot exit.
+        # Cleanups run even when the test fails. stop/join are idempotent.
+        if os.environ.get('ZUUL_LAUNCHER_IMPL') == 'rust':
+            self.addCleanup(self._stopLauncher, launcher)
         return launcher
+
+    def _stopLauncher(self, launcher):
+        launcher.stop()
+        launcher.join()
 
     def createZKContext(self, lock=None):
         if lock is None:

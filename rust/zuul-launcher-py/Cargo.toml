@@ -1,0 +1,29 @@
+# Copyright 2026 Acme Gating, LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+
+[package]
+name = "zuul-launcher-py"
+version = "14.3.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "PyO3 test harness that exposes the Rust zuul-launcher"
+
+[lib]
+name = "zuul_launcher_py"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+# extension-module is enabled by maturin (see pyproject.toml), not here,
+# so `cargo test` can link against libpython.
+pyo3 = "=0.22.6"
+zuul-launcher = { path = "../zuul-launcher" }
+
+[dev-dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
