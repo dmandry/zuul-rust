@@ -3520,13 +3520,18 @@ def _node_cache_refresh(launcher, data):
     The object is updated in place by the watch, which can land after
     the test has already taken _test_lock and saved. ZnodeStat is a
     namedtuple, so replace it. No ZooKeeper read: the version is the
-    one write_node just stored. A locked object is the test's own
-    activeContext.
+    one write_node just stored.
+
+    Still update a locked node: the launcher holds the create lock
+    while it writes create_state, and that is the BadVersion race in
+    test_failed_node_reassignment. write_node only runs from a
+    launcher pass, and the test's activeContext is under _test_lock,
+    so this cannot interleave with the test's own save.
     """
     uuid = data.get("uuid")
     version = data.get("version")
     node = launcher.api.nodes_cache.getItem(uuid)
-    if node is None or version is None or getattr(node, "lock", None) is not None:
+    if node is None or version is None:
         return {"ok": True}
     stat = getattr(node, "_zstat", None)
     if stat is None:
