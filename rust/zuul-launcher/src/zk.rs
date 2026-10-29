@@ -1072,6 +1072,11 @@ pub struct LauncherApi {
     pub tenant_label_used: HashMap<(String, String), i64>,
     pub ready: bool,
     pub max_zxid: i64,
+    /// Cache insertion order. `sorted(nodes)` is stable and
+    /// ProviderNode.__lt__ only compares request_time, so equal
+    /// timestamps keep the order the cache first saw the node.
+    node_ordinal: HashMap<String, u64>,
+    node_ordinal_next: u64,
     /// Contender payloads kept so a lock-child watch updates the holder
     /// with one `get`, the way `LockableZKObjectCache.preCacheHook` does.
     node_locks: HashMap<String, BTreeMap<String, Vec<u8>>>,
@@ -1113,6 +1118,8 @@ impl LauncherApi {
             tenant_label_used: HashMap::new(),
             ready: false,
             max_zxid: 0,
+            node_ordinal: HashMap::new(),
+            node_ordinal_next: 0,
             node_locks: HashMap::new(),
             upload_locks: HashMap::new(),
             request_wire: HashMap::new(),
@@ -1474,6 +1481,7 @@ impl LauncherApi {
                 self.node_wire
                     .insert(id.clone(), encode_polymorphic(&node.driver_id, &node.serialize()));
                 self.index_node(&id, &node);
+                self.remember_node(&id);
                 self.nodes.insert(id, node);
                 self.max_zxid = self.max_zxid.max(stat.mzxid);
             }
@@ -1822,6 +1830,7 @@ impl LauncherApi {
             }
             self.node_wire
                 .insert(id.to_string(), encode_polymorphic(&node.driver_id, &node.serialize()));
+            self.remember_node(id);
             self.nodes.insert(id.to_string(), node);
             return true;
         }
@@ -2260,15 +2269,32 @@ impl LauncherApi {
         matched
     }
 
+    /// First time this cache sees a node id. Later updates keep the
+    /// original position so a stable sort matches Python.
+    fn remember_node(&mut self, id: &str) {
+        if self.node_ordinal.contains_key(id) {
+            return;
+        }
+        let n = self.node_ordinal_next;
+        self.node_ordinal_next = n.wrapping_add(1);
+        self.node_ordinal.insert(id.to_string(), n);
+    }
+
     pub fn get_matching_nodes(&mut self) -> Vec<String> {
         let mut ids: Vec<String> = self.nodes.keys().cloned().collect();
         ids.sort_by(|a, b| {
             let na = &self.nodes[a];
             let nb = &self.nodes[b];
-            na.request_time()
+            let by_time = na
+                .request_time()
                 .partial_cmp(&nb.request_time())
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.cmp(b))
+                .unwrap_or(std::cmp::Ordering::Equal);
+            if by_time != std::cmp::Ordering::Equal {
+                return by_time;
+            }
+            let oa = self.node_ordinal.get(a).copied().unwrap_or(u64::MAX);
+            let ob = self.node_ordinal.get(b).copied().unwrap_or(u64::MAX);
+            oa.cmp(&ob)
         });
         let all = self.components.clone();
         let mut matched = Vec::new();
@@ -2458,6 +2484,7 @@ impl LauncherApi {
             if stored.zk_version.is_none() {
                 stored.zk_version = self.nodes.get(&id).and_then(|n| n.zk_version);
             }
+            self.remember_node(&id);
             self.nodes.insert(id, stored);
             return Ok(());
         }
@@ -2473,6 +2500,7 @@ impl LauncherApi {
         let mut stored = node.clone();
         stored.zk_version = Some(new_version as i64);
         self.node_wire.insert(id.clone(), bytes);
+        self.remember_node(&id);
         self.nodes.insert(id, stored);
         self.reindex();
         Ok(())

@@ -772,6 +772,44 @@ impl NodescanWorker {
         }
     }
 
+    /// One iteration of NodescanWorker.run, including the skip that
+    /// follows removeRequest inside the list iterator.
+    ///
+    /// Called once per launcher pass, before _processRequests. A scan
+    /// submitted during this pass is not advanced until the next one,
+    /// which is what the GIL gives the Python worker: it cannot run
+    /// while _processNodes holds the interpreter.
+    pub fn drive_once(&mut self) {
+        // Completed requests stay in the vec. Python's worker drops them
+        // from _active_requests, but the launcher still holds the
+        // NodescanRequest and reads .complete. Removing here would make
+        // the next _checkNodescanRequest submit a new scan.
+        let mut index = 0;
+        let mut skip_next = false;
+        while index < self.requests.len() {
+            if skip_next {
+                skip_next = false;
+                index += 1;
+                continue;
+            }
+            if self.requests[index].complete || self.requests[index].use_io_hook {
+                index += 1;
+                continue;
+            }
+            let ready = self.requests[index]
+                .conn
+                .as_ref()
+                .map(|conn| conn.ready)
+                .unwrap_or(false);
+            self.requests[index].advance(ready);
+            if self.requests[index].complete {
+                // removeRequest during list iteration skips the next item.
+                skip_next = true;
+            }
+            index += 1;
+        }
+    }
+
     pub fn get(&self, uuid: &str) -> Option<&NodescanRequest> {
         self.requests.iter().find(|r| r.uuid == uuid)
     }

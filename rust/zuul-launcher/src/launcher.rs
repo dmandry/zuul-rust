@@ -354,6 +354,11 @@ impl Launcher {
     /// the PyO3 harness can publish layout state in between, matching
     /// `_run` setting component state before `_processRequests`.
     pub fn process_once(&mut self) {
+        // One NodescanWorker iteration before _processRequests. Scans
+        // queued on the previous pass can complete here; _checkRequest
+        // still sees the node state from before this pass's
+        // _processNodes applies that result.
+        self.nodescan.drive_once();
         // Python reads time.time() on each pass. Logic tests that call
         // process_provider_node directly keep an injected clock.
         self.now = model::now_secs();
@@ -985,6 +990,38 @@ impl Launcher {
         );
     }
 
+    /// Per-pass _checkRequest snapshot for the pass-order test.
+    /// Compiled only with test-hooks, and only writes when
+    /// ZUUL_PASS_TRACE is set.
+    #[cfg(feature = "test-hooks")]
+    fn trace_request_check(&self, request: &NodesetRequest) {
+        let Ok(path) = std::env::var("ZUUL_PASS_TRACE") else {
+            return;
+        };
+        if path.is_empty() {
+            return;
+        }
+        let ids = request.nodes();
+        let slots: Vec<Value> = ids
+            .iter()
+            .filter_map(|id| {
+                let node = self.api.nodes.get(id)?;
+                Some(json!({
+                    "state": node.state(),
+                    "provider": node.provider(),
+                }))
+            })
+            .collect();
+        if slots.len() != ids.len() {
+            return;
+        }
+        let line = json!({ "slots": slots }).to_string();
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            use std::io::Write;
+            let _ = writeln!(file, "{line}");
+        }
+    }
+
     fn check_request(&mut self, request: &NodesetRequest, unassigned: &HashMap<String, Vec<String>>) {
         let ids = request.nodes();
         if ids.is_empty() {
@@ -995,6 +1032,8 @@ impl Launcher {
                 return;
             }
         }
+        #[cfg(feature = "test-hooks")]
+        self.trace_request_check(request);
         // server.py _checkRequest: if ANY node is in FAILED_STATES, re-select
         // providers for every slot. Retry failed/HOLD nodes and also READY
         // nodes whose provider no longer matches (locality shift).
@@ -2033,30 +2072,13 @@ impl Launcher {
     }
 
     pub fn process_nodes(&mut self) {
+        // _processNodes walks every matching node. A sibling that is
+        // still building stays that way because its create future has
+        // not finished, not because this loop returns early.
         let ids = self.matching_ids("matching_nodes");
         for id in ids {
-            let before = self.api.nodes.get(&id).map(|n| n.state()).unwrap_or_default();
             if let Err(e) = self.process_provider_node(&id) {
                 self.messages.push(format!("node {id}: {e}"));
-            }
-            let Some(node) = self.api.nodes.get(&id) else {
-                continue;
-            };
-            let after = node.state();
-            // Stop after the first node that newly failed. The next
-            // pass's _checkRequest then still sees the sibling in its
-            // previous state and keeps the same provider until
-            // launch-attempts is exhausted. Applying every completed
-            // scan in one pass drops that anchor: both slots look
-            // failed, quota sort picks the other region, and the
-            // successful attempt is never left unattached.
-            // A slot host's subnodes also have to stay in the cache
-            // until the following pass.
-            if before != after
-                && matches!(after.as_str(), node_state::FAILED | node_state::TEMPFAILED)
-            {
-                self.wake();
-                break;
             }
         }
     }
@@ -2582,9 +2604,9 @@ impl Launcher {
                 std::thread::sleep(Duration::from_millis(20));
             }
         } else {
-            // Drive once so an immediate (host-key-checking off) scan can
-            // finish inside this call, matching a worker that is already polling.
-            self.nodescan.poll();
+            // The worker advances this request on a later pass. Completing
+            // it inside the call that submitted it would apply the result
+            // before the next _checkRequest.
         }
         let Some(scan) = self.nodescan.get(node_id) else {
             return Ok(false);
@@ -3102,6 +3124,19 @@ impl Launcher {
             v
         } else {
             false
+        }
+    }
+
+    /// One Launcher._runStats pass, emitted on the Rust statsd socket.
+    /// The native suite calls this when the test calls `_runStats`,
+    /// instead of the observer's Python StatsClient.
+    pub fn run_stats_now(&mut self) {
+        self.refresh_worker_shared();
+        let snap = self.build_stats_snapshot();
+        let events = emit_run_stats(&snap);
+        for event in events {
+            crate::statsd::emit(&event);
+            self.stats.push(event);
         }
     }
 

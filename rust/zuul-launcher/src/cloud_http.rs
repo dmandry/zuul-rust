@@ -835,6 +835,9 @@ impl RateLimiter {
     }
 
     pub fn enter(&self) -> f64 {
+        // Hold the lock across the sleep. Python's RateLimiter._enter
+        // does the same, so a second mutating call stays inside its
+        // future until the interval has elapsed.
         let mut last = self.last.lock().unwrap();
         if last.is_none() {
             *last = Some(Instant::now());
@@ -849,10 +852,8 @@ impl RateLimiter {
                 break;
             }
             let delay = self.delta - elapsed;
-            drop(last);
             std::thread::sleep(delay);
             total += delay;
-            last = self.last.lock().unwrap();
         }
         *last = Some(Instant::now());
         total.as_secs_f64()

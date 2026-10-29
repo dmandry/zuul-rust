@@ -95,7 +95,7 @@ pub struct Flavor {
     pub raw: Value,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum AdvanceError {
     Quota(String),
     Capacity(String),

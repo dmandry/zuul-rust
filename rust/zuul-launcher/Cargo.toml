@@ -38,6 +38,10 @@ test-hooks = []
 name = "native_suite"
 required-features = ["test-hooks"]
 
+[[test]]
+name = "pass_order"
+required-features = ["test-hooks"]
+
 [workspace]
 
 [dependencies]

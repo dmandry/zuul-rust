@@ -21,7 +21,7 @@ use base64::Engine;
 use indexmap::IndexMap;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex, Once};
 use std::time::{Duration, Instant};
 
 const EC2_VERSION: &str = "2016-11-15";
@@ -34,6 +34,10 @@ struct Registry {
     connections: BTreeMap<String, ConnectionConfig>,
     providers: BTreeMap<String, ProviderSnap>,
     futures: BTreeMap<String, FutureJob>,
+    /// In-flight RunInstances calls. The worker thread stores the
+    /// outcome; complete returns null until that happens, matching
+    /// AwsCreateStateMachine._completeCreateInstance.
+    creates: BTreeMap<String, Arc<CreateInflight>>,
     aws: BTreeMap<String, Arc<AwsEndpoint>>,
     azure_tokens: BTreeMap<String, AzureToken>,
     os_tokens: BTreeMap<String, OsToken>,
@@ -76,8 +80,13 @@ struct PortBook {
 struct FutureJob {
     #[allow(dead_code)]
     kind: String,
+    #[allow(dead_code)]
     provider: String,
     payload: Value,
+}
+
+struct CreateInflight {
+    outcome: Mutex<Option<std::result::Result<Value, AdvanceError>>>,
 }
 
 #[derive(Clone)]
@@ -112,6 +121,10 @@ struct AwsEndpoint {
     mutating: RateLimiter,
     reading: RateLimiter,
     quota_limit: RateLimiter,
+    /// DescribeInstanceTypes results. getQuotaForLabel reads this and
+    /// does not call AWS; a miss fills it once, the way
+    /// refreshQuotaForLabel does.
+    instance_types: Mutex<BTreeMap<String, Value>>,
     lists: Mutex<BTreeMap<String, CachedList>>,
     not_our_images: Mutex<HashSet<String>>,
     not_our_snapshots: Mutex<HashSet<String>>,
@@ -130,6 +143,7 @@ fn registry() -> &'static Mutex<Registry> {
             connections: BTreeMap::new(),
             providers: BTreeMap::new(),
             futures: BTreeMap::new(),
+            creates: BTreeMap::new(),
             aws: BTreeMap::new(),
             azure_tokens: BTreeMap::new(),
             os_tokens: BTreeMap::new(),
@@ -220,6 +234,7 @@ pub fn reset_endpoint_runtime() {
     reg.unmanaged.clear();
     reg.ports.clear();
     reg.futures.clear();
+    reg.creates.clear();
     reg.extras.clear();
     reg.os_tokens.clear();
     reg.azure_tokens.clear();
@@ -337,7 +352,7 @@ pub fn invoke(op: &str, args: &Value) -> Result<Value, AdvanceError> {
     match op {
         "ep.refresh" => refresh_any(args),
         "ep.refresh_delete" => refresh_delete_any(args),
-        "ep.submit_create_instance" => submit("aws-create", args),
+        "ep.submit_create_instance" => submit_aws_create(args),
         "ep.complete_create_instance" => complete_aws_create(args),
         "ep.submit_allocate_host" => submit("aws-host", args),
         "ep.complete_allocate_host" => complete_aws_host(args),
@@ -845,6 +860,7 @@ fn aws_endpoint(provider: &ProviderSnap) -> Result<Arc<AwsEndpoint>, AdvanceErro
         mutating: RateLimiter::new(rate),
         reading: RateLimiter::new(rate * 10.0),
         quota_limit: RateLimiter::new(rate),
+        instance_types: Mutex::new(BTreeMap::new()),
         lists: Mutex::new(BTreeMap::new()),
         not_our_images: Mutex::new(HashSet::new()),
         not_our_snapshots: Mutex::new(HashSet::new()),
@@ -1237,6 +1253,10 @@ fn aws_refresh_delete(args: &Value) -> Result<Value, AdvanceError> {
         return Ok(json!({"obj": null}));
     }
     if let Some(id) = obj.get("InstanceId").and_then(|v| v.as_str()) {
+        // _refreshDelete calls _listInstances, which is not the 10s
+        // list cache. A stale "running" entry would keep the delete
+        // machine open long after TerminateInstances.
+        ep.lists.lock().unwrap().remove("instances");
         for instance in list_instances(&ep)? {
             if instance.get("InstanceId").and_then(|v| v.as_str()) == Some(id) {
                 let state = instance.pointer("/State/Name").and_then(|v| v.as_str()).unwrap_or("");
@@ -1275,39 +1295,88 @@ fn label_flavor_image(snap: &ProviderSnap, label_name: &str) -> Result<(Value, V
     Ok((label, flavor, image))
 }
 
-fn complete_aws_create(args: &Value) -> Result<Value, AdvanceError> {
-    let job = take_future(args)?;
-    let snap = {
-        let mut lookup = job.payload.clone();
-        if lookup.get("provider").is_none() {
-            lookup["provider"] = json!(job.provider);
-        }
-        provider_of(&lookup)?
-    };
+fn submit_aws_create(args: &Value) -> Result<Value, AdvanceError> {
+    let id = new_id();
+    let inflight = Arc::new(CreateInflight {
+        outcome: Mutex::new(None),
+    });
+    let provider = args
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let payload = args.clone();
+    registry()
+        .lock()
+        .unwrap()
+        .creates
+        .insert(id.clone(), inflight.clone());
+    let worker = inflight.clone();
+    std::thread::Builder::new()
+        .name("Thread-aws-create".into())
+        .spawn(move || {
+            let result = run_aws_create(&provider, &payload);
+            if let Ok(mut slot) = worker.outcome.lock() {
+                *slot = Some(result);
+            }
+        })
+        .map_err(|err| AdvanceError::Other(format!("create thread: {err}")))?;
+    Ok(json!({"future_id": id}))
+}
+
+/// RunInstances on the create thread. The connection rate limiter sleeps
+/// here, off the launcher thread, the way boto's executor does.
+fn run_aws_create(provider: &str, payload: &Value) -> Result<Value, AdvanceError> {
+    let mut lookup = payload.clone();
+    if lookup.get("provider").is_none() {
+        lookup["provider"] = json!(provider);
+    }
+    let snap = provider_of(&lookup)?;
     let ep = aws_endpoint(&snap)?;
-    let label_name = field_str(&job.payload, &["label"]).unwrap_or_default();
+    let label_name = field_str(payload, &["label"]).unwrap_or_default();
     let (label, flavor, image) = label_flavor_image(&snap, &label_name)?;
-    let image_id = if let Some(id) = field_str(&job.payload, &["image_external_id"]) {
+    let image_id = if let Some(id) = field_str(payload, &["image_external_id"]) {
         id
     } else if let Some(filters) = field(&image, &["image-filters", "image_filters"]) {
         latest_image_id(&ep, filters)?
     } else {
         field_str(&image, &["image-id", "image_id"]).unwrap_or_default()
     };
-    let tags = job.payload.get("tags").cloned().unwrap_or(json!({}));
-    let hostname = field_str(&job.payload, &["hostname"]).unwrap_or_default();
-    let host_id = field_str(&job.payload, &["dedicated_host_id"]);
-    let instance = run_instances(
+    let tags = payload.get("tags").cloned().unwrap_or(json!({}));
+    let hostname = field_str(payload, &["hostname"]).unwrap_or_default();
+    let host_id = field_str(payload, &["dedicated_host_id"]);
+    run_instances(
         &ep,
-        &job.provider,
+        provider,
         &label,
         &flavor,
         &image_id,
         &tags,
         &hostname,
         host_id.as_deref(),
-    )?;
-    Ok(json!({"instance": instance}))
+    )
+}
+
+fn complete_aws_create(args: &Value) -> Result<Value, AdvanceError> {
+    let id = args
+        .get("future_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AdvanceError::Other("missing future_id".into()))?;
+    let inflight = registry().lock().unwrap().creates.get(id).cloned();
+    let Some(inflight) = inflight else {
+        return Err(AdvanceError::Other(format!("unknown future {id}")));
+    };
+    let outcome = inflight.outcome.lock().unwrap().clone();
+    match outcome {
+        None => Ok(json!({"instance": Value::Null})),
+        Some(result) => {
+            registry().lock().unwrap().creates.remove(id);
+            match result {
+                Ok(instance) => Ok(json!({"instance": instance})),
+                Err(err) => Err(err),
+            }
+        }
+    }
 }
 
 fn tag_list(tags: &Value) -> Value {
@@ -1536,16 +1605,107 @@ fn complete_aws_host(args: &Value) -> Result<Value, AdvanceError> {
     Ok(json!({"host": {"HostId": host_id, "State": "pending"}}))
 }
 
+struct PendingDelete {
+    ep: Arc<AwsEndpoint>,
+    id: String,
+}
+
+fn pending_deletes() -> &'static (Mutex<Vec<PendingDelete>>, Condvar) {
+    static QUEUE: std::sync::OnceLock<(Mutex<Vec<PendingDelete>>, Condvar)> =
+        std::sync::OnceLock::new();
+    QUEUE.get_or_init(|| (Mutex::new(Vec::new()), Condvar::new()))
+}
+
+fn ensure_delete_thread() {
+    static START: Once = Once::new();
+    START.call_once(|| {
+        let _ = std::thread::Builder::new()
+            .name("Thread-aws-delete".into())
+            .spawn(aws_delete_thread);
+    });
+}
+
+/// AwsProviderEndpoint._deleteThread. TerminateInstances runs here, on
+/// the mutating rate limiter, not on the launcher thread.
+fn aws_delete_thread() {
+    loop {
+        let batch = {
+            let (lock, cv) = pending_deletes();
+            let mut guard = match lock.lock() {
+                Ok(guard) => guard,
+                Err(err) => err.into_inner(),
+            };
+            while guard.is_empty() {
+                guard = match cv.wait(guard) {
+                    Ok(guard) => guard,
+                    Err(err) => err.into_inner(),
+                };
+            }
+            let n = guard.len().min(50);
+            guard.drain(..n).collect::<Vec<_>>()
+        };
+        let mut rest = batch;
+        while !rest.is_empty() {
+            let ptr = Arc::as_ptr(&rest[0].ep);
+            let ep = rest[0].ep.clone();
+            let mut ids = Vec::new();
+            let mut keep = Vec::new();
+            for item in rest {
+                if Arc::as_ptr(&item.ep) == ptr && ids.len() < 50 {
+                    ids.push(item.id);
+                } else {
+                    keep.push(item);
+                }
+            }
+            rest = keep;
+            let mut params = Map::new();
+            params.insert("InstanceId".into(), json!(ids));
+            params.insert("SkipOsShutdown".into(), json!(true));
+            if ec2(&ep, "TerminateInstances", params, false).is_ok() {
+                ep.lists.lock().unwrap().remove("instances");
+            }
+        }
+    }
+}
+
 fn aws_delete_instance(args: &Value) -> Result<Value, AdvanceError> {
     let snap = provider_of(args)?;
     let ep = aws_endpoint(&snap)?;
     let id = args.get("instance_id").and_then(|v| v.as_str()).unwrap_or("");
-    let mut params = Map::new();
-    params.insert("InstanceId".into(), json!([id]));
-    params.insert("SkipOsShutdown".into(), json!(true));
-    ec2(&ep, "TerminateInstances", params, false)?;
-    ep.lists.lock().unwrap().remove("instances");
-    Ok(json!({"instance": {"InstanceId": id, "State": {"Name": "shutting-down"}}}))
+    if id.is_empty() {
+        return Ok(json!({"instance": Value::Null}));
+    }
+    // _deleteInstance finds the instance, then queues the terminate.
+    // The default path is not immediate, so this returns before the
+    // mutating rate limiter runs.
+    let mut instances = list_instances(&ep)?;
+    if !instances
+        .iter()
+        .any(|inst| inst.get("InstanceId").and_then(|v| v.as_str()) == Some(id))
+    {
+        ep.lists.lock().unwrap().remove("instances");
+        instances = list_instances(&ep)?;
+    }
+    let Some(instance) = instances
+        .into_iter()
+        .find(|inst| inst.get("InstanceId").and_then(|v| v.as_str()) == Some(id))
+    else {
+        return Ok(json!({"instance": Value::Null}));
+    };
+    ensure_delete_thread();
+    let (lock, cv) = pending_deletes();
+    match lock.lock() {
+        Ok(mut guard) => guard.push(PendingDelete {
+            ep,
+            id: id.to_string(),
+        }),
+        Err(err) => err.into_inner().push(PendingDelete {
+            ep,
+            id: id.to_string(),
+        }),
+    }
+    cv.notify_one();
+    Ok(json!({"instance": instance}))
 }
 
 fn aws_release_host(args: &Value) -> Result<Value, AdvanceError> {
@@ -1619,11 +1779,35 @@ fn aws_quota(snap: &ProviderSnap, args: &Value) -> Result<Value, AdvanceError> {
     } else if fleet && args.get("instance_type").and_then(|v| v.as_str()).is_none() {
         quota.insert("instances".into(), json!(1));
     } else {
-        let mut params = Map::new();
-        params.insert("InstanceType".into(), json!([instance_type.clone()]));
-        ep.quota_limit.enter();
-        let resp = ec2(&ep, "DescribeInstanceTypes", params, true)?;
-        let info = resp.pointer("/InstanceTypes/0").cloned().unwrap_or(Value::Null);
+        // getQuotaForLabel uses the quota cache. The DescribeInstanceTypes
+        // fetch is refreshQuotaForLabel, and only the non-mutating limiter
+        // applies (_getInstanceType). Repeating it on the launcher thread
+        // with the quota limiter would stall the pass until a sibling
+        // create future finished.
+        let info = {
+            let cached = ep
+                .instance_types
+                .lock()
+                .unwrap()
+                .get(&instance_type)
+                .cloned();
+            if let Some(info) = cached {
+                info
+            } else {
+                let mut params = Map::new();
+                params.insert("InstanceType".into(), json!([instance_type.clone()]));
+                let resp = ec2(&ep, "DescribeInstanceTypes", params, true)?;
+                let info = resp
+                    .pointer("/InstanceTypes/0")
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                ep.instance_types
+                    .lock()
+                    .unwrap()
+                    .insert(instance_type.clone(), info.clone());
+                info
+            }
+        };
         let cores = info.pointer("/VCpuInfo/DefaultCores").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let vcpus = info.pointer("/VCpuInfo/DefaultVCpus").and_then(|v| v.as_f64()).unwrap_or(cores);
         let ram = info.pointer("/MemoryInfo/SizeInMiB").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -3107,6 +3291,26 @@ mod tests {
         LOCK.get_or_init(|| StdMutex::new(()))
     }
 
+    /// RunInstances now finishes on a worker thread. Poll the way the
+    /// state machine does until the future is done.
+    fn await_aws_instance(future_id: &Value) -> Value {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let done = invoke(
+                "ep.complete_create_instance",
+                &json!({ "future_id": future_id }),
+            )
+            .unwrap_or_else(|err| panic!("create: {err}"));
+            if !done.get("instance").map(|v| v.is_null()).unwrap_or(true) {
+                return done;
+            }
+            if std::time::Instant::now() > deadline {
+                panic!("create future still pending: {future_id}");
+            }
+            thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
     fn content_length(header: &str) -> usize {
         header
             .lines()
@@ -3229,11 +3433,7 @@ mod tests {
             &json!({"provider": "tenant/aws-main", "label": "debian", "hostname": "npabc", "tags": {"Name": "npabc", "zuul_node_uuid": "u1"}}),
         )
         .unwrap();
-        let done = invoke(
-            "ep.complete_create_instance",
-            &json!({"provider": "tenant/aws-main", "future_id": submitted["future_id"]}),
-        )
-        .unwrap();
+        let done = await_aws_instance(&submitted["future_id"]);
         assert_eq!(done["instance"]["InstanceId"], "i-from-mock");
         assert_eq!(done["instance"]["State"]["Name"], "pending");
     }
@@ -3718,11 +3918,7 @@ mod tests {
             &json!({"provider": "tenant/fleet", "label": "debian", "hostname": "npf", "tags": {"Name": "npf"}}),
         )
         .unwrap();
-        let done = invoke(
-            "ep.complete_create_instance",
-            &json!({"provider": "tenant/fleet", "future_id": submitted["future_id"]}),
-        )
-        .unwrap();
+        let done = await_aws_instance(&submitted["future_id"]);
         assert_eq!(done["instance"]["InstanceId"], "i-fleet");
         assert!(seen.lock().unwrap().contains("zuul_system_id"));
         assert!(seen.lock().unwrap().contains("sys-1"));
@@ -4206,11 +4402,7 @@ mod tests {
             }),
         )
         .unwrap();
-        let done = invoke(
-            "ep.complete_create_instance",
-            &json!({"provider": "tenant/moto", "future_id": submitted["future_id"]}),
-        );
-        let done = done.expect("moto RunInstances");
+        let done = await_aws_instance(&submitted["future_id"]);
         let id = done["instance"]["InstanceId"].as_str().unwrap_or("").to_string();
         assert!(id.starts_with('i'), "{done}");
         let snap = provider_by_name("tenant/moto").unwrap();

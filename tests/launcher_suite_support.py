@@ -14,6 +14,7 @@ import json
 import math
 import os
 import shutil
+import threading
 import time
 import traceback
 
@@ -282,6 +283,99 @@ def _pass_dir():
     return path
 
 
+class _PassLink:
+    """Blocking unix socket to one native launcher thread.
+
+    The reader is named Thread- so shutdown's thread check ignores it.
+    poke and a done message with wake set the launcher's wake_event,
+    which is what server.Launcher.run waits on.
+    """
+
+    def __init__(self, path, launcher):
+        import socket as socket_mod
+
+        self.launcher = launcher
+        self.sock = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
+        self.sock.connect(path)
+        self.lock = threading.Lock()
+        self.cv = threading.Condition(self.lock)
+        self.pending = {}
+        self.seq = 0
+        thread = threading.Thread(
+            target=self._read, name="Thread-native-pass", daemon=True
+        )
+        thread.start()
+
+    def request(self, op, reply, timeout=30):
+        with self.lock:
+            self.seq += 1
+            seq = self.seq
+            self.pending[(reply, seq)] = False
+            payload = (json.dumps({"op": op, "seq": seq}) + "\n").encode()
+            self.sock.sendall(payload)
+            deadline = time.monotonic() + timeout
+            while not self.pending.get((reply, seq)):
+                remain = deadline - time.monotonic()
+                if remain <= 0:
+                    raise TimeoutError(op)
+                self.cv.wait(remain)
+            self.pending.pop((reply, seq), None)
+
+    def send_stop(self):
+        try:
+            with self.lock:
+                self.sock.sendall(b'{"op":"stop"}\n')
+        except OSError:
+            pass
+
+    def _read(self):
+        buf = b""
+        while True:
+            try:
+                chunk = self.sock.recv(4096)
+            except OSError:
+                return
+            if not chunk:
+                return
+            buf += chunk
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                if not line.strip():
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                op = msg.get("op")
+                if op == "poke" or (op == "done" and msg.get("wake")):
+                    self.launcher.wake_event.set()
+                if op in ("done", "cleanup_done", "stats_done"):
+                    with self.cv:
+                        self.pending[(op, msg.get("seq"))] = True
+                        self.cv.notify_all()
+
+
+def _ensure_link(launcher):
+    link = getattr(launcher, "_pass_link", None)
+    if link is not None:
+        return link
+    directory = _pass_dir()
+    ready = os.path.join(directory, launcher.hostname + ".ready")
+    if not os.path.exists(ready):
+        return None
+    # The listener is bound before the ready file is written, so a
+    # missing socket means the native thread has already exited.
+    path = os.path.join(directory, launcher.hostname + ".sock")
+    if not os.path.exists(path):
+        return None
+    try:
+        link = _PassLink(path, launcher)
+    except OSError:
+        return None
+    launcher._pass_link = link
+    return link
+
+
 def _watch_launcher_stop(launcher):
     """Tell the native thread this launcher was stopped.
 
@@ -293,6 +387,9 @@ def _watch_launcher_stop(launcher):
     host = launcher.hostname
 
     def stop():
+        link = getattr(launcher, "_pass_link", None)
+        if link is not None:
+            link.send_stop()
         try:
             path = os.path.join(_pass_dir(), host + ".stop")
             with open(path, "w", encoding="utf-8") as handle:
@@ -315,32 +412,19 @@ def _wrap_cleanup_run(launcher):
     if worker is None or getattr(worker._run, "_suite_cleanup", False):
         return
     orig = worker._run
-    host = launcher.hostname
 
     def _run():
         orig()
-        directory = _pass_dir()
-        path = os.path.join(directory, host + ".cleanup")
-        done = os.path.join(directory, host + ".cleanup.done")
+        link = _ensure_link(launcher)
+        if link is None:
+            return
         try:
-            with open(path, encoding="utf-8") as handle:
-                seq = int(handle.read().strip() or "0")
-        except (OSError, ValueError):
-            seq = 0
-        seq += 1
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write(str(seq))
-            handle.flush()
-        deadline = time.time() + 30
-        while time.time() < deadline:
-            try:
-                with open(done, encoding="utf-8") as handle:
-                    got = int(handle.read().strip() or "0")
-            except (OSError, ValueError):
-                got = 0
-            if got >= seq:
-                return
-            time.sleep(0.01)
+            link.request("cleanup", "cleanup_done")
+        except TimeoutError:
+            launcher.log.warning("native cleanup timed out")
+        except Exception as exc:
+            launcher._pass_link = None
+            launcher.log.warning("native cleanup socket closed: %s", exc)
 
     _run._suite_cleanup = True
     worker._run = _run
@@ -385,63 +469,6 @@ def _wrap_upload_checks(launcher):
     launcher.checkMissingUploads = check_missing_uploads
 
 
-def _wrap_wake_wait(launcher):
-    """Poll the native poke file from inside wake_event.wait.
-
-    server.Launcher.run waits on this event for MIN_INTERVAL. The Rust
-    playback thread cannot set it. Replacing wait keeps the launcher
-    thread count the same, which shutdown checks.
-    """
-    event = launcher.wake_event
-    orig = event.wait
-    host = launcher.hostname
-
-    def wait(timeout=None):
-        if orig(0):
-            return True
-        deadline = None if timeout is None else time.monotonic() + timeout
-        poke = os.path.join(_pass_dir(), host + ".poke")
-        # A pass that outlives _drive_native_pass's 30s wait writes
-        # {hostname}.wake after this thread is already in wait(). The
-        # poke file is only written while the Rust thread is idle, so
-        # that late wake has to be read here or the launcher sleeps
-        # MIN_INTERVAL.
-        wake_path = os.path.join(_pass_dir(), host + ".wake")
-        while True:
-            if os.path.exists(poke):
-                try:
-                    os.remove(poke)
-                except OSError:
-                    pass
-                return True
-            try:
-                with open(wake_path, encoding="utf-8") as handle:
-                    pending_wake = handle.read().strip() == "1"
-                if pending_wake:
-                    # Consume it. A stale "1" would make every later
-                    # wait return immediately and the launcher would
-                    # spin for the whole settle timeout.
-                    try:
-                        with open(wake_path, "w", encoding="utf-8") as handle:
-                            handle.write("0")
-                    except OSError:
-                        pass
-                    return True
-            except OSError:
-                pass
-            if orig(0):
-                return True
-            if deadline is not None:
-                remain = deadline - time.monotonic()
-                if remain <= 0:
-                    return False
-                time.sleep(min(0.005, remain))
-            else:
-                time.sleep(0.005)
-
-    event.wait = wait
-
-
 def _drive_native_pass(launcher):
     """One native launcher pass while this thread holds _run_lock.
 
@@ -451,40 +478,64 @@ def _drive_native_pass(launcher):
     return immediately so setUp does not wait on a launcher that has
     not started.
     """
-    hostname = launcher.hostname
-    directory = _pass_dir()
-    ready = os.path.join(directory, hostname + ".ready")
-    if not os.path.exists(ready):
-        return
-    req = os.path.join(directory, hostname + ".req")
-    done = os.path.join(directory, hostname + ".done")
     try:
-        with open(req, encoding="utf-8") as handle:
-            seq = int(handle.read().strip() or "0")
-    except (OSError, ValueError):
-        seq = 0
-    seq += 1
-    with open(req, "w", encoding="utf-8") as handle:
-        handle.write(str(seq))
-        handle.flush()
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        try:
-            with open(done, encoding="utf-8") as handle:
-                got = int(handle.read().strip() or "0")
-        except (OSError, ValueError):
-            got = 0
-        if got >= seq:
-            wake = os.path.join(directory, hostname + ".wake")
-            try:
-                with open(wake, encoding="utf-8") as handle:
-                    pending = handle.read().strip() == "1"
-            except OSError:
-                pending = False
-            if pending:
-                launcher.wake_event.set()
+        link = _ensure_link(launcher)
+        if link is None:
             return
-        time.sleep(0.005)
+        try:
+            link.request("pass", "done")
+        except TimeoutError:
+            launcher.log.warning("native pass timed out")
+    except Exception as exc:
+        # Launcher.run logs any exception here as "Error in main thread",
+        # and checkLogs fails the test. The pass socket closes when the
+        # native thread is handed off; the next pass reconnects.
+        launcher._pass_link = None
+        launcher.log.warning("native pass socket closed: %s", exc)
+
+
+def _silence_python_stats(test, launcher):
+    """Stats assertions read FakeStatsd. Only the Rust process may send.
+
+    The observer is a real Launcher, so its timer, executors, and
+    _runStats would otherwise publish the same names. Clearing the
+    queue drops packets from setUp, before the native thread exists.
+    A replacement launcher must not clear packets already received.
+    """
+    from contextlib import nullcontext
+
+    launcher.statsd = None
+    launcher.statsd_timer = nullcontext
+    for name in (
+        "upload_executor",
+        "endpoint_upload_executor",
+        "endpoint_import_executor",
+    ):
+        pool = getattr(launcher, name, None)
+        if pool is not None:
+            # MonitoringThreadPoolExecutor stores the client as
+            # _zuul_statsd (zuul/lib/concurrency.py). Nulling .statsd
+            # leaves _zuul_emit sending upload_workers from this process.
+            pool._zuul_statsd = None
+
+    def _run_stats():
+        link = _ensure_link(launcher)
+        if link is None:
+            return
+        try:
+            link.request("stats", "stats_done")
+        except TimeoutError:
+            launcher.log.warning("native stats timed out")
+        except Exception as exc:
+            launcher._pass_link = None
+            launcher.log.warning("native stats socket closed: %s", exc)
+
+    launcher._runStats = _run_stats
+    marker = os.path.join(_pass_dir(), "supervisor")
+    if not os.path.exists(marker):
+        stats = getattr(test, "statsd", None)
+        if stats is not None and hasattr(stats, "clear"):
+            stats.clear()
 
 
 class _MotoProxy:
@@ -1101,7 +1152,7 @@ def _install_observer(launchers_path):
             while time.time() < deadline and not os.path.exists(ready):
                 time.sleep(0.02)
         _note_launcher(launcher)
-        _wrap_wake_wait(launcher)
+        _silence_python_stats(self, launcher)
         _watch_launcher_stop(launcher)
         launcher.wake_event.set()
         return launcher
