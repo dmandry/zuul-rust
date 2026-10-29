@@ -621,6 +621,8 @@ def cloud_call(launcher, op, payload):
             result = _node_cache_insert(launcher, data)
         elif op == "node.cache_assign":
             result = _node_cache_assign(launcher, data)
+        elif op == "node.cache_refresh":
+            result = _node_cache_refresh(launcher, data)
         elif op == "class_attr":
             result = _class_attr(data)
         elif op == "matching_requests":
@@ -3509,6 +3511,33 @@ def _node_cache_insert(launcher, data):
         launcher.api.nodes_cache.postCacheHook(None, None, None, (uuid,), cached)
     except Exception:
         launcher.log.exception("cache_insert: quota hook failed for %s", uuid)
+    return {"ok": True}
+
+
+def _node_cache_refresh(launcher, data):
+    """Advance the live cache object's znode version after a Rust write.
+
+    The object is updated in place by the watch, which can land after
+    the test has already taken _test_lock and saved. ZnodeStat is a
+    namedtuple, so replace it. No ZooKeeper read: the version is the
+    one write_node just stored. A locked object is the test's own
+    activeContext.
+    """
+    uuid = data.get("uuid")
+    version = data.get("version")
+    node = launcher.api.nodes_cache.getItem(uuid)
+    if node is None or version is None or getattr(node, "lock", None) is not None:
+        return {"ok": True}
+    stat = getattr(node, "_zstat", None)
+    if stat is None:
+        return {"ok": True}
+    try:
+        version = int(version)
+        if int(stat.version) >= version:
+            return {"ok": True}
+        node._zstat = stat._replace(version=version)
+    except Exception as exc:
+        launcher.log.debug("cache_refresh %s: %s", uuid, exc)
     return {"ok": True}
 
 

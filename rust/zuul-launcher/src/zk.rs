@@ -2501,8 +2501,19 @@ impl LauncherApi {
         stored.zk_version = Some(new_version as i64);
         self.node_wire.insert(id.clone(), bytes);
         self.remember_node(&id);
-        self.nodes.insert(id, stored);
+        self.nodes.insert(id.clone(), stored);
         self.reindex();
+        // The PyO3 harness shares the Python nodes_cache object with the
+        // test. A ZK watch would update _zstat later; the test can save
+        // that object as soon as this pass drops _test_lock. Refresh it
+        // now so the version matches the write. Native runs have no cloud
+        // handler, so this does not add a pass-socket round trip.
+        if crate::cloud::enabled() {
+            let _ = crate::hooks::bridge(
+                "node.cache_refresh",
+                &json!({ "uuid": id, "version": new_version }),
+            );
+        }
         Ok(())
     }
 
